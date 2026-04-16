@@ -511,6 +511,26 @@ canvas {
   filter: brightness(0.4);
 }
 
+.canvas-shell:fullscreen,
+.canvas-shell:-webkit-full-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  width: 100vw;
+  height: 100vh;
+}
+
+.canvas-shell:fullscreen canvas,
+.canvas-shell:-webkit-full-screen canvas {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  object-fit: contain;
+  border-radius: 0;
+  border: none;
+}
+
 .hidden {
   display: none !important;
 }

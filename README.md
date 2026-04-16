@@ -1,16 +1,15 @@
-# F1 Pixel Cup 🏆
+# F1 Pixel Cup
 
-A pixel-art Formula One racing game built with vanilla HTML5 Canvas — no frameworks, no build step. Race as any of the 20 drivers from the **2025 F1 season** across 8 iconic circuits in two four-race cups.
+A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no build step. Race as any of the 20 drivers from the **2025 F1 season** across 8 circuits in two four-race cups.
 
 ---
 
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **8 F1-inspired circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each with distinct geometry, long straights, and proper corners
+- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each hand-tuned for drivability with smooth waypoint geometry
 - **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
 - **F1 power-up system** — Overtake Button, Power Deploy, Safety Car, Graining, Undercut, Debris, Oil Slick, Engine Blast, Formation Lap, Steward Penalty, DRS Sign
-- **DRS shortcut zones** on every circuit
 - **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1 points system
 - **Pixel-art F1 cars** — team livery colours, front wing, rear wing, halo, helmet
 - **Driver-locked constructor cars** — pick a driver, race their team car
@@ -19,31 +18,30 @@ A pixel-art Formula One racing game built with vanilla HTML5 Canvas — no frame
 
 ## Physics
 
-- Driver view (pseudo-3D perspective road rendering)
-- Equal forward and reverse speed/acceleration
-- No auto-heading snap on wall contact — you steer yourself out
+- First-person pseudo-3D perspective road rendering
 - Drift-boost system (hold Shift in corners)
 - Traffic avoidance AI with wide lane spread to prevent corner bunching
-- Early AI braking before corners
+- Controlled reverse — limited speed so you can back out of walls without overshooting
+- Heading correction disabled while reversing so steering inputs work naturally
 
 ---
 
 ## Project Structure
 
 ```
-f1-pixel-cup/
+F1_Pixel_Cup/
 ├── index.html      # Shell, HUD panels, modals
 ├── styles.css      # Dark F1 theme (carbon/scarlet/gold)
-└── game.js         # All game logic and rendering (~3000 lines)
+└── game.js         # All game logic and rendering
     ├── TEAMS[]         10 constructor cars with stats
-    ├── DRIVERS[]        20 F1 2025 drivers with stats
-    ├── TRACKS[]         8 circuits (points, shortcut, decor, item boxes)
-    ├── CUPS[]           Trophy Cup + Constructor Cup
-    ├── Physics          updateRacer, alignRacerToSurface, barriers
-    ├── AI               waypoint steering, traffic avoidance
-    ├── Items            F1 power-up system
-    ├── Rendering        drawDriverView (pseudo-3D), drawMiniMap, drawF1Car
-    └── UI               renderGarage, standings, results, podium
+    ├── DRIVERS[]       20 F1 2025 drivers with stats
+    ├── TRACKS[]        8 circuits (waypoints, decor, item boxes)
+    ├── CUPS[]          Trophy Cup + Constructor Cup
+    ├── Physics         updateRacer, alignRacerToSurface, barriers
+    ├── AI              waypoint steering, traffic avoidance
+    ├── Items           F1 power-up system
+    ├── Rendering       drawDriverView (pseudo-3D), drawMiniMap, drawF1Car
+    └── UI              renderGarage, standings, results, podium
 ```
 
 ---
@@ -68,23 +66,23 @@ This is a static site — no build step required.
 ### Local
 
 ```bash
-# Any static server works, e.g.:
 npx serve .
 # or
 python3 -m http.server 8080
 ```
+
 Then open `http://localhost:8080`.
 
 ### GitHub Pages
 
-1. Push this repo to GitHub (already done if you're reading this on GitHub).
+1. Push to GitHub.
 2. Go to **Settings → Pages**.
 3. Set source to **Deploy from branch → main → / (root)**.
-4. Your game will be live at `https://<username>.github.io/<repo-name>/`.
+4. Live at `https://<username>.github.io/<repo-name>/`.
 
 ### Netlify / Vercel / Cloudflare Pages
 
-Drag-and-drop the folder, or connect the GitHub repo. No build command needed — publish directory is `/` (root).
+Drag-and-drop the folder or connect the repo. No build command — publish directory is `/` (root).
 
 ---
 

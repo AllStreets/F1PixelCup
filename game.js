@@ -174,51 +174,48 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" },
     points: [
-      { x: 120, y: 425 },
-      { x: 858, y: 425 },
-      { x: 928, y: 388 },
-      { x: 952, y: 322 },
-      { x: 918, y: 268 },
-      { x: 878, y: 258 },
-      { x: 842, y: 290 },
-      { x: 860, y: 234 },
-      { x: 822, y: 175 },
-      { x: 682, y: 140 },
-      { x: 470, y: 128 },
-      { x: 265, y: 136 },
-      { x: 152, y: 168 },
-      { x: 114, y: 252 },
-      { x: 106, y: 355 },
+      { x: 155, y: 422 },
+      { x: 420, y: 422 },
+      { x: 688, y: 420 },
+      { x: 848, y: 402 },
+      { x: 922, y: 368 },
+      { x: 958, y: 318 },
+      { x: 962, y: 262 },
+      { x: 940, y: 212 },
+      { x: 895, y: 170 },
+      { x: 828, y: 146 },
+      { x: 685, y: 130 },
+      { x: 530, y: 126 },
+      { x: 378, y: 130 },
+      { x: 232, y: 150 },
+      { x: 148, y: 202 },
+      { x: 118, y: 272 },
+      { x: 115, y: 350 },
+      { x: 128, y: 398 },
     ],
     shortcut: {
-      entry: { x: 928, y: 388 },
-      exit: { x: 860, y: 234 },
+      entry: { x: 922, y: 368 },
+      exit: { x: 958, y: 318 },
       width: 30,
-      points: [
-        { x: 928, y: 388 },
-        { x: 955, y: 340 },
-        { x: 948, y: 278 },
-        { x: 900, y: 245 },
-        { x: 860, y: 234 },
-      ],
+      points: [{ x: 922, y: 368 }, { x: 958, y: 318 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 490, y: 90, w: 200, h: 36, color: "#dc0000" },
-      { type: "grandstand", x: 490, y: 465, w: 160, h: 30, color: "#dc0000" },
-      { type: "billboard", x: 960, y: 305, w: 88, h: 24, color: "#e8bf00" },
-      { type: "tower", x: 108, y: 190, w: 40, h: 60, color: "#888888" },
-      { type: "billboard", x: 680, y: 100, w: 100, h: 24, color: "#ffffff" },
+      { type: "grandstand", x: 490, y: 88, w: 200, h: 36, color: "#dc0000" },
+      { type: "grandstand", x: 490, y: 462, w: 160, h: 30, color: "#dc0000" },
+      { type: "billboard", x: 960, y: 290, w: 88, h: 24, color: "#e8bf00" },
+      { type: "tower", x: 122, y: 205, w: 40, h: 60, color: "#888888" },
+      { type: "billboard", x: 682, y: 98, w: 100, h: 24, color: "#ffffff" },
     ],
     itemBoxes: [
       { x: 460, y: 410 },
-      { x: 760, y: 410 },
-      { x: 940, y: 310 },
-      { x: 840, y: 255 },
-      { x: 580, y: 135 },
-      { x: 300, y: 140 },
-      { x: 118, y: 300 },
-      { x: 200, y: 408 },
+      { x: 762, y: 410 },
+      { x: 955, y: 290 },
+      { x: 895, y: 190 },
+      { x: 580, y: 132 },
+      { x: 300, y: 135 },
+      { x: 120, y: 310 },
+      { x: 195, y: 408 },
     ],
   }),
   trackDefinition({
@@ -229,54 +226,48 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#6a8faf", grass: "#2d5a27", accent: "#c8d8e8", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1a3a1a", horizonB: "#3a6a35", curbA: "#dc0000", curbB: "#ffffff", sun: "#ddeeff" },
     points: [
-      { x: 132, y: 455 },
-      { x: 670, y: 455 },
-      { x: 752, y: 430 },
-      { x: 800, y: 374 },
-      { x: 792, y: 314 },
-      { x: 748, y: 282 },
-      { x: 700, y: 262 },
-      { x: 655, y: 222 },
-      { x: 650, y: 165 },
-      { x: 715, y: 130 },
-      { x: 842, y: 116 },
-      { x: 942, y: 140 },
-      { x: 978, y: 188 },
-      { x: 962, y: 248 },
-      { x: 900, y: 272 },
-      { x: 850, y: 296 },
-      { x: 818, y: 356 },
-      { x: 858, y: 418 },
-      { x: 804, y: 452 },
+      { x: 148, y: 450 },
+      { x: 400, y: 450 },
+      { x: 635, y: 448 },
+      { x: 732, y: 428 },
+      { x: 810, y: 395 },
+      { x: 865, y: 345 },
+      { x: 888, y: 280 },
+      { x: 868, y: 215 },
+      { x: 822, y: 168 },
+      { x: 742, y: 132 },
+      { x: 620, y: 106 },
+      { x: 480, y: 98 },
+      { x: 345, y: 100 },
+      { x: 230, y: 128 },
+      { x: 148, y: 192 },
+      { x: 110, y: 285 },
+      { x: 120, y: 378 },
+      { x: 136, y: 438 },  // smooth the closing turn (was 69° → now 45°)
     ],
     shortcut: {
-      entry: { x: 852, y: 296 },
-      exit: { x: 858, y: 418 },
+      entry: { x: 810, y: 395 },
+      exit: { x: 865, y: 345 },
       width: 28,
-      points: [
-        { x: 852, y: 296 },
-        { x: 808, y: 325 },
-        { x: 808, y: 388 },
-        { x: 858, y: 418 },
-      ],
+      points: [{ x: 810, y: 395 }, { x: 865, y: 345 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "tree", x: 60, y: 260, size: 28, color: "#1e5c18" },
-      { type: "tree", x: 990, y: 320, size: 24, color: "#1e5c18" },
-      { type: "grandstand", x: 750, y: 80, w: 140, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 672, y: 100, w: 96, h: 24, color: "#ffffff" },
-      { type: "tower", x: 985, y: 160, w: 38, h: 58, color: "#888888" },
+      { type: "tree", x: 60, y: 240, size: 28, color: "#1e5c18" },
+      { type: "tree", x: 900, y: 80, size: 24, color: "#1e5c18" },
+      { type: "grandstand", x: 520, y: 64, w: 160, h: 28, color: "#dc0000" },
+      { type: "billboard", x: 740, y: 108, w: 96, h: 24, color: "#ffffff" },
+      { type: "tower", x: 892, y: 185, w: 38, h: 58, color: "#888888" },
     ],
     itemBoxes: [
-      { x: 380, y: 440 },
-      { x: 720, y: 440 },
-      { x: 770, y: 348 },
-      { x: 720, y: 245 },
-      { x: 780, y: 128 },
-      { x: 960, y: 218 },
-      { x: 872, y: 435 },
-      { x: 200, y: 442 },
+      { x: 390, y: 436 },
+      { x: 692, y: 436 },
+      { x: 868, y: 318 },
+      { x: 868, y: 228 },
+      { x: 622, y: 106 },
+      { x: 345, y: 105 },
+      { x: 118, y: 248 },
+      { x: 145, y: 418 },
     ],
   }),
   trackDefinition({
@@ -293,6 +284,7 @@ const TRACKS = [
       { x: 724, y: 310 },
       { x: 762, y: 252 },
       { x: 782, y: 190 },
+      { x: 770, y: 170 },  // smooth the top-right turn (was 62° → now 43°)
       { x: 742, y: 148 },
       { x: 658, y: 130 },
       { x: 520, y: 122 },
@@ -301,6 +293,7 @@ const TRACKS = [
       { x: 162, y: 178 },
       { x: 118, y: 252 },
       { x: 116, y: 322 },
+      { x: 126, y: 358 },  // smooth the closing turn (was 66° → now 49°)
     ],
     shortcut: {
       entry: { x: 724, y: 310 },
@@ -341,170 +334,172 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#9fd0e8", grass: "#3a7a38", accent: "#ffeedd", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1e4a1e", horizonB: "#408040", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
-      { x: 158, y: 418 },
-      { x: 238, y: 358 },
-      { x: 322, y: 298 },
-      { x: 422, y: 268 },
-      { x: 548, y: 260 },
-      { x: 668, y: 255 },
-      { x: 790, y: 242 },
-      { x: 875, y: 215 },
-      { x: 945, y: 172 },
-      { x: 962, y: 122 },
-      { x: 918, y: 88 },
-      { x: 818, y: 80 },
-      { x: 678, y: 90 },
-      { x: 548, y: 108 },
-      { x: 438, y: 132 },
-      { x: 332, y: 165 },
-      { x: 248, y: 218 },
-      { x: 210, y: 302 },
-      { x: 205, y: 375 },
+      { x: 250, y: 455 },  // start/finish — heading east
+      { x: 450, y: 455 },  // main straight
+      { x: 620, y: 448 },  // continuing east
+      { x: 740, y: 418 },  // turn 1 right
+      { x: 828, y: 368 },  // heading NE
+      { x: 895, y: 298 },  // heading N
+      { x: 940, y: 218 },  // heading N
+      { x: 958, y: 155 },  // heading N
+      { x: 940, y: 102 },  // top right hairpin
+      { x: 900, y: 68 },   // heading W
+      { x: 828, y: 50 },   // heading W
+      { x: 718, y: 42 },   // heading W (top straight)
+      { x: 588, y: 42 },   // heading W
+      { x: 450, y: 48 },   // heading W
+      { x: 320, y: 72 },   // heading SW
+      { x: 220, y: 115 },  // heading S
+      { x: 160, y: 178 },  // heading S (left descent)
+      { x: 128, y: 255 },  // heading S
+      { x: 115, y: 335 },  // heading S
+      { x: 120, y: 400 },  // heading SE
+      { x: 140, y: 438 },  // heading E
+      { x: 185, y: 455 },  // heading E — closing
     ],
     shortcut: {
-      entry: { x: 238, y: 358 },
-      exit: { x: 422, y: 268 },
+      entry: { x: 450, y: 455 },
+      exit: { x: 620, y: 448 },
       width: 28,
-      points: [
-        { x: 238, y: 358 },
-        { x: 305, y: 320 },
-        { x: 378, y: 282 },
-        { x: 422, y: 268 },
-      ],
+      points: [{ x: 450, y: 455 }, { x: 620, y: 448 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 688, y: 50, w: 160, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 960, y: 148, w: 80, h: 22, color: "#ffffff" },
-      { type: "tree", x: 80, y: 320, size: 24, color: "#2a6a28" },
-      { type: "tower", x: 975, y: 95, w: 36, h: 52, color: "#cc0000" },
-      { type: "grandstand", x: 500, y: 222, w: 120, h: 24, color: "#e8bf00" },
+      { type: "grandstand", x: 650, y: 18, w: 160, h: 28, color: "#dc0000" },
+      { type: "billboard", x: 958, y: 128, w: 80, h: 22, color: "#ffffff" },
+      { type: "tree", x: 80, y: 310, size: 24, color: "#2a6a28" },
+      { type: "tower", x: 970, y: 62, w: 36, h: 52, color: "#cc0000" },
+      { type: "grandstand", x: 430, y: 490, w: 120, h: 24, color: "#e8bf00" },
     ],
     itemBoxes: [
-      { x: 290, y: 385 },
-      { x: 490, y: 258 },
-      { x: 720, y: 248 },
-      { x: 950, y: 148 },
-      { x: 858, y: 88 },
-      { x: 590, y: 105 },
-      { x: 340, y: 148 },
-      { x: 218, y: 265 },
+      { x: 450, y: 455 },
+      { x: 760, y: 405 },
+      { x: 930, y: 258 },
+      { x: 958, y: 128 },
+      { x: 680, y: 46 },
+      { x: 450, y: 48 },
+      { x: 180, y: 148 },
+      { x: 120, y: 368 },
     ],
   }),
   trackDefinition({
     id: "monaco",
     name: "Circuit de Monaco",
     theme: "Street circuit showpiece",
-    roadWidth: 44,
+    roadWidth: 52,
     laps: 3,
     bg: { sky: "#4db8e8", grass: "#3a6a88", accent: "#ffeedd", road: "#505060", shoulder: "#c8c0b8", horizonA: "#184858", horizonB: "#3878a8", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
-      { x: 215, y: 400 },
-      { x: 545, y: 400 },
-      { x: 625, y: 378 },
-      { x: 668, y: 335 },
-      { x: 655, y: 282 },
-      { x: 600, y: 252 },
-      { x: 512, y: 238 },
-      { x: 418, y: 240 },
-      { x: 332, y: 262 },
-      { x: 265, y: 305 },
-      { x: 244, y: 370 },
-      { x: 256, y: 432 },
-      { x: 295, y: 468 },
-      { x: 360, y: 495 },
-      { x: 448, y: 502 },
-      { x: 532, y: 492 },
-      { x: 612, y: 476 },
-      { x: 672, y: 460 },
+      { x: 300, y: 460 },  // start/finish — heading east
+      { x: 500, y: 460 },  // main straight
+      { x: 660, y: 450 },  // approaching turn 1
+      { x: 760, y: 420 },  // turn 1 right curve
+      { x: 820, y: 370 },  // heading NE
+      { x: 850, y: 300 },  // heading N
+      { x: 840, y: 230 },  // top right
+      { x: 800, y: 180 },  // Casino hairpin entry
+      { x: 740, y: 155 },  // hairpin — heading W
+      { x: 660, y: 140 },  // top straight W
+      { x: 570, y: 133 },  // top straight W
+      { x: 470, y: 130 },  // top straight W
+      { x: 370, y: 133 },  // top straight W
+      { x: 280, y: 148 },  // heading SW (Mirabeau)
+      { x: 200, y: 180 },  // heading SW
+      { x: 150, y: 225 },  // heading S
+      { x: 125, y: 280 },  // left side S
+      { x: 115, y: 345 },  // left side S
+      { x: 125, y: 405 },  // heading SE (Rascasse)
+      { x: 155, y: 445 },  // heading E (Anthony Noghes)
+      { x: 210, y: 460 },  // rejoining main straight
     ],
     shortcut: {
-      entry: { x: 625, y: 378 },
-      exit: { x: 612, y: 476 },
+      entry: { x: 500, y: 460 },
+      exit: { x: 660, y: 450 },
       width: 25,
       points: [
-        { x: 625, y: 378 },
-        { x: 648, y: 422 },
-        { x: 630, y: 468 },
-        { x: 612, y: 476 },
+        { x: 500, y: 460 },
+        { x: 580, y: 455 },
+        { x: 660, y: 450 },
       ],
       color: "#445566",
     },
     decor: [
-      { type: "house", x: 500, y: 195, w: 120, h: 38, color: "#e8e0d0" },
-      { type: "grandstand", x: 420, y: 540, w: 120, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 670, y: 300, w: 70, h: 20, color: "#e8bf00" },
-      { type: "lamp", x: 238, y: 272, size: 16, color: "#ffee88" },
-      { type: "lamp", x: 670, y: 440, size: 16, color: "#ffee88" },
+      { type: "house", x: 560, y: 88, w: 120, h: 38, color: "#e8e0d0" },
+      { type: "grandstand", x: 430, y: 490, w: 120, h: 28, color: "#dc0000" },
+      { type: "billboard", x: 840, y: 260, w: 70, h: 20, color: "#e8bf00" },
+      { type: "lamp", x: 145, y: 265, size: 16, color: "#ffee88" },
+      { type: "lamp", x: 820, y: 420, size: 16, color: "#ffee88" },
     ],
     itemBoxes: [
-      { x: 375, y: 388 },
-      { x: 600, y: 360 },
-      { x: 558, y: 245 },
-      { x: 368, y: 248 },
-      { x: 252, y: 338 },
-      { x: 322, y: 488 },
-      { x: 528, y: 498 },
-      { x: 650, y: 468 },
+      { x: 420, y: 460 },
+      { x: 780, y: 395 },
+      { x: 845, y: 265 },
+      { x: 760, y: 155 },
+      { x: 520, y: 132 },
+      { x: 320, y: 135 },
+      { x: 132, y: 315 },
+      { x: 175, y: 452 },
     ],
   }),
   trackDefinition({
     id: "singapore",
     name: "Marina Bay Street Circuit",
     theme: "Night city circuit",
-    roadWidth: 48,
+    roadWidth: 52,
     laps: 3,
     bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" },
     points: [
-      { x: 128, y: 422 },
-      { x: 482, y: 422 },
-      { x: 558, y: 392 },
-      { x: 582, y: 328 },
-      { x: 558, y: 268 },
-      { x: 610, y: 242 },
-      { x: 700, y: 242 },
-      { x: 775, y: 252 },
-      { x: 838, y: 215 },
-      { x: 875, y: 165 },
-      { x: 928, y: 142 },
-      { x: 958, y: 185 },
-      { x: 945, y: 238 },
-      { x: 898, y: 272 },
-      { x: 832, y: 298 },
-      { x: 772, y: 355 },
-      { x: 758, y: 435 },
-      { x: 658, y: 462 },
-      { x: 518, y: 458 },
-      { x: 388, y: 445 },
+      { x: 200, y: 450 },  // start/finish — heading east
+      { x: 400, y: 450 },  // main straight
+      { x: 580, y: 445 },  // main straight end
+      { x: 680, y: 415 },  // turn 1 right curve
+      { x: 740, y: 365 },  // heading NE
+      { x: 780, y: 295 },  // heading N
+      { x: 800, y: 225 },  // heading N (sector 1)
+      { x: 800, y: 165 },  // heading N
+      { x: 790, y: 120 },  // top right hairpin approach
+      { x: 755, y: 95 },   // hairpin right
+      { x: 705, y: 88 },   // heading W
+      { x: 630, y: 82 },   // heading W (long top section)
+      { x: 540, y: 82 },   // heading W
+      { x: 450, y: 85 },   // heading W
+      { x: 355, y: 90 },   // heading W
+      { x: 265, y: 98 },   // heading SW
+      { x: 190, y: 125 },  // heading SW (top left curve)
+      { x: 148, y: 165 },  // heading S
+      { x: 128, y: 215 },  // heading S (left side)
+      { x: 125, y: 275 },  // heading S
+      { x: 132, y: 338 },  // heading SE
+      { x: 148, y: 392 },  // heading SE
+      { x: 172, y: 432 },  // heading E — rejoining start
     ],
     shortcut: {
-      entry: { x: 832, y: 298 },
-      exit: { x: 758, y: 435 },
+      entry: { x: 400, y: 450 },
+      exit: { x: 580, y: 445 },
       width: 28,
       points: [
-        { x: 832, y: 298 },
-        { x: 802, y: 368 },
-        { x: 782, y: 428 },
-        { x: 758, y: 435 },
+        { x: 400, y: 450 },
+        { x: 490, y: 447 },
+        { x: 580, y: 445 },
       ],
       color: "#00d2be",
     },
     decor: [
-      { type: "tower", x: 520, y: 378, w: 48, h: 70, color: "#1a2a4a" },
-      { type: "tower", x: 960, y: 115, w: 42, h: 65, color: "#1a2a4a" },
-      { type: "lamp", x: 130, y: 388, size: 18, color: "#ffaa44" },
-      { type: "lamp", x: 730, y: 222, size: 18, color: "#ffaa44" },
-      { type: "grandstand", x: 680, y: 498, w: 130, h: 26, color: "#dc0000" },
+      { type: "tower", x: 490, y: 32, w: 48, h: 70, color: "#1a2a4a" },
+      { type: "tower", x: 840, y: 155, w: 42, h: 65, color: "#1a2a4a" },
+      { type: "lamp", x: 148, y: 255, size: 18, color: "#ffaa44" },
+      { type: "lamp", x: 760, y: 175, size: 18, color: "#ffaa44" },
+      { type: "grandstand", x: 350, y: 490, w: 130, h: 26, color: "#dc0000" },
     ],
     itemBoxes: [
-      { x: 295, y: 410 },
-      { x: 565, y: 355 },
-      { x: 650, y: 245 },
-      { x: 858, y: 188 },
-      { x: 950, y: 212 },
-      { x: 878, y: 282 },
-      { x: 762, y: 398 },
-      { x: 560, y: 452 },
+      { x: 340, y: 450 },
+      { x: 720, y: 330 },
+      { x: 800, y: 195 },
+      { x: 770, y: 88 },
+      { x: 500, y: 82 },
+      { x: 220, y: 102 },
+      { x: 130, y: 245 },
+      { x: 145, y: 370 },
     ],
   }),
   trackDefinition({
@@ -515,49 +510,48 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#cc8833", grass: "#8a6a3a", accent: "#ffe8aa", road: "#585050", shoulder: "#c8b888", horizonA: "#6a4820", horizonB: "#aa7838", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcc44" },
     points: [
-      { x: 128, y: 405 },
-      { x: 718, y: 405 },
-      { x: 808, y: 382 },
-      { x: 868, y: 335 },
-      { x: 890, y: 278 },
-      { x: 868, y: 222 },
-      { x: 816, y: 175 },
-      { x: 728, y: 148 },
-      { x: 608, y: 138 },
-      { x: 475, y: 142 },
-      { x: 355, y: 158 },
-      { x: 252, y: 192 },
-      { x: 165, y: 252 },
-      { x: 125, y: 335 },
+      { x: 418, y: 408 },
+      { x: 618, y: 408 },
+      { x: 768, y: 400 },
+      { x: 858, y: 365 },
+      { x: 898, y: 312 },
+      { x: 896, y: 255 },
+      { x: 862, y: 205 },
+      { x: 808, y: 165 },
+      { x: 728, y: 142 },
+      { x: 608, y: 136 },
+      { x: 478, y: 140 },
+      { x: 355, y: 156 },
+      { x: 248, y: 198 },
+      { x: 162, y: 262 },
+      { x: 125, y: 338 },
+      { x: 112, y: 392 },
+      { x: 128, y: 410 },
+      { x: 255, y: 410 },
     ],
     shortcut: {
-      entry: { x: 868, y: 335 },
-      exit: { x: 868, y: 222 },
+      entry: { x: 858, y: 365 },
+      exit: { x: 898, y: 312 },
       width: 30,
-      points: [
-        { x: 868, y: 335 },
-        { x: 922, y: 308 },
-        { x: 928, y: 252 },
-        { x: 868, y: 222 },
-      ],
+      points: [{ x: 858, y: 365 }, { x: 898, y: 312 }],
       color: "#e8bf00",
     },
     decor: [
-      { type: "grandstand", x: 420, y: 360, w: 160, h: 32, color: "#dc0000" },
-      { type: "house", x: 940, y: 290, w: 60, h: 42, color: "#c8a870" },
-      { type: "billboard", x: 590, y: 98, w: 100, h: 26, color: "#e8bf00" },
-      { type: "tower", x: 130, y: 222, w: 38, h: 58, color: "#a08050" },
-      { type: "billboard", x: 250, y: 158, w: 82, h: 22, color: "#ffffff" },
+      { type: "grandstand", x: 520, y: 392, w: 160, h: 32, color: "#dc0000" },
+      { type: "house", x: 945, y: 280, w: 60, h: 42, color: "#c8a870" },
+      { type: "billboard", x: 590, y: 95, w: 100, h: 26, color: "#e8bf00" },
+      { type: "tower", x: 135, y: 225, w: 38, h: 58, color: "#a08050" },
+      { type: "billboard", x: 252, y: 155, w: 82, h: 22, color: "#ffffff" },
     ],
     itemBoxes: [
-      { x: 380, y: 392 },
-      { x: 680, y: 392 },
-      { x: 878, y: 308 },
-      { x: 888, y: 252 },
-      { x: 728, y: 152 },
-      { x: 480, y: 145 },
-      { x: 225, y: 218 },
-      { x: 135, y: 375 },
+      { x: 530, y: 396 },
+      { x: 760, y: 396 },
+      { x: 892, y: 282 },
+      { x: 878, y: 210 },
+      { x: 728, y: 148 },
+      { x: 480, y: 142 },
+      { x: 222, y: 215 },
+      { x: 125, y: 375 },
     ],
   }),
   trackDefinition({
@@ -568,8 +562,7 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" },
     points: [
-      { x: 182, y: 448 },
-      { x: 525, y: 448 },
+      { x: 525, y: 448 },  // start/finish — far end of main straight, grid spawns clear
       { x: 640, y: 415 },
       { x: 698, y: 358 },
       { x: 688, y: 292 },
@@ -579,6 +572,11 @@ const TRACKS = [
       { x: 292, y: 260 },
       { x: 205, y: 318 },
       { x: 148, y: 408 },
+      { x: 143, y: 424 },  // bottom-left hairpin
+      { x: 143, y: 440 },
+      { x: 155, y: 448 },
+      { x: 182, y: 448 },  // main straight
+      { x: 350, y: 448 },  // main straight — closing back to start
     ],
     shortcut: {
       entry: { x: 518, y: 228 },
@@ -795,33 +793,8 @@ function getCourseDistanceForRacer(racer, track) {
   return racer.shortcutActive ? getShortcutMappedDistance(racer, track) : getTrackDistanceForPoint(racer, track);
 }
 
-function shouldUseShortcutRoute(racer, track, mainSurface, shortcutSurface, now) {
-  const entryWindow = Math.max(track.shortcut.width * 3.3, 110);
-  const exitWindow = Math.max(track.shortcut.width * 2.6, 80);
-  const nearEntry = distance(racer, track.shortcut.entry) < entryWindow;
-  const nearExit = distance(racer, track.shortcut.exit) < exitWindow;
-  const shortcutAlong = track.shortcutTotalLength
-    ? getRouteDistanceForPoint(racer, track.shortcutSegments, track.shortcutCumulativeStarts)
-    : 0;
-
-  if (racer.shortcutActive) {
-    if (nearExit && mainSurface.onRoad && shortcutAlong > track.shortcutTotalLength * 0.58) {
-      return false;
-    }
-    if (shortcutAlong > track.shortcutTotalLength * 0.84 && mainSurface.distance <= mainSurface.segmentWidth * 1.02) {
-      return false;
-    }
-    if (!shortcutSurface.onRoad && mainSurface.onRoad && shortcutAlong > track.shortcutTotalLength * 0.18) {
-      return false;
-    }
-    return shortcutSurface.distance <= shortcutSurface.segmentWidth * 1.06 || !mainSurface.onRoad;
-  }
-
-  const allowedToTake = racer.isPlayer || racer.aiUseShortcut || racer.boostUntil > now || racer.starUntil > now || racer.bulletUntil > now;
-  return allowedToTake
-    && nearEntry
-    && shortcutSurface.onRoad
-    && shortcutSurface.distance <= mainSurface.distance + 12;
+function shouldUseShortcutRoute() {
+  return false;
 }
 
 function getActiveSurfaceInfo(racer, track, now) {
@@ -843,17 +816,17 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
     const side = -dx * sin + dy * cos;
-    if (forward < -16 || forward > 72 || Math.abs(side) > 34) return;
+    if (forward < -16 || forward > 90 || Math.abs(side) > 42) return;
 
-    const forwardWeight = 1 - clamp((forward + 16) / 88, 0, 1);
-    const sideWeight = 1 - clamp(Math.abs(side) / 34, 0, 1);
+    const forwardWeight = 1 - clamp((forward + 16) / 106, 0, 1);
+    const sideWeight = 1 - clamp(Math.abs(side) / 42, 0, 1);
     const pressure = forwardWeight * sideWeight;
     const steerAway = side >= 0 ? -1 : 1;
-    steerAdjust += steerAway * pressure * (racer.isPlayer ? 0.34 : 0.72);
+    steerAdjust += steerAway * pressure * (racer.isPlayer ? 0.38 : 0.88);
 
     if (forward > -4) {
-      throttleScale = Math.min(throttleScale, racer.isPlayer ? 0.88 : 0.68 - pressure * 0.18);
-      brakeBoost = Math.max(brakeBoost, racer.isPlayer ? pressure * 0.08 : pressure * 0.42);
+      throttleScale = Math.min(throttleScale, racer.isPlayer ? 0.85 : 0.58 - pressure * 0.22);
+      brakeBoost = Math.max(brakeBoost, racer.isPlayer ? pressure * 0.10 : pressure * 0.58);
     }
   });
 
@@ -924,7 +897,7 @@ function createRacer(driver, kart, isPlayer, slot) {
     driftCharge: 0,
     drifting: false,
     driftSide: 0,
-    aiOffset: (Math.random() - 0.5) * 32,
+    aiOffset: (Math.random() - 0.5) * 52,
     aiUseShortcut: false,
     lastKnownPlace: 20,
     statusText: "",
@@ -1004,7 +977,7 @@ function renderGarage() {
   }
   ui.driverName.textContent = driver.name;
   ui.kartName.textContent = `${team.car} (${team.name})`;
-  ui.startCup.textContent = `Enter ${selectedCup.icon} ${selectedCup.name}`;
+  ui.startCup.textContent = `Enter ${selectedCup.name}`;
   renderDriverButtons();
   renderKartButtons();
   renderCupButtons();
@@ -1018,7 +991,7 @@ function renderGarage() {
   ui.trackList.innerHTML = CUPS.map((cup) => `
     <section class="track-group ${cup.id === selectedCup.id ? "active" : ""}">
       <div class="track-group-title">
-        <strong>${cup.icon} ${cup.name}</strong>
+        <strong>${cup.name}</strong>
         <span class="muted">${cup.tracks.length} races</span>
       </div>
       <div class="track-group-list">
@@ -1095,7 +1068,7 @@ function getActiveCup() {
 function renderCupButtons() {
   ui.cupGrid.innerHTML = CUPS.map((cup, index) => `
     <button class="${index === state.selectedCup ? "active" : ""}" data-cup-index="${index}" type="button">
-      ${cup.icon} ${cup.name}
+      ${cup.name}
     </button>
   `).join("");
 
@@ -1124,20 +1097,54 @@ function buildCupEntries() {
 }
 
 function layoutGrid(track, count) {
-  const first = track.points[0];
-  const heading = track.startHeading;
-  const side = heading + Math.PI / 2;
-  const rowSpacing = 24;
-  const laneSpacing = Math.min(26, track.roadWidth * 0.34);
+  const pts = track.points;
+  const n = pts.length;
+  const rowSpacing = 36;
+  const laneSpacing = Math.min(28, track.roadWidth * 0.38);
+
   return Array.from({ length: count }, (_, index) => {
     const row = Math.floor(index / 2);
     const lane = index % 2 === 0 ? -1 : 1;
-    const distanceBehindStart = row * rowSpacing + 10;
+    let distBehind = row * rowSpacing + 12;
+
+    // Walk backwards along the actual track segments from pts[0]
+    let px = pts[0].x;
+    let py = pts[0].y;
+    let fwdHeading = track.startHeading;
+    let segEnd = 0;
+
+    while (distBehind > 0.5) {
+      const segStart = (segEnd - 1 + n) % n;
+      const fromPt = pts[segStart];
+      const toPt = pts[segEnd];
+      const segDx = toPt.x - fromPt.x;
+      const segDy = toPt.y - fromPt.y;
+      const segLen = Math.hypot(segDx, segDy);
+      if (segLen < 0.1) { segEnd = segStart; continue; }
+      const segFwdHeading = Math.atan2(segDy, segDx);
+      if (distBehind <= segLen) {
+        const t = 1 - distBehind / segLen;
+        px = fromPt.x + segDx * t;
+        py = fromPt.y + segDy * t;
+        fwdHeading = segFwdHeading;
+        distBehind = 0;
+      } else {
+        distBehind -= segLen;
+        px = fromPt.x;
+        py = fromPt.y;
+        fwdHeading = segFwdHeading;
+        segEnd = segStart;
+      }
+    }
+
+    const perpX = -Math.sin(fwdHeading);
+    const perpY = Math.cos(fwdHeading);
+    const totalDistBehind = row * rowSpacing + 12;
     return {
-      x: first.x - Math.cos(heading) * distanceBehindStart + Math.cos(side) * lane * laneSpacing,
-      y: first.y - Math.sin(heading) * distanceBehindStart + Math.sin(side) * lane * laneSpacing,
-      heading,
-      trackDistance: (track.totalLength - distanceBehindStart + track.totalLength) % track.totalLength,
+      x: px + perpX * lane * laneSpacing,
+      y: py + perpY * lane * laneSpacing,
+      heading: fwdHeading,
+      trackDistance: ((track.totalLength - totalDistBehind) % track.totalLength + track.totalLength) % track.totalLength,
     };
   });
 }
@@ -1470,7 +1477,7 @@ function alignRacerToSurface(racer, surface, turnBlend = 0.32) {
 function updateLapProgress(racer, now) {
   const previousDistance = racer.trackDistance || 0;
   const currentDistance = getCourseDistanceForRacer(racer, state.track);
-  const crossingBand = Math.max(36, state.track.totalLength * 0.12);
+  const crossingBand = Math.max(44, state.track.roadWidth * 0.9);
   const crossedForward = previousDistance > state.track.totalLength - crossingBand
     && currentDistance < crossingBand
     && racer.speed > 18;
@@ -1496,7 +1503,18 @@ function updateRacer(racer, dt, now) {
   }
 
   const nextPoint = state.track.points[racer.waypointIndex % state.track.points.length];
-  const targetAngle = Math.atan2(nextPoint.y - racer.y, nextPoint.x - racer.x);
+  let targetAngle;
+  if (!racer.isPlayer && racer.aiOffset) {
+    const prevPoint = state.track.points[((racer.waypointIndex - 1) + state.track.points.length) % state.track.points.length];
+    const tdx = nextPoint.x - prevPoint.x;
+    const tdy = nextPoint.y - prevPoint.y;
+    const tlen = Math.hypot(tdx, tdy) || 1;
+    const perpX = -tdy / tlen;
+    const perpY = tdx / tlen;
+    targetAngle = Math.atan2((nextPoint.y + perpY * racer.aiOffset) - racer.y, (nextPoint.x + perpX * racer.aiOffset) - racer.x);
+  } else {
+    targetAngle = Math.atan2(nextPoint.y - racer.y, nextPoint.x - racer.x);
+  }
   const surface = getActiveSurfaceInfo(racer, state.track, now);
   const offroad = !surface.onRoad;
 
@@ -1530,17 +1548,6 @@ function updateRacer(racer, dt, now) {
     if (turnSeverity > 0.52 && racer.speed > racer.physics.maxSpeed * 0.62) {
       brake = 1;
     }
-    const nearShortcut = distance(racer, state.track.shortcut.entry) < 90;
-    if (nearShortcut && (racer.currentItem === "mushroom" || racer.starUntil > now || racer.boostUntil > now)) {
-      racer.aiUseShortcut = true;
-    }
-    if (racer.aiUseShortcut && distance(racer, state.track.shortcut.exit) < 60) {
-      racer.aiUseShortcut = false;
-    }
-    if (racer.aiUseShortcut) {
-      const entryTarget = distance(racer, state.track.shortcut.entry) > 32 ? state.track.shortcut.entry : state.track.shortcut.exit;
-      steerInput = clamp(normalizeAngle(Math.atan2(entryTarget.y - racer.y, entryTarget.x - racer.x) - racer.heading) * 1.9, -1, 1);
-    }
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
     driftSide = steerInput;
     maybeUseAiItem(racer, now);
@@ -1566,7 +1573,7 @@ function updateRacer(racer, dt, now) {
   racer.heading += steerInput * turnRate * dt;
 
   let targetSpeed = racer.physics.maxSpeed;
-  const reverseTargetSpeed = -racer.physics.maxSpeed;
+  const reverseTargetSpeed = -(racer.isPlayer ? racer.physics.maxSpeed * 0.42 : racer.physics.maxSpeed * 0.55);
   if (offroad) targetSpeed *= racer.physics.offroadFactor;
   if (racer.boostUntil > now) targetSpeed *= 1.22;
   if (racer.starUntil > now) targetSpeed *= 1.1;
@@ -1626,7 +1633,8 @@ function updateRacer(racer, dt, now) {
   let barrierSurface = getActiveSurfaceInfo(racer, state.track, now);
   applyTrackBarrier(racer, barrierSurface);
   barrierSurface = getActiveSurfaceInfo(racer, state.track, now);
-  alignRacerToSurface(racer, barrierSurface, racer.isPlayer ? 0.28 : 0.22, 0.84);
+  const surfaceBlend = racer.isPlayer && racer.speed < -8 ? 0.04 : (racer.isPlayer ? 0.28 : 0.22);
+  alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
   updateLapProgress(racer, now);
 
   if (distance(racer, nextPoint) < 34) {
@@ -1714,7 +1722,7 @@ function handleRacerContacts(now) {
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 0.001;
-      const minDistance = 24;
+      const minDistance = 28;
       if (dist < minDistance) {
         const nx = dx / dist;
         const ny = dy / dist;
@@ -1739,8 +1747,8 @@ function handleRacerContacts(now) {
         const tangentLength = Math.hypot(tangentX, tangentY) || 1;
         const tx = tangentX / tangentLength;
         const ty = tangentY / tangentLength;
-        const staggerPush = clamp(overlap * 0.95 + 3.5, 3, 10);
-        const lateralBias = clamp(overlap * 0.3, 0.8, 3.2);
+        const staggerPush = clamp(overlap * 1.5 + 6, 6, 22);
+        const lateralBias = clamp(overlap * 0.5, 1.5, 5);
 
         if (leaderIsB) {
           a.x -= tx * staggerPush * 0.55;
@@ -1786,6 +1794,7 @@ function updateRace(dt, now) {
   state.racers.forEach((racer) => updateRacer(racer, dt, now));
   updateItems(dt, now);
   updateHazards(now);
+  handleRacerContacts(now);
   handleRacerContacts(now);
   handleRacerContacts(now);
   updateStandingsUI();
@@ -2602,7 +2611,7 @@ function drawMiniMap(track, player, frame) {
   const drawMiniStartLine = () => {
     const a = toMini(track.points[0]);
     const angle = track.startHeading + Math.PI / 2;
-    const width = Math.max(8, miniWidth(track.roadWidth + 12));
+    const width = Math.max(6, miniWidth(track.roadWidth - 4));
     const cell = Math.max(2, scale * 10);
     const tilesAcross = Math.max(4, Math.ceil((width * 2) / cell / 2));
     ctx.save();
@@ -2617,20 +2626,11 @@ function drawMiniMap(track, player, frame) {
     ctx.restore();
   };
 
-  drawMiniRibbon(track.shortcut.points, track.shortcut.width + 11, "#efe3c8", "#f8eed8", false);
-  drawMiniRibbon(track.shortcut.points, track.shortcut.width + 4, track.shortcut.color || "#b6854f", track.shortcut.color || "#b6854f", false);
-  drawMiniLane(track.shortcut.points, "#fff4cf", false, Math.max(1.1, scale * 3), [Math.max(5, scale * 14), Math.max(3, scale * 9)]);
   drawMiniRibbon(track.points, track.roadWidth + 12, track.bg.shoulder, track.bg.shoulder, true);
   drawMiniRibbon(track.points, track.roadWidth, track.bg.road, track.bg.road, true);
   drawMiniTrackBarriers(track.points, "rgba(255, 240, 201, 0.92)", true);
   drawMiniLane(track.points, "#fff0c9", true);
   drawMiniStartLine();
-  const entryMini = toMini(track.shortcut.entry);
-  const exitMini = toMini(track.shortcut.exit);
-  ctx.fillStyle = "#ffe08a";
-  ctx.fillRect(entryMini.x - 3, entryMini.y - 3, 6, 6);
-  ctx.fillStyle = "#86efac";
-  ctx.fillRect(exitMini.x - 3, exitMini.y - 3, 6, 6);
 
   state.racers.forEach((racer) => {
     const mini = toMini(racer);
@@ -2649,13 +2649,9 @@ function drawMiniKartIcon(x, y, heading, bodyColor, outlineColor) {
   ctx.translate(x, y);
   ctx.rotate(heading);
   ctx.fillStyle = outlineColor;
-  ctx.fillRect(-5, -4, 10, 8);
+  ctx.fillRect(-4, -2, 8, 4);
   ctx.fillStyle = bodyColor;
-  ctx.fillRect(-4, -3, 8, 6);
-  ctx.fillStyle = outlineColor;
-  ctx.fillRect(2, -2, 3, 4);
-  ctx.fillRect(-2, -5, 2, 2);
-  ctx.fillRect(-2, 3, 2, 2);
+  ctx.fillRect(-3, -1, 6, 2);
   ctx.restore();
 }
 
@@ -2810,30 +2806,23 @@ function drawOpenLaneStripe(points, color, width = 4, dash = [18, 12]) {
   ctx.restore();
 }
 
-function drawShortcutMapRoad(track) {
-  drawRoadRibbon(track.shortcut.points, track.shortcut.width + 11, "#efe3c8", "#f8eed8", false);
-  drawRoadRibbon(track.shortcut.points, track.shortcut.width + 4, track.shortcut.color || "#b6854f", track.shortcut.color || "#b6854f", false);
-  drawOpenLaneStripe(track.shortcut.points, "#fff4cf", 3, [14, 9]);
-  drawOpenLaneStripe(track.shortcut.points, "rgba(43, 29, 52, 0.88)", 1, [14, 9]);
-  ctx.fillStyle = "#ffe08a";
-  ctx.fillRect(track.shortcut.entry.x - 6, track.shortcut.entry.y - 6, 12, 12);
-  ctx.fillStyle = "#86efac";
-  ctx.fillRect(track.shortcut.exit.x - 6, track.shortcut.exit.y - 6, 12, 12);
+function drawShortcutMapRoad() {
+  // shortcuts disabled
 }
 
 function drawStartLine(track) {
   const a = track.points[0];
   const angle = track.startHeading + Math.PI / 2;
-  const width = track.roadWidth + 12;
+  const halfWidth = track.roadWidth / 2;
   const cell = 10;
-  const tilesAcross = Math.max(4, Math.ceil((width * 2) / cell / 2));
+  const tilesAcross = Math.max(2, Math.ceil(halfWidth / cell));
   ctx.save();
   ctx.translate(a.x, a.y);
   ctx.rotate(angle);
   for (let i = -tilesAcross; i <= tilesAcross; i += 1) {
     for (let j = 0; j < 2; j += 1) {
       ctx.fillStyle = (i + j) % 2 === 0 ? "#fff0c9" : "#1f1826";
-      ctx.fillRect(i * cell, -width + j * cell, cell, cell);
+      ctx.fillRect(i * cell, -halfWidth + j * cell, cell, cell);
     }
   }
   ctx.restore();
