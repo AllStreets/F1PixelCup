@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Pixel Cup</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="masthead panel">
+      <div>
+        <p class="eyebrow">2025 Season</p>
+        <h1>F1 Pixel Cup</h1>
+        <p class="lead">
+          A pixel-art Formula One racer with all 20 drivers from the 2025 grid,
+          two four-race cups, F1 power-up systems, live standings, and a podium ceremony.
+        </p>
+      </div>
+      <div class="masthead-chip">
+        <p class="eyebrow">Race Rules</p>
+        <p>3 laps per race</p>
+        <p>Full 20-car grid</p>
+        <p>F1 power-ups &amp; post-race scoring</p>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel garage-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Pit Lane</p>
+            <h2>Select Your Driver</h2>
+          </div>
+          <div class="garage-actions">
+            <div id="cup-grid" class="cup-grid" aria-label="Cup selection"></div>
+            <button id="start-cup" class="primary-button" type="button">Start Trophy Cup</button>
+          </div>
+        </div>
+
+        <div class="garage-grid">
+          <section class="subpanel">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Drivers</p>
+              <strong id="driver-name">Max Verstappen</strong>
+            </div>
+            <div id="driver-grid" class="driver-grid" aria-label="Driver selection"></div>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Car</p>
+              <strong id="kart-name">Red Bull RB21</strong>
+            </div>
+            <div id="kart-grid" class="kart-grid" aria-label="Car info"></div>
+          </section>
+        </div>
+
+        <div class="stats-layout">
+          <section class="subpanel">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Performance</p>
+              <strong>Driver + constructor combined</strong>
+            </div>
+            <div id="stat-bars" class="stat-bars"></div>
+          </section>
+
+          <section class="subpanel">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Cup Schedule</p>
+              <strong>Four races per cup, one DRS shortcut per circuit</strong>
+            </div>
+            <div id="track-list" class="track-list"></div>
+          </section>
+        </div>
+
+        <section class="subpanel">
+          <div class="subpanel-heading">
+            <p class="eyebrow">Controls</p>
+            <strong>Keyboard</strong>
+          </div>
+          <div class="control-grid">
+            <div class="control-card"><span>Throttle</span><strong>Shift + W / Up</strong></div>
+            <div class="control-card"><span>Brake / Reverse</span><strong>Shift + S / Down</strong></div>
+            <div class="control-card"><span>Steer</span><strong>A D / Left Right</strong></div>
+            <div class="control-card"><span>Drift Boost</span><strong>Hold Shift in Turns</strong></div>
+            <div class="control-card"><span>Use Power-Up</span><strong>Space</strong></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel race-panel">
+        <div class="race-topbar">
+          <div>
+            <p class="eyebrow" id="track-theme">Circuit Theme</p>
+            <h2 id="track-name">Autodromo Nazionale Monza</h2>
+          </div>
+          <div class="topbar-actions">
+            <div class="topbar-pills">
+              <div class="hud-pill">
+                <span>Lap</span>
+                <strong id="lap-indicator">1 / 3</strong>
+              </div>
+              <div class="hud-pill">
+                <span>Place</span>
+                <strong id="place-indicator">20th</strong>
+              </div>
+              <div class="hud-pill">
+                <span>Race</span>
+                <strong id="race-indicator">1 / 4</strong>
+              </div>
+            </div>
+            <div class="view-controls">
+              <button id="fullscreen-view" class="secondary-button" type="button">Full Screen</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="canvas-shell" class="canvas-shell">
+          <canvas id="game" width="1024" height="576" aria-label="F1 Pixel Cup race"></canvas>
+          <div id="countdown-banner" class="countdown-banner hidden">3</div>
+        </div>
+
+        <div class="hud-layout">
+          <section class="subpanel compact">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Power-Up</p>
+              <strong id="item-name">None</strong>
+            </div>
+            <div id="item-slot" class="item-slot empty">
+              <span id="item-icon">?</span>
+            </div>
+            <p id="item-copy" class="muted">
+              Hit a power-up box to activate the roulette.
+            </p>
+          </section>
+
+          <section class="subpanel compact">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Championship</p>
+              <strong>Updated after each race</strong>
+            </div>
+            <div id="mini-standings" class="mini-standings"></div>
+          </section>
+
+          <section class="subpanel compact">
+            <div class="subpanel-heading">
+              <p class="eyebrow">Race Feed</p>
+              <strong id="race-status">Forming on the grid</strong>
+            </div>
+            <div id="status-feed" class="status-feed"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="results-modal" class="modal hidden" aria-live="polite">
+    <div class="modal-card">
+      <p class="eyebrow" id="results-kicker">Race Results</p>
+      <h3 id="results-title">Monza Complete</h3>
+      <div id="results-table" class="results-table"></div>
+      <div class="modal-actions">
+        <button id="results-garage-button" class="secondary-button" type="button">Back to Pit Lane</button>
+        <button id="results-button" class="primary-button" type="button">Next Race</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="podium-modal" class="modal hidden" aria-live="polite">
+    <div class="modal-card">
+      <p class="eyebrow" id="podium-kicker">Cup Complete</p>
+      <h3 id="podium-title">Podium Ceremony</h3>
+      <div id="podium-scene" class="podium-scene"></div>
+      <div class="modal-actions">
+        <button id="restart-button" class="primary-button" type="button">Back to Pit Lane</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./game.js"></script>
+</body>
+</html>
