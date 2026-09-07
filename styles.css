@@ -622,7 +622,7 @@ canvas {
 
 .results-header {
   display: grid;
-  grid-template-columns: 52px 1fr 80px 80px;
+  grid-template-columns: 52px 1fr 92px 80px 80px;
   gap: 8px;
   padding: 6px 0;
   border-bottom: 1px solid rgba(220, 0, 0, 0.28);
@@ -634,7 +634,7 @@ canvas {
 
 .results-row {
   display: grid;
-  grid-template-columns: 52px 1fr 80px 80px;
+  grid-template-columns: 52px 1fr 92px 80px 80px;
   gap: 8px;
   padding: 5px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
@@ -753,4 +753,9 @@ canvas {
   .masthead {
     grid-template-columns: 1fr;
   }
+}
+
+.results-row .fastest-lap {
+  color: #a855f7;
+  font-weight: 700;
 }

@@ -18,6 +18,7 @@ const ui = {
   raceIndicator: document.getElementById("race-indicator"),
   toggleView: document.getElementById("toggle-view"),
   fullscreenView: document.getElementById("fullscreen-view"),
+  soundToggle: document.getElementById("sound-toggle"),
   canvasShell: document.getElementById("canvas-shell"),
   itemName: document.getElementById("item-name"),
   itemIcon: document.getElementById("item-icon"),
@@ -171,7 +172,7 @@ const TRACKS = [
     name: "Autodromo di Monza",
     theme: "Italian speed temple",
     roadWidth: 50,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" },
     points: [
       { x: 156, y: 430 },
@@ -249,7 +250,7 @@ const TRACKS = [
     name: "Circuit de Spa-Francorchamps",
     theme: "Belgian forest circuit",
     roadWidth: 52,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#6a8faf", grass: "#2d5a27", accent: "#c8d8e8", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1a3a1a", horizonB: "#3a6a35", curbA: "#dc0000", curbB: "#ffffff", sun: "#ddeeff" },
     points: [
       { x: 151, y: 446 },
@@ -327,7 +328,7 @@ const TRACKS = [
     name: "Silverstone Circuit",
     theme: "British airfield classic",
     roadWidth: 54,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#aac8e0", grass: "#4c8840", accent: "#e8f0e0", road: "#505058", shoulder: "#c0b8a8", horizonA: "#304828", horizonB: "#5a7848", curbA: "#dc0000", curbB: "#ffffff", sun: "#d8e8f0" },
     points: [
       { x: 153, y: 418 },
@@ -408,7 +409,7 @@ const TRACKS = [
     name: "Suzuka International Racing Course",
     theme: "Japanese technical masterpiece",
     roadWidth: 50,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#9fd0e8", grass: "#3a7a38", accent: "#ffeedd", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1e4a1e", horizonB: "#408040", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
       { x: 154, y: 434 },
@@ -486,7 +487,7 @@ const TRACKS = [
     name: "Circuit de Monaco",
     theme: "Street circuit showpiece",
     roadWidth: 52,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#4db8e8", grass: "#3a6a88", accent: "#ffeedd", road: "#505060", shoulder: "#c8c0b8", horizonA: "#184858", horizonB: "#3878a8", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
       { x: 160, y: 422 },
@@ -565,7 +566,7 @@ const TRACKS = [
     name: "Marina Bay Street Circuit",
     theme: "Night city circuit",
     roadWidth: 52,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" },
     points: [
       { x: 153, y: 440 },
@@ -645,7 +646,7 @@ const TRACKS = [
     name: "Bahrain International Circuit",
     theme: "Desert twilight circuit",
     roadWidth: 52,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#cc8833", grass: "#8a6a3a", accent: "#ffe8aa", road: "#585050", shoulder: "#c8b888", horizonA: "#6a4820", horizonB: "#aa7838", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcc44" },
     points: [
       { x: 155, y: 429 },
@@ -726,7 +727,7 @@ const TRACKS = [
     name: "Autódromo José Carlos Pace",
     theme: "Brazilian passion circuit",
     roadWidth: 50,
-    laps: 3,
+    laps: 5,
     bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" },
     points: [
       { x: 161, y: 424 },
@@ -849,6 +850,10 @@ const state = {
   lastTimestamp: 0,
   resultsQueued: false,
   resultTimeoutAt: 0,
+  flagOutAt: 0,
+  finalLapAt: 0,
+  paused: false,
+  pausedAt: 0,
   viewMode: "driver",
   cameraHeading: 0,
   camPos: null,
@@ -1114,6 +1119,11 @@ function createRacer(driver, kart, isPlayer, slot) {
     spinUntil: 0,
     spinImmuneUntil: 0,
     lapAccum: 0,
+    stallCheckAt: 0,
+    stallDistance: 0,
+    lapStartAt: 0,
+    lastLapTime: 0,
+    bestLapTime: 0,
     inkUntil: 0,
     driftCharge: 0,
     drifting: false,
@@ -1428,6 +1438,8 @@ function toggleFullscreen() {
 }
 
 function startCup() {
+  initAudio();
+  if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
   state.activeCupIndex = state.selectedCup;
   state.raceIndex = 0;
   buildCupEntries();
@@ -1452,6 +1464,10 @@ function startRace(index) {
   state.hudPlaceFlashUntil = 0;
   state.resultsQueued = false;
   state.resultTimeoutAt = 0;
+  state.flagOutAt = 0;
+  state.finalLapAt = 0;
+  state.paused = false;
+  state.pausedAt = 0;
   ui.resultsModal.classList.add("hidden");
   ui.podiumModal.classList.add("hidden");
   syncOverlayState();
@@ -1490,10 +1506,17 @@ function updateCountdown(now) {
   const step = Math.floor(elapsed);
   if (step < digits.length) {
     ui.countdownBanner.classList.add("hidden");
+    const litNow = clamp(Math.floor((elapsed - 0.35) / 0.62) + 1, 0, 5);
+    if (litNow > 0 && litNow !== audio.lastBeepStep) {
+      audio.lastBeepStep = litNow;
+      sfx.lightBeep();
+    }
   } else {
     ui.countdownBanner.classList.add("hidden");
     state.phase = "race";
     state.raceStart = now;
+    audio.lastBeepStep = -1;
+    sfx.lightsOut();
     addFeed("Lights out — go go go!");
   }
 }
@@ -1584,6 +1607,7 @@ function assignItemForPlace(place) {
 function startRoulette(racer) {
   if (racer.currentItem !== "none" || racer.rouletteUntil > performance.now()) return;
   racer.rouletteUntil = performance.now() + 1100;
+  if (racer.isPlayer) sfx.itemGet();
   addFeed(`${racer.driver.name} hit a power-up box.`);
 }
 
@@ -1598,6 +1622,7 @@ function finishRoulette(racer) {
 }
 
 function maybeUseAiItem(racer, now, dt) {
+  if (state.flagOutAt) return;
   if (racer.isPlayer || racer.currentItem === "none" || racer.itemCooldownUntil > now || racer.spinUntil > now) return;
   const sorted = getSortedRacers();
   const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
@@ -1613,6 +1638,7 @@ function useItem(racer, item, now) {
   if (!item || item === "none") return;
   racer.currentItem = "none";
   racer.itemCooldownUntil = now + 2600;
+  if (racer.isPlayer) sfx.itemUse();
   if (item === "oilSlick" || item === "drsSignPost") {
     state.hazards.push({
       type: item,
@@ -1673,7 +1699,10 @@ function spinRacer(racer, duration = 900) {
   if (now < (racer.spinImmuneUntil || 0)) return;
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
   racer.spinImmuneUntil = now + duration + 1400;
-  if (racer.isPlayer) addScreenShake(10, 420);
+  if (racer.isPlayer) {
+    addScreenShake(10, 420);
+    sfx.spin();
+  }
   racer.speed *= 0.55;
 }
 
@@ -1734,6 +1763,7 @@ function updateLapProgress(racer, now) {
   if (!racer.startedRaceLap) {
     racer.startedRaceLap = true;
     racer.lapAccum = 0;
+    racer.lapStartAt = now;
     return;
   }
 
@@ -1741,6 +1771,22 @@ function updateLapProgress(racer, now) {
   // back and forth across the line cannot bank several.
   if (racer.lapAccum < lapLength * 0.5) return;
   racer.lapAccum = 0;
+
+  if (racer.isPlayer) {
+    sfx.lap();
+    if (racer.lap + 1 === state.track.laps - 1) sfx.finalLap();
+  }
+  // Cars being fast-forwarded after the flag cover a lap in a fraction of the
+  // wall clock, so timing those laps would post impossible times and steal the
+  // fastest-lap point. Only laps run at normal speed are timed.
+  const fastForwarded = state.flagOutAt && !racer.isPlayer;
+  if (racer.lapStartAt && !fastForwarded) {
+    racer.lastLapTime = now - racer.lapStartAt;
+    if (!racer.bestLapTime || racer.lastLapTime < racer.bestLapTime) {
+      racer.bestLapTime = racer.lastLapTime;
+    }
+  }
+  racer.lapStartAt = now;
 
   racer.lap += 1;
   if (racer.lap >= state.track.laps) {
@@ -1879,8 +1925,10 @@ function updateRacer(racer, dt, now) {
   } else if (racer.drifting) {
     if (racer.driftCharge > 1.6) {
       racer.boostUntil = Math.max(racer.boostUntil, now + 1400);
+      if (racer.isPlayer) sfx.boost();
     } else if (racer.driftCharge > 0.9) {
       racer.boostUntil = Math.max(racer.boostUntil, now + 850);
+      if (racer.isPlayer) sfx.boost();
     }
     racer.drifting = false;
     racer.driftCharge = 0;
@@ -1899,9 +1947,29 @@ function updateRacer(racer, dt, now) {
   alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
   updateLapProgress(racer, now);
 
-  if (distance(racer, nextPoint) < 34) {
-    racer.waypointIndex = (racer.waypointIndex + 1) % state.track.points.length;
+  const wantedWaypoint = desiredWaypointIndex(racer, state.track);
+  if (wantedWaypoint !== racer.waypointIndex) {
+    racer.waypointIndex = wantedWaypoint;
     racer.passedWaypoints += 1;
+  }
+
+  // Watchdog. If a car somehow makes no progress along the lap for a few
+  // seconds, put it back on the racing line pointing the right way, so a
+  // wedged car can never stop the field from completing the distance.
+  if (!racer.stallCheckAt || now - racer.stallCheckAt > 3000) {
+    const previous = racer.stallDistance || 0;
+    const moved = Math.abs((racer.trackDistance || 0) - previous);
+    const wrappedRound = moved > state.track.totalLength * 0.5;
+    if (racer.stallCheckAt && !wrappedRound && moved < 40) {
+      const rescue = sampleRouteSurfaceAtDistance(getMainRoute(state.track), racer.trackDistance || 0);
+      racer.x = rescue.point.x;
+      racer.y = rescue.point.y;
+      racer.heading = Math.atan2(rescue.tangentY, rescue.tangentX);
+      racer.speed = Math.max(racer.speed, 50);
+      racer.spinUntil = 0;
+    }
+    racer.stallCheckAt = now;
+    racer.stallDistance = racer.trackDistance || 0;
   }
 
   state.track.itemBoxes.forEach((box) => {
@@ -1916,6 +1984,7 @@ function updateRacer(racer, dt, now) {
 function finishRacer(racer, now) {
   if (racer.finished) return;
   racer.finished = true;
+  if (racer.isPlayer) sfx.finish();
   const finishedCount = state.racers.filter((entry) => entry.finished).length;
   racer.finishPosition = finishedCount;
   racer.finishTime = now - state.raceStart;
@@ -2037,6 +2106,7 @@ function handleRacerContacts(now) {
 
         if (a.isPlayer || b.isPlayer) {
           addScreenShake(clamp(overlap * 0.7, 2, 9), 220);
+          if (overlap > 4) sfx.impact();
         }
         if (a.starUntil > now || a.bulletUntil > now) spinRacer(b, 700);
         if (b.starUntil > now || b.bulletUntil > now) spinRacer(a, 700);
@@ -2057,8 +2127,17 @@ function handleRacerContacts(now) {
   }
 }
 
+const FLAG_FAST_FORWARD = 7;
+
 function updateRace(dt, now) {
-  state.racers.forEach((racer) => updateRacer(racer, dt, now));
+  state.racers.forEach((racer) => {
+    if (racer.finished) return;
+    // Sub-stepping rather than a speed multiplier, so the cars still obey the
+    // same physics, corners and barriers -- they simply cover the remaining
+    // distance faster in real time.
+    const steps = state.flagOutAt && !racer.isPlayer ? FLAG_FAST_FORWARD : 1;
+    for (let step = 0; step < steps; step += 1) updateRacer(racer, dt, now);
+  });
   updateItems(dt, now);
   updateHazards(now);
   updateParticles(dt);
@@ -2070,9 +2149,12 @@ function updateRace(dt, now) {
 
   const player = getPlayer();
   const everyoneFinished = state.racers.every((racer) => racer.finished);
-  if (player && player.finished && !state.resultTimeoutAt && !everyoneFinished) {
-    state.resultTimeoutAt = now + 4500;
-    addFeed("Chequered flag out, positions being confirmed.");
+  if (player && player.finished && !state.flagOutAt && !everyoneFinished) {
+    state.flagOutAt = now;
+    // Safety valve only. With the fast-forward above the field is home in a
+    // few seconds; this exists so a wedged car can never hang the race.
+    state.resultTimeoutAt = now + 60000;
+    addFeed("Chequered flag — waiting for the rest of the field to come home.");
   }
 
   if (!state.resultsQueued && (everyoneFinished || (state.resultTimeoutAt && now >= state.resultTimeoutAt))) {
@@ -2103,6 +2185,15 @@ function finalizeRace() {
     const entry = state.cupEntries.find((cupEntry) => cupEntry.driver.id === racer.driver.id);
     if (entry) entry.points += POINTS_TABLE[index] || 0;
   });
+  // Bonus point for the fastest lap, top ten only, exactly as F1 scores it.
+  const fastest = finishers.reduce((best, racer) => (
+    racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
+  ), null);
+  if (fastest && finishers.indexOf(fastest) < 10) {
+    const entry = state.cupEntries.find((cupEntry) => cupEntry.driver.id === fastest.driver.id);
+    if (entry) entry.points += 1;
+    addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
+  }
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
   showResults(finishers);
 }
@@ -2123,12 +2214,16 @@ function completeRemainingFinishers(now) {
 function showResults(finishers) {
   const activeCup = getActiveCup();
   exitFullscreenMode();
+  const fastest = finishers.reduce((best, racer) => (
+    racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
+  ), null);
   ui.resultsKicker.textContent = `Race ${state.raceIndex + 1} Results`;
   ui.resultsTitle.textContent = `${state.track.name} Complete`;
   ui.resultsTable.innerHTML = `
     <div class="results-header">
       <span>Place</span>
       <span>Driver</span>
+      <span>Best Lap</span>
       <span>Race Pts</span>
       <span>Cup Pts</span>
     </div>
@@ -2139,6 +2234,7 @@ function showResults(finishers) {
         <div class="results-row ${racer.isPlayer ? "player-row" : ""}">
           <strong>${formatOrdinal(index + 1)}</strong>
           <span>${racer.driver.name}</span>
+          <span class="${fastest && racer.id === fastest.id ? "fastest-lap" : ""}">${formatLapTime(racer.bestLapTime)}</span>
           <span>${racePoints}</span>
           <span>${cupEntry ? cupEntry.points : racePoints}</span>
         </div>
@@ -2307,6 +2403,34 @@ function sampleRouteSurfaceAtDistance(route, rawDistance) {
     normalY: 1,
     width: route.defaultWidth || 48,
   };
+}
+
+function getMainRoute(track) {
+  if (!track.mainRoute) {
+    track.mainRoute = {
+      segments: track.segments,
+      cumulativeStarts: track.cumulativeStarts,
+      totalLength: track.totalLength,
+      fallbackPoint: track.points[0],
+      defaultWidth: track.roadWidth,
+      closed: true,
+    };
+  }
+  return track.mainRoute;
+}
+
+// The waypoint a car should be aiming at, derived from how far around the lap
+// it actually is. The old code only advanced the index when a car came within
+// 34 units of the point, so a car shoved wide missed it, kept chasing a target
+// it could never reach, and circled the same corner for the rest of the race.
+function desiredWaypointIndex(racer, track) {
+  const starts = track.cumulativeStarts;
+  const total = track.totalLength;
+  const ahead = (((racer.trackDistance || 0) + 34) % total + total) % total;
+  for (let i = 0; i < starts.length; i += 1) {
+    if (starts[i] > ahead) return i % track.points.length;
+  }
+  return 0;
 }
 
 function getCameraRoute(player, track) {
@@ -2928,6 +3052,245 @@ function drawDriverView(track) {
 
 // Subtle speed streaks at the screen edges once you are really moving.
 // ---------------------------------------------------------------------------
+// Audio. Everything is synthesised with WebAudio -- no asset files, no loading.
+// The context can only start after a user gesture, so initAudio() is called
+// from the first click or key press.
+// ---------------------------------------------------------------------------
+
+const audio = {
+  ctx: null,
+  master: null,
+  engine: null,
+  screech: null,
+  noiseBuffer: null,
+  ready: false,
+  enabled: true,
+  lastBeepStep: -1,
+};
+
+function loadAudioPreference() {
+  try {
+    const stored = window.localStorage.getItem("f1pixelcup.sound");
+    if (stored !== null) audio.enabled = stored === "on";
+  } catch (err) {
+    // Private browsing or blocked storage: just keep the default.
+  }
+}
+
+function saveAudioPreference() {
+  try {
+    window.localStorage.setItem("f1pixelcup.sound", audio.enabled ? "on" : "off");
+  } catch (err) {
+    // Nothing to do; the preference simply will not persist.
+  }
+}
+
+function makeNoiseBuffer(ctx) {
+  const length = Math.floor(ctx.sampleRate * 1.4);
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
+  return buffer;
+}
+
+function initAudio() {
+  if (audio.ready) return;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return;
+  try {
+    audio.ctx = new AudioCtx();
+  } catch (err) {
+    return;
+  }
+  const ctxA = audio.ctx;
+  audio.master = ctxA.createGain();
+  audio.master.gain.value = audio.enabled ? 0.55 : 0;
+  audio.master.connect(ctxA.destination);
+  audio.noiseBuffer = makeNoiseBuffer(ctxA);
+
+  // Engine: two detuned oscillators through a lowpass that opens with revs.
+  const engineGain = ctxA.createGain();
+  engineGain.gain.value = 0;
+  const engineFilter = ctxA.createBiquadFilter();
+  engineFilter.type = "lowpass";
+  engineFilter.frequency.value = 700;
+  engineFilter.Q.value = 6;
+  const oscA = ctxA.createOscillator();
+  oscA.type = "sawtooth";
+  oscA.frequency.value = 55;
+  const oscB = ctxA.createOscillator();
+  oscB.type = "square";
+  oscB.frequency.value = 82;
+  const oscBGain = ctxA.createGain();
+  oscBGain.gain.value = 0.4;
+  oscA.connect(engineFilter);
+  oscB.connect(oscBGain);
+  oscBGain.connect(engineFilter);
+  engineFilter.connect(engineGain);
+  engineGain.connect(audio.master);
+  oscA.start();
+  oscB.start();
+  audio.engine = { oscA, oscB, gain: engineGain, filter: engineFilter };
+
+  // Tyre scrub: looping noise through a bandpass, opened while sliding.
+  const screechSource = ctxA.createBufferSource();
+  screechSource.buffer = audio.noiseBuffer;
+  screechSource.loop = true;
+  const screechFilter = ctxA.createBiquadFilter();
+  screechFilter.type = "bandpass";
+  screechFilter.frequency.value = 1750;
+  screechFilter.Q.value = 7;
+  const screechGain = ctxA.createGain();
+  screechGain.gain.value = 0;
+  screechSource.connect(screechFilter);
+  screechFilter.connect(screechGain);
+  screechGain.connect(audio.master);
+  screechSource.start();
+  audio.screech = { gain: screechGain, filter: screechFilter };
+
+  audio.ready = true;
+  updateSoundButton();
+}
+
+function setAudioEnabled(enabled) {
+  audio.enabled = enabled;
+  saveAudioPreference();
+  if (audio.ready && audio.master) {
+    // Stay silent if the game is paused, whatever the toggle says.
+    const level = enabled && !state.paused ? 0.55 : 0;
+    audio.master.gain.setTargetAtTime(level, audio.ctx.currentTime, 0.04);
+  }
+  updateSoundButton();
+}
+
+function updateSoundButton() {
+  if (ui.soundToggle) {
+    ui.soundToggle.textContent = audio.enabled ? "Sound: On" : "Sound: Off";
+    ui.soundToggle.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
+  }
+}
+
+function audioReady() {
+  return audio.ready && audio.enabled && audio.ctx && audio.ctx.state === "running";
+}
+
+// One-shot pitched blip.
+function playTone(frequency, { endFrequency, type = "square", duration = 0.16, volume = 0.3, delay = 0 } = {}) {
+  if (!audioReady()) return;
+  const ctxA = audio.ctx;
+  const start = ctxA.currentTime + delay;
+  const osc = ctxA.createOscillator();
+  const gain = ctxA.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(frequency, start);
+  if (endFrequency) osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), start + duration);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  osc.connect(gain);
+  gain.connect(audio.master);
+  osc.start(start);
+  osc.stop(start + duration + 0.03);
+}
+
+// One-shot noise burst, for impacts and scrapes.
+function playNoise({ duration = 0.2, volume = 0.35, frequency = 900, type = "lowpass", sweepTo } = {}) {
+  if (!audioReady()) return;
+  const ctxA = audio.ctx;
+  const start = ctxA.currentTime;
+  const source = ctxA.createBufferSource();
+  source.buffer = audio.noiseBuffer;
+  const filter = ctxA.createBiquadFilter();
+  filter.type = type;
+  filter.frequency.setValueAtTime(frequency, start);
+  if (sweepTo) filter.frequency.exponentialRampToValueAtTime(Math.max(60, sweepTo), start + duration);
+  const gain = ctxA.createGain();
+  gain.gain.setValueAtTime(volume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audio.master);
+  source.start(start);
+  source.stop(start + duration + 0.02);
+}
+
+const sfxLastPlayed = {};
+
+// Rate limit for sounds that can be triggered many times in a single frame.
+function sfxAllowed(key, minimumGapMs) {
+  const now = performance.now();
+  if (now - (sfxLastPlayed[key] || 0) < minimumGapMs) return false;
+  sfxLastPlayed[key] = now;
+  return true;
+}
+
+const sfx = {
+  lightBeep: () => playTone(620, { duration: 0.16, volume: 0.3, type: "square" }),
+  lightsOut: () => {
+    playTone(880, { duration: 0.45, volume: 0.34, type: "square" });
+    playTone(1320, { duration: 0.45, volume: 0.18, type: "square", delay: 0.02 });
+  },
+  impact: () => {
+    if (!sfxAllowed("impact", 130)) return;
+    playNoise({ duration: 0.18, volume: 0.4, frequency: 1200, sweepTo: 180 });
+    playTone(120, { endFrequency: 60, duration: 0.16, volume: 0.28, type: "triangle" });
+  },
+  spin: () => {
+    if (!sfxAllowed("spin", 400)) return;
+    playTone(420, { endFrequency: 90, duration: 0.6, volume: 0.3, type: "sawtooth" });
+  },
+  itemGet: () => {
+    playTone(660, { duration: 0.09, volume: 0.24 });
+    playTone(880, { duration: 0.09, volume: 0.24, delay: 0.09 });
+    playTone(1180, { duration: 0.14, volume: 0.24, delay: 0.18 });
+  },
+  itemUse: () => playTone(300, { endFrequency: 900, duration: 0.18, volume: 0.28, type: "square" }),
+  lap: () => {
+    playTone(760, { duration: 0.12, volume: 0.26 });
+    playTone(1140, { duration: 0.18, volume: 0.24, delay: 0.1 });
+  },
+  finalLap: () => {
+    playTone(980, { duration: 0.14, volume: 0.3 });
+    playTone(980, { duration: 0.14, volume: 0.3, delay: 0.18 });
+  },
+  finish: () => {
+    [523, 659, 784, 1047].forEach((note, index) => {
+      playTone(note, { duration: 0.3, volume: 0.3, delay: index * 0.13, type: "triangle" });
+    });
+  },
+  boost: () => {
+    if (!sfxAllowed("boost", 260)) return;
+    playTone(220, { endFrequency: 720, duration: 0.3, volume: 0.26, type: "sawtooth" });
+  },
+};
+
+// Continuous engine and tyre noise, driven from the player's car each frame.
+function updateEngineAudio(player) {
+  if (!audio.ready || !audio.engine) return;
+  const ctxA = audio.ctx;
+  const now = ctxA.currentTime;
+  const racing = state.phase === "race" || state.phase === "countdown";
+  const maxSpeed = Math.max(1, player ? player.physics.maxSpeed : 1);
+  const ratio = player ? clamp(Math.abs(player.speed) / maxSpeed, 0, 1.25) : 0;
+
+  // Fake gearing: the note climbs, drops back, and climbs again.
+  const geared = (ratio * 4) % 1;
+  const base = 46 + geared * 58 + ratio * 66;
+  audio.engine.oscA.frequency.setTargetAtTime(base, now, 0.05);
+  audio.engine.oscB.frequency.setTargetAtTime(base * 1.5, now, 0.05);
+  audio.engine.filter.frequency.setTargetAtTime(420 + ratio * 2400, now, 0.06);
+  const idle = racing ? 0.055 : 0;
+  const level = player && player.finished ? 0 : idle + ratio * 0.1;
+  audio.engine.gain.gain.setTargetAtTime(level, now, 0.09);
+
+  if (audio.screech) {
+    const sliding = player && !player.finished
+      && (player.drifting || (Math.abs(player.speed) > 60 && !findSurfaceInfo(player, state.track).onRoad));
+    audio.screech.gain.gain.setTargetAtTime(sliding ? 0.13 : 0, now, 0.07);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Particles: drift smoke, boost flame and dirt kicked up off the kerbs. They
 // live in world space and are projected through the same camera as everything
 // else, so they sit on the track rather than floating on the glass.
@@ -3312,6 +3675,14 @@ function hudPanel(x, y, w, h, accent) {
   }
 }
 
+function formatLapTime(ms) {
+  if (!ms || ms <= 0) return "--:--.--";
+  const total = ms / 1000;
+  const minutes = Math.floor(total / 60);
+  const seconds = total - minutes * 60;
+  return `${minutes}:${seconds.toFixed(2).padStart(5, "0")}`;
+}
+
 function formatGap(seconds) {
   if (!Number.isFinite(seconds)) return "--.-";
   if (seconds >= 60) return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
@@ -3333,7 +3704,7 @@ function drawDriverHud(track, player) {
   state.hudLastPlace = place;
 
   // ---- Lap block, top left ----
-  hudPanel(20, 16, 244, 74, placeStyle.fill);
+  hudPanel(20, 16, 262, 116, placeStyle.fill);
   ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
   ctx.font = "bold 11px Trebuchet MS";
   ctx.fillText(track.name.toUpperCase(), 34, 34);
@@ -3344,17 +3715,32 @@ function drawDriverHud(track, player) {
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 30px Georgia";
   const lapNow = getDisplayedLap(player, track);
+  const lapNowWidth = ctx.measureText(`${lapNow}`).width;
   ctx.fillText(`${lapNow}`, 66, 62);
   ctx.font = "bold 17px Georgia";
   ctx.fillStyle = "rgba(255, 240, 201, 0.66)";
-  ctx.fillText(`/ ${track.laps}`, 66 + ctx.measureText(`${lapNow}`).width + 22, 62);
+  ctx.fillText(`/ ${track.laps}`, 66 + lapNowWidth + 10, 62);
 
   // Lap progress bar.
   const lapFraction = clamp(getRelativeTrackDistance(player, track) / track.totalLength, 0, 1);
   ctx.fillStyle = "rgba(255, 240, 201, 0.16)";
-  ctx.fillRect(34, 74, 214, 5);
+  ctx.fillRect(34, 72, 232, 5);
   ctx.fillStyle = placeStyle.fill;
-  ctx.fillRect(34, 74, 214 * lapFraction, 5);
+  ctx.fillRect(34, 72, 232 * lapFraction, 5);
+
+  // Lap times.
+  const liveLap = player.finished || !player.lapStartAt ? player.lastLapTime : now - player.lapStartAt;
+  const timeRow = (label, value, y, color) => {
+    ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
+    ctx.font = "bold 11px Trebuchet MS";
+    ctx.fillText(label, 34, y);
+    ctx.fillStyle = color;
+    ctx.font = "bold 15px Georgia";
+    const text = formatLapTime(value);
+    ctx.fillText(text, 266 - ctx.measureText(text).width, y);
+  };
+  timeRow("THIS LAP", liveLap, 96, "#fff0c9");
+  timeRow("BEST", player.bestLapTime, 116, "#39d98a");
 
   // ---- Position block, bottom left ----
   const flashing = now < (state.hudPlaceFlashUntil || 0);
@@ -3414,6 +3800,41 @@ function drawDriverHud(track, player) {
   };
   gapRow("AHD", ahead, canvas.height - 64, "#ff8f6b");
   gapRow("BHD", behind, canvas.height - 34, "#75d5ff");
+
+  // ---- Final lap call ----
+  if (!player.finished && player.startedRaceLap && player.lap === track.laps - 1) {
+    if (!state.finalLapAt) state.finalLapAt = now;
+    if (now - state.finalLapAt < 3200) {
+      const fade = 1 - (now - state.finalLapAt) / 3200;
+      ctx.save();
+      ctx.globalAlpha = 0.35 + fade * 0.65;
+      ctx.fillStyle = "#e7b83d";
+      ctx.font = "bold 46px Georgia";
+      ctx.textAlign = "center";
+      ctx.fillText("FINAL LAP", canvas.width / 2, 196);
+      ctx.textAlign = "left";
+      ctx.restore();
+    }
+  }
+
+  // ---- Waiting for the rest of the field ----
+  if (state.flagOutAt && player.finished) {
+    const done = state.racers.filter((racer) => racer.finished).length;
+    const w = 420;
+    const x = canvas.width / 2 - w / 2;
+    hudPanel(x, 226, w, 92, "#e7b83d");
+    ctx.fillStyle = "#e7b83d";
+    ctx.font = "bold 30px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText("CHEQUERED FLAG", canvas.width / 2, 264);
+    ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
+    ctx.font = "bold 15px Trebuchet MS";
+    ctx.fillText(`You finished P${player.finishPosition} — field coming home`, canvas.width / 2, 288);
+    ctx.fillStyle = "#fff0c9";
+    ctx.font = "bold 16px Georgia";
+    ctx.fillText(`${done} / ${state.racers.length} classified`, canvas.width / 2, 310);
+    ctx.textAlign = "left";
+  }
 
   // ---- Speed, bottom right ----
   const kph = Math.round(Math.abs(player.speed) * 1.45);
@@ -3760,18 +4181,78 @@ function drawPlayerEffects() {
   }
 }
 
+// Pausing shifts every deadline in flight. Without this, a paused boost, spin,
+// item cooldown or lap timer would all expire the instant the game resumes.
+const RACER_TIME_FIELDS = ["rouletteUntil", "itemCooldownUntil", "boostUntil", "starUntil", "bulletUntil", "shrinkUntil", "spinUntil", "spinImmuneUntil", "inkUntil", "lapStartAt"];
+
+function shiftRaceClocks(delta) {
+  state.racers.forEach((racer) => {
+    RACER_TIME_FIELDS.forEach((field) => {
+      if (racer[field]) racer[field] += delta;
+    });
+  });
+  state.items.forEach((item) => {
+    if (item.expiresAt) item.expiresAt += delta;
+    if (item.armedAt) item.armedAt += delta;
+  });
+  state.hazards.forEach((hazard) => {
+    if (hazard.expiresAt) hazard.expiresAt += delta;
+  });
+  ["raceStart", "flagOutAt", "resultTimeoutAt", "countdownStart",
+   "hudPlaceFlashUntil", "finalLapAt", "shakeUntil"].forEach((field) => {
+    if (state[field]) state[field] += delta;
+  });
+}
+
+function togglePause() {
+  if (state.phase !== "race" && state.phase !== "countdown") return;
+  if (state.paused) {
+    shiftRaceClocks(performance.now() - state.pausedAt);
+    state.paused = false;
+    state.pausedAt = 0;
+  } else {
+    state.paused = true;
+    state.pausedAt = performance.now();
+  }
+  if (audio.ready && audio.master) {
+    audio.master.gain.setTargetAtTime(
+      !audio.enabled || state.paused ? 0 : 0.55, audio.ctx.currentTime, 0.05,
+    );
+  }
+}
+
+function drawPauseOverlay() {
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 6, 14, 0.62)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#fff0c9";
+  ctx.font = "bold 62px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 6);
+  ctx.font = "bold 16px Trebuchet MS";
+  ctx.fillStyle = "rgba(255, 240, 201, 0.7)";
+  ctx.fillText("Press Esc or P to resume", canvas.width / 2, canvas.height / 2 + 30);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
 function update(now) {
   const dt = clamp((now - (state.lastTimestamp || now)) / 1000, 0, 0.033);
   state.lastTimestamp = now;
 
-  if (state.phase === "countdown") {
-    updateCountdown(now);
-  } else if (state.phase === "race") {
-    updateRace(dt, now);
+  if (!state.paused) {
+    if (state.phase === "countdown") {
+      updateCountdown(now);
+    } else if (state.phase === "race") {
+      updateRace(dt, now);
+    }
   }
+
+  updateEngineAudio(getPlayer());
 
   if (state.phase !== "garage") {
     drawTrack(state.track);
+    if (state.paused) drawPauseOverlay();
   } else {
     drawGarageScene();
   }
@@ -3841,11 +4322,18 @@ function bindEvents() {
     ui.toggleView.addEventListener("click", toggleViewMode);
   }
   ui.fullscreenView.addEventListener("click", toggleFullscreen);
+  ui.soundToggle.addEventListener("click", () => {
+    initAudio();
+    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+    setAudioEnabled(!audio.enabled);
+  });
   ui.canvasShell.addEventListener("dblclick", toggleFullscreen);
   document.addEventListener("fullscreenchange", updateViewControls);
   document.addEventListener("webkitfullscreenchange", updateViewControls);
 
   window.addEventListener("keydown", (event) => {
+    if (!audio.ready) initAudio();
+    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Shift"].includes(event.key) || event.code === "Space") {
       event.preventDefault();
     }
@@ -3854,6 +4342,10 @@ function bindEvents() {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
     if (event.key === "Shift") input.drift = true;
+    if (event.key === "Escape" || event.key.toLowerCase() === "p") {
+      event.preventDefault();
+      togglePause();
+    }
     if (event.code === "Space") {
       event.preventDefault();
       const player = getPlayer();
@@ -3876,6 +4368,8 @@ function bindEvents() {
   });
 }
 
+loadAudioPreference();
+updateSoundButton();
 renderGarage();
 updateViewControls();
 syncOverlayState();

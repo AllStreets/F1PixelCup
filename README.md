@@ -9,8 +9,9 @@ A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
 - **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each with its own layout: chicanes, esses, hairpins and switchbacks that turn *both* ways, generated from hand-placed control points and spline-smoothed so every corner stays drivable
 - **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
+- **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
 - **F1 power-up system** — Overtake Button, Power Deploy, Safety Car, Graining, Undercut, Debris, Oil Slick, Engine Blast, Formation Lap, Steward Penalty, DRS Sign
-- **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1 points system
+- **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1, plus the bonus point for fastest lap (top ten finishers only)
 - **Pixel-art F1 cars** — team livery colours, front wing, rear wing, halo, helmet
 - **Driver-locked constructor cars** — pick a driver, race their team car
 - **Live championship standings** updated after each race
@@ -26,12 +27,27 @@ Always on screen while racing:
 - **SPEED** — km/h with a redline bar
 - **Mini map** — rotated so *up is always the direction you are driving*, with a field-of-view wedge showing exactly the slice of track filling the main screen, every rival as a heading-aware blip, and the podium places ringed in gold
 
+## Sound
+
+Everything is synthesised with WebAudio — no audio files, nothing to load.
+
+- **Engine note** that rises with speed and steps through fake gears
+- **Tyre scrub** while drifting or running wide
+- **Start light beeps**, one per light, then the lights-out tone
+- Impacts, spins, power-up pickup and use, drift-boost, lap chime, final-lap call and a finishing fanfare
+- **Sound: On / Off** button next to Full Screen; the choice is remembered between sessions
+
+The audio context can only start from a user gesture, so it initialises on the first click or key press.
+
 ## Race feel
 
 - **F1 start gantry** — five red lights come on one column at a time, then out. Lights out, go.
 - **Drift smoke that tells you something** — the smoke off the rear tyres turns from white to blue to orange as the drift boost charges, so you can read the charge without looking away from the road
 - **Boost flame, dirt off the kerbs, and impact shake** on contact and spins
 - **Catch-up racing** — cars behind you run up to 10% quicker and cars ahead up to 10% slower, so the field stays in touch instead of stringing out over a lap
+- **Live lap times** — current lap and your best, alongside the lap counter; the race results carry a best-lap column with the fastest highlighted
+- **FINAL LAP** call, and a chequered-flag panel while the remaining cars come home
+- **Everyone finishes.** Once you are home the rest of the field is fast-forwarded by sub-stepping its physics, so every car completes the full five laps in about three seconds of real time rather than being retired where it stood
 
 ## Rendering
 
@@ -84,6 +100,8 @@ F1_Pixel_Cup/
 | Steer | `A` `D` / `←` `→` |
 | Drift Boost | Hold `Shift` in corners |
 | Use Power-Up | `Space` |
+| Pause | `Esc` or `P` |
+| Sound On / Off | Button on UI |
 | Full Screen | Button on UI |
 
 ---
