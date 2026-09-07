@@ -20,8 +20,8 @@
       </div>
       <div class="masthead-chip">
         <p class="eyebrow">Race Rules</p>
-        <p>3 laps per race</p>
-        <p>Full 20-car grid</p>
+        <p>5 laps per race, full distance for all 20 cars</p>
+        <p>Full 20-car grid, three difficulties</p>
         <p>F1 power-ups &amp; post-race scoring</p>
       </div>
     </header>
@@ -34,6 +34,7 @@
             <h2>Select Your Driver</h2>
           </div>
           <div class="garage-actions">
+            <div id="difficulty-grid" class="cup-grid" aria-label="Difficulty"></div>
             <div id="cup-grid" class="cup-grid" aria-label="Cup selection"></div>
             <button id="start-cup" class="primary-button" type="button">Start Trophy Cup</button>
           </div>
@@ -100,7 +101,7 @@
             <div class="topbar-pills">
               <div class="hud-pill">
                 <span>Lap</span>
-                <strong id="lap-indicator">1 / 3</strong>
+                <strong id="lap-indicator">1 / 5</strong>
               </div>
               <div class="hud-pill">
                 <span>Place</span>

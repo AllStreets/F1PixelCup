@@ -7,7 +7,8 @@ A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each with its own layout: chicanes, esses, hairpins and switchbacks that turn *both* ways, generated from hand-placed control points and spline-smoothed so every corner stays drivable
+- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos. Roughly 4,100 units a lap with 54-66 corners, and around 390 degrees of counter-steer per lap, so you are genuinely turning left *and* right rather than circling an oval
+- **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
 - **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
 - **F1 power-up system** — Overtake Button, Power Deploy, Safety Car, Graining, Undercut, Debris, Oil Slick, Engine Blast, Formation Lap, Steward Penalty, DRS Sign
@@ -26,6 +27,22 @@ Always on screen while racing:
 - **INTERVAL** — gap in seconds to the car ahead and the car behind
 - **SPEED** — km/h with a redline bar
 - **Mini map** — rotated so *up is always the direction you are driving*, with a field-of-view wedge showing exactly the slice of track filling the main screen, every rival as a heading-aware blip, and the podium places ringed in gold
+
+## The rivals
+
+Every car on the grid, yours included, runs identical machinery. There is no
+hidden player advantage: the traffic throttle and brake penalty, the reverse
+speed and the road-alignment assist are the same numbers for all 20 cars. The
+only thing reserved for the AI is steering avoidance, which stands in for the
+hands you have on the keyboard.
+
+Measured on Monza, best lap over four laps:
+
+| Difficulty | Fastest AI | Median AI |
+|---|---|---|
+| Rookie | 24.7s | 27.2s |
+| Pro | 21.5s | 25.5s |
+| Legend | 23.3s | 24.5s |
 
 ## Sound
 
