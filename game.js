@@ -857,6 +857,8 @@ const state = {
   hudLastPlace: 0,
   hudPlaceFlashUntil: 0,
   hudPlaceFlashDir: 0,
+  shakeMag: 0,
+  shakeUntil: 0,
 };
 
 const input = {
@@ -1041,9 +1043,9 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
     const steerAway = side >= 0 ? -1 : 1;
     steerAdjust += steerAway * pressure * (racer.isPlayer ? 0.38 : 0.88);
 
-    if (forward > -4) {
-      throttleScale = Math.min(throttleScale, racer.isPlayer ? 0.85 : 0.58 - pressure * 0.22);
-      brakeBoost = Math.max(brakeBoost, racer.isPlayer ? pressure * 0.10 : pressure * 0.58);
+    if (forward > 8) {
+      throttleScale = Math.min(throttleScale, racer.isPlayer ? 0.88 : 0.74 - pressure * 0.16);
+      brakeBoost = Math.max(brakeBoost, racer.isPlayer ? pressure * 0.10 : pressure * 0.32);
     }
   });
 
@@ -1111,6 +1113,7 @@ function createRacer(driver, kart, isPlayer, slot) {
     shrinkUntil: 0,
     spinUntil: 0,
     spinImmuneUntil: 0,
+    lapAccum: 0,
     inkUntil: 0,
     driftCharge: 0,
     drifting: false,
@@ -1486,8 +1489,7 @@ function updateCountdown(now) {
   const digits = ["3", "2", "1", "GO!"];
   const step = Math.floor(elapsed);
   if (step < digits.length) {
-    ui.countdownBanner.textContent = digits[step];
-    ui.countdownBanner.classList.remove("hidden");
+    ui.countdownBanner.classList.add("hidden");
   } else {
     ui.countdownBanner.classList.add("hidden");
     state.phase = "race";
@@ -1671,6 +1673,7 @@ function spinRacer(racer, duration = 900) {
   if (now < (racer.spinImmuneUntil || 0)) return;
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
   racer.spinImmuneUntil = now + duration + 1400;
+  if (racer.isPlayer) addScreenShake(10, 420);
   racer.speed *= 0.55;
 }
 
@@ -1706,18 +1709,38 @@ function alignRacerToSurface(racer, surface, turnBlend = 0.32) {
 function updateLapProgress(racer, now) {
   const previousDistance = racer.trackDistance || 0;
   const currentDistance = getCourseDistanceForRacer(racer, state.track);
-  const crossingBand = Math.max(44, state.track.roadWidth * 0.9);
-  const crossedForward = previousDistance > state.track.totalLength - crossingBand
-    && currentDistance < crossingBand
-    && racer.speed > 18;
+  const lapLength = state.track.totalLength;
+
+  // Signed progress since the previous frame, wrapped into [-L/2, +L/2]. Using
+  // the direction of travel rather than a raw speed threshold matters: the
+  // front row reaches the line while still accelerating, and the old
+  // `speed > 18` guard silently rejected that crossing. Once the previous
+  // distance was past the line the crossing could never be re-detected, so the
+  // pole car -- always the player -- lost a full lap and finished last.
+  let delta = currentDistance - previousDistance;
+  if (delta > lapLength / 2) delta -= lapLength;
+  if (delta < -lapLength / 2) delta += lapLength;
 
   racer.trackDistance = currentDistance;
+  racer.lapAccum = (racer.lapAccum || 0) + delta;
 
-  if (!crossedForward) return;
+  // A genuine crossing is a wrap from the end of the lap back to the start,
+  // made while moving forwards. Deliberately no speed or per-frame distance
+  // threshold: at 120fps a car doing 60 advances well under a unit per frame,
+  // and any such threshold silently swallows the crossing.
+  const wrapped = previousDistance > lapLength * 0.75 && currentDistance < lapLength * 0.25;
+  if (!wrapped || delta <= 0) return;
+
   if (!racer.startedRaceLap) {
     racer.startedRaceLap = true;
+    racer.lapAccum = 0;
     return;
   }
+
+  // A lap only counts if most of one was actually driven, so a car nudging
+  // back and forth across the line cannot bank several.
+  if (racer.lapAccum < lapLength * 0.5) return;
+  racer.lapAccum = 0;
 
   racer.lap += 1;
   if (racer.lap >= state.track.laps) {
@@ -1808,6 +1831,16 @@ function updateRacer(racer, dt, now) {
   if (racer.bulletUntil > now) targetSpeed = racer.physics.maxSpeed * 1.42;
   if (racer.shrinkUntil > now) targetSpeed *= 0.76;
 
+  if (!racer.isPlayer) {
+    const human = getPlayer();
+    if (human && human !== racer) {
+      // Positive when this car is behind the player, negative when ahead.
+      const gap = getRaceProgress(human) - getRaceProgress(racer);
+      const catchUp = clamp(gap / (state.track.totalLength * 0.5), -1, 1);
+      targetSpeed *= 1 + catchUp * 0.1;
+    }
+  }
+
   if (throttle > 0) {
     if (racer.speed < 0) {
       racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * 0.95 * dt);
@@ -1876,6 +1909,8 @@ function updateRacer(racer, dt, now) {
       startRoulette(racer);
     }
   });
+
+  emitRacerParticles(racer, dt, now, offroad);
 }
 
 function finishRacer(racer, now) {
@@ -2000,6 +2035,9 @@ function handleRacerContacts(now) {
         b.x += ny * lateralBias;
         b.y -= nx * lateralBias;
 
+        if (a.isPlayer || b.isPlayer) {
+          addScreenShake(clamp(overlap * 0.7, 2, 9), 220);
+        }
         if (a.starUntil > now || a.bulletUntil > now) spinRacer(b, 700);
         if (b.starUntil > now || b.bulletUntil > now) spinRacer(a, 700);
 
@@ -2023,6 +2061,7 @@ function updateRace(dt, now) {
   state.racers.forEach((racer) => updateRacer(racer, dt, now));
   updateItems(dt, now);
   updateHazards(now);
+  updateParticles(dt);
   handleRacerContacts(now);
   handleRacerContacts(now);
   handleRacerContacts(now);
@@ -2854,6 +2893,8 @@ function drawDriverView(track) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   ctx.save();
+  const shake = getScreenShake();
+  ctx.translate(shake.x, shake.y);
   // Bank the whole world slightly through corners.
   ctx.translate(canvas.width / 2, CAMERA.horizon);
   ctx.rotate(state.camRoll || 0);
@@ -2872,6 +2913,7 @@ function drawDriverView(track) {
   drawDriverSceneDecor(track, player, cameraHeading);
   drawDriverItemBoxesInScene(track, player, cameraHeading);
   drawDriverItemsInScene(player, cameraHeading);
+  drawSceneParticles(player, cameraHeading);
   drawDriverRacers(player, track, cameraHeading);
   ctx.restore();
 
@@ -2879,10 +2921,178 @@ function drawDriverView(track) {
   drawDriverItemBadge(player);
   drawMiniMap(track, player, { x: canvas.width - 224, y: 12, width: 212, height: 212 });
   drawDriverHud(track, player);
+  if (state.phase === "countdown") drawStartLights(performance.now());
+  drawLightsOutFlash(performance.now());
   drawPlayerEffects();
 }
 
 // Subtle speed streaks at the screen edges once you are really moving.
+// ---------------------------------------------------------------------------
+// Particles: drift smoke, boost flame and dirt kicked up off the kerbs. They
+// live in world space and are projected through the same camera as everything
+// else, so they sit on the track rather than floating on the glass.
+// ---------------------------------------------------------------------------
+
+const MAX_PARTICLES = 220;
+
+function spawnParticle(particle) {
+  if (state.particles.length >= MAX_PARTICLES) return;
+  state.particles.push(particle);
+}
+
+function emitRacerParticles(racer, dt, now, offroad) {
+  const boosting = racer.boostUntil > now || racer.bulletUntil > now;
+  const sliding = racer.drifting;
+  const scuffing = offroad && Math.abs(racer.speed) > 40;
+  if (!boosting && !sliding && !scuffing) return;
+
+  racer.emitAccum = (racer.emitAccum || 0) + dt;
+  const interval = 0.035;
+  while (racer.emitAccum >= interval) {
+    racer.emitAccum -= interval;
+    const cos = Math.cos(racer.heading);
+    const sin = Math.sin(racer.heading);
+    const spread = (Math.random() - 0.5) * 13;
+    const px = racer.x - cos * 15 - sin * spread;
+    const py = racer.y - sin * 15 + cos * spread;
+
+    if (sliding) {
+      // Smoke takes on the colour of the boost that is charging, so you can
+      // see the drift ripening without looking away from the road.
+      const charge = racer.driftCharge;
+      const color = charge > 1.6 ? "#ff9a3c" : charge > 0.9 ? "#75d5ff" : "#e6e6ef";
+      spawnParticle({
+        x: px, y: py,
+        vx: (Math.random() - 0.5) * 28, vy: (Math.random() - 0.5) * 28,
+        life: 0.55, maxLife: 0.55, size: 5 + Math.random() * 4, color, height: 3,
+      });
+    } else if (boosting) {
+      spawnParticle({
+        x: px, y: py,
+        vx: (Math.random() - 0.5) * 18, vy: (Math.random() - 0.5) * 18,
+        life: 0.3, maxLife: 0.3, size: 4 + Math.random() * 3,
+        color: Math.random() < 0.5 ? "#ffd166" : "#ff6b35", height: 6,
+      });
+    } else {
+      spawnParticle({
+        x: px, y: py,
+        vx: (Math.random() - 0.5) * 24, vy: (Math.random() - 0.5) * 24,
+        life: 0.7, maxLife: 0.7, size: 4 + Math.random() * 4, color: "#8f7a52", height: 3,
+      });
+    }
+  }
+}
+
+function updateParticles(dt) {
+  state.particles = state.particles.filter((particle) => {
+    particle.life -= dt;
+    if (particle.life <= 0) return false;
+    particle.x += particle.vx * dt;
+    particle.y += particle.vy * dt;
+    particle.vx *= 0.94;
+    particle.vy *= 0.94;
+    return true;
+  });
+}
+
+function drawSceneParticles(player, cameraHeading) {
+  if (!state.particles.length) return;
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  state.particles
+    .map((particle) => ({ particle, ...projectScene(camOrigin, cameraHeading, particle, particle.height) }))
+    .filter((entry) => entry.visible && entry.forward < 700)
+    .sort((a, b) => b.forward - a.forward)
+    .forEach(({ particle, x, y, scale }) => {
+      const size = clamp(particle.size * scale, 1, 34);
+      ctx.save();
+      ctx.globalAlpha = clamp(particle.life / particle.maxLife, 0, 1) * 0.72;
+      ctx.fillStyle = particle.color;
+      ctx.fillRect(x - size / 2, y - size / 2, size, size);
+      ctx.restore();
+    });
+}
+
+function addScreenShake(magnitude, durationMs) {
+  const now = performance.now();
+  state.shakeMag = Math.min(11, Math.max(state.shakeMag || 0, magnitude));
+  state.shakeUntil = Math.max(state.shakeUntil || 0, now + durationMs);
+}
+
+function getScreenShake() {
+  const now = performance.now();
+  if (now > (state.shakeUntil || 0)) return { x: 0, y: 0 };
+  const remaining = ((state.shakeUntil - now) / 220);
+  const mag = (state.shakeMag || 0) * clamp(remaining, 0, 1);
+  return {
+    x: (Math.random() - 0.5) * mag * 2,
+    y: (Math.random() - 0.5) * mag * 2,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Start procedure: five red lights on, then out.
+// ---------------------------------------------------------------------------
+
+function drawStartLights(now) {
+  const elapsed = (now - state.countdownStart) / 1000;
+  const lit = clamp(Math.floor((elapsed - 0.35) / 0.62) + 1, 0, 5);
+  const panelWidth = 358;
+  const panelHeight = 96;
+  const x = Math.round(canvas.width / 2 - panelWidth / 2);
+  const y = 62;
+
+  ctx.save();
+  ctx.fillStyle = "rgba(10, 8, 16, 0.9)";
+  ctx.fillRect(x, y, panelWidth, panelHeight);
+  ctx.strokeStyle = "rgba(255, 240, 201, 0.32)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(x + 1, y + 1, panelWidth - 2, panelHeight - 2);
+  // Gantry legs.
+  ctx.fillStyle = "rgba(10, 8, 16, 0.9)";
+  ctx.fillRect(x + 26, y - 16, 10, 16);
+  ctx.fillRect(x + panelWidth - 36, y - 16, 10, 16);
+
+  for (let i = 0; i < 5; i += 1) {
+    const cx = x + 46 + i * 67;
+    const on = i < lit;
+    for (let row = 0; row < 2; row += 1) {
+      const cy = y + 30 + row * 38;
+      ctx.beginPath();
+      ctx.arc(cx, cy, 15, 0, TAU);
+      ctx.fillStyle = on ? "#e8231a" : "#2a1d22";
+      ctx.fill();
+      if (on) {
+        ctx.strokeStyle = "rgba(255, 120, 100, 0.85)";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx - 4, cy - 5, 4, 0, TAU);
+        ctx.fillStyle = "rgba(255, 220, 210, 0.75)";
+        ctx.fill();
+      } else {
+        ctx.strokeStyle = "rgba(255, 240, 201, 0.14)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawLightsOutFlash(now) {
+  const since = now - (state.raceStart || 0);
+  if (!state.raceStart || since > 1100) return;
+  const fade = 1 - since / 1100;
+  ctx.save();
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = "#39d98a";
+  ctx.font = "bold 84px Georgia";
+  ctx.textAlign = "center";
+  ctx.fillText("LIGHTS OUT", canvas.width / 2, 150);
+  ctx.textAlign = "left";
+  ctx.restore();
+}
+
 function drawSpeedLines(player) {
   const ratio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1.4);
   if (ratio < 0.62) return;
@@ -3091,7 +3301,7 @@ function getPlaceStyle(place) {
 }
 
 function hudPanel(x, y, w, h, accent) {
-  ctx.fillStyle = "rgba(8, 6, 14, 0.76)";
+  ctx.fillStyle = "rgba(8, 6, 14, 0.9)";
   ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = "rgba(255, 240, 201, 0.24)";
   ctx.lineWidth = 1;

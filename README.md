@@ -26,6 +26,13 @@ Always on screen while racing:
 - **SPEED** — km/h with a redline bar
 - **Mini map** — rotated so *up is always the direction you are driving*, with a field-of-view wedge showing exactly the slice of track filling the main screen, every rival as a heading-aware blip, and the podium places ringed in gold
 
+## Race feel
+
+- **F1 start gantry** — five red lights come on one column at a time, then out. Lights out, go.
+- **Drift smoke that tells you something** — the smoke off the rear tyres turns from white to blue to orange as the drift boost charges, so you can read the charge without looking away from the road
+- **Boost flame, dirt off the kerbs, and impact shake** on contact and spins
+- **Catch-up racing** — cars behind you run up to 10% quicker and cars ahead up to 10% slower, so the field stays in touch instead of stringing out over a lap
+
 ## Rendering
 
 - Chase-cam pseudo-3D road, drawn through **one** perspective camera (`projectScene`) shared by the road, the cars, the scenery and the item boxes — so everything agrees on where the ground is
@@ -38,7 +45,8 @@ Always on screen while racing:
 - Drift-boost system (hold Shift in corners)
 - Traffic avoidance AI with wide lane spread to prevent corner bunching
 - Spin immunity window so a driver cannot be chain-spun to a standstill
-- Frame-rate independent drag and AI weapon use — the game plays the same at 60Hz and 144Hz
+- Frame-rate independent drag, AI weapon use and lap timing — the game plays the same at 60Hz and 144Hz
+- Lap detection works off a wrapped-distance test plus a half-lap accumulator rather than a speed threshold, so a car that crawls over the start line still gets its lap (a threshold here previously cost the front row an entire lap)
 - Controlled reverse — limited speed so you can back out of walls without overshooting
 - Heading correction disabled while reversing so steering inputs work naturally
 
@@ -61,6 +69,7 @@ F1_Pixel_Cup/
     ├── Camera          CAMERA, projectScene, updateCameraRig
     ├── Rendering       drawDriverView, drawDriverRoad, drawKartRear
     ├── HUD              drawDriverHud, drawMiniMap (heading-up radar)
+    ├── Effects          particles, screen shake, start lights
     └── UI              renderGarage, standings, results, podium
 ```
 
