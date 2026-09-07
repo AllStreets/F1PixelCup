@@ -174,48 +174,74 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" },
     points: [
-      { x: 155, y: 422 },
-      { x: 420, y: 422 },
-      { x: 688, y: 420 },
-      { x: 848, y: 402 },
-      { x: 922, y: 368 },
-      { x: 958, y: 318 },
-      { x: 962, y: 262 },
-      { x: 940, y: 212 },
-      { x: 895, y: 170 },
-      { x: 828, y: 146 },
-      { x: 685, y: 130 },
-      { x: 530, y: 126 },
-      { x: 378, y: 130 },
-      { x: 232, y: 150 },
-      { x: 148, y: 202 },
-      { x: 118, y: 272 },
-      { x: 115, y: 350 },
-      { x: 128, y: 398 },
+      { x: 156, y: 430 },
+      { x: 204, y: 438 },
+      { x: 258, y: 438 },
+      { x: 312, y: 438 },
+      { x: 366, y: 438 },
+      { x: 418, y: 435 },
+      { x: 461, y: 411 },
+      { x: 510, y: 410 },
+      { x: 553, y: 433 },
+      { x: 605, y: 440 },
+      { x: 659, y: 440 },
+      { x: 713, y: 438 },
+      { x: 767, y: 432 },
+      { x: 819, y: 420 },
+      { x: 868, y: 397 },
+      { x: 909, y: 363 },
+      { x: 934, y: 318 },
+      { x: 931, y: 268 },
+      { x: 902, y: 225 },
+      { x: 858, y: 197 },
+      { x: 807, y: 181 },
+      { x: 753, y: 175 },
+      { x: 701, y: 181 },
+      { x: 655, y: 198 },
+      { x: 610, y: 181 },
+      { x: 559, y: 168 },
+      { x: 505, y: 161 },
+      { x: 451, y: 158 },
+      { x: 397, y: 158 },
+      { x: 343, y: 163 },
+      { x: 290, y: 172 },
+      { x: 238, y: 188 },
+      { x: 190, y: 212 },
+      { x: 152, y: 248 },
+      { x: 128, y: 295 },
+      { x: 125, y: 348 },
+      { x: 133, y: 398 },
     ],
     shortcut: {
-      entry: { x: 922, y: 368 },
-      exit: { x: 958, y: 318 },
+      entry: { x: 125, y: 348 },
+      exit: { x: 258, y: 438 },
       width: 30,
-      points: [{ x: 922, y: 368 }, { x: 958, y: 318 }],
+      points: [{ x: 125, y: 348 }, { x: 258, y: 438 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 490, y: 88, w: 200, h: 36, color: "#dc0000" },
-      { type: "grandstand", x: 490, y: 462, w: 160, h: 30, color: "#dc0000" },
-      { type: "billboard", x: 960, y: 290, w: 88, h: 24, color: "#e8bf00" },
-      { type: "tower", x: 122, y: 205, w: 40, h: 60, color: "#888888" },
-      { type: "billboard", x: 682, y: 98, w: 100, h: 24, color: "#ffffff" },
+      { type: "grandstand", x: 196, y: 549, color: "#dc0000" },
+      { type: "grandstand", x: 362, y: 300, color: "#dc0000" },
+      { type: "tower", x: 613, y: 328, color: "#888888" },
+      { type: "grandstand", x: 780, y: 258, color: "#dc0000" },
+      { type: "billboard", x: 779, y: 316, color: "#e8bf00" },
+      { type: "tower", x: 664, y: 22, color: "#888888" },
+      { type: "billboard", x: 537, y: 278, color: "#ffffff" },
+      { type: "grandstand", x: 454, y: 20, color: "#dc0000" },
+      { type: "grandstand", x: 328, y: 332, color: "#dc0000" },
+      { type: "billboard", x: 62, y: 181, color: "#e8bf00" },
+      { type: "tower", x: 262, y: 341, color: "#888888" },
     ],
     itemBoxes: [
-      { x: 460, y: 410 },
-      { x: 762, y: 410 },
-      { x: 955, y: 290 },
-      { x: 895, y: 190 },
-      { x: 580, y: 132 },
-      { x: 300, y: 135 },
-      { x: 120, y: 310 },
-      { x: 195, y: 408 },
+      { x: 166, y: 412 },
+      { x: 366, y: 438 },
+      { x: 547, y: 453 },
+      { x: 764, y: 412 },
+      { x: 934, y: 318 },
+      { x: 753, y: 154 },
+      { x: 555, y: 188 },
+      { x: 343, y: 163 },
+      { x: 135, y: 236 },
     ],
   }),
   trackDefinition({
@@ -226,48 +252,74 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#6a8faf", grass: "#2d5a27", accent: "#c8d8e8", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1a3a1a", horizonB: "#3a6a35", curbA: "#dc0000", curbB: "#ffffff", sun: "#ddeeff" },
     points: [
-      { x: 148, y: 450 },
-      { x: 400, y: 450 },
-      { x: 635, y: 448 },
-      { x: 732, y: 428 },
-      { x: 810, y: 395 },
-      { x: 865, y: 345 },
-      { x: 888, y: 280 },
-      { x: 868, y: 215 },
-      { x: 822, y: 168 },
-      { x: 742, y: 132 },
-      { x: 620, y: 106 },
-      { x: 480, y: 98 },
-      { x: 345, y: 100 },
-      { x: 230, y: 128 },
-      { x: 148, y: 192 },
-      { x: 110, y: 285 },
-      { x: 120, y: 378 },
-      { x: 136, y: 438 },  // smooth the closing turn (was 69° → now 45°)
+      { x: 151, y: 446 },
+      { x: 200, y: 454 },
+      { x: 255, y: 456 },
+      { x: 309, y: 456 },
+      { x: 363, y: 456 },
+      { x: 415, y: 448 },
+      { x: 460, y: 422 },
+      { x: 508, y: 405 },
+      { x: 551, y: 378 },
+      { x: 595, y: 348 },
+      { x: 645, y: 328 },
+      { x: 698, y: 322 },
+      { x: 751, y: 330 },
+      { x: 801, y: 349 },
+      { x: 849, y: 365 },
+      { x: 894, y: 348 },
+      { x: 917, y: 304 },
+      { x: 914, y: 253 },
+      { x: 884, y: 212 },
+      { x: 837, y: 187 },
+      { x: 785, y: 172 },
+      { x: 732, y: 163 },
+      { x: 678, y: 162 },
+      { x: 627, y: 178 },
+      { x: 580, y: 202 },
+      { x: 531, y: 220 },
+      { x: 480, y: 211 },
+      { x: 428, y: 196 },
+      { x: 375, y: 183 },
+      { x: 322, y: 176 },
+      { x: 268, y: 176 },
+      { x: 216, y: 188 },
+      { x: 170, y: 215 },
+      { x: 136, y: 256 },
+      { x: 120, y: 306 },
+      { x: 118, y: 360 },
+      { x: 126, y: 411 },
     ],
     shortcut: {
-      entry: { x: 810, y: 395 },
-      exit: { x: 865, y: 345 },
-      width: 28,
-      points: [{ x: 810, y: 395 }, { x: 865, y: 345 }],
+      entry: { x: 118, y: 360 },
+      exit: { x: 255, y: 456 },
+      width: 30,
+      points: [{ x: 118, y: 360 }, { x: 255, y: 456 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "tree", x: 60, y: 240, size: 28, color: "#1e5c18" },
-      { type: "tree", x: 900, y: 80, size: 24, color: "#1e5c18" },
-      { type: "grandstand", x: 520, y: 64, w: 160, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 740, y: 108, w: 96, h: 24, color: "#ffffff" },
-      { type: "tower", x: 892, y: 185, w: 38, h: 58, color: "#888888" },
+      { type: "tree", x: 190, y: 568, color: "#1e5c18" },
+      { type: "tree", x: 353, y: 316, color: "#1e5c18" },
+      { type: "billboard", x: 541, y: 247, color: "#ffffff" },
+      { type: "tower", x: 716, y: 465, color: "#888888" },
+      { type: "tree", x: 847, y: 199, color: "#1e5c18" },
+      { type: "grandstand", x: 754, y: 309, color: "#dc0000" },
+      { type: "tower", x: 541, y: 334, color: "#888888" },
+      { type: "tree", x: 464, y: 61, color: "#1e5c18" },
+      { type: "tree", x: 287, y: 340, color: "#1e5c18" },
+      { type: "grandstand", x: 37, y: 201, color: "#dc0000" },
+      { type: "billboard", x: 258, y: 351, color: "#ffffff" },
     ],
     itemBoxes: [
-      { x: 390, y: 436 },
-      { x: 692, y: 436 },
-      { x: 868, y: 318 },
-      { x: 868, y: 228 },
-      { x: 622, y: 106 },
-      { x: 345, y: 105 },
-      { x: 118, y: 248 },
-      { x: 145, y: 418 },
+      { x: 162, y: 427 },
+      { x: 363, y: 456 },
+      { x: 563, y: 396 },
+      { x: 756, y: 308 },
+      { x: 917, y: 304 },
+      { x: 734, y: 141 },
+      { x: 533, y: 242 },
+      { x: 322, y: 176 },
+      { x: 117, y: 245 },
     ],
   }),
   trackDefinition({
@@ -278,52 +330,77 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#aac8e0", grass: "#4c8840", accent: "#e8f0e0", road: "#505058", shoulder: "#c0b8a8", horizonA: "#304828", horizonB: "#5a7848", curbA: "#dc0000", curbB: "#ffffff", sun: "#d8e8f0" },
     points: [
-      { x: 138, y: 372 },
-      { x: 562, y: 382 },
-      { x: 652, y: 358 },
-      { x: 724, y: 310 },
-      { x: 762, y: 252 },
-      { x: 782, y: 190 },
-      { x: 770, y: 170 },  // smooth the top-right turn (was 62° → now 43°)
-      { x: 742, y: 148 },
-      { x: 658, y: 130 },
-      { x: 520, y: 122 },
-      { x: 378, y: 128 },
-      { x: 255, y: 140 },
-      { x: 162, y: 178 },
-      { x: 118, y: 252 },
-      { x: 116, y: 322 },
-      { x: 126, y: 358 },  // smooth the closing turn (was 66° → now 49°)
+      { x: 153, y: 418 },
+      { x: 202, y: 429 },
+      { x: 256, y: 432 },
+      { x: 311, y: 434 },
+      { x: 365, y: 433 },
+      { x: 418, y: 426 },
+      { x: 467, y: 405 },
+      { x: 511, y: 388 },
+      { x: 553, y: 407 },
+      { x: 597, y: 402 },
+      { x: 639, y: 385 },
+      { x: 682, y: 406 },
+      { x: 731, y: 424 },
+      { x: 784, y: 425 },
+      { x: 835, y: 408 },
+      { x: 878, y: 378 },
+      { x: 908, y: 334 },
+      { x: 916, y: 283 },
+      { x: 898, y: 235 },
+      { x: 859, y: 201 },
+      { x: 809, y: 184 },
+      { x: 757, y: 185 },
+      { x: 710, y: 203 },
+      { x: 664, y: 195 },
+      { x: 620, y: 177 },
+      { x: 574, y: 192 },
+      { x: 528, y: 191 },
+      { x: 484, y: 164 },
+      { x: 433, y: 151 },
+      { x: 379, y: 148 },
+      { x: 325, y: 148 },
+      { x: 271, y: 152 },
+      { x: 218, y: 162 },
+      { x: 171, y: 186 },
+      { x: 136, y: 226 },
+      { x: 121, y: 276 },
+      { x: 119, y: 329 },
+      { x: 128, y: 381 },
     ],
     shortcut: {
-      entry: { x: 724, y: 310 },
-      exit: { x: 742, y: 148 },
+      entry: { x: 553, y: 407 },
+      exit: { x: 731, y: 424 },
       width: 30,
-      points: [
-        { x: 724, y: 310 },
-        { x: 780, y: 258 },
-        { x: 790, y: 195 },
-        { x: 762, y: 155 },
-        { x: 742, y: 148 },
-      ],
+      points: [{ x: 553, y: 407 }, { x: 731, y: 424 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 340, y: 84, w: 180, h: 32, color: "#dc0000" },
-      { type: "grandstand", x: 340, y: 420, w: 140, h: 28, color: "#3366cc" },
-      { type: "billboard", x: 785, y: 108, w: 90, h: 22, color: "#e8bf00" },
-      { type: "house", x: 980, y: 248, w: 52, h: 38, color: "#ccddcc" },
-      { type: "tower", x: 118, y: 198, w: 36, h: 52, color: "#888888" },
+      { type: "grandstand", x: 186, y: 544, color: "#dc0000" },
+      { type: "grandstand", x: 354, y: 291, color: "#3366cc" },
+      { type: "billboard", x: 529, y: 561, color: "#e8bf00" },
+      { type: "house", x: 568, y: 290, color: "#ccddcc" },
+      { type: "tower", x: 705, y: 564, color: "#888888" },
+      { type: "grandstand", x: 759, y: 259, color: "#dc0000" },
+      { type: "billboard", x: 786, y: 324, color: "#e8bf00" },
+      { type: "house", x: 710, y: 33, color: "#ccddcc" },
+      { type: "tower", x: 591, y: 307, color: "#888888" },
+      { type: "grandstand", x: 455, y: 10, color: "#dc0000" },
+      { type: "grandstand", x: 294, y: 318, color: "#3366cc" },
+      { type: "billboard", x: 35, y: 169, color: "#e8bf00" },
+      { type: "house", x: 261, y: 319, color: "#ccddcc" },
     ],
     itemBoxes: [
-      { x: 335, y: 368 },
-      { x: 620, y: 368 },
-      { x: 754, y: 275 },
-      { x: 760, y: 168 },
-      { x: 580, y: 128 },
-      { x: 305, y: 132 },
-      { x: 128, y: 285 },
-      { x: 250, y: 375 },
+      { x: 166, y: 399 },
+      { x: 365, y: 433 },
+      { x: 550, y: 430 },
+      { x: 781, y: 402 },
+      { x: 916, y: 283 },
+      { x: 753, y: 162 },
+      { x: 578, y: 215 },
+      { x: 325, y: 148 },
+      { x: 116, y: 214 },
     ],
   }),
   trackDefinition({
@@ -334,52 +411,74 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#9fd0e8", grass: "#3a7a38", accent: "#ffeedd", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1e4a1e", horizonB: "#408040", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
-      { x: 250, y: 455 },  // start/finish — heading east
-      { x: 450, y: 455 },  // main straight
-      { x: 620, y: 448 },  // continuing east
-      { x: 740, y: 418 },  // turn 1 right
-      { x: 828, y: 368 },  // heading NE
-      { x: 895, y: 298 },  // heading N
-      { x: 940, y: 218 },  // heading N
-      { x: 958, y: 155 },  // heading N
-      { x: 940, y: 102 },  // top right hairpin
-      { x: 900, y: 68 },   // heading W
-      { x: 828, y: 50 },   // heading W
-      { x: 718, y: 42 },   // heading W (top straight)
-      { x: 588, y: 42 },   // heading W
-      { x: 450, y: 48 },   // heading W
-      { x: 320, y: 72 },   // heading SW
-      { x: 220, y: 115 },  // heading S
-      { x: 160, y: 178 },  // heading S (left descent)
-      { x: 128, y: 255 },  // heading S
-      { x: 115, y: 335 },  // heading S
-      { x: 120, y: 400 },  // heading SE
-      { x: 140, y: 438 },  // heading E
-      { x: 185, y: 455 },  // heading E — closing
+      { x: 154, y: 434 },
+      { x: 204, y: 444 },
+      { x: 258, y: 446 },
+      { x: 312, y: 444 },
+      { x: 364, y: 435 },
+      { x: 409, y: 414 },
+      { x: 452, y: 408 },
+      { x: 496, y: 417 },
+      { x: 539, y: 402 },
+      { x: 584, y: 420 },
+      { x: 635, y: 434 },
+      { x: 688, y: 439 },
+      { x: 742, y: 436 },
+      { x: 794, y: 424 },
+      { x: 843, y: 403 },
+      { x: 885, y: 370 },
+      { x: 914, y: 328 },
+      { x: 913, y: 279 },
+      { x: 881, y: 242 },
+      { x: 833, y: 231 },
+      { x: 783, y: 231 },
+      { x: 742, y: 202 },
+      { x: 694, y: 179 },
+      { x: 642, y: 164 },
+      { x: 589, y: 156 },
+      { x: 535, y: 152 },
+      { x: 481, y: 152 },
+      { x: 427, y: 154 },
+      { x: 373, y: 159 },
+      { x: 320, y: 163 },
+      { x: 266, y: 166 },
+      { x: 214, y: 177 },
+      { x: 169, y: 203 },
+      { x: 136, y: 244 },
+      { x: 120, y: 294 },
+      { x: 116, y: 348 },
+      { x: 125, y: 399 },
     ],
     shortcut: {
-      entry: { x: 450, y: 455 },
-      exit: { x: 620, y: 448 },
-      width: 28,
-      points: [{ x: 450, y: 455 }, { x: 620, y: 448 }],
+      entry: { x: 452, y: 408 },
+      exit: { x: 635, y: 434 },
+      width: 30,
+      points: [{ x: 452, y: 408 }, { x: 635, y: 434 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 650, y: 18, w: 160, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 958, y: 128, w: 80, h: 22, color: "#ffffff" },
-      { type: "tree", x: 80, y: 310, size: 24, color: "#2a6a28" },
-      { type: "tower", x: 970, y: 62, w: 36, h: 52, color: "#cc0000" },
-      { type: "grandstand", x: 430, y: 490, w: 120, h: 24, color: "#e8bf00" },
+      { type: "grandstand", x: 192, y: 555, color: "#dc0000" },
+      { type: "billboard", x: 324, y: 303, color: "#ffffff" },
+      { type: "tower", x: 620, y: 314, color: "#cc0000" },
+      { type: "grandstand", x: 759, y: 262, color: "#dc0000" },
+      { type: "tree", x: 741, y: 362, color: "#2a6a28" },
+      { type: "tower", x: 752, y: 26, color: "#cc0000" },
+      { type: "grandstand", x: 531, y: 264, color: "#e8bf00" },
+      { type: "grandstand", x: 419, y: 17, color: "#dc0000" },
+      { type: "billboard", x: 286, y: 329, color: "#ffffff" },
+      { type: "tree", x: 37, y: 191, color: "#2a6a28" },
+      { type: "tower", x: 254, y: 341, color: "#cc0000" },
     ],
     itemBoxes: [
-      { x: 450, y: 455 },
-      { x: 760, y: 405 },
-      { x: 930, y: 258 },
-      { x: 958, y: 128 },
-      { x: 680, y: 46 },
-      { x: 450, y: 48 },
-      { x: 180, y: 148 },
-      { x: 120, y: 368 },
+      { x: 165, y: 416 },
+      { x: 364, y: 435 },
+      { x: 539, y: 423 },
+      { x: 739, y: 415 },
+      { x: 914, y: 328 },
+      { x: 752, y: 184 },
+      { x: 534, y: 173 },
+      { x: 320, y: 163 },
+      { x: 117, y: 234 },
     ],
   }),
   trackDefinition({
@@ -390,55 +489,75 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#4db8e8", grass: "#3a6a88", accent: "#ffeedd", road: "#505060", shoulder: "#c8c0b8", horizonA: "#184858", horizonB: "#3878a8", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" },
     points: [
-      { x: 300, y: 460 },  // start/finish — heading east
-      { x: 500, y: 460 },  // main straight
-      { x: 660, y: 450 },  // approaching turn 1
-      { x: 760, y: 420 },  // turn 1 right curve
-      { x: 820, y: 370 },  // heading NE
-      { x: 850, y: 300 },  // heading N
-      { x: 840, y: 230 },  // top right
-      { x: 800, y: 180 },  // Casino hairpin entry
-      { x: 740, y: 155 },  // hairpin — heading W
-      { x: 660, y: 140 },  // top straight W
-      { x: 570, y: 133 },  // top straight W
-      { x: 470, y: 130 },  // top straight W
-      { x: 370, y: 133 },  // top straight W
-      { x: 280, y: 148 },  // heading SW (Mirabeau)
-      { x: 200, y: 180 },  // heading SW
-      { x: 150, y: 225 },  // heading S
-      { x: 125, y: 280 },  // left side S
-      { x: 115, y: 345 },  // left side S
-      { x: 125, y: 405 },  // heading SE (Rascasse)
-      { x: 155, y: 445 },  // heading E (Anthony Noghes)
-      { x: 210, y: 460 },  // rejoining main straight
+      { x: 160, y: 422 },
+      { x: 211, y: 431 },
+      { x: 265, y: 433 },
+      { x: 320, y: 434 },
+      { x: 374, y: 430 },
+      { x: 421, y: 409 },
+      { x: 448, y: 368 },
+      { x: 456, y: 321 },
+      { x: 496, y: 294 },
+      { x: 547, y: 296 },
+      { x: 590, y: 323 },
+      { x: 632, y: 354 },
+      { x: 683, y: 364 },
+      { x: 737, y: 360 },
+      { x: 788, y: 343 },
+      { x: 831, y: 312 },
+      { x: 859, y: 268 },
+      { x: 857, y: 220 },
+      { x: 821, y: 187 },
+      { x: 770, y: 176 },
+      { x: 718, y: 186 },
+      { x: 667, y: 193 },
+      { x: 615, y: 180 },
+      { x: 562, y: 167 },
+      { x: 508, y: 160 },
+      { x: 453, y: 158 },
+      { x: 399, y: 160 },
+      { x: 344, y: 165 },
+      { x: 290, y: 170 },
+      { x: 236, y: 177 },
+      { x: 187, y: 198 },
+      { x: 148, y: 234 },
+      { x: 126, y: 282 },
+      { x: 122, y: 336 },
+      { x: 131, y: 387 },
     ],
     shortcut: {
-      entry: { x: 500, y: 460 },
-      exit: { x: 660, y: 450 },
-      width: 25,
-      points: [
-        { x: 500, y: 460 },
-        { x: 580, y: 455 },
-        { x: 660, y: 450 },
-      ],
-      color: "#445566",
+      entry: { x: 421, y: 409 },
+      exit: { x: 547, y: 296 },
+      width: 30,
+      points: [{ x: 421, y: 409 }, { x: 547, y: 296 }],
+      color: "#00d2be",
     },
     decor: [
-      { type: "house", x: 560, y: 88, w: 120, h: 38, color: "#e8e0d0" },
-      { type: "grandstand", x: 430, y: 490, w: 120, h: 28, color: "#dc0000" },
-      { type: "billboard", x: 840, y: 260, w: 70, h: 20, color: "#e8bf00" },
-      { type: "lamp", x: 145, y: 265, size: 16, color: "#ffee88" },
-      { type: "lamp", x: 820, y: 420, size: 16, color: "#ffee88" },
+      { type: "house", x: 199, y: 544, color: "#e8e0d0" },
+      { type: "grandstand", x: 341, y: 293, color: "#dc0000" },
+      { type: "billboard", x: 602, y: 429, color: "#e8bf00" },
+      { type: "lamp", x: 580, y: 187, color: "#ffee88" },
+      { type: "lamp", x: 576, y: 482, color: "#ffee88" },
+      { type: "house", x: 713, y: 195, color: "#e8e0d0" },
+      { type: "grandstand", x: 969, y: 299, color: "#dc0000" },
+      { type: "billboard", x: 769, y: 316, color: "#e8bf00" },
+      { type: "lamp", x: 677, y: 27, color: "#ffee88" },
+      { type: "lamp", x: 498, y: 274, color: "#ffee88" },
+      { type: "house", x: 389, y: 20, color: "#e8e0d0" },
+      { type: "grandstand", x: 280, y: 337, color: "#dc0000" },
+      { type: "billboard", x: 55, y: 168, color: "#e8bf00" },
+      { type: "lamp", x: 259, y: 331, color: "#ffee88" },
     ],
     itemBoxes: [
-      { x: 420, y: 460 },
-      { x: 780, y: 395 },
-      { x: 845, y: 265 },
-      { x: 760, y: 155 },
-      { x: 520, y: 132 },
-      { x: 320, y: 135 },
-      { x: 132, y: 315 },
-      { x: 175, y: 452 },
+      { x: 171, y: 403 },
+      { x: 374, y: 430 },
+      { x: 502, y: 315 },
+      { x: 685, y: 342 },
+      { x: 859, y: 268 },
+      { x: 770, y: 154 },
+      { x: 558, y: 189 },
+      { x: 344, y: 165 },
+      { x: 130, y: 221 },
     ],
   }),
   trackDefinition({
@@ -449,57 +568,76 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" },
     points: [
-      { x: 200, y: 450 },  // start/finish — heading east
-      { x: 400, y: 450 },  // main straight
-      { x: 580, y: 445 },  // main straight end
-      { x: 680, y: 415 },  // turn 1 right curve
-      { x: 740, y: 365 },  // heading NE
-      { x: 780, y: 295 },  // heading N
-      { x: 800, y: 225 },  // heading N (sector 1)
-      { x: 800, y: 165 },  // heading N
-      { x: 790, y: 120 },  // top right hairpin approach
-      { x: 755, y: 95 },   // hairpin right
-      { x: 705, y: 88 },   // heading W
-      { x: 630, y: 82 },   // heading W (long top section)
-      { x: 540, y: 82 },   // heading W
-      { x: 450, y: 85 },   // heading W
-      { x: 355, y: 90 },   // heading W
-      { x: 265, y: 98 },   // heading SW
-      { x: 190, y: 125 },  // heading SW (top left curve)
-      { x: 148, y: 165 },  // heading S
-      { x: 128, y: 215 },  // heading S (left side)
-      { x: 125, y: 275 },  // heading S
-      { x: 132, y: 338 },  // heading SE
-      { x: 148, y: 392 },  // heading SE
-      { x: 172, y: 432 },  // heading E — rejoining start
+      { x: 153, y: 440 },
+      { x: 202, y: 450 },
+      { x: 255, y: 451 },
+      { x: 308, y: 452 },
+      { x: 362, y: 452 },
+      { x: 415, y: 451 },
+      { x: 468, y: 447 },
+      { x: 517, y: 432 },
+      { x: 551, y: 397 },
+      { x: 587, y: 366 },
+      { x: 637, y: 359 },
+      { x: 689, y: 367 },
+      { x: 738, y: 387 },
+      { x: 785, y: 410 },
+      { x: 836, y: 413 },
+      { x: 884, y: 396 },
+      { x: 917, y: 358 },
+      { x: 926, y: 308 },
+      { x: 909, y: 261 },
+      { x: 869, y: 230 },
+      { x: 819, y: 219 },
+      { x: 768, y: 224 },
+      { x: 723, y: 248 },
+      { x: 672, y: 253 },
+      { x: 623, y: 238 },
+      { x: 576, y: 212 },
+      { x: 528, y: 191 },
+      { x: 476, y: 178 },
+      { x: 423, y: 171 },
+      { x: 370, y: 168 },
+      { x: 316, y: 168 },
+      { x: 263, y: 172 },
+      { x: 212, y: 184 },
+      { x: 166, y: 209 },
+      { x: 135, y: 250 },
+      { x: 121, y: 300 },
+      { x: 120, y: 353 },
+      { x: 129, y: 403 },
     ],
     shortcut: {
-      entry: { x: 400, y: 450 },
-      exit: { x: 580, y: 445 },
-      width: 28,
-      points: [
-        { x: 400, y: 450 },
-        { x: 490, y: 447 },
-        { x: 580, y: 445 },
-      ],
+      entry: { x: 120, y: 353 },
+      exit: { x: 255, y: 451 },
+      width: 30,
+      points: [{ x: 120, y: 353 }, { x: 255, y: 451 }],
       color: "#00d2be",
     },
     decor: [
-      { type: "tower", x: 490, y: 32, w: 48, h: 70, color: "#1a2a4a" },
-      { type: "tower", x: 840, y: 155, w: 42, h: 65, color: "#1a2a4a" },
-      { type: "lamp", x: 148, y: 255, size: 18, color: "#ffaa44" },
-      { type: "lamp", x: 760, y: 175, size: 18, color: "#ffaa44" },
-      { type: "grandstand", x: 350, y: 490, w: 130, h: 26, color: "#dc0000" },
+      { type: "tower", x: 189, y: 563, color: "#1a2a4a" },
+      { type: "tower", x: 360, y: 312, color: "#1a2a4a" },
+      { type: "lamp", x: 541, y: 262, color: "#ffaa44" },
+      { type: "grandstand", x: 680, y: 515, color: "#dc0000" },
+      { type: "tower", x: 791, y: 259, color: "#1a2a4a" },
+      { type: "lamp", x: 811, y: 358, color: "#ffaa44" },
+      { type: "lamp", x: 689, y: 88, color: "#ffaa44" },
+      { type: "grandstand", x: 526, y: 314, color: "#dc0000" },
+      { type: "tower", x: 435, y: 31, color: "#1a2a4a" },
+      { type: "tower", x: 288, y: 336, color: "#1a2a4a" },
+      { type: "lamp", x: 33, y: 199, color: "#ffaa44" },
+      { type: "lamp", x: 259, y: 342, color: "#ffaa44" },
     ],
     itemBoxes: [
-      { x: 340, y: 450 },
-      { x: 720, y: 330 },
-      { x: 800, y: 195 },
-      { x: 770, y: 88 },
-      { x: 500, y: 82 },
-      { x: 220, y: 102 },
-      { x: 130, y: 245 },
-      { x: 145, y: 370 },
+      { x: 165, y: 422 },
+      { x: 362, y: 452 },
+      { x: 566, y: 413 },
+      { x: 790, y: 389 },
+      { x: 926, y: 308 },
+      { x: 761, y: 204 },
+      { x: 567, y: 232 },
+      { x: 316, y: 168 },
+      { x: 115, y: 240 },
     ],
   }),
   trackDefinition({
@@ -510,48 +648,77 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#cc8833", grass: "#8a6a3a", accent: "#ffe8aa", road: "#585050", shoulder: "#c8b888", horizonA: "#6a4820", horizonB: "#aa7838", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcc44" },
     points: [
-      { x: 418, y: 408 },
-      { x: 618, y: 408 },
-      { x: 768, y: 400 },
-      { x: 858, y: 365 },
-      { x: 898, y: 312 },
-      { x: 896, y: 255 },
-      { x: 862, y: 205 },
-      { x: 808, y: 165 },
-      { x: 728, y: 142 },
-      { x: 608, y: 136 },
-      { x: 478, y: 140 },
-      { x: 355, y: 156 },
-      { x: 248, y: 198 },
-      { x: 162, y: 262 },
-      { x: 125, y: 338 },
-      { x: 112, y: 392 },
-      { x: 128, y: 410 },
-      { x: 255, y: 410 },
+      { x: 155, y: 429 },
+      { x: 205, y: 437 },
+      { x: 259, y: 439 },
+      { x: 313, y: 439 },
+      { x: 368, y: 440 },
+      { x: 422, y: 441 },
+      { x: 476, y: 442 },
+      { x: 531, y: 442 },
+      { x: 585, y: 442 },
+      { x: 640, y: 441 },
+      { x: 694, y: 439 },
+      { x: 748, y: 432 },
+      { x: 801, y: 419 },
+      { x: 850, y: 399 },
+      { x: 894, y: 368 },
+      { x: 921, y: 325 },
+      { x: 916, y: 275 },
+      { x: 881, y: 239 },
+      { x: 832, y: 228 },
+      { x: 783, y: 245 },
+      { x: 742, y: 278 },
+      { x: 700, y: 311 },
+      { x: 652, y: 324 },
+      { x: 607, y: 305 },
+      { x: 563, y: 290 },
+      { x: 520, y: 302 },
+      { x: 479, y: 278 },
+      { x: 441, y: 240 },
+      { x: 401, y: 203 },
+      { x: 355, y: 175 },
+      { x: 304, y: 158 },
+      { x: 250, y: 153 },
+      { x: 199, y: 164 },
+      { x: 155, y: 193 },
+      { x: 127, y: 238 },
+      { x: 116, y: 290 },
+      { x: 117, y: 344 },
+      { x: 128, y: 395 },
     ],
     shortcut: {
-      entry: { x: 858, y: 365 },
-      exit: { x: 898, y: 312 },
+      entry: { x: 607, y: 305 },
+      exit: { x: 441, y: 240 },
       width: 30,
-      points: [{ x: 858, y: 365 }, { x: 898, y: 312 }],
-      color: "#e8bf00",
+      points: [{ x: 607, y: 305 }, { x: 441, y: 240 }],
+      color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 520, y: 392, w: 160, h: 32, color: "#dc0000" },
-      { type: "house", x: 945, y: 280, w: 60, h: 42, color: "#c8a870" },
-      { type: "billboard", x: 590, y: 95, w: 100, h: 26, color: "#e8bf00" },
-      { type: "tower", x: 135, y: 225, w: 38, h: 58, color: "#a08050" },
-      { type: "billboard", x: 252, y: 155, w: 82, h: 22, color: "#ffffff" },
+      { type: "grandstand", x: 193, y: 551, color: "#dc0000" },
+      { type: "house", x: 369, y: 300, color: "#c8a870" },
+      { type: "tower", x: 636, y: 327, color: "#a08050" },
+      { type: "billboard", x: 844, y: 552, color: "#ffffff" },
+      { type: "grandstand", x: 759, y: 286, color: "#dc0000" },
+      { type: "house", x: 937, y: 140, color: "#c8a870" },
+      { type: "billboard", x: 829, y: 388, color: "#e8bf00" },
+      { type: "tower", x: 666, y: 150, color: "#a08050" },
+      { type: "billboard", x: 504, y: 415, color: "#ffffff" },
+      { type: "grandstand", x: 485, y: 91, color: "#dc0000" },
+      { type: "house", x: 260, y: 319, color: "#c8a870" },
+      { type: "billboard", x: 21, y: 196, color: "#e8bf00" },
+      { type: "tower", x: 257, y: 329, color: "#a08050" },
     ],
     itemBoxes: [
-      { x: 530, y: 396 },
-      { x: 760, y: 396 },
-      { x: 892, y: 282 },
-      { x: 878, y: 210 },
-      { x: 728, y: 148 },
-      { x: 480, y: 142 },
-      { x: 222, y: 215 },
-      { x: 125, y: 375 },
+      { x: 166, y: 409 },
+      { x: 368, y: 440 },
+      { x: 585, y: 464 },
+      { x: 840, y: 379 },
+      { x: 881, y: 239 },
+      { x: 690, y: 292 },
+      { x: 517, y: 324 },
+      { x: 304, y: 158 },
+      { x: 107, y: 230 },
     ],
   }),
   trackDefinition({
@@ -562,50 +729,77 @@ const TRACKS = [
     laps: 3,
     bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" },
     points: [
-      { x: 525, y: 448 },  // start/finish — far end of main straight, grid spawns clear
-      { x: 640, y: 415 },
-      { x: 698, y: 358 },
-      { x: 688, y: 292 },
-      { x: 622, y: 245 },
-      { x: 518, y: 228 },
-      { x: 398, y: 232 },
-      { x: 292, y: 260 },
-      { x: 205, y: 318 },
-      { x: 148, y: 408 },
-      { x: 143, y: 424 },  // bottom-left hairpin
-      { x: 143, y: 440 },
-      { x: 155, y: 448 },
-      { x: 182, y: 448 },  // main straight
-      { x: 350, y: 448 },  // main straight — closing back to start
+      { x: 161, y: 424 },
+      { x: 210, y: 435 },
+      { x: 263, y: 438 },
+      { x: 317, y: 440 },
+      { x: 370, y: 439 },
+      { x: 423, y: 434 },
+      { x: 473, y: 418 },
+      { x: 505, y: 384 },
+      { x: 509, y: 339 },
+      { x: 544, y: 307 },
+      { x: 594, y: 296 },
+      { x: 647, y: 298 },
+      { x: 699, y: 310 },
+      { x: 749, y: 331 },
+      { x: 795, y: 355 },
+      { x: 844, y: 365 },
+      { x: 887, y: 344 },
+      { x: 904, y: 298 },
+      { x: 890, y: 251 },
+      { x: 852, y: 218 },
+      { x: 802, y: 201 },
+      { x: 749, y: 197 },
+      { x: 697, y: 206 },
+      { x: 645, y: 208 },
+      { x: 595, y: 192 },
+      { x: 544, y: 176 },
+      { x: 491, y: 163 },
+      { x: 438, y: 158 },
+      { x: 385, y: 157 },
+      { x: 331, y: 159 },
+      { x: 278, y: 166 },
+      { x: 226, y: 176 },
+      { x: 178, y: 198 },
+      { x: 143, y: 235 },
+      { x: 126, y: 284 },
+      { x: 125, y: 337 },
+      { x: 135, y: 388 },
     ],
     shortcut: {
-      entry: { x: 518, y: 228 },
-      exit: { x: 292, y: 260 },
-      width: 28,
-      points: [
-        { x: 518, y: 228 },
-        { x: 418, y: 215 },
-        { x: 322, y: 238 },
-        { x: 292, y: 260 },
-      ],
-      color: "#009c3b",
+      entry: { x: 473, y: 418 },
+      exit: { x: 594, y: 296 },
+      width: 30,
+      points: [{ x: 473, y: 418 }, { x: 594, y: 296 }],
+      color: "#00d2be",
     },
     decor: [
-      { type: "grandstand", x: 360, y: 192, w: 140, h: 28, color: "#009c3b" },
-      { type: "tree", x: 80, y: 310, size: 26, color: "#2a6a28" },
-      { type: "tree", x: 985, y: 380, size: 22, color: "#2a6a28" },
-      { type: "billboard", x: 620, y: 205, w: 92, h: 24, color: "#ffdf00" },
-      { type: "tower", x: 700, y: 325, w: 36, h: 52, color: "#888888" },
+      { type: "grandstand", x: 194, y: 546, color: "#009c3b" },
+      { type: "tree", x: 363, y: 301, color: "#2a6a28" },
+      { type: "tree", x: 558, y: 558, color: "#2a6a28" },
+      { type: "billboard", x: 494, y: 207, color: "#ffdf00" },
+      { type: "tower", x: 657, y: 442, color: "#888888" },
+      { type: "grandstand", x: 851, y: 201, color: "#009c3b" },
+      { type: "tree", x: 1016, y: 302, color: "#2a6a28" },
+      { type: "tree", x: 775, y: 336, color: "#2a6a28" },
+      { type: "billboard", x: 681, y: 43, color: "#ffdf00" },
+      { type: "tower", x: 513, y: 284, color: "#888888" },
+      { type: "grandstand", x: 447, y: 20, color: "#009c3b" },
+      { type: "tree", x: 303, y: 328, color: "#2a6a28" },
+      { type: "tree", x: 47, y: 178, color: "#2a6a28" },
+      { type: "billboard", x: 263, y: 325, color: "#ffdf00" },
     ],
     itemBoxes: [
-      { x: 345, y: 435 },
-      { x: 595, y: 432 },
-      { x: 698, y: 328 },
-      { x: 652, y: 262 },
-      { x: 465, y: 232 },
-      { x: 338, y: 244 },
-      { x: 175, y: 365 },
-      { x: 245, y: 445 },
+      { x: 172, y: 407 },
+      { x: 370, y: 439 },
+      { x: 528, y: 348 },
+      { x: 706, y: 291 },
+      { x: 887, y: 344 },
+      { x: 748, y: 176 },
+      { x: 538, y: 196 },
+      { x: 331, y: 159 },
+      { x: 125, y: 225 },
     ],
   }),
 ];
@@ -616,6 +810,23 @@ const CUPS = [
 ];
 
 
+
+// Single perspective camera shared by the road, the karts, the scenery and the
+// item boxes. Everything in the driver view is projected through it, so a car
+// at a given world position always lands exactly on the tarmac it is driving on.
+const CAMERA = {
+  focal: 340,      // focal length in pixels
+  height: 27,      // camera height above the road plane, in world units
+  back: 48,        // how far behind the car the camera sits
+  horizon: 236,    // screen y that an infinitely distant road point maps to
+  nearClip: 12,
+  farClip: 1600,
+};
+
+const KART_SPRITE_SCALE = 0.55;
+const DECOR_WORLD_SIZE = 46;
+const ITEM_BOX_SIZE = 22;
+const ITEM_BOX_HEIGHT = 11;
 
 const state = {
   selectedDriver: 0,
@@ -640,6 +851,12 @@ const state = {
   resultTimeoutAt: 0,
   viewMode: "driver",
   cameraHeading: 0,
+  camPos: null,
+  camRoll: 0,
+  camLastHeading: 0,
+  hudLastPlace: 0,
+  hudPlaceFlashUntil: 0,
+  hudPlaceFlashDir: 0,
 };
 
 const input = {
@@ -893,6 +1110,7 @@ function createRacer(driver, kart, isPlayer, slot) {
     bulletUntil: 0,
     shrinkUntil: 0,
     spinUntil: 0,
+    spinImmuneUntil: 0,
     inkUntil: 0,
     driftCharge: 0,
     drifting: false,
@@ -1224,6 +1442,11 @@ function startRace(index) {
   state.hazards = [];
   state.particles = [];
   state.cameraHeading = state.track.startHeading;
+  state.camPos = null;
+  state.camRoll = 0;
+  state.camLastHeading = state.track.startHeading;
+  state.hudLastPlace = 0;
+  state.hudPlaceFlashUntil = 0;
   state.resultsQueued = false;
   state.resultTimeoutAt = 0;
   ui.resultsModal.classList.add("hidden");
@@ -1246,6 +1469,7 @@ function startRace(index) {
   const player = state.racers.find((racer) => racer.isPlayer);
   state.playerId = player.id;
   state.cameraHeading = player.heading;
+  state.camPos = null;
   state.countdownStart = performance.now();
   state.raceStart = 0;
   addFeed(`${state.track.name} loaded. DRS shortcut zone is somewhere on circuit.`);
@@ -1371,12 +1595,14 @@ function finishRoulette(racer) {
   }
 }
 
-function maybeUseAiItem(racer, now) {
+function maybeUseAiItem(racer, now, dt) {
   if (racer.isPlayer || racer.currentItem === "none" || racer.itemCooldownUntil > now || racer.spinUntil > now) return;
   const sorted = getSortedRacers();
   const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
-  const shouldUse = Math.random() < 0.008 + place * 0.0007;
-  if (shouldUse) {
+  // Expressed per second rather than per frame, otherwise a high refresh rate
+  // turns the field into a firing squad and nobody can move.
+  const usesPerSecond = 0.16 + place * 0.011;
+  if (Math.random() < usesPerSecond * Math.max(dt, 0)) {
     useItem(racer, racer.currentItem, now);
   }
 }
@@ -1384,7 +1610,7 @@ function maybeUseAiItem(racer, now) {
 function useItem(racer, item, now) {
   if (!item || item === "none") return;
   racer.currentItem = "none";
-  racer.itemCooldownUntil = now + 900;
+  racer.itemCooldownUntil = now + 2600;
   if (item === "oilSlick" || item === "drsSignPost") {
     state.hazards.push({
       type: item,
@@ -1441,8 +1667,11 @@ function chooseTarget(racer, item) {
 
 function spinRacer(racer, duration = 900) {
   const now = performance.now();
+  // Brief grace period after recovering, so overlapping hits cannot pin a car.
+  if (now < (racer.spinImmuneUntil || 0)) return;
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
-  racer.speed *= 0.45;
+  racer.spinImmuneUntil = now + duration + 1400;
+  racer.speed *= 0.55;
 }
 
 function applyTrackBarrier(racer, surface) {
@@ -1526,11 +1755,10 @@ function updateRacer(racer, dt, now) {
   let driftSide = 0;
 
   if (racer.isPlayer) {
-    const driveHeld = input.drift;
-    const wantsForward = driveHeld && input.throttle;
-    const wantsBack = driveHeld && input.brake && !wantsForward;
-    throttle = wantsForward ? 1 : 0;
-    if (wantsBack) {
+    // Throttle stands on its own. Shift is the drift modifier, exactly as the
+    // control card says -- it is not a deadman switch for the accelerator.
+    throttle = input.throttle ? 1 : 0;
+    if (input.brake && !input.throttle) {
       if (racer.speed > 18) {
         brake = 1;
       } else {
@@ -1538,7 +1766,7 @@ function updateRacer(racer, dt, now) {
       }
     }
     steerInput = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    drifting = driveHeld && wantsForward && Math.abs(steerInput) > 0 && racer.speed > 70;
+    drifting = input.drift && input.throttle && Math.abs(steerInput) > 0 && racer.speed > 70;
     driftSide = steerInput;
   } else {
     const angleDiff = normalizeAngle(targetAngle - racer.heading);
@@ -1550,7 +1778,7 @@ function updateRacer(racer, dt, now) {
     }
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
     driftSide = steerInput;
-    maybeUseAiItem(racer, now);
+    maybeUseAiItem(racer, now, dt);
   }
 
   if (racer.spinUntil > now) {
@@ -1592,10 +1820,11 @@ function updateRacer(racer, dt, now) {
       racer.speed = Math.max(reverseTargetSpeed, racer.speed - racer.physics.accelRate * reverse * dt);
     }
   } else {
+    // Lifting off should coast, not anchor the car to the tarmac.
     if (racer.speed > 0) {
-      racer.speed = Math.max(0, racer.speed - racer.physics.accelRate * 0.45 * dt);
+      racer.speed = Math.max(0, racer.speed - racer.physics.accelRate * 0.18 * dt);
     } else {
-      racer.speed = Math.min(0, racer.speed + racer.physics.accelRate * 0.45 * dt);
+      racer.speed = Math.min(0, racer.speed + racer.physics.accelRate * 0.18 * dt);
     }
   }
 
@@ -1607,7 +1836,7 @@ function updateRacer(racer, dt, now) {
     }
   }
 
-  racer.speed *= offroad ? racer.physics.driftGrip : 0.992;
+  racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992, dt * 60);
 
   if (drifting) {
     racer.drifting = true;
@@ -1939,6 +2168,8 @@ function resetToGarage() {
   state.items = [];
   state.hazards = [];
   state.cameraHeading = 0;
+  state.camPos = null;
+  state.camRoll = 0;
   ui.resultsModal.classList.add("hidden");
   ui.podiumModal.classList.add("hidden");
   syncOverlayState();
@@ -2075,6 +2306,9 @@ function getCameraBaseDistance(player, track, route) {
     : getRouteDistanceForPoint(player, route.segments, route.cumulativeStarts);
 }
 
+
+
+
 function getCameraHeading(player, track) {
   const route = getCameraRoute(player, track);
   if (state.phase === "countdown" || Math.abs(player.speed) < 18) {
@@ -2083,14 +2317,94 @@ function getCameraHeading(player, track) {
   }
   const currentAngle = getSurfaceForwardAngle(route.currentSurface, player.heading);
   const baseDistance = getCameraBaseDistance(player, track, route);
-  const lookaheadDistance = clamp(136 + Math.abs(player.speed) * 1.1, 136, 320);
+  const lookaheadDistance = clamp(70 + Math.abs(player.speed) * 0.55, 70, 190);
   const futureSurface = sampleRouteSurfaceAtDistance(route, baseDistance + lookaheadDistance);
   const futureAngle = getSurfaceForwardAngle(futureSurface, currentAngle);
-  const chosenAngle = lerpAngle(currentAngle, futureAngle, 0.62);
+  // Lean into the corner a little, but only a little. Aiming the camera at the
+  // road a long way ahead points it across a hairpin instead of along it, and
+  // the whole track then projects off the side of the screen.
+  const bias = clamp(normalizeAngle(futureAngle - currentAngle), -0.42, 0.42);
+  const chosenAngle = normalizeAngle(currentAngle + bias * 0.35);
   state.cameraHeading = state.cameraHeading
-    ? lerpAngle(state.cameraHeading, chosenAngle, 0.28)
+    ? lerpAngle(state.cameraHeading, chosenAngle, 0.22)
     : chosenAngle;
+  // Hard limit on how far the smoothed camera may drift from the road, so the
+  // road ahead can never leave the picture.
+  const drift = clamp(normalizeAngle(state.cameraHeading - currentAngle), -0.5, 0.5);
+  state.cameraHeading = normalizeAngle(currentAngle + drift);
   return state.cameraHeading;
+}
+
+// ---------------------------------------------------------------------------
+// Camera rig. Everything drawn in the driver view goes through projectScene so
+// the road, the karts, the scenery and the item boxes all agree on where the
+// ground is.
+// ---------------------------------------------------------------------------
+
+function updateCameraRig(player, track) {
+  const heading = getCameraHeading(player, track);
+  const route = getCameraRoute(player, track);
+  const baseDistance = getCameraBaseDistance(player, track, route);
+  const here = sampleRouteSurfaceAtDistance(route, baseDistance);
+  const behind = sampleRouteSurfaceAtDistance(route, baseDistance - CAMERA.back);
+
+  // How far off the racing line the player is sitting right now.
+  const lateral = (player.x - here.point.x) * here.normalX + (player.y - here.point.y) * here.normalY;
+  // The camera only chases part of that offset, so the remainder reads on
+  // screen as the car moving left and right in front of you.
+  const follow = clamp(lateral * 0.8, -here.width * 2.2, here.width * 2.2);
+  const target = {
+    x: behind.point.x + behind.normalX * follow,
+    y: behind.point.y + behind.normalY * follow,
+  };
+
+  state.camPos = state.camPos
+    ? { x: lerp(state.camPos.x, target.x, 0.28), y: lerp(state.camPos.y, target.y, 0.28) }
+    : target;
+
+  // The smoothing above can lag a long way through a fast corner, which throws
+  // the car across the screen. Nudge the camera sideways so the player always
+  // stays near the middle of the picture.
+  const cosH = Math.cos(heading);
+  const sinH = Math.sin(heading);
+  const side = -(player.x - state.camPos.x) * sinH + (player.y - state.camPos.y) * cosH;
+  const maxSide = 15;
+  if (Math.abs(side) > maxSide) {
+    const excess = side - Math.sign(side) * maxSide;
+    state.camPos = {
+      x: state.camPos.x + -sinH * excess,
+      y: state.camPos.y + cosH * excess,
+    };
+  }
+
+  // Bank the horizon slightly into the corner.
+  const turnRate = normalizeAngle(heading - (state.camLastHeading ?? heading));
+  state.camLastHeading = heading;
+  const targetRoll = clamp(turnRate * 5.2, -0.075, 0.075);
+  state.camRoll = lerp(state.camRoll || 0, targetRoll, 0.12);
+
+  return heading;
+}
+
+function projectScene(camOrigin, cameraHeading, worldPoint, worldHeight = 0) {
+  const dx = worldPoint.x - camOrigin.x;
+  const dy = worldPoint.y - camOrigin.y;
+  const cos = Math.cos(cameraHeading);
+  const sin = Math.sin(cameraHeading);
+  const forward = dx * cos + dy * sin;
+  const side = -dx * sin + dy * cos;
+  if (forward < CAMERA.nearClip) {
+    return { visible: false, forward, side, x: 0, y: 0, scale: 0 };
+  }
+  const invZ = CAMERA.focal / forward;
+  return {
+    visible: forward <= CAMERA.farClip,
+    forward,
+    side,
+    x: canvas.width / 2 + side * invZ,
+    y: CAMERA.horizon + (CAMERA.height - worldHeight) * invZ,
+    scale: invZ,
+  };
 }
 
 function projectDriverView(origin, cameraHeading, worldPoint) {
@@ -2106,49 +2420,414 @@ function projectDriverView(origin, cameraHeading, worldPoint) {
 function buildDriverRoadSamples(track, player, cameraHeading) {
   const route = getCameraRoute(player, track);
   const baseDistance = getCameraBaseDistance(player, track, route);
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  const cos = Math.cos(cameraHeading);
+  const sin = Math.sin(cameraHeading);
+  const halfCanvas = canvas.width / 2;
   const samples = [];
-  for (let i = 0; i < 44; i += 1) {
-    const ahead = 8 + i * 16 + i * i * 0.62;
-    const sample = sampleRouteSurfaceAtDistance(route, baseDistance + ahead);
-    const centerProjection = projectDriverView(player, cameraHeading, sample.point);
-    if (centerProjection.forward < 10) continue;
-    const depth = clamp(centerProjection.forward / 980, 0, 1);
-    const perspective = lerp(3.9, 0.22, Math.pow(depth, 0.84));
-    const shoulderWidth = sample.width + 10;
-    const leftRoadPoint = {
-      x: sample.point.x - sample.normalX * sample.width,
-      y: sample.point.y - sample.normalY * sample.width,
+
+  for (let i = 0; i < 58; i += 1) {
+    const ahead = -CAMERA.back + 2 + i * 8 + i * i * 0.44;
+    const routeDistance = baseDistance + ahead;
+    const sample = sampleRouteSurfaceAtDistance(route, routeDistance);
+    const center = projectScene(camOrigin, cameraHeading, sample.point);
+    if (center.forward > CAMERA.farClip) break;
+    if (!center.visible) continue;
+
+    // Each edge is projected from its own world position so corners keep their
+    // shape, but the whole row shares the centre's ground height.
+    const edgeX = (offset) => {
+      const px = sample.point.x + sample.normalX * offset;
+      const py = sample.point.y + sample.normalY * offset;
+      const ex = px - camOrigin.x;
+      const ey = py - camOrigin.y;
+      const f = Math.max(ex * cos + ey * sin, CAMERA.nearClip);
+      const s = -ex * sin + ey * cos;
+      return halfCanvas + s * (CAMERA.focal / f);
     };
-    const rightRoadPoint = {
-      x: sample.point.x + sample.normalX * sample.width,
-      y: sample.point.y + sample.normalY * sample.width,
-    };
-    const leftShoulderPoint = {
-      x: sample.point.x - sample.normalX * shoulderWidth,
-      y: sample.point.y - sample.normalY * shoulderWidth,
-    };
-    const rightShoulderPoint = {
-      x: sample.point.x + sample.normalX * shoulderWidth,
-      y: sample.point.y + sample.normalY * shoulderWidth,
-    };
-    const centerX = canvas.width / 2 + centerProjection.side * perspective;
-    const leftRoadX = canvas.width / 2 + projectDriverView(player, cameraHeading, leftRoadPoint).side * perspective;
-    const rightRoadX = canvas.width / 2 + projectDriverView(player, cameraHeading, rightRoadPoint).side * perspective;
-    const leftShoulderX = canvas.width / 2 + projectDriverView(player, cameraHeading, leftShoulderPoint).side * perspective;
-    const rightShoulderX = canvas.width / 2 + projectDriverView(player, cameraHeading, rightShoulderPoint).side * perspective;
-    const y = canvas.height - 42 - Math.pow(depth, 0.8) * 432;
+
+    const shoulder = sample.width + 13;
     samples.push({
-      centerX,
-      leftRoadX,
-      rightRoadX,
-      leftShoulderX,
-      rightShoulderX,
-      y,
-      laneHalf: Math.max(2, (rightRoadX - leftRoadX) * 0.055),
-      depth,
+      y: center.y,
+      scale: center.scale,
+      forward: center.forward,
+      routeDistance,
+      centerX: center.x,
+      leftRoadX: edgeX(-sample.width),
+      rightRoadX: edgeX(sample.width),
+      leftShoulderX: edgeX(-shoulder),
+      rightShoulderX: edgeX(shoulder),
+      laneHalf: Math.max(1, sample.width * 0.045 * center.scale),
     });
   }
   return samples;
+}
+
+function drawDriverRoad(samples, track) {
+  const lapLength = track.totalLength;
+  for (let index = samples.length - 2; index >= 0; index -= 1) {
+    const far = samples[index + 1];
+    const near = samples[index];
+    if (far.y > near.y) continue;
+
+    const band = Math.floor(near.routeDistance / 26);
+    const grassColor = band % 2 === 0 ? track.bg.grass : shadeColor(track.bg.grass, -7);
+    const roadColor = band % 2 === 0 ? "#4b4b58" : "#525260";
+    const curbColor = band % 2 === 0 ? (track.bg.curbA || "#ff5f57") : (track.bg.curbB || "#fff0c9");
+
+    // Verge either side, so the ground reads as moving underneath you.
+    drawQuad(0, near.y, near.leftShoulderX, near.y, far.leftShoulderX, far.y, 0, far.y, grassColor);
+    drawQuad(near.rightShoulderX, near.y, canvas.width, near.y, canvas.width, far.y, far.rightShoulderX, far.y, grassColor);
+
+    drawQuad(
+      near.leftShoulderX, near.y, near.rightShoulderX, near.y,
+      far.rightShoulderX, far.y, far.leftShoulderX, far.y,
+      shadeColor(track.bg.shoulder || "#8d8d9c", -6),
+    );
+    drawQuad(
+      near.leftRoadX, near.y, near.rightRoadX, near.y,
+      far.rightRoadX, far.y, far.leftRoadX, far.y,
+      roadColor,
+    );
+    drawQuad(
+      near.leftShoulderX, near.y, near.leftRoadX, near.y,
+      far.leftRoadX, far.y, far.leftShoulderX, far.y,
+      curbColor,
+    );
+    drawQuad(
+      near.rightRoadX, near.y, near.rightShoulderX, near.y,
+      far.rightShoulderX, far.y, far.rightRoadX, far.y,
+      curbColor,
+    );
+
+    // Centre line dashes.
+    if (band % 2 === 0) {
+      drawQuad(
+        near.centerX - near.laneHalf, near.y, near.centerX + near.laneHalf, near.y,
+        far.centerX + far.laneHalf, far.y, far.centerX - far.laneHalf, far.y,
+        "rgba(255, 240, 201, 0.5)",
+      );
+    }
+
+    // Start / finish line, drawn wherever the lap boundary falls between rows.
+    const nearLap = Math.floor(near.routeDistance / lapLength);
+    const farLap = Math.floor(far.routeDistance / lapLength);
+    if (nearLap !== farLap) {
+      drawCheckerBand(near, far);
+    }
+
+    // Barriers, thickness scaled with distance so they taper properly.
+    const nearWall = Math.max(1, near.scale * 7);
+    const farWall = Math.max(1, far.scale * 7);
+    const wallColor = band % 2 === 0 ? "#fff0c9" : "#2b1d34";
+    drawQuad(
+      near.leftShoulderX - nearWall, near.y, near.leftShoulderX, near.y,
+      far.leftShoulderX, far.y, far.leftShoulderX - farWall, far.y,
+      wallColor,
+    );
+    drawQuad(
+      near.rightShoulderX, near.y, near.rightShoulderX + nearWall, near.y,
+      far.rightShoulderX + farWall, far.y, far.rightShoulderX, far.y,
+      wallColor,
+    );
+  }
+}
+
+function drawCheckerBand(near, far) {
+  const cells = 16;
+  for (let c = 0; c < cells; c += 1) {
+    const t0 = c / cells;
+    const t1 = (c + 1) / cells;
+    const nx0 = lerp(near.leftRoadX, near.rightRoadX, t0);
+    const nx1 = lerp(near.leftRoadX, near.rightRoadX, t1);
+    const fx0 = lerp(far.leftRoadX, far.rightRoadX, t0);
+    const fx1 = lerp(far.leftRoadX, far.rightRoadX, t1);
+    drawQuad(nx0, near.y, nx1, near.y, fx1, far.y, fx0, far.y, c % 2 === 0 ? "#f4f1e8" : "#1b1620");
+  }
+}
+
+function shadeColor(hex, amount) {
+  if (typeof hex !== "string" || hex[0] !== "#" || hex.length < 7) return hex;
+  const clampByte = (v) => Math.max(0, Math.min(255, v));
+  const r = clampByte(parseInt(hex.slice(1, 3), 16) + amount);
+  const g = clampByte(parseInt(hex.slice(3, 5), 16) + amount);
+  const b = clampByte(parseInt(hex.slice(5, 7), 16) + amount);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getCameraOrigin(player, cameraHeading) {
+  return {
+    x: player.x - Math.cos(cameraHeading) * CAMERA.back,
+    y: player.y - Math.sin(cameraHeading) * CAMERA.back,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Scene contents
+// ---------------------------------------------------------------------------
+
+function drawDriverSceneDecor(track, player, cameraHeading) {
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  const sprites = track.decor.map((decor) => {
+    const projected = projectScene(camOrigin, cameraHeading, decor);
+    if (!projected.visible || projected.forward > 1200 || projected.forward < 46) return null;
+    if (projected.x < -400 || projected.x > canvas.width + 400) return null;
+    return { decor, ...projected, size: clamp(DECOR_WORLD_SIZE * projected.scale, 1, 210) };
+  }).filter(Boolean).sort((a, b) => b.forward - a.forward);
+
+  sprites.forEach(({ decor, x, y, size }) => {
+    if (size < 1.5) return;
+    if (decor.type === "tree" || decor.type === "cactus") {
+      ctx.fillStyle = "#3f6a34";
+      ctx.fillRect(x - size * 0.12, y - size * 0.5, size * 0.24, size * 0.5);
+      ctx.fillStyle = decor.color;
+      ctx.fillRect(x - size * 0.5, y - size * 1.25, size, size * 0.8);
+    } else if (decor.type === "grandstand") {
+      ctx.fillStyle = "#2b2331";
+      ctx.fillRect(x - size * 1.1, y - size * 0.95, size * 2.2, size * 0.95);
+      ctx.fillStyle = decor.color;
+      for (let row = 0; row < 4; row += 1) {
+        ctx.fillRect(x - size * 0.95, y - size * (0.85 - row * 0.19), size * 1.9, size * 0.1);
+      }
+      ctx.fillStyle = "#fff0c9";
+      for (let dot = 0; dot < 9; dot += 1) {
+        ctx.fillRect(x - size * 0.86 + dot * size * 0.2, y - size * 0.72, size * 0.09, size * 0.09);
+      }
+    } else if (decor.type === "house" || decor.type === "tower") {
+      ctx.fillStyle = decor.color;
+      ctx.fillRect(x - size * 0.5, y - size * 1.35, size, size * 1.35);
+      ctx.fillStyle = "#ffe8ad";
+      ctx.fillRect(x - size * 0.14, y - size * 0.75, size * 0.28, size * 0.28);
+    } else if (decor.type === "billboard" || decor.type === "lamp") {
+      ctx.fillStyle = "#5e4331";
+      ctx.fillRect(x - size * 0.06, y - size * 0.95, size * 0.12, size * 0.95);
+      ctx.fillStyle = decor.color;
+      ctx.fillRect(x - size * 0.42, y - size * 1.45, size * 0.84, size * 0.5);
+    } else if (decor.type === "ghost") {
+      ctx.fillStyle = decor.color;
+      ctx.fillRect(x - size * 0.3, y - size * 1.1, size * 0.6, size * 0.7);
+      ctx.fillRect(x - size * 0.24, y - size * 0.4, size * 0.48, size * 0.24);
+    } else {
+      ctx.fillStyle = decor.color || "#c46631";
+      ctx.fillRect(x - size * 0.5, y - size * 0.9, size, size * 0.7);
+    }
+  });
+}
+
+function isOnRenderedStretch(point, track, player, cache) {
+  if (cache && cache.routeDistance !== undefined) {
+    var routeDistance = cache.routeDistance;
+  } else {
+    var routeDistance = getRouteDistanceForPoint(point, track.segments, track.cumulativeStarts);
+    if (cache) cache.routeDistance = routeDistance;
+  }
+  const lapLength = track.totalLength;
+  let delta = (routeDistance - (player.trackDistance || 0)) % lapLength;
+  if (delta > lapLength / 2) delta -= lapLength;
+  if (delta < -lapLength / 2) delta += lapLength;
+  return delta > -160 && delta < 900;
+}
+
+function drawDriverItemBoxesInScene(track, player, cameraHeading) {
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  const now = performance.now();
+  track.itemBoxes
+    .map((box) => ({ box, ...projectScene(camOrigin, cameraHeading, box, ITEM_BOX_HEIGHT) }))
+    .filter((entry) => entry.visible && entry.forward < 700 && entry.forward > 26
+      && isOnRenderedStretch(entry.box, track, player, entry.box))
+    .sort((a, b) => b.forward - a.forward)
+    .forEach(({ box, x, y, scale }) => {
+      const size = clamp(ITEM_BOX_SIZE * scale, 1, 56);
+      if (size < 1.5) return;
+      const pulse = 1 + Math.sin(now / 180 + box.x * 0.01 + box.y * 0.01) * 0.09;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(now / 700);
+      ctx.scale(size * pulse * 0.05, size * pulse * 0.05);
+      ctx.fillStyle = "#dc0000";
+      ctx.fillRect(-11, -11, 22, 22);
+      ctx.strokeStyle = "#fff0c9";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-11, -11, 22, 22);
+      ctx.fillStyle = "rgba(255, 240, 201, 0.9)";
+      ctx.fillRect(-3, -3, 6, 6);
+      ctx.restore();
+    });
+}
+
+function drawDriverItemsInScene(player, cameraHeading) {
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  state.items
+    .map((item) => ({ item, ...projectScene(camOrigin, cameraHeading, item, 4) }))
+    .filter((entry) => entry.visible && entry.forward < 700
+      && isOnRenderedStretch(entry.item, state.track, player, null))
+    .sort((a, b) => b.forward - a.forward)
+    .forEach(({ item, x, y, scale }) => {
+      const size = clamp(9 * scale, 2, 46);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = item.type === "undercut" ? "#dc0000" : item.type === "stewardPenalty" ? "#0090ff" : "#00d2be";
+      ctx.fillRect(-size, -size * 0.8, size * 2, size * 1.6);
+      ctx.strokeStyle = "rgba(255, 240, 201, 0.75)";
+      ctx.lineWidth = Math.max(1, size * 0.16);
+      ctx.strokeRect(-size, -size * 0.8, size * 2, size * 1.6);
+      ctx.restore();
+    });
+}
+
+// Every car, including the player's, sorted back to front so overtakes read
+// correctly whichever side they happen on.
+function drawDriverRacers(player, track, cameraHeading) {
+  const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
+  const now = performance.now();
+  const lapLength = track.totalLength;
+  const relativeDistance = (racer) => {
+    let delta = ((racer.trackDistance || 0) - (player.trackDistance || 0)) % lapLength;
+    if (delta > lapLength / 2) delta -= lapLength;
+    if (delta < -lapLength / 2) delta += lapLength;
+    return delta;
+  };
+  state.racers
+    .filter((racer) => !racer.finished || racer.id === player.id)
+    .filter((racer) => {
+      if (racer.id === player.id) return true;
+      const delta = relativeDistance(racer);
+      return delta > -160 && delta < 900;
+    })
+    .map((racer) => ({ racer, ...projectScene(camOrigin, cameraHeading, racer, 0) }))
+    .filter((entry) => entry.visible && entry.forward < 900
+      && entry.x > -260 && entry.x < canvas.width + 260)
+    .sort((a, b) => b.forward - a.forward)
+    .forEach(({ racer, x, y, scale, forward }) => {
+      const spriteScale = scale * KART_SPRITE_SCALE;
+      if (spriteScale < 0.04) return;
+      const yaw = normalizeAngle(racer.heading - cameraHeading);
+      drawKartRear(ctx, x, y, spriteScale, racer.kart, racer.driver, yaw, {
+        isPlayer: racer.id === player.id,
+        boosting: racer.bulletUntil > now || racer.boostUntil > now,
+        spinning: racer.spinUntil > now,
+      });
+    });
+}
+
+// Rear three-quarter view of an F1 car, anchored at its contact patch.
+function drawKartRear(targetCtx, x, y, scale, kart, driver, yaw, opts = {}) {
+  const sway = Math.sin(yaw) * 0.85;
+  targetCtx.save();
+  targetCtx.translate(x, y);
+  targetCtx.scale(scale, scale);
+  if (opts.spinning) targetCtx.rotate(Math.sin(performance.now() / 90) * 0.25);
+  // Lean the body into the direction the car is pointing.
+  targetCtx.transform(1, 0, sway * 0.34, 1, 0, 0);
+
+  const body = kart.body;
+  const trim = kart.trim;
+
+  // Shadow on the tarmac.
+  targetCtx.fillStyle = "rgba(0, 0, 0, 0.32)";
+  targetCtx.fillRect(-17, -3, 34, 5);
+
+  if (opts.isPlayer) {
+    targetCtx.save();
+    targetCtx.globalAlpha = 0.55;
+    targetCtx.fillStyle = "#75d5ff";
+    targetCtx.beginPath();
+    targetCtx.ellipse(0, -1, 21, 5, 0, 0, TAU);
+    targetCtx.fill();
+    targetCtx.restore();
+  }
+
+  if (opts.boosting) {
+    targetCtx.fillStyle = "rgba(255, 174, 66, 0.75)";
+    targetCtx.fillRect(-5, -13, 10, 9);
+    targetCtx.fillStyle = "rgba(255, 240, 201, 0.9)";
+    targetCtx.fillRect(-2.5, -12, 5, 7);
+  }
+
+  // Rear tyres.
+  targetCtx.fillStyle = "#14141c";
+  targetCtx.fillRect(-17, -14, 8, 14);
+  targetCtx.fillRect(9, -14, 8, 14);
+  targetCtx.fillStyle = "#2c2c38";
+  targetCtx.fillRect(-17, -12, 8, 2);
+  targetCtx.fillRect(9, -12, 8, 2);
+
+  // Diffuser and floor.
+  targetCtx.fillStyle = "#1c1c26";
+  targetCtx.fillRect(-9, -7, 18, 7);
+  targetCtx.fillStyle = trim;
+  targetCtx.fillRect(-9, -8, 18, 2);
+
+  // Engine cover / bodywork.
+  targetCtx.fillStyle = body;
+  targetCtx.fillRect(-8, -20, 16, 13);
+  targetCtx.fillStyle = shadeColor(body, -22);
+  targetCtx.fillRect(-8, -20, 3, 13);
+  targetCtx.fillStyle = trim;
+  targetCtx.fillRect(-3, -20, 6, 13);
+
+  // Airbox, halo and helmet.
+  targetCtx.fillStyle = shadeColor(body, 14);
+  targetCtx.fillRect(-4, -26, 8, 6);
+  targetCtx.fillStyle = driver.color;
+  targetCtx.fillRect(-3, -25, 6, 5);
+  targetCtx.fillStyle = "#101018";
+  targetCtx.fillRect(-5, -27, 10, 1.6);
+
+  // Rear wing.
+  targetCtx.fillStyle = "#12121a";
+  targetCtx.fillRect(-15, -25, 30, 4);
+  targetCtx.fillStyle = trim;
+  targetCtx.fillRect(-15, -25, 30, 1.6);
+  targetCtx.fillStyle = shadeColor(body, -30);
+  targetCtx.fillRect(-15, -26, 3, 8);
+  targetCtx.fillRect(12, -26, 3, 8);
+
+  // Rain light.
+  targetCtx.fillStyle = "#ff3b30";
+  targetCtx.fillRect(-1.6, -12, 3.2, 3);
+
+  targetCtx.restore();
+}
+
+function drawParallaxHorizon(track, cameraHeading) {
+  const horizon = CAMERA.horizon;
+  const span = 2600;
+  const pan = -(cameraHeading / TAU) * span;
+  const wrap = ((pan % span) + span) % span;
+
+  ctx.fillStyle = track.bg.sun || "#ffe08a";
+  const sunX = ((wrap + 1700) % span) - 300;
+  ctx.beginPath();
+  ctx.arc(sunX, horizon - 118, 30, 0, TAU);
+  ctx.fill();
+
+  for (let pass = -1; pass <= 1; pass += 1) {
+    const offset = wrap + pass * span;
+    ctx.save();
+    ctx.translate(offset, 0);
+
+    ctx.fillStyle = track.bg.horizonB || "rgba(0, 0, 0, 0.18)";
+    ctx.beginPath();
+    ctx.moveTo(0, horizon);
+    ctx.lineTo(0, horizon - 88);
+    for (let i = 1; i <= 13; i += 1) {
+      const hillHeight = 52 + ((i * 37) % 60);
+      ctx.lineTo((i / 13) * span, horizon - hillHeight);
+    }
+    ctx.lineTo(span, horizon);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = track.bg.horizonA || "rgba(0, 0, 0, 0.26)";
+    for (let i = 0; i < 26; i += 1) {
+      const bx = i * 100 + (i % 2) * 14;
+      const bw = 54 + (i % 3) * 24;
+      const bh = 26 + ((i + 1) % 4) * 20;
+      ctx.fillRect(bx, horizon - bh, bw, bh);
+    }
+    ctx.restore();
+  }
 }
 
 function drawDriverView(track) {
@@ -2157,37 +2836,403 @@ function drawDriverView(track) {
     drawGarageScene();
     return;
   }
-  let cameraHeading = getCameraHeading(player, track);
+  let cameraHeading = updateCameraRig(player, track);
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
-  const roadCollapsed = samples.length < 2
-    || samples.every((sample) => sample.rightShoulderX < -60 || sample.leftShoulderX > canvas.width + 60);
+  const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
+    && sample.y < canvas.height + 500
+    && sample.rightShoulderX > -300
+    && sample.leftShoulderX < canvas.width + 300).length;
+  const roadCollapsed = samples.length < 3 || onScreen < 3;
   if (roadCollapsed) {
     const fallbackRoute = getCameraRoute(player, track);
     cameraHeading = getSurfaceForwardAngle(fallbackRoute.currentSurface, player.heading);
     state.cameraHeading = cameraHeading;
+    state.camPos = getCameraOrigin(player, cameraHeading);
     samples = buildDriverRoadSamples(track, player, cameraHeading);
   }
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = track.bg.sky;
-  ctx.fillRect(0, 0, canvas.width, 194);
-  drawParallaxHorizon(track);
-  ctx.fillStyle = "#d7d0ea";
-  ctx.fillRect(0, 154, canvas.width, 4);
-  ctx.fillStyle = track.bg.grass;
-  ctx.fillRect(0, 158, canvas.width, canvas.height - 158);
 
-  drawDriverSceneDecor(track, player, cameraHeading);
+  ctx.save();
+  // Bank the whole world slightly through corners.
+  ctx.translate(canvas.width / 2, CAMERA.horizon);
+  ctx.rotate(state.camRoll || 0);
+  ctx.translate(-canvas.width / 2, -CAMERA.horizon);
+
+  const sky = ctx.createLinearGradient(0, -120, 0, CAMERA.horizon + 40);
+  sky.addColorStop(0, shadeColor(track.bg.sky, -26));
+  sky.addColorStop(1, track.bg.sky);
+  ctx.fillStyle = sky;
+  ctx.fillRect(-400, -200, canvas.width + 800, CAMERA.horizon + 202);
+  drawParallaxHorizon(track, cameraHeading);
+  ctx.fillStyle = track.bg.grass;
+  ctx.fillRect(-400, CAMERA.horizon, canvas.width + 800, canvas.height - CAMERA.horizon + 220);
+
   drawDriverRoad(samples, track);
+  drawDriverSceneDecor(track, player, cameraHeading);
   drawDriverItemBoxesInScene(track, player, cameraHeading);
-  drawDriverOpponents(player, track, cameraHeading);
-  drawDriverItemBadge(player);
-  drawCockpit(player);
   drawDriverItemsInScene(player, cameraHeading);
-  drawMiniMap(track, player, { x: canvas.width - 292, y: 18, width: 268, height: 144 });
+  drawDriverRacers(player, track, cameraHeading);
+  ctx.restore();
+
+  drawSpeedLines(player);
+  drawDriverItemBadge(player);
+  drawMiniMap(track, player, { x: canvas.width - 224, y: 12, width: 212, height: 212 });
   drawDriverHud(track, player);
   drawPlayerEffects();
 }
+
+// Subtle speed streaks at the screen edges once you are really moving.
+function drawSpeedLines(player) {
+  const ratio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1.4);
+  if (ratio < 0.62) return;
+  const strength = (ratio - 0.62) / 0.6;
+  const now = performance.now();
+  ctx.save();
+  ctx.globalAlpha = clamp(strength * 0.5, 0, 0.45);
+  ctx.strokeStyle = "#fff0c9";
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 14; i += 1) {
+    const seed = (i * 97 + Math.floor(now / 45)) % 360;
+    const t = (seed / 360);
+    const edge = i % 2 === 0 ? -1 : 1;
+    const x = canvas.width / 2 + edge * (canvas.width * 0.32 + t * canvas.width * 0.22);
+    const y = CAMERA.horizon + 40 + t * (canvas.height - CAMERA.horizon);
+    const len = 26 + strength * 60;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + edge * len * 0.7, y + len * 0.42);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Mini map. Rotated so that "up" is always the direction you are looking, with
+// a field-of-view wedge matching the camera on the main screen.
+// ---------------------------------------------------------------------------
+
+function getTrackMapGeometry(track) {
+  if (track.mapGeometry) return track.mapGeometry;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  track.points.forEach((point) => {
+    minX = Math.min(minX, point.x);
+    maxX = Math.max(maxX, point.x);
+    minY = Math.min(minY, point.y);
+    maxY = Math.max(maxY, point.y);
+  });
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  let radius = 1;
+  track.points.forEach((point) => {
+    radius = Math.max(radius, Math.hypot(point.x - cx, point.y - cy));
+  });
+  track.mapGeometry = { cx, cy, radius: (radius + track.roadWidth + 26) * 1.08 };
+  return track.mapGeometry;
+}
+
+function drawMiniMap(track, player, frame) {
+  const geo = getTrackMapGeometry(track);
+  const cx = frame.x + frame.width / 2;
+  const cy = frame.y + frame.height / 2;
+  const radius = Math.min(frame.width, frame.height) / 2 - 6;
+  const scale = radius / geo.radius;
+  // A world point straight ahead of the camera must land straight up.
+  const rot = -(state.cameraHeading || 0) - Math.PI / 2;
+  const cosR = Math.cos(rot);
+  const sinR = Math.sin(rot);
+
+  const toMap = (point) => {
+    const dx = (point.x - geo.cx) * scale;
+    const dy = (point.y - geo.cy) * scale;
+    return { x: cx + dx * cosR - dy * sinR, y: cy + dx * sinR + dy * cosR };
+  };
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, TAU);
+  ctx.fillStyle = "rgba(8, 6, 14, 0.82)";
+  ctx.fill();
+  ctx.clip();
+
+  // Track ribbon, drawn in world space so widths scale with the map.
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+  ctx.translate(-geo.cx, -geo.cy);
+
+  const ribbon = (points, width, color, dash) => {
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+    ctx.closePath();
+    ctx.lineWidth = width;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = color;
+    ctx.setLineDash(dash || []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+
+  ribbon(track.points, (track.roadWidth + 20) * 2, "rgba(117, 213, 255, 0.22)");
+  ribbon(track.points, (track.roadWidth + 8) * 2, "rgba(255, 240, 201, 0.5)");
+  ribbon(track.points, track.roadWidth * 2, "#4d4d5e");
+  ribbon(track.points, Math.max(2 / scale, track.roadWidth * 0.09), "rgba(255, 240, 201, 0.42)", [track.roadWidth * 0.6, track.roadWidth * 0.5]);
+  ctx.restore();
+
+  // Field of view wedge: this is literally what fills the screen in front of you.
+  const fov = Math.atan(canvas.width / 2 / CAMERA.focal);
+  const eye = toMap(state.camPos || player);
+  const wedge = ctx.createRadialGradient(eye.x, eye.y, 0, eye.x, eye.y, radius * 1.15);
+  wedge.addColorStop(0, "rgba(117, 213, 255, 0.42)");
+  wedge.addColorStop(1, "rgba(117, 213, 255, 0)");
+  ctx.beginPath();
+  ctx.moveTo(eye.x, eye.y);
+  ctx.arc(eye.x, eye.y, radius * 1.15, -Math.PI / 2 - fov, -Math.PI / 2 + fov);
+  ctx.closePath();
+  ctx.fillStyle = wedge;
+  ctx.fill();
+
+  // Start / finish line.
+  const startPoint = toMap(track.points[0]);
+  const startAngle = track.startHeading + rot + Math.PI / 2;
+  const startHalf = Math.max(4, track.roadWidth * scale);
+  ctx.save();
+  ctx.translate(startPoint.x, startPoint.y);
+  ctx.rotate(startAngle);
+  const cell = Math.max(2, startHalf / 4);
+  for (let i = -2; i < 2; i += 1) {
+    ctx.fillStyle = i % 2 === 0 ? "#fff0c9" : "#1f1826";
+    ctx.fillRect(i * cell, -2, cell, 4);
+  }
+  ctx.restore();
+
+  // Rivals, then the player on top.
+  const sorted = getSortedRacers();
+  state.racers.forEach((racer) => {
+    if (racer.id === player.id) return;
+    const point = toMap(racer);
+    const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
+    drawMapBlip(point.x, point.y, racer.heading + rot, racer.driver.color, 3.1, "rgba(6, 4, 10, 0.9)");
+    if (place <= 3) {
+      ctx.strokeStyle = "rgba(231, 184, 61, 0.8)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, 5.4, 0, TAU);
+      ctx.stroke();
+    }
+  });
+
+  const me = toMap(player);
+  const pulse = 5.5 + Math.sin(performance.now() / 260) * 1.4;
+  ctx.strokeStyle = "rgba(117, 213, 255, 0.85)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(me.x, me.y, pulse, 0, TAU);
+  ctx.stroke();
+  drawMapBlip(me.x, me.y, player.heading + rot, "#75d5ff", 4.6, "#fff0c9");
+
+  ctx.restore();
+
+  // Bezel and heading marker.
+  ctx.strokeStyle = "rgba(255, 240, 201, 0.4)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, TAU);
+  ctx.stroke();
+
+  ctx.fillStyle = "#75d5ff";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - radius - 1);
+  ctx.lineTo(cx - 6, cy - radius - 11);
+  ctx.lineTo(cx + 6, cy - radius - 11);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawMapBlip(x, y, heading, color, size, outline) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(heading);
+  ctx.beginPath();
+  ctx.moveTo(size, 0);
+  ctx.lineTo(-size * 0.8, -size * 0.75);
+  ctx.lineTo(-size * 0.35, 0);
+  ctx.lineTo(-size * 0.8, size * 0.75);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.strokeStyle = outline;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// On-screen HUD: position and lap are always visible.
+// ---------------------------------------------------------------------------
+
+function getPlaceStyle(place) {
+  if (place === 1) {
+    return { label: "1st", fill: "#e7b83d", stroke: "#fff3b8", text: "#2f2206" };
+  }
+  if (place === 2) {
+    return { label: "2nd", fill: "#c8d0df", stroke: "#f6fbff", text: "#223246" };
+  }
+  if (place === 3) {
+    return { label: "3rd", fill: "#b97742", stroke: "#f0cfb1", text: "#30170a" };
+  }
+  return { label: formatOrdinal(place), fill: "#75d5ff", stroke: "#e9fbff", text: "#10253a" };
+}
+
+function hudPanel(x, y, w, h, accent) {
+  ctx.fillStyle = "rgba(8, 6, 14, 0.76)";
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = "rgba(255, 240, 201, 0.24)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+  if (accent) {
+    ctx.fillStyle = accent;
+    ctx.fillRect(x, y, 4, h);
+  }
+}
+
+function formatGap(seconds) {
+  if (!Number.isFinite(seconds)) return "--.-";
+  if (seconds >= 60) return `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
+  return seconds.toFixed(1);
+}
+
+function drawDriverHud(track, player) {
+  const sorted = getSortedRacers();
+  const place = sorted.findIndex((racer) => racer.id === player.id) + 1;
+  const total = sorted.length;
+  const placeStyle = getPlaceStyle(place);
+  const now = performance.now();
+
+  // Flash the position panel whenever a place changes hands.
+  if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "racing") {
+    state.hudPlaceFlashUntil = now + 1400;
+    state.hudPlaceFlashDir = place < state.hudLastPlace ? 1 : -1;
+  }
+  state.hudLastPlace = place;
+
+  // ---- Lap block, top left ----
+  hudPanel(20, 16, 244, 74, placeStyle.fill);
+  ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
+  ctx.font = "bold 11px Trebuchet MS";
+  ctx.fillText(track.name.toUpperCase(), 34, 34);
+
+  ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
+  ctx.font = "bold 12px Trebuchet MS";
+  ctx.fillText("LAP", 34, 58);
+  ctx.fillStyle = "#fff0c9";
+  ctx.font = "bold 30px Georgia";
+  const lapNow = getDisplayedLap(player, track);
+  ctx.fillText(`${lapNow}`, 66, 62);
+  ctx.font = "bold 17px Georgia";
+  ctx.fillStyle = "rgba(255, 240, 201, 0.66)";
+  ctx.fillText(`/ ${track.laps}`, 66 + ctx.measureText(`${lapNow}`).width + 22, 62);
+
+  // Lap progress bar.
+  const lapFraction = clamp(getRelativeTrackDistance(player, track) / track.totalLength, 0, 1);
+  ctx.fillStyle = "rgba(255, 240, 201, 0.16)";
+  ctx.fillRect(34, 74, 214, 5);
+  ctx.fillStyle = placeStyle.fill;
+  ctx.fillRect(34, 74, 214 * lapFraction, 5);
+
+  // ---- Position block, bottom left ----
+  const flashing = now < (state.hudPlaceFlashUntil || 0);
+  const flashPulse = flashing ? 0.4 + Math.abs(Math.sin(now / 110)) * 0.6 : 0;
+  const px = 20;
+  const py = canvas.height - 116;
+  hudPanel(px, py, 168, 96, placeStyle.fill);
+  if (flashing) {
+    ctx.save();
+    ctx.globalAlpha = flashPulse * 0.4;
+    ctx.fillStyle = state.hudPlaceFlashDir > 0 ? "#39d98a" : "#ff5f57";
+    ctx.fillRect(px, py, 168, 96);
+    ctx.restore();
+  }
+
+  ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
+  ctx.font = "bold 12px Trebuchet MS";
+  ctx.fillText("POSITION", px + 14, py + 24);
+
+  ctx.fillStyle = placeStyle.fill;
+  ctx.font = "bold 54px Georgia";
+  const placeText = `P${place}`;
+  const placeWidth = ctx.measureText(placeText).width;
+  ctx.fillText(placeText, px + 12, py + 76);
+
+  ctx.font = "bold 18px Georgia";
+  ctx.fillStyle = "rgba(255, 240, 201, 0.55)";
+  ctx.fillText(`/ ${total}`, px + 12 + placeWidth + 8, py + 76);
+
+  if (flashing) {
+    ctx.fillStyle = state.hudPlaceFlashDir > 0 ? "#39d98a" : "#ff5f57";
+    ctx.font = "bold 22px Trebuchet MS";
+    ctx.fillText(state.hudPlaceFlashDir > 0 ? "▲" : "▼", px + 138, py + 34);
+  }
+
+  // ---- Gap to the car ahead / behind ----
+  const ahead = sorted[place - 2];
+  const behind = sorted[place];
+  const referenceSpeed = Math.max(Math.abs(player.speed), 45);
+  hudPanel(px + 178, canvas.height - 116, 150, 96);
+  ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
+  ctx.font = "bold 12px Trebuchet MS";
+  ctx.fillText("INTERVAL", px + 192, canvas.height - 92);
+
+  const gapRow = (label, other, y, color) => {
+    ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
+    ctx.font = "bold 11px Trebuchet MS";
+    ctx.fillText(label, px + 192, y);
+    ctx.fillStyle = color;
+    ctx.font = "bold 17px Georgia";
+    if (!other) {
+      ctx.fillText("--.-", px + 232, y);
+      return;
+    }
+    const gap = Math.abs(getRaceProgress(other) - getRaceProgress(player)) / referenceSpeed;
+    ctx.fillText(`${formatGap(gap)}s`, px + 232, y);
+  };
+  gapRow("AHD", ahead, canvas.height - 64, "#ff8f6b");
+  gapRow("BHD", behind, canvas.height - 34, "#75d5ff");
+
+  // ---- Speed, bottom right ----
+  const kph = Math.round(Math.abs(player.speed) * 1.45);
+  const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
+  const sx = canvas.width - 208;
+  const sy = canvas.height - 116;
+  hudPanel(sx, sy, 188, 96, "#39d98a");
+  ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
+  ctx.font = "bold 12px Trebuchet MS";
+  ctx.fillText("SPEED", sx + 14, sy + 24);
+  ctx.fillStyle = "#fff0c9";
+  ctx.font = "bold 44px Georgia";
+  const kphWidth = ctx.measureText(`${kph}`).width;
+  ctx.fillText(`${kph}`, sx + 12, sy + 70);
+  ctx.font = "bold 14px Trebuchet MS";
+  ctx.fillStyle = "rgba(255, 240, 201, 0.55)";
+  ctx.fillText("KM/H", sx + 12 + kphWidth + 12, sy + 70);
+
+  // Speed bar.
+  ctx.fillStyle = "rgba(255, 240, 201, 0.16)";
+  ctx.fillRect(sx + 14, sy + 80, 160, 5);
+  const speedGradient = ctx.createLinearGradient(sx + 14, 0, sx + 174, 0);
+  speedGradient.addColorStop(0, "#39d98a");
+  speedGradient.addColorStop(0.7, "#e7b83d");
+  speedGradient.addColorStop(1, "#ff5f57");
+  ctx.fillStyle = speedGradient;
+  ctx.fillRect(sx + 14, sy + 80, 160 * speedRatio, 5);
+}
+
 
 function drawDriverItemBadge(player) {
   const rouletteActive = player.rouletteUntil > performance.now();
@@ -2197,10 +3242,10 @@ function drawDriverItemBadge(player) {
   const itemKey = rouletteActive ? "roulette" : player.currentItem;
   const itemLabel = rouletteActive ? "Roulette" : labelizeItem(player.currentItem);
   const icon = ITEM_ICONS[itemKey] || "?";
-  const panelX = 28;
-  const panelY = canvas.height - 146;
   const panelWidth = 186;
   const panelHeight = 84;
+  const panelX = Math.round(canvas.width / 2 - panelWidth / 2);
+  const panelY = canvas.height - 104;
 
   ctx.save();
   ctx.fillStyle = "rgba(18, 10, 21, 0.84)";
@@ -2228,124 +3273,7 @@ function drawDriverItemBadge(player) {
   ctx.restore();
 }
 
-function drawParallaxHorizon(track) {
-  ctx.fillStyle = track.bg.sun || "#ffe08a";
-  ctx.beginPath();
-  ctx.arc(canvas.width - 172, 72, 34, 0, TAU);
-  ctx.fill();
 
-  ctx.fillStyle = track.bg.horizonB || "rgba(0, 0, 0, 0.18)";
-  ctx.beginPath();
-  ctx.moveTo(0, 164);
-  ctx.lineTo(0, 118);
-  ctx.lineTo(90, 136);
-  ctx.lineTo(186, 110);
-  ctx.lineTo(302, 136);
-  ctx.lineTo(412, 104);
-  ctx.lineTo(538, 142);
-  ctx.lineTo(660, 108);
-  ctx.lineTo(788, 138);
-  ctx.lineTo(920, 102);
-  ctx.lineTo(1024, 140);
-  ctx.lineTo(1024, 164);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = track.bg.horizonA || "rgba(0, 0, 0, 0.26)";
-  for (let i = 0; i < 11; i += 1) {
-    const x = i * 96 + (i % 2) * 12;
-    const w = 52 + (i % 3) * 22;
-    const h = 24 + ((i + 1) % 4) * 18;
-    ctx.fillRect(x, 164 - h, w, h);
-  }
-}
-
-function drawDriverRoad(samples, track) {
-  for (let index = samples.length - 2; index >= 0; index -= 1) {
-    const far = samples[index + 1];
-    const near = samples[index];
-    const stripeColor = index % 2 === 0 ? "#d8cfeb" : "#c7bbdd";
-    const curbColor = index % 2 === 0 ? (track.bg.curbA || "#ff5f57") : (track.bg.curbB || "#fff0c9");
-    const barrierColor = index % 2 === 0 ? "#fff0c9" : "#2b1d34";
-    drawQuad(
-      near.leftShoulderX,
-      near.y,
-      near.rightShoulderX,
-      near.y,
-      far.rightShoulderX,
-      far.y,
-      far.leftShoulderX,
-      far.y,
-      stripeColor,
-    );
-    drawQuad(
-      near.leftRoadX,
-      near.y,
-      near.rightRoadX,
-      near.y,
-      far.rightRoadX,
-      far.y,
-      far.leftRoadX,
-      far.y,
-      "#575766",
-    );
-    drawQuad(
-      near.leftShoulderX,
-      near.y,
-      near.leftRoadX,
-      near.y,
-      far.leftRoadX,
-      far.y,
-      far.leftShoulderX,
-      far.y,
-      curbColor,
-    );
-    drawQuad(
-      near.rightRoadX,
-      near.y,
-      near.rightShoulderX,
-      near.y,
-      far.rightShoulderX,
-      far.y,
-      far.rightRoadX,
-      far.y,
-      curbColor,
-    );
-    drawQuad(
-      near.leftShoulderX - 7,
-      near.y,
-      near.leftShoulderX + 2,
-      near.y,
-      far.leftShoulderX + 2,
-      far.y,
-      far.leftShoulderX - 7,
-      far.y,
-      barrierColor,
-    );
-    drawQuad(
-      near.rightShoulderX - 2,
-      near.y,
-      near.rightShoulderX + 7,
-      near.y,
-      far.rightShoulderX + 7,
-      far.y,
-      far.rightShoulderX - 2,
-      far.y,
-      barrierColor,
-    );
-    drawQuad(
-      near.centerX - near.laneHalf,
-      near.y,
-      near.centerX + near.laneHalf,
-      near.y,
-      far.centerX + far.laneHalf,
-      far.y,
-      far.centerX - far.laneHalf,
-      far.y,
-      index % 2 === 0 ? "#fff0c9" : "#575766",
-    );
-  }
-}
 
 function drawQuad(ax, ay, bx, by, cx, cy, dx, dy, fill) {
   ctx.fillStyle = fill;
@@ -2358,340 +3286,14 @@ function drawQuad(ax, ay, bx, by, cx, cy, dx, dy, fill) {
   ctx.fill();
 }
 
-function drawDriverSceneDecor(track, player, cameraHeading) {
-  const decorSprites = track.decor.map((decor) => {
-    const worldPoint = { x: decor.x, y: decor.y };
-    const projected = projectDriverView(player, cameraHeading, worldPoint);
-    if (projected.forward < 20 || projected.forward > 560) return null;
-    const depth = clamp(projected.forward / 560, 0, 1);
-    const x = canvas.width / 2 + projected.side * lerp(3.2, 0.28, depth);
-    const y = canvas.height - 68 - Math.pow(depth, 0.82) * 342;
-    const size = lerp(68, 10, depth);
-    return { decor, x, y, size, depth };
-  }).filter(Boolean).sort((a, b) => b.depth - a.depth);
 
-  decorSprites.forEach(({ decor, x, y, size }) => {
-    if (decor.type === "tree" || decor.type === "cactus") {
-      ctx.fillStyle = "#3f6a34";
-      ctx.fillRect(x - size * 0.12, y - size * 0.2, size * 0.24, size * 0.8);
-      ctx.fillStyle = decor.color;
-      ctx.fillRect(x - size * 0.5, y - size * 0.9, size, size * 0.7);
-    } else if (decor.type === "grandstand") {
-      ctx.fillStyle = "#2b2331";
-      ctx.fillRect(x - size * 0.7, y - size * 0.36, size * 1.4, size * 0.52);
-      ctx.fillStyle = decor.color;
-      for (let row = 0; row < 3; row += 1) {
-        ctx.fillRect(x - size * 0.58, y - size * (0.28 + row * 0.1), size * 1.16, size * 0.06);
-      }
-      ctx.fillStyle = "#fff0c9";
-      for (let dot = 0; dot < 6; dot += 1) {
-        ctx.fillRect(x - size * 0.48 + dot * size * 0.18, y - size * 0.22, size * 0.06, size * 0.06);
-      }
-    } else if (decor.type === "house" || decor.type === "tower") {
-      ctx.fillStyle = decor.color;
-      ctx.fillRect(x - size * 0.5, y - size * 0.9, size, size * 0.9);
-      ctx.fillStyle = "#ffe8ad";
-      ctx.fillRect(x - size * 0.12, y - size * 0.4, size * 0.24, size * 0.2);
-    } else if (decor.type === "billboard" || decor.type === "lamp") {
-      ctx.fillStyle = "#5e4331";
-      ctx.fillRect(x - size * 0.06, y - size * 0.12, size * 0.12, size * 0.72);
-      ctx.fillStyle = decor.color;
-      ctx.fillRect(x - size * 0.34, y - size * 0.76, size * 0.68, size * 0.28);
-    } else if (decor.type === "ghost") {
-      ctx.fillStyle = decor.color;
-      ctx.fillRect(x - size * 0.28, y - size * 0.72, size * 0.56, size * 0.48);
-      ctx.fillRect(x - size * 0.22, y - size * 0.24, size * 0.44, size * 0.18);
-    } else {
-      ctx.fillStyle = decor.color || "#c46631";
-      ctx.fillRect(x - size * 0.48, y - size * 0.7, size * 0.96, size * 0.5);
-    }
-  });
-}
 
-function drawDriverOpponents(player, track, cameraHeading) {
-  const visible = state.racers
-    .filter((racer) => racer.id !== player.id && !racer.finished)
-    .map((racer) => {
-      const projected = projectDriverView(player, cameraHeading, racer);
-      return { racer, ...projected };
-    })
-    .filter((entry) => entry.forward > -40 && entry.forward < 500 && Math.abs(entry.side) < 280)
-    .sort((a, b) => b.forward - a.forward);
 
-  visible.forEach(({ racer, forward, side }) => {
-    const depth = clamp((forward + 40) / 540, 0, 1);
-    const x = canvas.width / 2 + side * lerp(3.3, 0.25, depth);
-    const y = canvas.height - 72 - Math.pow(depth, 0.82) * 336;
-    const scale = clamp(lerp(1.7, 0.26, depth), 0.25, 2);
-    drawKart(ctx, x, y, 0, racer.kart, racer.driver, scale);
-  });
-}
 
-function drawCockpit(player) {
-  const team = getTeamForDriver(player.driver);
-  const cx = canvas.width / 2;
-  const ch = canvas.height;
-  // Front wing
-  ctx.fillStyle = team.body;
-  ctx.fillRect(cx - 170, ch - 52, 340, 28);
-  ctx.fillStyle = team.trim;
-  ctx.fillRect(cx - 170, ch - 58, 340, 8);
-  // Nosecone
-  ctx.fillStyle = team.body;
-  ctx.fillRect(cx - 60, ch - 80, 120, 36);
-  // Halo bar
-  ctx.fillStyle = team.body;
-  ctx.fillRect(cx - 6, ch - 110, 12, 64);
-  // Dashboard
-  ctx.fillStyle = "#0a0a18";
-  ctx.fillRect(cx - 100, ch - 88, 200, 46);
-  ctx.strokeStyle = team.trim;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(cx - 100, ch - 88, 200, 46);
-  // Steering wheel
-  ctx.strokeStyle = "#333";
-  ctx.lineWidth = 7;
-  ctx.beginPath();
-  ctx.arc(cx, ch - 58, 28, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.fillStyle = "#222";
-  ctx.fillRect(cx - 14, ch - 62, 28, 8);
-  ctx.fillRect(cx - 4, ch - 68, 8, 20);
-}
 
-function drawDriverItemsInScene(player, cameraHeading) {
-  state.items.forEach((item) => {
-    const projected = projectDriverView(player, cameraHeading, item);
-    if (projected.forward < 10 || projected.forward > 360 || Math.abs(projected.side) > 200) return;
-    const depth = clamp(projected.forward / 360, 0, 1);
-    const x = canvas.width / 2 + projected.side * lerp(3.5, 0.32, depth);
-    const y = canvas.height - 70 - Math.pow(depth, 0.82) * 310;
-    const scale = lerp(1.2, 0.24, depth);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(scale, scale);
-    ctx.fillStyle = item.type === "undercut" ? "#dc0000" : item.type === "stewardPenalty" ? "#0090ff" : "#00d2be";
-    ctx.fillRect(-10, -8, 20, 16);
-    ctx.restore();
-  });
-}
 
-function drawDriverItemBoxesInScene(track, player, cameraHeading) {
-  track.itemBoxes.forEach((box) => {
-    const projected = projectDriverView(player, cameraHeading, box);
-    if (projected.forward < 18 || projected.forward > 420 || Math.abs(projected.side) > 220) return;
-    const depth = clamp(projected.forward / 420, 0, 1);
-    const x = canvas.width / 2 + projected.side * lerp(3.4, 0.3, depth);
-    const y = canvas.height - 72 - Math.pow(depth, 0.82) * 324;
-    const scale = lerp(1.5, 0.22, depth);
-    const pulse = 1 + Math.sin((performance.now() / 180) + box.x * 0.01 + box.y * 0.01) * 0.08;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(performance.now() / 700);
-    ctx.scale(scale * pulse, scale * pulse);
-    ctx.fillStyle = "#dc0000";
-    ctx.fillRect(-11, -11, 22, 22);
-    ctx.strokeStyle = "#fff0c9";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(-11, -11, 22, 22);
-    ctx.fillStyle = "rgba(255, 240, 201, 0.9)";
-    ctx.fillRect(-3, -3, 6, 6);
-    ctx.restore();
-  });
-}
 
-function drawMiniMap(track, player, frame) {
-  const mapPadding = Math.max(track.roadWidth + 18, track.shortcut.width + 18);
-  const allPoints = [
-    ...track.points.flatMap((point) => ([
-      { x: point.x - mapPadding, y: point.y - mapPadding },
-      { x: point.x + mapPadding, y: point.y + mapPadding },
-    ])),
-    ...track.shortcut.points.flatMap((point) => ([
-      { x: point.x - mapPadding, y: point.y - mapPadding },
-      { x: point.x + mapPadding, y: point.y + mapPadding },
-    ])),
-  ];
-  const bounds = allPoints.reduce((memo, point) => ({
-    minX: Math.min(memo.minX, point.x),
-    maxX: Math.max(memo.maxX, point.x),
-    minY: Math.min(memo.minY, point.y),
-    maxY: Math.max(memo.maxY, point.y),
-  }), {
-    minX: Infinity,
-    maxX: -Infinity,
-    minY: Infinity,
-    maxY: -Infinity,
-  });
-  const innerPadding = 14;
-  const mapWidth = frame.width - innerPadding * 2;
-  const mapHeight = frame.height - innerPadding * 2;
-  const scale = Math.min(
-    mapWidth / Math.max(1, bounds.maxX - bounds.minX),
-    mapHeight / Math.max(1, bounds.maxY - bounds.minY),
-  );
-  const drawnWidth = Math.max(1, bounds.maxX - bounds.minX) * scale;
-  const drawnHeight = Math.max(1, bounds.maxY - bounds.minY) * scale;
-  const offsetX = frame.x + innerPadding + (mapWidth - drawnWidth) / 2;
-  const offsetY = frame.y + innerPadding + (mapHeight - drawnHeight) / 2;
-  const toMini = (point) => ({
-    x: offsetX + (point.x - bounds.minX) * scale,
-    y: offsetY + (point.y - bounds.minY) * scale,
-  });
-  const miniWidth = (worldWidth) => Math.max(1.5, worldWidth * scale);
 
-  ctx.fillStyle = "rgba(18, 10, 21, 0.78)";
-  ctx.fillRect(frame.x, frame.y, frame.width, frame.height);
-  ctx.strokeStyle = "rgba(255, 240, 201, 0.24)";
-  ctx.strokeRect(frame.x, frame.y, frame.width, frame.height);
-  ctx.fillStyle = "#fff0c9";
-  ctx.font = "bold 14px Trebuchet MS";
-  ctx.fillText("Mini Map", frame.x + 12, frame.y + 16);
-
-  const drawPath = (points, width, color, closed) => {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    const first = toMini(points[0]);
-    ctx.moveTo(first.x, first.y);
-    points.slice(1).forEach((point) => {
-      const mini = toMini(point);
-      ctx.lineTo(mini.x, mini.y);
-    });
-    if (closed) ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
-
-  const drawMiniRibbon = (points, width, fill, stroke, closed) => {
-    drawPath(points, miniWidth(width) * 2, stroke, closed);
-    drawPath(points, miniWidth(width) * 1.78, fill, closed);
-  };
-
-  const drawMiniTrackBarriers = (points, color, closed) => {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1.4, scale * 3);
-    ctx.setLineDash([Math.max(4, scale * 10), Math.max(3, scale * 9)]);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    const first = toMini(points[0]);
-    ctx.moveTo(first.x, first.y);
-    points.slice(1).forEach((point) => {
-      const mini = toMini(point);
-      ctx.lineTo(mini.x, mini.y);
-    });
-    if (closed) ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
-
-  const drawMiniLane = (points, color, closed, width = Math.max(1.2, scale * 4), dash = [Math.max(6, scale * 18), Math.max(4, scale * 12)]) => {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.setLineDash(dash);
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    const first = toMini(points[0]);
-    ctx.moveTo(first.x, first.y);
-    points.slice(1).forEach((point) => {
-      const mini = toMini(point);
-      ctx.lineTo(mini.x, mini.y);
-    });
-    if (closed) ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
-
-  const drawMiniStartLine = () => {
-    const a = toMini(track.points[0]);
-    const angle = track.startHeading + Math.PI / 2;
-    const width = Math.max(6, miniWidth(track.roadWidth - 4));
-    const cell = Math.max(2, scale * 10);
-    const tilesAcross = Math.max(4, Math.ceil((width * 2) / cell / 2));
-    ctx.save();
-    ctx.translate(a.x, a.y);
-    ctx.rotate(angle);
-    for (let i = -tilesAcross; i <= tilesAcross; i += 1) {
-      for (let j = 0; j < 2; j += 1) {
-        ctx.fillStyle = (i + j) % 2 === 0 ? "#fff0c9" : "#1f1826";
-        ctx.fillRect(i * cell, -width + j * cell, cell, cell);
-      }
-    }
-    ctx.restore();
-  };
-
-  drawMiniRibbon(track.points, track.roadWidth + 12, track.bg.shoulder, track.bg.shoulder, true);
-  drawMiniRibbon(track.points, track.roadWidth, track.bg.road, track.bg.road, true);
-  drawMiniTrackBarriers(track.points, "rgba(255, 240, 201, 0.92)", true);
-  drawMiniLane(track.points, "#fff0c9", true);
-  drawMiniStartLine();
-
-  state.racers.forEach((racer) => {
-    const mini = toMini(racer);
-    drawMiniKartIcon(
-      mini.x,
-      mini.y,
-      racer.heading,
-      racer.id === player?.id ? "#12284c" : racer.driver.color,
-      racer.id === player?.id ? "#fff0c9" : "#20152c",
-    );
-  });
-}
-
-function drawMiniKartIcon(x, y, heading, bodyColor, outlineColor) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(heading);
-  ctx.fillStyle = outlineColor;
-  ctx.fillRect(-4, -2, 8, 4);
-  ctx.fillStyle = bodyColor;
-  ctx.fillRect(-3, -1, 6, 2);
-  ctx.restore();
-}
-
-function getPlaceStyle(place) {
-  if (place === 1) {
-    return { label: "1st", fill: "#e7b83d", stroke: "#fff3b8", text: "#2f2206" };
-  }
-  if (place === 2) {
-    return { label: "2nd", fill: "#c8d0df", stroke: "#f6fbff", text: "#223246" };
-  }
-  if (place === 3) {
-    return { label: "3rd", fill: "#b97742", stroke: "#f0cfb1", text: "#30170a" };
-  }
-  return { label: formatOrdinal(place), fill: "#75d5ff", stroke: "#e9fbff", text: "#10253a" };
-}
-
-function drawDriverHud(track, player) {
-  const sorted = getSortedRacers();
-  const place = sorted.findIndex((racer) => racer.id === player.id) + 1;
-  const lapText = `Lap ${getDisplayedLap(player, track)} / ${track.laps}`;
-  const placeStyle = getPlaceStyle(place);
-
-  ctx.fillStyle = "rgba(18, 10, 21, 0.78)";
-  ctx.fillRect(20, 18, 178, 70);
-  ctx.strokeStyle = "rgba(255, 240, 201, 0.22)";
-  ctx.strokeRect(20, 18, 178, 70);
-  ctx.fillStyle = "#fff0c9";
-  ctx.font = "bold 18px Georgia";
-  ctx.fillText(track.name, 32, 44);
-  ctx.font = "bold 16px Trebuchet MS";
-  ctx.fillText(lapText, 32, 69);
-
-  ctx.fillStyle = placeStyle.fill;
-  ctx.fillRect(canvas.width - 146, 170, 118, 52);
-  ctx.strokeStyle = placeStyle.stroke;
-  ctx.strokeRect(canvas.width - 146, 170, 118, 52);
-  ctx.fillStyle = placeStyle.text;
-  ctx.font = "bold 28px Georgia";
-  ctx.fillText(placeStyle.label, canvas.width - 118, 204);
-}
 
 
 function drawDecor(track) {

@@ -7,7 +7,7 @@ A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each hand-tuned for drivability with smooth waypoint geometry
+- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos — each with its own layout: chicanes, esses, hairpins and switchbacks that turn *both* ways, generated from hand-placed control points and spline-smoothed so every corner stays drivable
 - **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
 - **F1 power-up system** — Overtake Button, Power Deploy, Safety Car, Graining, Undercut, Debris, Oil Slick, Engine Blast, Formation Lap, Steward Penalty, DRS Sign
 - **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1 points system
@@ -16,11 +16,29 @@ A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no
 - **Live championship standings** updated after each race
 - **Podium ceremony** at cup end
 
+## Heads-up display
+
+Always on screen while racing:
+
+- **POSITION** — your live place out of the field, flashing green or red when a place changes hands
+- **LAP** — current lap of the total, with a lap-progress bar
+- **INTERVAL** — gap in seconds to the car ahead and the car behind
+- **SPEED** — km/h with a redline bar
+- **Mini map** — rotated so *up is always the direction you are driving*, with a field-of-view wedge showing exactly the slice of track filling the main screen, every rival as a heading-aware blip, and the podium places ringed in gold
+
+## Rendering
+
+- Chase-cam pseudo-3D road, drawn through **one** perspective camera (`projectScene`) shared by the road, the cars, the scenery and the item boxes — so everything agrees on where the ground is
+- Rear-view F1 car sprites that lean into the direction the car is pointing
+- Parallax horizon that pans as you turn, and a horizon that banks into corners
+- Cars on other parts of the circuit are culled, so nothing appears to float across the infield
+
 ## Physics
 
-- First-person pseudo-3D perspective road rendering
 - Drift-boost system (hold Shift in corners)
 - Traffic avoidance AI with wide lane spread to prevent corner bunching
+- Spin immunity window so a driver cannot be chain-spun to a standstill
+- Frame-rate independent drag and AI weapon use — the game plays the same at 60Hz and 144Hz
 - Controlled reverse — limited speed so you can back out of walls without overshooting
 - Heading correction disabled while reversing so steering inputs work naturally
 
@@ -40,7 +58,9 @@ F1_Pixel_Cup/
     ├── Physics         updateRacer, alignRacerToSurface, barriers
     ├── AI              waypoint steering, traffic avoidance
     ├── Items           F1 power-up system
-    ├── Rendering       drawDriverView (pseudo-3D), drawMiniMap, drawF1Car
+    ├── Camera          CAMERA, projectScene, updateCameraRig
+    ├── Rendering       drawDriverView, drawDriverRoad, drawKartRear
+    ├── HUD              drawDriverHud, drawMiniMap (heading-up radar)
     └── UI              renderGarage, standings, results, podium
 ```
 
@@ -50,8 +70,8 @@ F1_Pixel_Cup/
 
 | Action | Key |
 |--------|-----|
-| Throttle | `Shift` + `W` / `↑` |
-| Brake / Reverse | `Shift` + `S` / `↓` |
+| Throttle | `W` / `↑` |
+| Brake / Reverse | `S` / `↓` |
 | Steer | `A` `D` / `←` `→` |
 | Drift Boost | Hold `Shift` in corners |
 | Use Power-Up | `Space` |
