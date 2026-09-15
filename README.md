@@ -118,6 +118,8 @@ F1_Pixel_Cup/
 | Drift Boost | Hold `Shift` in corners |
 | Use Power-Up | `Space` |
 | Pause | `Esc` or `P` |
+| Back to the pit lane | `Esc` on the results or podium screen |
+| Quit mid-race | `Q` while paused |
 | Sound On / Off | Button on UI |
 | Full Screen | Button on UI |
 

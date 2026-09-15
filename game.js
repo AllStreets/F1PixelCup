@@ -3017,6 +3017,12 @@ function nextRace() {
 
 function resetToGarage() {
   exitFullscreenMode();
+  const wasPaused = state.paused;
+  state.paused = false;
+  state.pausedAt = 0;
+  if (wasPaused && audio.ready && audio.master) {
+    audio.master.gain.setTargetAtTime(audio.enabled ? 0.55 : 0, audio.ctx.currentTime, 0.05);
+  }
   state.phase = "garage";
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
@@ -4943,6 +4949,17 @@ function togglePause() {
   }
 }
 
+function handleEscapeKey() {
+  // After a race or a cup there is nothing to pause, so Esc is the way home.
+  if (state.phase === "results" || state.phase === "podium") {
+    resetToGarage();
+    return;
+  }
+  if (state.phase === "race" || state.phase === "countdown") {
+    togglePause();
+  }
+}
+
 function drawPauseOverlay() {
   ctx.save();
   ctx.fillStyle = "rgba(8, 6, 14, 0.62)";
@@ -4953,7 +4970,9 @@ function drawPauseOverlay() {
   ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 6);
   ctx.font = "bold 16px Trebuchet MS";
   ctx.fillStyle = "rgba(255, 240, 201, 0.7)";
-  ctx.fillText("Press Esc or P to resume", canvas.width / 2, canvas.height / 2 + 30);
+  ctx.fillText("Esc or P to resume", canvas.width / 2, canvas.height / 2 + 30);
+  ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
+  ctx.fillText("Q to quit to the pit lane", canvas.width / 2, canvas.height / 2 + 54);
   ctx.textAlign = "left";
   ctx.restore();
 }
@@ -5064,9 +5083,18 @@ function bindEvents() {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
     if (event.key === "Shift") input.drift = true;
-    if (event.key === "Escape" || event.key.toLowerCase() === "p") {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      handleEscapeKey();
+    }
+    if (event.key.toLowerCase() === "p" && (state.phase === "race" || state.phase === "countdown")) {
       event.preventDefault();
       togglePause();
+    }
+    // A way out mid-race without having to finish it.
+    if (event.key.toLowerCase() === "q" && state.paused) {
+      event.preventDefault();
+      resetToGarage();
     }
     if (event.code === "Space") {
       event.preventDefault();
