@@ -136,12 +136,16 @@ test("a corrupt save is backed up, never deleted, and replaced with a fresh prof
   assert.equal(JSON.parse(storage.data["f1pixelcup.profile"]).version, 1);
 });
 
-test("a save from a newer version is treated as unrecognised and backed up", () => {
+test("a save from a newer version is left untouched and the session plays from memory", () => {
   const future = JSON.stringify({ version: 2, careerPoints: 999 });
   const storage = memoryStorage({ "f1pixelcup.profile": future });
   const { career } = make(storage);
   assert.equal(career.getProfile().careerPoints, 0);
-  assert.equal(storage.data["f1pixelcup.profile.backup.1790510400000"], future);
+  const summary = career.recordRace(monzaWin);
+  assert.equal(summary.saved, false);
+  assert.equal(career.recordRace(monzaWin).careerTotal, 104);
+  assert.equal(storage.data["f1pixelcup.profile"], future);
+  assert.deepEqual(Object.keys(storage.data), ["f1pixelcup.profile"]);
 });
 
 test("a version-1 save with missing fields is filled in and keeps its data", () => {
@@ -226,4 +230,36 @@ test("while saves are failing, progress keeps adding up in memory", () => {
   storage.setItem = () => { throw new Error("QuotaExceededError"); };
   assert.equal(career.recordRace(monzaWin).careerTotal, 104);
   assert.equal(career.recordRace(monzaWin).careerTotal, 156);
+});
+
+test("a corrupt save that cannot be backed up is left in place, not overwritten", () => {
+  const storage = memoryStorage({ "f1pixelcup.profile": "{not json" });
+  const realSet = storage.setItem;
+  storage.setItem = (key, value) => {
+    if (key.startsWith("f1pixelcup.profile.backup.")) throw new Error("QuotaExceededError");
+    realSet(key, value);
+  };
+  const { career } = make(storage);
+  assert.equal(career.getProfile().careerPoints, 0);
+  assert.equal(career.recordRace(monzaWin).saved, false);
+  assert.equal(storage.data["f1pixelcup.profile"], "{not json");
+});
+
+test("a version-1 save with bad field types is repaired instead of breaking the game", () => {
+  const bad = JSON.stringify({
+    version: 1, profileId: 42, careerPoints: null, rating: "fast", ratedRaces: -Infinity,
+    totals: { races: 3, wins: "<img src=x onerror=alert(1)>", podiums: null },
+    bestLaps: { monza: { ms: "quick" }, spa: { ms: 41000, at: "2026-01-01T00:00:00.000Z" }, silverstone: null },
+    history: [1, null, "x", { id: "keep", type: "race" }],
+  });
+  const { career } = make(memoryStorage({ "f1pixelcup.profile": bad }));
+  const profile = career.getProfile();
+  assert.equal(typeof profile.profileId, "string");
+  assert.equal(profile.careerPoints, 0);
+  assert.equal(profile.rating, 1200);
+  assert.equal(profile.ratedRaces, 0);
+  assert.deepEqual(profile.totals, { races: 3, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(Object.keys(profile.bestLaps), ["spa"]);
+  assert.deepEqual(profile.history, [{ id: "keep", type: "race" }]);
+  assert.equal(career.recordRace(monzaWin).careerTotal, 52);
 });

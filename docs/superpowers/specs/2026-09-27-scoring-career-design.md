@@ -148,8 +148,10 @@ Stored in `localStorage` under `f1pixelcup.profile` as JSON:
   never has to replay history. History is capped at the newest 5,000 entries;
   totals are unaffected by the cap.
 - `version` lets the format change later. Loading a profile with an older
-  version runs an upgrade step; a newer or unrecognised version is treated as
-  corrupt (below).
+  version runs an upgrade step, which also drops any field of the wrong type.
+  A profile from a **newer** version of the game is left untouched: the
+  session plays from memory and saves nothing, so an out-of-date tab can never
+  wipe a newer save. (Amended after review; originally "treated as corrupt".)
 - IDs come from `crypto.randomUUID()`, with a timestamp-plus-random fallback
   where that is unavailable.
 
@@ -213,7 +215,8 @@ Two layers:
   `saved: false`; they never throw into the game.
 - **Corrupt or unrecognised save**: the raw value is copied to
   `f1pixelcup.profile.backup.<timestamp>` (never deleted), and a fresh profile
-  starts.
+  starts. If the backup cannot be written, the save is left exactly where it
+  is and the session plays from memory.
 - **Atomic writes**: the whole profile is serialised and written with one
   `setItem`, so a crash cannot leave a half-written profile.
 

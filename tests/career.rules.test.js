@@ -67,3 +67,8 @@ test("tierFor uses the spec boundaries", () => {
   assert.equal(Career.tierFor(1850), "World Champion");
   assert.equal(Career.tierFor(400), "Karting");
 });
+
+test("tierFor falls back to Karting for a rating that is not a number", () => {
+  assert.equal(Career.tierFor(NaN), "Karting");
+  assert.equal(Career.tierFor(undefined), "Karting");
+});

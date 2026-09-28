@@ -105,8 +105,12 @@ const DIFFICULTIES = [
   },
 ];
 
+// The difficulty is fixed for the whole cup when it starts: the AI, the
+// points multiplier and the rating all use the one the cup is run on, whatever
+// is clicked in the garage afterwards.
 function getDifficulty() {
-  return DIFFICULTIES[clamp(state.difficulty || 0, 0, DIFFICULTIES.length - 1)];
+  const index = state.phase !== "garage" && state.cupDifficulty !== null ? state.cupDifficulty : state.difficulty;
+  return DIFFICULTIES[clamp(index || 0, 0, DIFFICULTIES.length - 1)];
 }
 
 const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -357,6 +361,7 @@ const state = {
   raceIndex: 0,
   cupRunId: null,
   cupRecordedFor: null,
+  cupDifficulty: null,
   lastRaceCareer: null,
   lastCupCareer: null,
   track: CUPS[0].tracks[0],
@@ -871,6 +876,7 @@ function renderDifficultyButtons() {
 
   ui.difficultyGrid.querySelectorAll("[data-difficulty-index]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (state.phase !== "garage") return;
       state.difficulty = Number(button.dataset.difficultyIndex);
       try {
         window.localStorage.setItem("f1pixelcup.difficulty", String(state.difficulty));
@@ -1041,6 +1047,7 @@ function startCup() {
   // One id per cup attempt ties its races to its cup bonus (see career.js).
   state.cupRunId = window.Career ? window.Career.startCupRun() : null;
   state.cupRecordedFor = null;
+  state.cupDifficulty = state.difficulty;
   state.feed = [];
   addFeed(`Lights out soon. ${getActiveCup().name} grid is forming.`);
   enterFullscreenMode();
@@ -1858,7 +1865,15 @@ function renderRaceCareer(summary) {
 // Career panel in the garage: totals, rating and the best lap on each circuit.
 function renderCareerPanel() {
   if (!window.Career || !ui.careerStats) return;
-  const profile = window.Career.getProfile();
+  try {
+    drawCareerPanel(window.Career.getProfile());
+  } catch (error) {
+    // A damaged save must never stop the garage (or the game) from working.
+    console.warn("Career: panel not drawn", error);
+  }
+}
+
+function drawCareerPanel(profile) {
   const totals = profile.totals;
   ui.careerTier.textContent = `${window.Career.tierFor(profile.rating)} · ${profile.rating}`;
   const stats = [
@@ -1878,6 +1893,28 @@ function renderCareerPanel() {
   }).join("");
 }
 
+// The cup bonus, recorded as soon as the cup's last race is finalised, so
+// leaving from the last results screen (Esc) still counts the cup. Guarded
+// here and again inside career.js by cupRunId, so it is added exactly once.
+function recordPlayerCup() {
+  if (!window.Career || !state.cupRunId || state.cupRecordedFor === state.cupRunId) return;
+  state.cupRecordedFor = state.cupRunId;
+  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  try {
+    state.lastCupCareer = playerEntry ? window.Career.recordCup({
+      cupId: getActiveCup().id,
+      cupRunId: state.cupRunId,
+      difficulty: getDifficulty().id,
+      position: state.cupEntries.indexOf(playerEntry) + 1,
+      cupPoints: playerEntry.points,
+    }) : null;
+  } catch (error) {
+    console.warn("Career: cup not recorded", error);
+    state.lastCupCareer = null;
+  }
+  renderCareerPanel();
+}
+
 function finalizeRace() {
   const finishers = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition);
   finishers.forEach((racer, index) => {
@@ -1894,8 +1931,9 @@ function finalizeRace() {
     addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
   }
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
-  if (typeof renderCareerPanel === "function") renderCareerPanel();
+  renderCareerPanel();
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
+  if (state.raceIndex >= getActiveCup().tracks.length - 1) recordPlayerCup();
   showResults(finishers);
 }
 
@@ -1977,25 +2015,7 @@ function showPodium() {
       </div>
     `).join("")}
   `;
-  // Guarded here and again inside career.js by cupRunId, so showing the podium
-  // again can never add the bonus twice.
-  if (window.Career && state.cupRunId && state.cupRecordedFor !== state.cupRunId) {
-    state.cupRecordedFor = state.cupRunId;
-    const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
-    try {
-      state.lastCupCareer = playerEntry ? window.Career.recordCup({
-        cupId: activeCup.id,
-        cupRunId: state.cupRunId,
-        difficulty: getDifficulty().id,
-        position: state.cupEntries.indexOf(playerEntry) + 1,
-        cupPoints: playerEntry.points,
-      }) : null;
-    } catch (error) {
-      console.warn("Career: cup not recorded", error);
-      state.lastCupCareer = null;
-    }
-    if (typeof renderCareerPanel === "function") renderCareerPanel();
-  }
+  recordPlayerCup();
   const cup = state.lastCupCareer;
   renderCareerStrip(ui.podiumCareer, cup && cup.bonus > 0
     ? [`<strong>Cup ${formatOrdinal(state.cupEntries.findIndex((entry) => entry.isPlayer) + 1)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]

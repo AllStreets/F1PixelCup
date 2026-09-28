@@ -63,6 +63,7 @@
   }
 
   function tierFor(rating) {
+    if (typeof rating !== "number" || !Number.isFinite(rating)) return "Karting";
     return TIERS.find(([floor]) => rating >= floor)[1];
   }
 
@@ -106,17 +107,40 @@
       && isNumber(raw.version) && raw.version >= 1 && raw.version <= PROFILE_VERSION;
   }
 
-  // Fill in anything an older or partial save lacks, keeping what it has.
+  // A save written by a newer version of the game. It is not ours to touch.
+  function fromNewerVersion(raw) {
+    return Boolean(raw) && typeof raw === "object" && isNumber(raw.version) && raw.version > PROFILE_VERSION;
+  }
+
+  const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  const numberOr = (value, fallback) => (isNumber(value) && value >= 0 ? value : fallback);
+  const stringOr = (value, fallback) => (typeof value === "string" && value ? value : fallback);
+
+  // Fill in anything an older or partial save lacks, and drop any field of
+  // the wrong type, keeping everything that is sound. A hand-edited or
+  // damaged save must never stop the game from starting.
   // Future format changes add their upgrade steps here, keyed on raw.version.
   function upgrade(raw, at, uuid) {
     const base = freshProfile(at, uuid);
+    const totals = isObject(raw.totals) ? raw.totals : {};
+    const bestLaps = {};
+    if (isObject(raw.bestLaps)) {
+      Object.keys(raw.bestLaps).forEach((trackId) => {
+        const lap = raw.bestLaps[trackId];
+        if (isObject(lap) && isNumber(lap.ms) && lap.ms > 0) bestLaps[trackId] = lap;
+      });
+    }
     return {
-      ...base,
-      ...raw,
       version: PROFILE_VERSION,
-      totals: { ...base.totals, ...(raw.totals || {}) },
-      bestLaps: { ...(raw.bestLaps || {}) },
-      history: Array.isArray(raw.history) ? raw.history : [],
+      profileId: stringOr(raw.profileId, base.profileId),
+      createdAt: stringOr(raw.createdAt, base.createdAt),
+      updatedAt: stringOr(raw.updatedAt, base.updatedAt),
+      careerPoints: numberOr(raw.careerPoints, base.careerPoints),
+      rating: numberOr(raw.rating, base.rating),
+      ratedRaces: numberOr(raw.ratedRaces, base.ratedRaces),
+      totals: Object.fromEntries(Object.keys(base.totals).map((key) => [key, numberOr(totals[key], 0)])),
+      bestLaps,
+      history: Array.isArray(raw.history) ? raw.history.filter(isObject) : [],
     };
   }
 
@@ -129,9 +153,13 @@
     // storage means a fresh profile, not the last one read.
     let memory = null;
     let unsaved = false;
+    // Set when the save in storage must not be overwritten (it is from a newer
+    // version of the game, or it is damaged and could not be backed up). The
+    // session then plays from memory and nothing is written.
+    let locked = false;
 
     function write(profile) {
-      if (!storage) return false;
+      if (!storage || locked) return false;
       try {
         storage.setItem(STORAGE_KEY, JSON.stringify(profile));
         return true;
@@ -142,7 +170,7 @@
 
     function read() {
       const at = now().toISOString();
-      if (unsaved && memory) return memory;
+      if ((unsaved || locked) && memory) return memory;
       let raw;
       try {
         raw = storage ? storage.getItem(STORAGE_KEY) : null;
@@ -160,12 +188,20 @@
       } catch (error) {
         parsed = null;
       }
+      if (fromNewerVersion(parsed)) {
+        locked = true;
+        memory = freshProfile(at, uuid);
+        return memory;
+      }
       if (!recognised(parsed)) {
         // Never throw a save away: keep it under a backup key, then start over.
+        // If the backup cannot be written, leave the save exactly where it is.
         try {
           storage.setItem(`${BACKUP_PREFIX}${Date.parse(at)}`, raw);
         } catch (error) {
-          // A fresh profile is still better than none.
+          locked = true;
+          memory = freshProfile(at, uuid);
+          return memory;
         }
         memory = freshProfile(at, uuid);
         write(memory);
