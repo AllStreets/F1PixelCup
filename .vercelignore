@@ -1,0 +1,7 @@
+# Only the site itself is deployed: pages, scripts, styles, data and assets.
+docs/
+tests/
+tools/
+.playwright-mcp/
+.superpowers/
+__pycache__/
