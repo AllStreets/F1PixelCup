@@ -208,3 +208,22 @@ test("startCupRun returns a new id each time", () => {
   const { career } = make();
   assert.notEqual(career.startCupRun(), career.startCupRun());
 });
+
+test("a profile removed from storage mid-session starts fresh instead of coming back", () => {
+  const { career, storage } = make();
+  career.recordRace(monzaWin);
+  delete storage.data["f1pixelcup.profile"];
+  const profile = career.getProfile();
+  assert.equal(profile.careerPoints, 0);
+  assert.deepEqual(profile.history, []);
+  assert.equal(career.recordRace(monzaWin).careerTotal, 52);
+});
+
+test("while saves are failing, progress keeps adding up in memory", () => {
+  const storage = memoryStorage();
+  const { career } = make(storage);
+  career.recordRace(monzaWin);
+  storage.setItem = () => { throw new Error("QuotaExceededError"); };
+  assert.equal(career.recordRace(monzaWin).careerTotal, 104);
+  assert.equal(career.recordRace(monzaWin).careerTotal, 156);
+});

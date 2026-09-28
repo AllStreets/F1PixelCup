@@ -123,8 +123,12 @@
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
   function createCareer({ storage = null, now = () => new Date(), uuid = defaultUuid } = {}) {
-    // Used when storage is missing or throws, so a session still adds up.
+    // The profile as this session last knew it. It is only preferred over
+    // storage while saving is failing (storage missing, blocked or full), so a
+    // session still adds up; otherwise storage is the truth, and an emptied
+    // storage means a fresh profile, not the last one read.
     let memory = null;
+    let unsaved = false;
 
     function write(profile) {
       if (!storage) return false;
@@ -138,6 +142,7 @@
 
     function read() {
       const at = now().toISOString();
+      if (unsaved && memory) return memory;
       let raw;
       try {
         raw = storage ? storage.getItem(STORAGE_KEY) : null;
@@ -146,7 +151,7 @@
         return memory;
       }
       if (raw === null || raw === undefined) {
-        memory = memory || freshProfile(at, uuid);
+        memory = freshProfile(at, uuid);
         return memory;
       }
       let parsed = null;
@@ -176,7 +181,8 @@
         profile.history = profile.history.slice(-HISTORY_LIMIT);
       }
       memory = profile;
-      return write(profile);
+      unsaved = !write(profile);
+      return !unsaved;
     }
 
     function recordRace(result) {

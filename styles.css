@@ -787,6 +787,12 @@ canvas {
   color: #fff;
 }
 
+/* On the results card the strip leads, so what you earned is visible without
+   scrolling past all twenty rows. */
+#results-career {
+  margin: 4px 0 16px;
+}
+
 .career-strip-warning {
   margin-top: 6px !important;
   color: #ffb4a8;
