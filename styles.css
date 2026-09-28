@@ -792,3 +792,45 @@ canvas {
   color: #ffb4a8;
   font-size: 0.85rem;
 }
+
+/* Career panel in the garage. */
+.career-stats,
+.career-bests {
+  display: grid;
+  gap: 8px;
+}
+
+.career-stats {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+.career-bests {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.career-bests-title {
+  margin: 14px 0 8px;
+}
+
+.career-stat,
+.career-best {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: rgba(8, 8, 18, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.career-stat span,
+.career-best span {
+  font-size: 0.72rem;
+  color: rgba(240, 240, 240, 0.6);
+}
+
+.career-stat strong,
+.career-best strong {
+  font-size: 1rem;
+  color: #fff;
+}

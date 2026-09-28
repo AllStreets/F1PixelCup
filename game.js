@@ -68,6 +68,9 @@ const ui = {
   restartButton: document.getElementById("restart-button"),
   resultsCareer: document.getElementById("results-career"),
   podiumCareer: document.getElementById("podium-career"),
+  careerTier: document.getElementById("career-tier"),
+  careerStats: document.getElementById("career-stats"),
+  careerBests: document.getElementById("career-bests"),
 };
 
 const TAU = Math.PI * 2;
@@ -1852,6 +1855,29 @@ function renderRaceCareer(summary) {
   renderCareerStrip(ui.resultsCareer, lines, summary.saved);
 }
 
+// Career panel in the garage: totals, rating and the best lap on each circuit.
+function renderCareerPanel() {
+  if (!window.Career || !ui.careerStats) return;
+  const profile = window.Career.getProfile();
+  const totals = profile.totals;
+  ui.careerTier.textContent = `${window.Career.tierFor(profile.rating)} · ${profile.rating}`;
+  const stats = [
+    ["Career points", profile.careerPoints.toLocaleString()],
+    ["Rating", profile.rating],
+    ["Races", totals.races],
+    ["Wins", totals.wins],
+    ["Podiums", totals.podiums],
+    ["Cups won", `${totals.cupsWon} / ${totals.cupsCompleted}`],
+  ];
+  ui.careerStats.innerHTML = stats.map(([label, value]) => `
+    <div class="career-stat"><span>${label}</span><strong>${value}</strong></div>
+  `).join("");
+  ui.careerBests.innerHTML = TRACKS.map((track) => {
+    const best = profile.bestLaps[track.id];
+    return `<div class="career-best"><span>${track.name}</span><strong>${best ? formatLapTime(best.ms) : "—"}</strong></div>`;
+  }).join("");
+}
+
 function finalizeRace() {
   const finishers = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition);
   finishers.forEach((racer, index) => {
@@ -2014,6 +2040,7 @@ function resetToGarage() {
   ui.podiumModal.classList.add("hidden");
   syncOverlayState();
   addFeed("Back in the pit lane.");
+  renderCareerPanel();
 }
 
 function drawTrack(track) {
@@ -4156,6 +4183,7 @@ loadAudioPreference();
 loadDifficultyPreference();
 updateSoundButton();
 renderGarage();
+renderCareerPanel();
 updateViewControls();
 syncOverlayState();
 bindEvents();
