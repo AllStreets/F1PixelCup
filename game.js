@@ -1,6 +1,33 @@
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
+// The view fills whatever box the page gives it, at any size or aspect ratio.
+// Everything is drawn in logical units: the logical view always covers at
+// least the 1024x576 area the HUD was designed for, and grows past it in
+// whichever direction the window is longer, so HUD elements anchored to the
+// right or bottom edge stay on the real edge instead of being letterboxed or
+// cut off. The backing store matches the element's real pixels.
+const SAFE_WIDTH = 1024;
+const SAFE_HEIGHT = 576;
+const view = { width: SAFE_WIDTH, height: SAFE_HEIGHT, scale: 1 };
+
+function fitViewToElement() {
+  const cssWidth = canvas.clientWidth || SAFE_WIDTH;
+  const cssHeight = canvas.clientHeight || SAFE_HEIGHT;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const pixelWidth = Math.max(1, Math.round(cssWidth * dpr));
+  const pixelHeight = Math.max(1, Math.round(cssHeight * dpr));
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  const fit = Math.min(cssWidth / SAFE_WIDTH, cssHeight / SAFE_HEIGHT);
+  view.width = cssWidth / fit;
+  view.height = cssHeight / fit;
+  view.scale = fit * dpr;
+  ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+}
+
 const ui = {
   driverGrid: document.getElementById("driver-grid"),
   kartGrid: document.getElementById("kart-grid"),
@@ -2155,7 +2182,7 @@ function projectScene(camOrigin, cameraHeading, worldPoint, worldHeight = 0) {
     visible: forward <= CAMERA.farClip,
     forward,
     side,
-    x: canvas.width / 2 + side * invZ,
+    x: view.width / 2 + side * invZ,
     y: CAMERA.horizon + (CAMERA.height - worldHeight) * invZ,
     scale: invZ,
   };
@@ -2177,7 +2204,7 @@ function buildDriverRoadSamples(track, player, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
   const cos = Math.cos(cameraHeading);
   const sin = Math.sin(cameraHeading);
-  const halfCanvas = canvas.width / 2;
+  const halfCanvas = view.width / 2;
   const samples = [];
 
   for (let i = 0; i < 58; i += 1) {
@@ -2231,7 +2258,7 @@ function drawDriverRoad(samples, track) {
 
     // Verge either side, so the ground reads as moving underneath you.
     drawQuad(0, near.y, near.leftShoulderX, near.y, far.leftShoulderX, far.y, 0, far.y, grassColor);
-    drawQuad(near.rightShoulderX, near.y, canvas.width, near.y, canvas.width, far.y, far.rightShoulderX, far.y, grassColor);
+    drawQuad(near.rightShoulderX, near.y, view.width, near.y, view.width, far.y, far.rightShoulderX, far.y, grassColor);
 
     drawQuad(
       near.leftShoulderX, near.y, near.rightShoulderX, near.y,
@@ -2325,7 +2352,7 @@ function drawDriverSceneDecor(track, player, cameraHeading) {
   const sprites = track.decor.map((decor) => {
     const projected = projectScene(camOrigin, cameraHeading, decor);
     if (!projected.visible || projected.forward > 1200 || projected.forward < 46) return null;
-    if (projected.x < -400 || projected.x > canvas.width + 400) return null;
+    if (projected.x < -400 || projected.x > view.width + 400) return null;
     return { decor, ...projected, size: clamp(DECOR_WORLD_SIZE * projected.scale, 1, 210) };
   }).filter(Boolean).sort((a, b) => b.forward - a.forward);
 
@@ -2450,7 +2477,7 @@ function drawDriverRacers(player, track, cameraHeading) {
     })
     .map((racer) => ({ racer, ...projectScene(camOrigin, cameraHeading, racer, 0) }))
     .filter((entry) => entry.visible && entry.forward < 900
-      && entry.x > -260 && entry.x < canvas.width + 260)
+      && entry.x > -260 && entry.x < view.width + 260)
     .sort((a, b) => b.forward - a.forward)
     .forEach(({ racer, x, y, scale, forward }) => {
       const spriteScale = scale * KART_SPRITE_SCALE;
@@ -2596,7 +2623,7 @@ function drawDriverView(track) {
   // canvas then only carries the HUD on top. Without it, fall back to 2D.
   if (window.Render3D && window.Render3D.ready) {
     const now = performance.now();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, view.width, view.height);
     const surface = window.Render3D.render({
       track,
       player,
@@ -2612,7 +2639,7 @@ function drawDriverView(track) {
     if (surface && surface.onKerb && state.phase === "race" && !state.paused && Math.abs(player.speed) > 40) sfx.kerb();
     drawSpeedLines(player);
     drawDriverItemBadge(player);
-    drawMiniMap(track, player, { x: canvas.width - 224, y: 12, width: 212, height: 212 });
+    drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
     drawDriverHud(track, player);
     if (state.phase === "countdown") drawStartLights(now);
     drawLightsOutFlash(now);
@@ -2622,9 +2649,9 @@ function drawDriverView(track) {
 
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
   const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
-    && sample.y < canvas.height + 500
+    && sample.y < view.height + 500
     && sample.rightShoulderX > -300
-    && sample.leftShoulderX < canvas.width + 300).length;
+    && sample.leftShoulderX < view.width + 300).length;
   const roadCollapsed = samples.length < 3 || onScreen < 3;
   if (roadCollapsed) {
     const fallbackRoute = getCameraRoute(player, track);
@@ -2634,24 +2661,24 @@ function drawDriverView(track) {
     samples = buildDriverRoadSamples(track, player, cameraHeading);
   }
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, view.width, view.height);
 
   ctx.save();
   const shake = getScreenShake();
   ctx.translate(shake.x, shake.y);
   // Bank the whole world slightly through corners.
-  ctx.translate(canvas.width / 2, CAMERA.horizon);
+  ctx.translate(view.width / 2, CAMERA.horizon);
   ctx.rotate(state.camRoll || 0);
-  ctx.translate(-canvas.width / 2, -CAMERA.horizon);
+  ctx.translate(-view.width / 2, -CAMERA.horizon);
 
   const sky = ctx.createLinearGradient(0, -120, 0, CAMERA.horizon + 40);
   sky.addColorStop(0, shadeColor(track.bg.sky, -26));
   sky.addColorStop(1, track.bg.sky);
   ctx.fillStyle = sky;
-  ctx.fillRect(-400, -200, canvas.width + 800, CAMERA.horizon + 202);
+  ctx.fillRect(-400, -200, view.width + 800, CAMERA.horizon + 202);
   drawParallaxHorizon(track, cameraHeading);
   ctx.fillStyle = track.bg.grass;
-  ctx.fillRect(-400, CAMERA.horizon, canvas.width + 800, canvas.height - CAMERA.horizon + 220);
+  ctx.fillRect(-400, CAMERA.horizon, view.width + 800, view.height - CAMERA.horizon + 220);
 
   drawDriverRoad(samples, track);
   drawDriverSceneDecor(track, player, cameraHeading);
@@ -2663,7 +2690,7 @@ function drawDriverView(track) {
 
   drawSpeedLines(player);
   drawDriverItemBadge(player);
-  drawMiniMap(track, player, { x: canvas.width - 224, y: 12, width: 212, height: 212 });
+  drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
   drawDriverHud(track, player);
   if (state.phase === "countdown") drawStartLights(performance.now());
   drawLightsOutFlash(performance.now());
@@ -3026,7 +3053,7 @@ function drawStartLights(now) {
   const lit = clamp(Math.floor((elapsed - 0.35) / 0.62) + 1, 0, 5);
   const panelWidth = 358;
   const panelHeight = 96;
-  const x = Math.round(canvas.width / 2 - panelWidth / 2);
+  const x = Math.round(view.width / 2 - panelWidth / 2);
   const y = 62;
 
   ctx.save();
@@ -3076,7 +3103,7 @@ function drawLightsOutFlash(now) {
   ctx.fillStyle = "#39d98a";
   ctx.font = "bold 84px Georgia";
   ctx.textAlign = "center";
-  ctx.fillText("LIGHTS OUT", canvas.width / 2, 150);
+  ctx.fillText("LIGHTS OUT", view.width / 2, 150);
   ctx.textAlign = "left";
   ctx.restore();
 }
@@ -3094,8 +3121,8 @@ function drawSpeedLines(player) {
     const seed = (i * 97 + Math.floor(now / 45)) % 360;
     const t = (seed / 360);
     const edge = i % 2 === 0 ? -1 : 1;
-    const x = canvas.width / 2 + edge * (canvas.width * 0.32 + t * canvas.width * 0.22);
-    const y = CAMERA.horizon + 40 + t * (canvas.height - CAMERA.horizon);
+    const x = view.width / 2 + edge * (view.width * 0.32 + t * view.width * 0.22);
+    const y = CAMERA.horizon + 40 + t * (view.height - CAMERA.horizon);
     const len = 26 + strength * 60;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -3184,7 +3211,7 @@ function drawMiniMap(track, player, frame) {
   ctx.restore();
 
   // Field of view wedge: this is literally what fills the screen in front of you.
-  const fov = Math.atan(canvas.width / 2 / CAMERA.focal);
+  const fov = Math.atan(view.width / 2 / CAMERA.focal);
   const eye = toMap(state.camPos || player);
   const wedge = ctx.createRadialGradient(eye.x, eye.y, 0, eye.x, eye.y, radius * 1.15);
   wedge.addColorStop(0, "rgba(117, 213, 255, 0.42)");
@@ -3371,7 +3398,7 @@ function drawDriverHud(track, player) {
   const flashing = now < (state.hudPlaceFlashUntil || 0);
   const flashPulse = flashing ? 0.4 + Math.abs(Math.sin(now / 110)) * 0.6 : 0;
   const px = 20;
-  const py = canvas.height - 116;
+  const py = view.height - 116;
   hudPanel(px, py, 168, 96, placeStyle.fill);
   if (flashing) {
     ctx.save();
@@ -3405,10 +3432,10 @@ function drawDriverHud(track, player) {
   const ahead = sorted[place - 2];
   const behind = sorted[place];
   const referenceSpeed = Math.max(Math.abs(player.speed), 45);
-  hudPanel(px + 178, canvas.height - 116, 150, 96);
+  hudPanel(px + 178, view.height - 116, 150, 96);
   ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
   ctx.font = "bold 12px Trebuchet MS";
-  ctx.fillText("INTERVAL", px + 192, canvas.height - 92);
+  ctx.fillText("INTERVAL", px + 192, view.height - 92);
 
   const gapRow = (label, other, y, color) => {
     ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
@@ -3423,8 +3450,8 @@ function drawDriverHud(track, player) {
     const gap = Math.abs(getRaceProgress(other) - getRaceProgress(player)) / referenceSpeed;
     ctx.fillText(`${formatGap(gap)}s`, px + 232, y);
   };
-  gapRow("AHD", ahead, canvas.height - 64, "#ff8f6b");
-  gapRow("BHD", behind, canvas.height - 34, "#75d5ff");
+  gapRow("AHD", ahead, view.height - 64, "#ff8f6b");
+  gapRow("BHD", behind, view.height - 34, "#75d5ff");
 
   // ---- Final lap call ----
   if (!player.finished && player.startedRaceLap && player.lap === track.laps - 1) {
@@ -3436,7 +3463,7 @@ function drawDriverHud(track, player) {
       ctx.fillStyle = "#e7b83d";
       ctx.font = "bold 46px Georgia";
       ctx.textAlign = "center";
-      ctx.fillText("FINAL LAP", canvas.width / 2, 196);
+      ctx.fillText("FINAL LAP", view.width / 2, 196);
       ctx.textAlign = "left";
       ctx.restore();
     }
@@ -3446,26 +3473,26 @@ function drawDriverHud(track, player) {
   if (state.flagOutAt && player.finished) {
     const done = state.racers.filter((racer) => racer.finished).length;
     const w = 420;
-    const x = canvas.width / 2 - w / 2;
+    const x = view.width / 2 - w / 2;
     hudPanel(x, 226, w, 92, "#e7b83d");
     ctx.fillStyle = "#e7b83d";
     ctx.font = "bold 30px Georgia";
     ctx.textAlign = "center";
-    ctx.fillText("CHEQUERED FLAG", canvas.width / 2, 264);
+    ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
     ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
     ctx.font = "bold 15px Trebuchet MS";
-    ctx.fillText(`You finished P${player.finishPosition} — field coming home`, canvas.width / 2, 288);
+    ctx.fillText(`You finished P${player.finishPosition} — field coming home`, view.width / 2, 288);
     ctx.fillStyle = "#fff0c9";
     ctx.font = "bold 16px Georgia";
-    ctx.fillText(`${done} / ${state.racers.length} classified`, canvas.width / 2, 310);
+    ctx.fillText(`${done} / ${state.racers.length} classified`, view.width / 2, 310);
     ctx.textAlign = "left";
   }
 
   // ---- Speed, bottom right ----
   const kph = Math.round(Math.abs(player.speed) * 1.45);
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
-  const sx = canvas.width - 208;
-  const sy = canvas.height - 116;
+  const sx = view.width - 208;
+  const sy = view.height - 116;
   hudPanel(sx, sy, 188, 96, "#39d98a");
   ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
   ctx.font = "bold 12px Trebuchet MS";
@@ -3500,8 +3527,8 @@ function drawDriverItemBadge(player) {
   const icon = ITEM_ICONS[itemKey] || "?";
   const panelWidth = 186;
   const panelHeight = 84;
-  const panelX = Math.round(canvas.width / 2 - panelWidth / 2);
-  const panelY = canvas.height - 104;
+  const panelX = Math.round(view.width / 2 - panelWidth / 2);
+  const panelY = view.height - 104;
 
   ctx.save();
   ctx.fillStyle = "rgba(18, 10, 21, 0.84)";
@@ -3796,10 +3823,10 @@ function drawPlayerEffects() {
   if (player.inkUntil > performance.now()) {
     ctx.save();
     ctx.fillStyle = "rgba(18, 10, 21, 0.22)";
-    ctx.fillRect(0, 0, canvas.width, 24);
+    ctx.fillRect(0, 0, view.width, 24);
     ctx.fillRect(0, 0, 34, 184);
-    ctx.fillRect(canvas.width - 34, 0, 34, 184);
-    [[92, 46, 88, 22], [canvas.width - 184, 42, 96, 24], [canvas.width / 2 - 44, 28, 88, 18]].forEach(([x, y, w, h]) => {
+    ctx.fillRect(view.width - 34, 0, 34, 184);
+    [[92, 46, 88, 22], [view.width - 184, 42, 96, 24], [view.width / 2 - 44, 28, 88, 18]].forEach(([x, y, w, h]) => {
       ctx.fillRect(x, y, w, h);
     });
     ctx.restore();
@@ -3860,21 +3887,22 @@ function handleEscapeKey() {
 function drawPauseOverlay() {
   ctx.save();
   ctx.fillStyle = "rgba(8, 6, 14, 0.62)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, view.width, view.height);
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 62px Georgia";
   ctx.textAlign = "center";
-  ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2 - 6);
+  ctx.fillText("PAUSED", view.width / 2, view.height / 2 - 6);
   ctx.font = "bold 16px Trebuchet MS";
   ctx.fillStyle = "rgba(255, 240, 201, 0.7)";
-  ctx.fillText("Esc or P to resume", canvas.width / 2, canvas.height / 2 + 30);
+  ctx.fillText("Esc or P to resume", view.width / 2, view.height / 2 + 30);
   ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
-  ctx.fillText("Q to quit to the pit lane", canvas.width / 2, canvas.height / 2 + 54);
+  ctx.fillText("Q to quit to the pit lane", view.width / 2, view.height / 2 + 54);
   ctx.textAlign = "left";
   ctx.restore();
 }
 
 function update(now) {
+  fitViewToElement();
   const dt = clamp((now - (state.lastTimestamp || now)) / 1000, 0, 0.033);
   state.lastTimestamp = now;
 
@@ -3899,7 +3927,7 @@ function update(now) {
 }
 
 function drawGarageScene() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, view.width, view.height);
   const driver = DRIVERS[state.selectedDriver];
   const team = getTeamForDriver(driver);
   // In 3D the selected car turns on a showroom floor behind this canvas, and
@@ -3907,25 +3935,25 @@ function drawGarageScene() {
   const showroom = Boolean(window.Render3D && window.Render3D.ready
     && window.Render3D.renderGarage(team, driver, performance.now()));
   if (showroom) {
-    const fade = ctx.createLinearGradient(0, 0, canvas.width * 0.55, 0);
+    const fade = ctx.createLinearGradient(0, 0, view.width * 0.55, 0);
     fade.addColorStop(0, "rgba(8, 8, 18, 0.85)");
     fade.addColorStop(1, "rgba(8, 8, 18, 0)");
     ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, view.width, view.height);
   } else {
     ctx.fillStyle = "#080812";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, view.width, view.height);
     // Carbon grid background
     ctx.fillStyle = "#0e0e1e";
-    for (let y = 0; y < canvas.height; y += 32) {
-      ctx.fillRect(0, y, canvas.width, 16);
+    for (let y = 0; y < view.height; y += 32) {
+      ctx.fillRect(0, y, view.width, 16);
     }
   }
   // Team color stripe
   ctx.fillStyle = team.body;
-  ctx.fillRect(0, 0, 8, canvas.height);
+  ctx.fillRect(0, 0, 8, view.height);
   ctx.fillStyle = team.trim;
-  ctx.fillRect(8, 0, 4, canvas.height);
+  ctx.fillRect(8, 0, 4, view.height);
   // Title
   ctx.fillStyle = "#f0f0f0";
   ctx.font = "bold 36px Georgia";

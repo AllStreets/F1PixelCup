@@ -299,6 +299,24 @@ function syncCars(world, racers, player, now, dt) {
 // Per frame
 // ---------------------------------------------------------------------------
 
+// Vertical field of view that shows at least as much to the sides as a 16:9
+// screen would. Wider windows see more; taller ones open up vertically
+// instead of cropping the road at the edges.
+function fitFov(fov) {
+  const aspect = camera.aspect || 16 / 9;
+  if (aspect >= 16 / 9) return fov;
+  const half = Math.atan(Math.tan((fov * Math.PI) / 360) * (16 / 9) / aspect);
+  return (half * 360) / Math.PI;
+}
+
+function setFov(fov) {
+  const next = fitFov(fov);
+  if (Math.abs(camera.fov - next) > 0.01) {
+    camera.fov = next;
+    camera.updateProjectionMatrix();
+  }
+}
+
 function resize() {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
@@ -364,10 +382,7 @@ function render(frame) {
   const boosting = player.bulletUntil > now || player.boostUntil > now;
   const targetFov = BASE_FOV + 15 * Math.pow(sf, 1.4) + (boosting ? 8 : 0);
   world.fov += (targetFov - world.fov) * Math.min(1, dt * 4);
-  if (Math.abs(camera.fov - world.fov) > 0.01) {
-    camera.fov = world.fov;
-    camera.updateProjectionMatrix();
-  }
+  setFov(world.fov);
 
   // Rumble: hard and fast over kerbs, looser off the track, a faint buzz at
   // top speed on the tarmac.
@@ -485,10 +500,7 @@ function renderGarage(kart, driver, now) {
   sun.intensity = 2.6;
   sun.color.set(0xffffff);
   renderer.toneMappingExposure = 1.1;
-  if (camera.fov !== BASE_FOV) {
-    camera.fov = BASE_FOV;
-    camera.updateProjectionMatrix();
-  }
+  setFov(BASE_FOV);
   const key = `${kart.id}|${driver.id || driver.name}`;
   if (garage.key !== key) {
     if (garage.car) garage.group.remove(garage.car.root);
