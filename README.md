@@ -209,6 +209,11 @@ F1_Pixel_Cup/
 
 This is a static site — no build step required.
 
+**Live:** https://f1-pixel-cup.vercel.app (game at `/play.html`). The Vercel project is
+connected to this GitHub repo, so every push to `main` deploys to production
+automatically; pushes to other branches get preview URLs. `.vercelignore` keeps
+docs, tests, tools and local env files out of the upload.
+
 ### Local
 
 It must be served over HTTP (the 3D renderer is an ES module and loads a model),
