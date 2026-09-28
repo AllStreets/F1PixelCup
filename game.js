@@ -66,6 +66,8 @@ const ui = {
   podiumTitle: document.getElementById("podium-title"),
   podiumScene: document.getElementById("podium-scene"),
   restartButton: document.getElementById("restart-button"),
+  resultsCareer: document.getElementById("results-career"),
+  podiumCareer: document.getElementById("podium-career"),
 };
 
 const TAU = Math.PI * 2;
@@ -350,6 +352,10 @@ const state = {
   activeCupIndex: 0,
   phase: "garage",
   raceIndex: 0,
+  cupRunId: null,
+  cupRecordedFor: null,
+  lastRaceCareer: null,
+  lastCupCareer: null,
   track: CUPS[0].tracks[0],
   racers: [],
   playerId: "",
@@ -1029,6 +1035,9 @@ function startCup() {
   state.activeCupIndex = state.selectedCup;
   state.raceIndex = 0;
   buildCupEntries();
+  // One id per cup attempt ties its races to its cup bonus (see career.js).
+  state.cupRunId = window.Career ? window.Career.startCupRun() : null;
+  state.cupRecordedFor = null;
   state.feed = [];
   addFeed(`Lights out soon. ${getActiveCup().name} grid is forming.`);
   enterFullscreenMode();
@@ -1782,6 +1791,67 @@ function updateStandingsUI() {
   }).join("");
 }
 
+// The player's race, handed to the career profile. Called once per race, from
+// finalizeRace, so a race abandoned before the flag is never recorded.
+function recordPlayerRace(finishers, fastest) {
+  const player = finishers.find((racer) => racer.isPlayer);
+  if (!player || !window.Career) return null;
+  try {
+    return window.Career.recordRace({
+      cupId: getActiveCup().id,
+      cupRunId: state.cupRunId,
+      raceIndex: state.raceIndex,
+      trackId: state.track.id,
+      difficulty: getDifficulty().id,
+      driverId: player.driver.id,
+      teamId: player.kart.id,
+      position: finishers.indexOf(player) + 1,
+      fieldSize: finishers.length,
+      bestLapMs: player.bestLapTime || 0,
+      fastestLap: Boolean(fastest && fastest.id === player.id),
+    });
+  } catch (error) {
+    console.warn("Career: race not recorded", error);
+    return null;
+  }
+}
+
+function careerDifficultyName(id) {
+  return (window.Career && window.Career.DIFFICULTY_NAMES[id]) || id;
+}
+
+function renderCareerStrip(node, lines, saved) {
+  if (!node) return;
+  if (!lines.length) {
+    node.innerHTML = "";
+    node.classList.add("hidden");
+    return;
+  }
+  const warning = saved === false
+    ? `<p class="career-strip-warning">Progress couldn't be saved in this browser.</p>`
+    : "";
+  node.innerHTML = lines.map((line) => `<p>${line}</p>`).join("") + warning;
+  node.classList.remove("hidden");
+}
+
+function renderRaceCareer(summary) {
+  if (!summary) {
+    renderCareerStrip(ui.resultsCareer, [], true);
+    return;
+  }
+  const difficulty = careerDifficultyName(getDifficulty().id);
+  const { before, after, delta } = summary.rating;
+  const trend = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "=";
+  const lines = [
+    `<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier})`,
+    `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
+  ];
+  if (summary.newBestLap) {
+    lines.push(`New best at ${state.track.name}: <strong>${formatLapTime(summary.newBestLap.ms)}</strong>`);
+  }
+  renderCareerStrip(ui.resultsCareer, lines, summary.saved);
+}
+
 function finalizeRace() {
   const finishers = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition);
   finishers.forEach((racer, index) => {
@@ -1797,6 +1867,8 @@ function finalizeRace() {
     if (entry) entry.points += 1;
     addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
   }
+  state.lastRaceCareer = recordPlayerRace(finishers, fastest);
+  if (typeof renderCareerPanel === "function") renderCareerPanel();
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
   showResults(finishers);
 }
@@ -1845,6 +1917,7 @@ function showResults(finishers) {
     }).join("")}
   `;
   ui.resultsButton.textContent = state.raceIndex === activeCup.tracks.length - 1 ? "Show Podium" : "Next Race";
+  renderRaceCareer(state.lastRaceCareer);
   ui.resultsModal.classList.remove("hidden");
   state.phase = "results";
   syncOverlayState();
@@ -1878,6 +1951,29 @@ function showPodium() {
       </div>
     `).join("")}
   `;
+  // Guarded here and again inside career.js by cupRunId, so showing the podium
+  // again can never add the bonus twice.
+  if (window.Career && state.cupRunId && state.cupRecordedFor !== state.cupRunId) {
+    state.cupRecordedFor = state.cupRunId;
+    const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+    try {
+      state.lastCupCareer = playerEntry ? window.Career.recordCup({
+        cupId: activeCup.id,
+        cupRunId: state.cupRunId,
+        difficulty: getDifficulty().id,
+        position: state.cupEntries.indexOf(playerEntry) + 1,
+        cupPoints: playerEntry.points,
+      }) : null;
+    } catch (error) {
+      console.warn("Career: cup not recorded", error);
+      state.lastCupCareer = null;
+    }
+    if (typeof renderCareerPanel === "function") renderCareerPanel();
+  }
+  const cup = state.lastCupCareer;
+  renderCareerStrip(ui.podiumCareer, cup && cup.bonus > 0
+    ? [`<strong>Cup ${formatOrdinal(state.cupEntries.findIndex((entry) => entry.isPlayer) + 1)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
+    : [], cup ? cup.saved : true);
   ui.podiumModal.classList.remove("hidden");
   ui.resultsModal.classList.add("hidden");
   state.phase = "podium";

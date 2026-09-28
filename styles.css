@@ -767,3 +767,28 @@ canvas {
   color: #a855f7;
   font-weight: 700;
 }
+
+/* What a race or cup earned, under the results table and the podium. */
+.career-strip {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(220, 0, 0, 0.08);
+  border: 1px solid rgba(220, 0, 0, 0.28);
+  line-height: 1.55;
+  color: #f0f0f0;
+}
+
+.career-strip p {
+  margin: 0;
+}
+
+.career-strip strong {
+  color: #fff;
+}
+
+.career-strip-warning {
+  margin-top: 6px !important;
+  color: #ffb4a8;
+  font-size: 0.85rem;
+}
