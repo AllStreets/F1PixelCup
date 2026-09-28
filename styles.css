@@ -759,3 +759,26 @@ canvas {
   color: #a855f7;
   font-weight: 700;
 }
+
+/* 3D renderer: the WebGL canvas sits in the flow and the 2D canvas lies over
+   it as a transparent HUD layer, the same size and position. */
+.canvas-shell.has-3d #game {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  border-color: transparent;
+  background: transparent;
+}
+
+#game3d {
+  aspect-ratio: 16 / 9;
+  background: #080812;
+}
+
+.canvas-shell:fullscreen.has-3d #game,
+.canvas-shell:-webkit-full-screen.has-3d #game {
+  bottom: 0;
+  margin: auto;
+}

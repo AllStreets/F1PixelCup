@@ -3728,6 +3728,34 @@ function drawDriverView(track) {
     return;
   }
   let cameraHeading = updateCameraRig(player, track);
+
+  // The 3D renderer (render3d.js) draws the world when it has loaded; this
+  // canvas then only carries the HUD on top. Without it, fall back to 2D.
+  if (window.Render3D && window.Render3D.ready) {
+    const now = performance.now();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    window.Render3D.render({
+      track,
+      player,
+      racers: state.racers,
+      cameraHeading,
+      camPos: state.camPos,
+      roll: state.camRoll,
+      shake: getScreenShake(),
+      items: state.items,
+      particles: state.particles,
+      now,
+    });
+    drawSpeedLines(player);
+    drawDriverItemBadge(player);
+    drawMiniMap(track, player, { x: canvas.width - 224, y: 12, width: 212, height: 212 });
+    drawDriverHud(track, player);
+    if (state.phase === "countdown") drawStartLights(now);
+    drawLightsOutFlash(now);
+    drawPlayerEffects();
+    return;
+  }
+
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
   const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
     && sample.y < canvas.height + 500
@@ -5003,15 +5031,27 @@ function update(now) {
 
 function drawGarageScene() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = "#080812";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Carbon grid background
-  ctx.fillStyle = "#0e0e1e";
-  for (let y = 0; y < canvas.height; y += 32) {
-    ctx.fillRect(0, y, canvas.width, 16);
-  }
   const driver = DRIVERS[state.selectedDriver];
   const team = getTeamForDriver(driver);
+  // In 3D the selected car turns on a showroom floor behind this canvas, and
+  // this canvas only lays the driver details over a fade on the left.
+  const showroom = Boolean(window.Render3D && window.Render3D.ready
+    && window.Render3D.renderGarage(team, driver, performance.now()));
+  if (showroom) {
+    const fade = ctx.createLinearGradient(0, 0, canvas.width * 0.55, 0);
+    fade.addColorStop(0, "rgba(8, 8, 18, 0.85)");
+    fade.addColorStop(1, "rgba(8, 8, 18, 0)");
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = "#080812";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Carbon grid background
+    ctx.fillStyle = "#0e0e1e";
+    for (let y = 0; y < canvas.height; y += 32) {
+      ctx.fillRect(0, y, canvas.width, 16);
+    }
+  }
   // Team color stripe
   ctx.fillStyle = team.body;
   ctx.fillRect(0, 0, 8, canvas.height);
@@ -5030,6 +5070,7 @@ function drawGarageScene() {
   ctx.fillText(`#${driver.number}  ${driver.title}`, 56, 148);
   ctx.fillText(team.name, 56, 172);
   ctx.fillText(team.car, 56, 196);
+  if (showroom) return;
   // Draw the car large
   drawKart(ctx, 320, 320, 0, team, driver, 5.5);
   // Team color swatch

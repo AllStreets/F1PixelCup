@@ -1,6 +1,6 @@
 # F1 Pixel Cup
 
-A pixel-art F1 racing game built with vanilla HTML5 Canvas — no frameworks, no build step. Race as any of the 20 drivers from the **2025 F1 season** across 8 circuits in two four-race cups.
+An F1 racing game in the browser — Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** across 8 circuits in two four-race cups.
 
 ---
 
@@ -68,10 +68,27 @@ The audio context can only start from a user gesture, so it initialises on the f
 
 ## Rendering
 
-- Chase-cam pseudo-3D road, drawn through **one** perspective camera (`projectScene`) shared by the road, the cars, the scenery and the item boxes — so everything agrees on where the ground is
-- Rear-view F1 car sprites that lean into the direction the car is pointing
-- Parallax horizon that pans as you turn, and a horizon that banks into corners
-- Cars on other parts of the circuit are culled, so nothing appears to float across the infield
+The world is drawn in real 3D with **Three.js**; the HUD stays on a transparent
+2D canvas laid over the top. `game.js` still owns physics, AI, laps, items and
+audio, and hands the renderer the race state each frame, so none of the racing
+changed. If WebGL or the car model is unavailable it falls back to the original
+pseudo-3D canvas renderer.
+
+- **Blender-built F1 car** (`assets/f1_car.glb`) — one model, recoloured into all
+  ten liveries plus each driver's helmet, with wheels that roll with speed and
+  front wheels that steer
+- **Circuits built from the track data** — tarmac, run-off, white lines,
+  kerbs that appear only where the track bends, advertising barriers, a start
+  gantry, chequered line and grid boxes, all extruded from the same centreline
+  the physics runs on, so what you see is what you race
+- **Per-venue lighting** — Singapore runs at night under floodlights with lit
+  towers, Bahrain at desert dusk, Monaco beside the harbour
+- Real-time shadows, fog, a gradient sky with the sun, grandstands with crowds,
+  and a few hundred trees scattered clear of the circuit
+- Drift smoke and boost glow as 3D particles
+- **3D showroom** in the pit lane — the selected driver's car on a turntable
+
+Rebuild the car with `tools/blender/build_f1_car.py` (see `tools/BLENDER-MCP.md`).
 
 ## Physics
 
@@ -91,7 +108,11 @@ The audio context can only start from a user gesture, so it initialises on the f
 F1_Pixel_Cup/
 ├── index.html      # Shell, HUD panels, modals
 ├── styles.css      # Dark F1 theme (carbon/scarlet/gold)
-└── game.js         # All game logic and rendering
+├── render3d.js     # Three.js renderer: track mesh, cars, scenery, showroom
+├── assets/         # f1_car.glb, built in Blender
+├── vendor/three/   # Three.js r186, vendored so there is still no build step
+├── tools/blender/  # build_f1_car.py, regenerates the car model
+└── game.js         # Game logic, HUD, and the 2D fallback renderer
     ├── TEAMS[]         10 constructor cars with stats
     ├── DRIVERS[]       20 F1 2025 drivers with stats
     ├── TRACKS[]        8 circuits (waypoints, decor, item boxes)
@@ -130,6 +151,9 @@ F1_Pixel_Cup/
 This is a static site — no build step required.
 
 ### Local
+
+It must be served over HTTP (the 3D renderer is an ES module and loads a model),
+so opening `index.html` straight from disk will fall back to the 2D renderer.
 
 ```bash
 npx serve .

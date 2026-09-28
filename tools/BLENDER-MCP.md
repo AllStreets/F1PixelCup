@@ -50,6 +50,17 @@ If you ever move or upgrade that Python, update `.mcp.json` to match.
 So car models do not have to be hand-coded in Python - they can be pulled
 from a library or generated, then exported to glTF.
 
+## The car model
+
+`tools/blender/build_f1_car.py` builds the car from lofted cross-sections and
+exports `assets/f1_car.glb`. Materials are named by role (`livery_body`,
+`livery_trim`, `helmet`, ...) and `render3d.js` recolours them per team, so
+one model covers the whole grid. To rebuild, with the MCP server running:
+
+    import os
+    os.environ["F1_CAR_OUT"] = "<repo>/assets/f1_car.glb"
+    exec(open("<repo>/tools/blender/build_f1_car.py").read())
+
 ## Removing it
 
 Delete `.mcp.json`, `tools/start-blender-mcp.sh`, this file, and
