@@ -5,3 +5,5 @@ tools/
 .playwright-mcp/
 .superpowers/
 __pycache__/
+.env*
+.vercel/

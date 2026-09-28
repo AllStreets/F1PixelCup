@@ -1,3 +1,5 @@
 .playwright-mcp/
 __pycache__/
 .superpowers/
+.vercel
+.env*
