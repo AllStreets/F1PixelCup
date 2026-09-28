@@ -192,8 +192,9 @@ const ITEM_BOX_SIZE = 22;
 const ITEM_BOX_HEIGHT = 11;
 
 const state = {
-  selectedDriver: 0,
-  selectedKart: 0,
+  // Charles Leclerc is the default driver (the player's favourite).
+  selectedDriver: Math.max(0, DRIVERS.findIndex((driver) => driver.id === "leclerc")),
+  selectedKart: Math.max(0, TEAMS.findIndex((team) => team.id === "ferrari")),
   selectedCup: 0,
   difficulty: 1,
   activeCupIndex: 0,
