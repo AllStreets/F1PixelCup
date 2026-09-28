@@ -2,8 +2,111 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=./play.html">
-  <title>F1 Pixel Cup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Pixel Cup — Race the real circuits in your browser</title>
+  <meta name="description" content="All 20 drivers of the 2025 season on eight real circuits, in 3D, in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231b1620'/%3E%3Crect x='4' y='5' width='24' height='8' rx='2' fill='%23dc0000'/%3E%3Crect x='4' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='12' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='20' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='8' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='16' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='24' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap">
+  <link rel="stylesheet" href="./site.css">
+  <link rel="stylesheet" href="./landing.css">
 </head>
-<body><a href="./play.html">Play F1 Pixel Cup</a></body>
+<body class="landing">
+  <header class="topbar">
+    <a class="wordmark" href="#hero">F1 PIXEL CUP</a>
+    <nav class="topnav" aria-label="Sections">
+      <a href="#circuits">Circuits</a>
+      <a href="#career">Your career</a>
+      <a href="#grid">The grid</a>
+      <a href="#how-to-play">How to play</a>
+    </nav>
+    <a class="go-btn play-link" href="./play.html"><span>Play</span></a>
+  </header>
+
+  <main>
+    <section id="hero" class="hero">
+      <img src="./assets/shots/hero.jpg" alt="Charles Leclerc's Ferrari leading the field through the forest at Spa-Francorchamps" data-fallback="hero">
+      <div class="hero-shade"></div>
+      <div class="hero-tower" aria-hidden="true">
+        <div class="tower-row is-player"><b>1</b><i style="background:#dc0000"></i><span>LEC</span><em>LEADER</em></div>
+        <div class="tower-row"><b>2</b><i style="background:#dc0000"></i><span>HAM</span><em>+0.4</em></div>
+        <div class="tower-row"><b>3</b><i style="background:#ff8000"></i><span>NOR</span><em>+1.1</em></div>
+        <div class="tower-row"><b>4</b><i style="background:#1e41b2"></i><span>VER</span><em>+1.6</em></div>
+      </div>
+      <div class="hero-copy">
+        <p class="kicker">2025 season · 8 real circuits</p>
+        <h1 class="it-title hero-title">Lights out.<br>Your race.</h1>
+        <p class="hero-lead">All 20 drivers, eight real circuits and a career that remembers every lap. In 3D, in your browser.</p>
+        <a class="go-btn play-link" href="./play.html"><span>Play now ›</span></a>
+      </div>
+    </section>
+
+    <section id="circuits" class="section">
+      <p class="kicker">The calendar</p>
+      <h2 class="it-title section-title">Eight real circuits</h2>
+      <p class="section-lead muted">Every track is traced from the real layout, from Monza's straights to Suzuka's figure of eight.</p>
+      <div id="circuit-list" class="circuit-list"></div>
+    </section>
+
+    <section id="career" class="section">
+      <p class="kicker">Your career</p>
+      <h2 class="it-title section-title">Every lap counts</h2>
+      <div id="career-summary" class="career-summary"></div>
+    </section>
+
+    <section id="grid" class="section">
+      <p class="kicker">The grid</p>
+      <h2 class="it-title section-title">Ten teams, twenty drivers</h2>
+      <div id="team-list" class="team-list"></div>
+    </section>
+
+    <section id="how-to-play" class="section">
+      <p class="kicker">How to play</p>
+      <h2 class="it-title section-title">Keyboard, and nerve</h2>
+      <div class="howto">
+        <div class="howto-block">
+          <h3>Controls</h3>
+          <dl class="keys">
+            <dt>W / ↑</dt><dd>Throttle</dd>
+            <dt>S / ↓</dt><dd>Brake, then reverse</dd>
+            <dt>A D / ← →</dt><dd>Steer</dd>
+            <dt>Shift</dt><dd>Hold through a corner to drift</dd>
+            <dt>Space</dt><dd>Use your power-up</dd>
+            <dt>Esc / P</dt><dd>Pause (Q from pause to quit)</dd>
+          </dl>
+        </div>
+        <div class="howto-block">
+          <h3>Drift boost</h3>
+          <p class="muted">Hold Shift through a corner. The tyre smoke turns white, then blue, then orange as the boost charges — let go on orange for the biggest kick.</p>
+          <h3>Power-ups</h3>
+          <p class="muted">Drive through the red boxes. The further back you are, the stronger what you get.</p>
+          <ul id="power-up-list" class="power-ups"></ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Circuit outlines: <a href="https://github.com/bacinger/f1-circuits">bacinger/f1-circuits</a> (MIT) · Textures: <a href="https://polyhaven.com">Poly Haven</a> (CC0) · 3D: <a href="https://threejs.org">Three.js</a> (MIT)</p>
+    <p class="muted">F1 Pixel Cup is a fan project, not affiliated with Formula 1.</p>
+  </footer>
+
+  <dialog id="phone-play-note" class="phone-note">
+    <p class="kicker">Heads up</p>
+    <h2 class="it-title">Best played on a computer with a keyboard</h2>
+    <p class="muted">F1 Pixel Cup is driven with the keyboard. Touch controls are on the way.</p>
+    <div class="note-actions">
+      <button class="ghost-btn" type="button" data-close>Stay here</button>
+      <a class="go-btn" href="./play.html"><span>Play anyway ›</span></a>
+    </div>
+  </dialog>
+
+  <script src="./tracks-data.js"></script>
+  <script src="./game-data.js"></script>
+  <script src="./trackmap.js"></script>
+  <script src="./device.js"></script>
+  <script src="./career.js"></script>
+  <script src="./landing.js"></script>
+</body>
 </html>
