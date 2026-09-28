@@ -82,6 +82,23 @@ export function waterMaterial(tint = "#2a6f96") {
   return new THREE.MeshPhongMaterial({ color: color(tint), specular: 0x9fc4dd, shininess: 90 });
 }
 
+// Slide a big round thing (a hill, a tower, a bay) straight away from the
+// middle of the circuit until its whole footprint is clear of the track.
+function pushClear(course, x, z, radius, margin = 40) {
+  const b = course.bounds;
+  let dx = x - b.cx;
+  let dz = z - b.cz;
+  const len = Math.hypot(dx, dz) || 1;
+  dx /= len;
+  dz /= len;
+  for (let i = 0; i < 200; i += 1) {
+    if (course.clearance(x, z, radius + margin + 120) >= radius + margin) return { x, z };
+    x += dx * 40;
+    z += dz * 40;
+  }
+  return null;
+}
+
 // Place a long building beside the lap. Tries each side of a stretch of the
 // lap and shorter lengths until the whole footprint is clear.
 function placeAlongside(course, centreDistance, lengths, depth, gap) {
@@ -167,8 +184,12 @@ function hills(course, group, { tint, count, height, flat }, rand) {
     const w = h * (flat ? 5 : 2.2) + rand() * 200;
     const geo = new THREE.IcosahedronGeometry(1, 1);
     const hill = new THREE.Mesh(geo, mat);
-    hill.scale.set(w, h, w * (0.7 + rand() * 0.6));
-    hill.position.set(cx + Math.cos(a) * rx * d, -h * 0.15, cz + Math.sin(a) * rz * d);
+    const depth = w * (0.7 + rand() * 0.6);
+    hill.scale.set(w, h, depth);
+    // The icosahedron's footprint is at most its larger horizontal radius.
+    const spot = pushClear(course, cx + Math.cos(a) * rx * d, cz + Math.sin(a) * rz * d, Math.max(w, depth));
+    if (!spot) continue;
+    hill.position.set(spot.x, -h * 0.15, spot.z);
     hill.rotation.y = rand() * Math.PI;
     hill.receiveShadow = true;
     group.add(hill);
@@ -272,16 +293,22 @@ function skyline(course, group, rand, { night, count = 90, arc = [0, Math.PI * 2
   const rx = (b.maxX - b.minX) / 2 + 1300;
   const rz = (b.maxZ - b.minZ) / 2 + 1300;
   const palette = night ? ["#3a3f4a", "#2c3240", "#4a4e58"] : ["#c9ccd2", "#aeb4bd", "#e1e3e6", "#9aa3ad"];
+  let placed = 0;
   for (let i = 0; i < count; i += 1) {
     const a = arc[0] + rand() * (arc[1] - arc[0]);
     const d = 1 + rand() * 0.35;
     const w = 40 + rand() * 60;
     const h = height[0] + rand() * (height[1] - height[0]);
+    const depth = w * (0.6 + rand() * 0.8);
+    const spot = pushClear(course, b.cx + Math.cos(a) * rx * d, b.cz + Math.sin(a) * rz * d, Math.hypot(w, depth) / 2, 60);
+    if (!spot) continue;
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
-    m.compose(new THREE.Vector3(b.cx + Math.cos(a) * rx * d, h / 2, b.cz + Math.sin(a) * rz * d), q, new THREE.Vector3(w, h, w * (0.6 + rand() * 0.8)));
-    mesh.setMatrixAt(i, m);
-    mesh.setColorAt(i, color(palette[i % palette.length]));
+    m.compose(new THREE.Vector3(spot.x, h / 2, spot.z), q, new THREE.Vector3(w, h, depth));
+    mesh.setMatrixAt(placed, m);
+    mesh.setColorAt(placed, color(palette[placed % palette.length]));
+    placed += 1;
   }
+  mesh.count = placed;
   group.add(mesh);
 }
 
@@ -296,12 +323,13 @@ function floodlights(course, group) {
     const off = side * ((side > 0 ? p.outerR : p.outerL) + 9);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
-    if (course.occupied.blocked(x, z, 3)) continue;
+    if (course.occupied.blocked(x, z, 3) || course.clearance(x, z) < 8) continue;
     const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 70, 6), poleMat);
     pole.position.set(x, p.h + 35, z);
     group.add(pole);
     const head = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 4), headMat);
-    head.position.set(x - p.nx * side * 3, p.h + 70, z - p.ny * side * 3);
+    // Lamp head sits behind the pole, never out over the run-off.
+    head.position.set(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3);
     head.rotation.y = -Math.atan2(p.ty, p.tx);
     group.add(head);
   }
@@ -368,6 +396,7 @@ const EXTRAS = {
     const land = new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 1, 1), color: color("#d6cfc2"), roughness: 0.95, side: THREE.DoubleSide });
     const plate = new THREE.Mesh(ribbon(course.samples, (p) => -(p.outerL + 190), (p) => p.outerR + 190, 0.01, 80), land);
     plate.receiveShadow = true;
+    plate.userData.ground = true;
     group.add(plate);
     streetBlocks(course, group, rand, {
       rows: 2, height: [26, 70], depth: [38, 64], width: [30, 58], maxCount: 700, spacing: 6,
@@ -411,14 +440,16 @@ const EXTRAS = {
       const h = 380 + rand() * 520;
       const hill = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), mat);
       hill.scale.set(h * 1.6, h, h * 1.2);
-      hill.position.set(b.minX - 300 + (i / 8) * (b.maxX - b.minX + 600), -h * 0.1, b.minZ - 900 - rand() * 400);
+      const spot = pushClear(course, b.minX - 300 + (i / 8) * (b.maxX - b.minX + 600), b.minZ - 900 - rand() * 400, h * 1.6);
+      if (!spot) continue;
+      hill.position.set(spot.x, -h * 0.1, spot.z);
       group.add(hill);
     }
   },
 
   casino(course, group) {
     const b = course.bounds;
-    const spot = course.findSpot(b.cx, b.minZ + 150, 44, 900, 8);
+    const spot = course.findSpot(b.cx, b.minZ + 150, 52, 900, 8);
     if (!spot) return;
     const g = new THREE.Group();
     addMesh(g, new THREE.BoxGeometry(80, 26, 50), std(0xf1e4c8), 0, 13, 0);
@@ -441,7 +472,7 @@ const EXTRAS = {
 
   marinaBaySands(course, group) {
     const b = course.bounds;
-    const spot = course.findSpot(b.maxX + 120, b.cz, 110, 1400, 20);
+    const spot = course.findSpot(b.maxX + 120, b.cz, 128, 1400, 20);
     if (!spot) return;
     const g = new THREE.Group();
     const mat = buildingMaterial({ night: true, glass: "#22304a", litShare: 0.7 });
@@ -456,10 +487,13 @@ const EXTRAS = {
     g.rotation.y = 0.4;
     group.add(g);
     // The bay beside it.
-    const bay = new THREE.Mesh(new THREE.CircleGeometry(700, 48), waterMaterial("#0e2238"));
-    bay.rotation.x = -Math.PI / 2;
-    bay.position.set(spot.x + 650, 0.05, spot.z);
-    group.add(bay);
+    const baySpot = pushClear(course, spot.x + 650, spot.z, 700, 20);
+    if (baySpot) {
+      const bay = new THREE.Mesh(new THREE.CircleGeometry(700, 48), waterMaterial("#0e2238"));
+      bay.rotation.x = -Math.PI / 2;
+      bay.position.set(baySpot.x, 0.05, baySpot.z);
+      group.add(bay);
+    }
   },
 
   flyer(course, group) {

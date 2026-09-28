@@ -69,6 +69,10 @@ converted by `tools/tracks/build_tracks.py` into `tracks-data.js`:
 - Grandstands, billboards, towers and item boxes are placed by the same tool,
   and every piece of scenery in the 3D view checks its whole footprint against
   the entire circuit before it is placed, so nothing ever sits on the track.
+  That includes the background: hills, mountains, skyline towers and water are
+  slid outwards until they clear it. `Render3D.auditScenery(track)` checks the
+  result by dropping a ray onto points right across the road and run-off all
+  the way round the lap; every circuit comes back with zero hits.
 
 ## Sound
 

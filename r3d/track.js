@@ -156,11 +156,19 @@ export function buildCourse(track) {
     return false;
   });
 
-  // Clearance of a point from the circuit: distance to the nearest barrier.
+  // Clearance of a point from the circuit: how far it is outside the nearest
+  // barrier, using the barrier on whichever side of the lap the point is.
+  // Negative means inside the barriers.
+  // `reach` is how far past the barriers to look; the search itself always
+  // extends a full run-off width further, so a centreline point just out of
+  // reach cannot hide a barrier that is close.
   const clearance = (x, z, reach = 260) => {
     let best = Infinity;
-    near(x, z, reach, (p) => {
-      const d = Math.hypot(p.x - x, p.y - z) - Math.max(p.outerL, p.outerR) - 2;
+    near(x, z, reach + runoffBase + 4, (p) => {
+      const dx = x - p.x;
+      const dz = z - p.y;
+      const barrier = (dx * p.nx + dz * p.ny >= 0 ? p.outerR : p.outerL) + 2;
+      const d = Math.hypot(dx, dz) - barrier;
       if (d < best) best = d;
     });
     return best;
@@ -633,7 +641,7 @@ export function scatterTrees(course, { count, kind = "broadleaf", tint = "#3a6a3
       z = b.minZ - pad + rand() * (b.maxZ - b.minZ + pad * 2);
     }
     const scale = kind === "conifer" ? 0.8 + rand() * 0.9 : 0.7 + rand() * 0.8;
-    const r = 14 * scale;
+    const r = (kind === "palm" ? 17 : 15) * scale;
     if (course.clearance(x, z, r + 60) < r + 12 || course.occupied.blocked(x, z, r)) continue;
     course.occupied.add(x, z, r * 0.7);
     q.setFromAxisAngle(up, rand() * Math.PI * 2);

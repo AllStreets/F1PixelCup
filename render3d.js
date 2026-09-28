@@ -58,7 +58,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, render, renderGarage };
+const api = { ready: false, render, renderGarage, auditScenery };
 window.Render3D = api;
 
 loadCar(() => { api.ready = true; }, (error) => {
@@ -154,7 +154,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0 };
+  return { trackId: track.id, course, venue, group, decor, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0 };
 }
 
 function disposeWorld(world) {
@@ -400,6 +400,44 @@ function render(frame) {
 
   renderer.render(scene, camera);
   return surface;
+}
+
+// ---------------------------------------------------------------------------
+// Scenery audit: nothing but the circuit itself may stand over the track.
+// Drops a ray straight down onto points right across the road and run-off
+// all the way round the lap, and reports anything from the scenery it hits.
+// Used by the automated check; cheap enough to run on every circuit.
+// ---------------------------------------------------------------------------
+
+function auditScenery(track, { step = 2, lanes = 7 } = {}) {
+  const world = ensureWorld(track);
+  const { course } = world;
+  world.group.updateMatrixWorld(true);
+  const targets = [world.decor, world.landmarks];
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const origin = new THREE.Vector3();
+  const hits = [];
+  course.samples.forEach((p, i) => {
+    if (i % step) return;
+    for (let k = 0; k < lanes; k += 1) {
+      // Across the whole width inside the barriers, left to right.
+      const t = k / (lanes - 1);
+      const off = -p.outerL + 1 + t * (p.outerL + p.outerR - 2);
+      origin.set(p.x + p.nx * off, 3000, p.y + p.ny * off);
+      ray.set(origin, down);
+      // Ground layers the road is laid on (Monaco's town) do not count.
+      const hit = ray.intersectObjects(targets, true).find((h) => !h.object.userData.ground);
+      if (hit) {
+        let o = hit.object;
+        let label = o.name || o.type;
+        while (o.parent && !o.name && o.parent !== world.decor && o.parent !== world.landmarks) o = o.parent;
+        if (o.name) label = o.name;
+        hits.push({ d: Math.round(p.d), off: Math.round(off), y: Math.round(hit.point.y), what: `${label}:${hit.object.geometry?.type}`, landmark: hit.object.userData.kind || o.userData.kind || null });
+      }
+    }
+  });
+  return hits;
 }
 
 // ---------------------------------------------------------------------------
