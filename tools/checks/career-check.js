@@ -58,7 +58,7 @@ async (page) => {
       historyTypes: afterCup.history.map((h) => h.type),
       bestLaps: Object.keys(afterCup.bestLaps),
       quitRecorded: afterQuit - before,
-      panel: document.getElementById("career-tier").innerText,
+      panel: document.getElementById("career-chip").innerText,
     };
   });
   await context.close();

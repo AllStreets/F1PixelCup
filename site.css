@@ -1,0 +1,127 @@
+/* Broadcast look shared by the landing page and the game: dark, F1 red,
+   heavy italic caps, skewed buttons, timing-tower rows. */
+:root {
+  --bg: #07070c;
+  --panel: #0e0e16;
+  --panel-2: #15151f;
+  --line: rgba(255, 255, 255, 0.08);
+  --ink: #f4f4f6;
+  --muted: #a4a4b0;
+  --red: #e10600;
+  --red-dark: #a30400;
+  --font: "Titillium Web", "Helvetica Neue", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+}
+
+a { color: inherit; }
+
+.hidden { display: none !important; }
+
+.kicker {
+  margin: 0;
+  color: var(--red);
+  font: 700 0.72rem/1 var(--font);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.it-title {
+  margin: 0;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+}
+
+.muted { color: var(--muted); }
+
+/* Primary action: a skewed red block, text kept upright. */
+.go-btn {
+  display: inline-block;
+  border: 0;
+  background: var(--red);
+  color: #fff;
+  padding: 0.8em 1.8em;
+  transform: skew(-12deg);
+  font: italic 900 1rem/1 var(--font);
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.go-btn > span { display: inline-block; transform: skew(12deg); }
+.go-btn:hover, .go-btn:focus-visible { background: #ff1a10; }
+
+.ghost-btn {
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(7, 7, 12, 0.6);
+  color: var(--ink);
+  padding: 0.6em 1.1em;
+  font: 700 0.8rem/1 var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ghost-btn:hover, .ghost-btn:focus-visible { border-color: #fff; }
+
+.pill {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(7, 7, 12, 0.55);
+  color: var(--ink);
+  padding: 0.45em 0.9em;
+  font: 700 0.78rem/1 var(--font);
+  cursor: pointer;
+}
+.pill.is-on { background: var(--red); border-color: var(--red); }
+
+.chip {
+  display: inline-block;
+  border: 0;
+  border-left: 3px solid var(--red);
+  background: rgba(8, 8, 14, 0.82);
+  color: var(--ink);
+  padding: 0.55em 0.8em;
+  font: 700 0.78rem/1.2 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Timing-tower row: position, team colour, code, gap. */
+.tower-row {
+  display: grid;
+  grid-template-columns: 1.6em 4px 1fr auto;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.28em 0.6em;
+  background: rgba(8, 8, 14, 0.84);
+  border-bottom: 1px solid var(--line);
+  font: 700 0.8rem/1 var(--font);
+}
+.tower-row b { color: var(--red); text-align: right; }
+.tower-row i { display: block; width: 4px; height: 1em; }
+.tower-row em { font-style: normal; color: var(--muted); font-weight: 600; }
+.tower-row.is-player { background: rgba(225, 6, 0, 0.28); }
+.tower-row.is-player b, .tower-row.is-player em { color: #fff; }
+
+.career-strip {
+  padding: 0.8em 1em;
+  border-left: 3px solid var(--red);
+  background: rgba(225, 6, 0, 0.1);
+  line-height: 1.55;
+}
+.career-strip p { margin: 0; }
+.career-strip strong { color: #fff; }
+.career-strip-warning { margin-top: 0.4em !important; color: #ffb4a8; font-size: 0.85rem; }

@@ -25,52 +25,18 @@ function fitViewToElement() {
   view.width = cssWidth / fit;
   view.height = cssHeight / fit;
   view.scale = fit * dpr;
+  // Lets the timing tower and ticker line up with the HUD at any size.
+  if (fitViewToElement.lastFit !== fit) {
+    fitViewToElement.lastFit = fit;
+    document.documentElement.style.setProperty("--hud-scale", fit.toFixed(4));
+  }
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
 }
 
+// The game page's DOM belongs to screens.js; the game only needs these two.
 const ui = {
-  driverGrid: document.getElementById("driver-grid"),
-  kartGrid: document.getElementById("kart-grid"),
-  statBars: document.getElementById("stat-bars"),
-  driverName: document.getElementById("driver-name"),
-  kartName: document.getElementById("kart-name"),
-  trackList: document.getElementById("track-list"),
-  startCup: document.getElementById("start-cup"),
-  cupGrid: document.getElementById("cup-grid"),
-  difficultyGrid: document.getElementById("difficulty-grid"),
-  countdownBanner: document.getElementById("countdown-banner"),
-  trackTheme: document.getElementById("track-theme"),
-  trackName: document.getElementById("track-name"),
-  lapIndicator: document.getElementById("lap-indicator"),
-  placeIndicator: document.getElementById("place-indicator"),
-  raceIndicator: document.getElementById("race-indicator"),
-  toggleView: document.getElementById("toggle-view"),
-  fullscreenView: document.getElementById("fullscreen-view"),
-  soundToggle: document.getElementById("sound-toggle"),
   canvasShell: document.getElementById("canvas-shell"),
-  itemName: document.getElementById("item-name"),
-  itemIcon: document.getElementById("item-icon"),
-  itemSlot: document.getElementById("item-slot"),
-  itemCopy: document.getElementById("item-copy"),
-  miniStandings: document.getElementById("mini-standings"),
-  raceStatus: document.getElementById("race-status"),
-  statusFeed: document.getElementById("status-feed"),
-  resultsModal: document.getElementById("results-modal"),
-  resultsKicker: document.getElementById("results-kicker"),
-  resultsTitle: document.getElementById("results-title"),
-  resultsTable: document.getElementById("results-table"),
-  resultsGarageButton: document.getElementById("results-garage-button"),
-  resultsButton: document.getElementById("results-button"),
-  podiumModal: document.getElementById("podium-modal"),
-  podiumKicker: document.getElementById("podium-kicker"),
-  podiumTitle: document.getElementById("podium-title"),
-  podiumScene: document.getElementById("podium-scene"),
-  restartButton: document.getElementById("restart-button"),
-  resultsCareer: document.getElementById("results-career"),
-  podiumCareer: document.getElementById("podium-career"),
-  careerTier: document.getElementById("career-tier"),
-  careerStats: document.getElementById("career-stats"),
-  careerBests: document.getElementById("career-bests"),
+  countdownBanner: document.getElementById("countdown-banner"),
 };
 
 const TAU = Math.PI * 2;
@@ -236,6 +202,7 @@ const state = {
   cupRunId: null,
   cupRecordedFor: null,
   cupDifficulty: null,
+  towerUpdatedAt: 0,
   lastRaceCareer: null,
   lastCupCareer: null,
   track: CUPS[0].tracks[0],
@@ -582,155 +549,54 @@ function createRacer(driver, kart, isPlayer, slot) {
 function addFeed(message) {
   state.feed.unshift({ id: state.nextFeedId += 1, message });
   state.feed = state.feed.slice(0, 8);
-  renderFeed();
+  if (window.Screens && (state.phase === "race" || state.phase === "countdown")) window.Screens.pushFeed(message);
 }
 
-function renderFeed() {
-  ui.statusFeed.innerHTML = state.feed
-    .map((entry) => `<div class="feed-line">${entry.message}</div>`)
-    .join("");
-}
-
-function renderDriverButtons() {
-  ui.driverGrid.innerHTML = DRIVERS.map((driver, index) => {
-    const active = index === state.selectedDriver ? "active" : "";
-    return `
-      <button class="driver-card ${active}" data-driver-index="${index}" type="button">
-        <canvas class="driver-avatar" width="112" height="72" data-driver-canvas="${index}"></canvas>
-        <div class="driver-nameplate">
-          <strong>${driver.name}</strong>
-          <span>${driver.title}</span>
-        </div>
-      </button>
-    `;
-  }).join("");
-
-  ui.driverGrid.querySelectorAll("[data-driver-index]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedDriver = Number(button.dataset.driverIndex);
-      const selD = DRIVERS[state.selectedDriver];
-      state.selectedKart = TEAMS.findIndex((t) => t.id === selD.teamId);
-      renderGarage();
-    });
-  });
-
-  ui.driverGrid.querySelectorAll("[data-driver-canvas]").forEach((node) => {
-    const driver = DRIVERS[Number(node.dataset.driverCanvas)];
-    drawDriverPortrait(node, driver);
-  });
-}
-
-function renderKartButtons() {
-  const driver = DRIVERS[state.selectedDriver];
-  const team = getTeamForDriver(driver);
-  state.selectedKart = TEAMS.findIndex((t) => t.id === driver.teamId);
-  ui.kartGrid.innerHTML = `
-    <div class="kart-card">
-      <canvas class="kart-preview" width="132" height="72" data-kart-canvas="single"></canvas>
-      <div class="kart-copy">
-        <strong>${team.car}</strong>
-        <span>${team.style}</span>
-      </div>
-    </div>
-  `;
-  ui.kartGrid.querySelectorAll("[data-kart-canvas]").forEach((node) => {
-    drawKartPreview(node, team);
-  });
-}
-
+// The pit lane is drawn by screens.js; this keeps the game's side in step.
 function renderGarage() {
+  if (state.phase === "garage") state.track = getSelectedCup().tracks[0];
+  if (window.Screens) window.Screens.refreshPitLane();
+}
+
+function getPitLaneState() {
   const driver = DRIVERS[state.selectedDriver];
-  const kart = getTeamForDriver(driver);
-  const stats = combineStats(driver, kart);
-  const team = kart;
-  const selectedCup = getSelectedCup();
-  if (state.phase === "garage") {
-    state.track = selectedCup.tracks[0];
-    ui.trackTheme.textContent = selectedCup.tracks[0].theme;
-    ui.trackName.textContent = selectedCup.tracks[0].name;
-    ui.raceIndicator.textContent = `1 / ${selectedCup.tracks.length}`;
-  }
-  ui.driverName.textContent = driver.name;
-  ui.kartName.textContent = `${team.car} (${team.name})`;
-  ui.startCup.textContent = `Enter ${selectedCup.name}`;
-  renderDriverButtons();
-  renderKartButtons();
-  renderCupButtons();
-  renderDifficultyButtons();
-  ui.statBars.innerHTML = Object.entries(stats).map(([key, value]) => `
-    <div class="stat-row">
-      <span>${labelizeStat(key)}</span>
-      <div class="stat-track"><div class="stat-fill" style="width: ${Math.round(value * 100)}%"></div></div>
-      <strong>${Math.round(value * 100)}</strong>
-    </div>
-  `).join("");
-  ui.trackList.innerHTML = CUPS.map((cup) => `
-    <section class="track-group ${cup.id === selectedCup.id ? "active" : ""}">
-      <div class="track-group-title">
-        <strong>${cup.name}</strong>
-        <span class="muted">${cup.tracks.length} races</span>
-      </div>
-      <div class="track-group-list">
-        ${cup.tracks.map((track, index) => `
-          <div class="track-group-row">
-            <strong>${index + 1}.</strong>
-            <span><strong>${track.name}</strong> <span class="muted">(${track.theme})</span></span>
-          </div>
-        `).join("")}
-      </div>
-    </section>
-  `).join("");
-}
-
-function labelizeStat(stat) {
-  return {
-    speed: "Top Speed",
-    acceleration: "Acceleration",
-    handling: "Handling",
-    weight: "Downforce",
-    traction: "Tyre Grip",
-    drift: "Drift",
-  }[stat] || stat;
-}
-
-function drawDriverPortrait(canvasNode, driver) {
-  const local = canvasNode.getContext("2d");
-  local.clearRect(0, 0, canvasNode.width, canvasNode.height);
   const team = getTeamForDriver(driver);
-  local.fillStyle = "#0a0a12";
-  local.fillRect(0, 0, canvasNode.width, canvasNode.height);
-  // Helmet body
-  local.fillStyle = driver.color;
-  local.fillRect(22, 10, 68, 48);
-  // Visor
-  local.fillStyle = driver.accent;
-  local.fillRect(26, 22, 60, 18);
-  // Visor tint
-  local.fillStyle = "rgba(0,0,0,0.35)";
-  local.fillRect(26, 22, 60, 18);
-  // Chin guard
-  local.fillStyle = team.body;
-  local.fillRect(28, 40, 56, 14);
-  // Number
-  local.fillStyle = "#ffffff";
-  local.font = "bold 13px monospace";
-  local.textAlign = "center";
-  local.fillText(`#${driver.number}`, 56, 54);
-  local.textAlign = "left";
+  const stats = combineStats(driver, team);
+  return {
+    drivers: DRIVERS.map((d, index) => ({ index, code: d.code, number: d.number, name: d.name, teamColor: getTeamForDriver(d).body })),
+    selectedDriver: state.selectedDriver,
+    driver: { name: driver.name, number: driver.number, title: driver.title },
+    team: { name: team.name, car: team.car, body: team.body, trim: team.trim },
+    stats: { speed: stats.speed, handling: stats.handling, acceleration: stats.acceleration, traction: stats.traction },
+    cups: CUPS.map((cup, index) => ({ index, name: cup.name, circuits: cup.tracks.map((track) => track.name) })),
+    selectedCup: state.selectedCup,
+    difficulties: DIFFICULTIES.map((d, index) => ({ index, name: d.name })),
+    selectedDifficulty: state.difficulty,
+  };
 }
 
-function drawKartPreview(canvasNode, kart) {
-  const local = canvasNode.getContext("2d");
-  local.clearRect(0, 0, canvasNode.width, canvasNode.height);
-  local.imageSmoothingEnabled = false;
-  local.fillStyle = "#0a0a12";
-  local.fillRect(0, 0, canvasNode.width, canvasNode.height);
-  // Draw F1 car preview using a dummy neutral driver
-  const dummyDriver = { color: kart.trim, accent: "#ffffff", number: "" };
-  drawKart(local, 66, 38, 0, kart, dummyDriver, 1.6);
-  local.fillStyle = "#f0f0f0";
-  local.font = "bold 11px monospace";
-  local.fillText(kart.car, 8, 65);
+function selectDriver(index) {
+  if (state.phase !== "garage") return;
+  state.selectedDriver = ((index % DRIVERS.length) + DRIVERS.length) % DRIVERS.length;
+  state.selectedKart = TEAMS.findIndex((t) => t.id === DRIVERS[state.selectedDriver].teamId);
+  renderGarage();
+}
+
+function selectCup(index) {
+  if (state.phase !== "garage") return;
+  state.selectedCup = clamp(index, 0, CUPS.length - 1);
+  renderGarage();
+}
+
+function selectDifficulty(index) {
+  if (state.phase !== "garage") return;
+  state.difficulty = clamp(index, 0, DIFFICULTIES.length - 1);
+  try {
+    window.localStorage.setItem("f1pixelcup.difficulty", String(state.difficulty));
+  } catch (err) {
+    // Preference just will not persist.
+  }
+  renderGarage();
 }
 
 function getSelectedCup() {
@@ -741,27 +607,6 @@ function getActiveCup() {
   return CUPS[state.activeCupIndex];
 }
 
-function renderDifficultyButtons() {
-  ui.difficultyGrid.innerHTML = DIFFICULTIES.map((difficulty, index) => `
-    <button class="${index === state.difficulty ? "active" : ""}" data-difficulty-index="${index}" type="button">
-      ${difficulty.name}
-    </button>
-  `).join("");
-
-  ui.difficultyGrid.querySelectorAll("[data-difficulty-index]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (state.phase !== "garage") return;
-      state.difficulty = Number(button.dataset.difficultyIndex);
-      try {
-        window.localStorage.setItem("f1pixelcup.difficulty", String(state.difficulty));
-      } catch (err) {
-        // Preference just will not persist.
-      }
-      renderGarage();
-    });
-  });
-}
-
 function loadDifficultyPreference() {
   try {
     const stored = window.localStorage.getItem("f1pixelcup.difficulty");
@@ -769,21 +614,6 @@ function loadDifficultyPreference() {
   } catch (err) {
     // Keep the default.
   }
-}
-
-function renderCupButtons() {
-  ui.cupGrid.innerHTML = CUPS.map((cup, index) => `
-    <button class="${index === state.selectedCup ? "active" : ""}" data-cup-index="${index}" type="button">
-      ${cup.name}
-    </button>
-  `).join("");
-
-  ui.cupGrid.querySelectorAll("[data-cup-index]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedCup = Number(button.dataset.cupIndex);
-      renderGarage();
-    });
-  });
 }
 
 function buildCupEntries() {
@@ -869,50 +699,20 @@ function exitFullscreenMode() {
 }
 
 function enterFullscreenMode() {
-  const shell = ui.canvasShell;
-  if (!shell || isFullscreenActive()) return;
-  state.viewMode = "driver";
-  updateViewControls();
-  const request = shell.requestFullscreen
-    ? shell.requestFullscreen()
-    : shell.webkitRequestFullscreen
-      ? shell.webkitRequestFullscreen()
-      : null;
-  if (request && typeof request.catch === "function") {
-    request.catch(() => {});
-  }
-}
-
-function syncOverlayState() {
-  const overlayOpen = !ui.resultsModal.classList.contains("hidden") || !ui.podiumModal.classList.contains("hidden");
-  ui.canvasShell.classList.toggle("overlay-open", overlayOpen);
-  document.body.classList.toggle("overlay-open", overlayOpen);
-}
-
-function updateViewControls() {
-  ui.fullscreenView.textContent = isFullscreenActive() ? "Exit Full Screen" : "Full Screen";
-}
-
-function toggleViewMode() {
-  state.viewMode = "driver";
-  updateViewControls();
+  if (isFullscreenActive()) return;
+  const page = document.documentElement;
+  const request = page.requestFullscreen ? page.requestFullscreen() : page.webkitRequestFullscreen ? page.webkitRequestFullscreen() : null;
+  if (request && typeof request.catch === "function") request.catch(() => {});
 }
 
 function toggleFullscreen() {
-  const shell = ui.canvasShell;
-  if (!shell) return;
-  if (isFullscreenActive()) {
-    if (document.exitFullscreen) {
-      document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    }
-    return;
-  }
-  enterFullscreenMode();
+  if (isFullscreenActive()) exitFullscreenMode();
+  else enterFullscreenMode();
 }
 
 function startCup() {
+  // Enter on a focused Start button fires both the key and the click.
+  if (state.phase !== "garage") return;
   initAudio();
   if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
   state.activeCupIndex = state.selectedCup;
@@ -931,6 +731,7 @@ function startCup() {
 function startRace(index) {
   const activeCup = getActiveCup();
   state.phase = "countdown";
+  if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
@@ -949,13 +750,6 @@ function startRace(index) {
   state.finalLapAt = 0;
   state.paused = false;
   state.pausedAt = 0;
-  ui.resultsModal.classList.add("hidden");
-  ui.podiumModal.classList.add("hidden");
-  syncOverlayState();
-  ui.trackTheme.textContent = state.track.theme;
-  ui.trackName.textContent = state.track.name;
-  ui.raceIndicator.textContent = `${index + 1} / ${activeCup.tracks.length}`;
-  ui.raceStatus.textContent = "Waiting on the grid";
 
   const grid = layoutGrid(state.track, state.cupEntries.length);
   state.racers = state.cupEntries.map((entry, slot) => {
@@ -1005,31 +799,7 @@ function updateCountdown(now) {
 function updatePlayerUI() {
   const player = getPlayer();
   if (!player) return;
-  const sorted = getSortedRacers();
-  const place = sorted.findIndex((racer) => racer.id === player.id) + 1;
-  player.lastKnownPlace = place;
-  ui.placeIndicator.textContent = formatOrdinal(place);
-  ui.lapIndicator.textContent = `${getDisplayedLap(player, state.track)} / ${state.track.laps}`;
-  const leader = sorted[0];
-  ui.raceStatus.textContent = player.finished
-    ? `Finished ${formatOrdinal(player.finishPosition)} on ${state.track.name}`
-    : `Leader: ${leader.driver.name} | You are ${formatOrdinal(place)}`;
-  if (player.rouletteUntil > performance.now()) {
-    ui.itemName.textContent = "Roulette";
-    ui.itemIcon.textContent = ITEM_ICONS.roulette;
-    ui.itemSlot.classList.add("ready");
-    ui.itemCopy.textContent = "Power-up roulette spinning...";
-  } else if (player.currentItem !== "none") {
-    ui.itemName.textContent = labelizeItem(player.currentItem);
-    ui.itemIcon.textContent = ITEM_ICONS[player.currentItem];
-    ui.itemSlot.classList.add("ready");
-    ui.itemCopy.textContent = "Press Space to activate power-up.";
-  } else {
-    ui.itemName.textContent = "None";
-    ui.itemIcon.textContent = ITEM_ICONS.none;
-    ui.itemSlot.classList.remove("ready");
-    ui.itemCopy.textContent = "Hit a power-up box to start the roulette.";
-  }
+  player.lastKnownPlace = getSortedRacers().findIndex((racer) => racer.id === player.id) + 1;
 }
 
 function labelizeItem(item) {
@@ -1649,19 +1419,28 @@ function updateRace(dt, now) {
   }
 }
 
-function updateStandingsUI() {
+// Typical race speed, for turning a distance lead into seconds on the tower.
+const TOWER_REFERENCE_SPEED = 180;
+
+function getRaceStandings() {
   const sorted = getSortedRacers();
-  ui.miniStandings.innerHTML = sorted.slice(0, 6).map((racer, index) => {
-    const cupEntry = state.cupEntries.find((entry) => entry.driver.id === racer.driver.id);
-    return `
-      <div class="standing-row">
-        <strong>${formatOrdinal(index + 1)}</strong>
-        <span>${racer.driver.name}</span>
-        <span>${cupEntry ? cupEntry.points : 0} pts</span>
-        <span>${racer.finished ? "FIN" : `L${getDisplayedLap(racer, state.track)}`}</span>
-      </div>
-    `;
-  }).join("");
+  const leader = sorted[0];
+  return sorted.map((racer, index) => {
+    let gap;
+    if (racer.finished) gap = "FIN";
+    else if (index === 0) gap = "LEADER";
+    else if (leader.finished) gap = "RUNNING";
+    else gap = `+${formatGap((getRaceProgress(leader) - getRaceProgress(racer)) / TOWER_REFERENCE_SPEED)}`;
+    return { position: index + 1, code: racer.driver.code, teamColor: racer.kart.body, isPlayer: racer.id === state.playerId, gap };
+  });
+}
+
+function updateStandingsUI() {
+  if (!window.Screens) return;
+  const now = performance.now();
+  if (now - (state.towerUpdatedAt || 0) < 250) return;
+  state.towerUpdatedAt = now;
+  window.Screens.updateTower(getRaceStandings());
 }
 
 // The player's race, handed to the career profile. Called once per race, from
@@ -1693,25 +1472,8 @@ function careerDifficultyName(id) {
   return (window.Career && window.Career.DIFFICULTY_NAMES[id]) || id;
 }
 
-function renderCareerStrip(node, lines, saved) {
-  if (!node) return;
-  if (!lines.length) {
-    node.innerHTML = "";
-    node.classList.add("hidden");
-    return;
-  }
-  const warning = saved === false
-    ? `<p class="career-strip-warning">Progress couldn't be saved in this browser.</p>`
-    : "";
-  node.innerHTML = lines.map((line) => `<p>${line}</p>`).join("") + warning;
-  node.classList.remove("hidden");
-}
-
-function renderRaceCareer(summary) {
-  if (!summary) {
-    renderCareerStrip(ui.resultsCareer, [], true);
-    return;
-  }
+function careerForRace(summary) {
+  if (!summary) return { lines: [], saved: true };
   const difficulty = careerDifficultyName(getDifficulty().id);
   const { before, after, delta } = summary.rating;
   const trend = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "=";
@@ -1719,41 +1481,16 @@ function renderRaceCareer(summary) {
     `<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier})`,
     `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
   ];
-  if (summary.newBestLap) {
-    lines.push(`New best at ${state.track.name}: <strong>${formatLapTime(summary.newBestLap.ms)}</strong>`);
-  }
-  renderCareerStrip(ui.resultsCareer, lines, summary.saved);
+  if (summary.newBestLap) lines.push(`New best at ${state.track.name}: <strong>${formatLapTime(summary.newBestLap.ms)}</strong>`);
+  return { lines, saved: summary.saved };
 }
 
-// Career panel in the garage: totals, rating and the best lap on each circuit.
-function renderCareerPanel() {
-  if (!window.Career || !ui.careerStats) return;
-  try {
-    drawCareerPanel(window.Career.getProfile());
-  } catch (error) {
-    // A damaged save must never stop the garage (or the game) from working.
-    console.warn("Career: panel not drawn", error);
-  }
-}
-
-function drawCareerPanel(profile) {
-  const totals = profile.totals;
-  ui.careerTier.textContent = `${window.Career.tierFor(profile.rating)} · ${profile.rating}`;
-  const stats = [
-    ["Career points", profile.careerPoints.toLocaleString()],
-    ["Rating", profile.rating],
-    ["Races", totals.races],
-    ["Wins", totals.wins],
-    ["Podiums", totals.podiums],
-    ["Cups won", `${totals.cupsWon} / ${totals.cupsCompleted}`],
-  ];
-  ui.careerStats.innerHTML = stats.map(([label, value]) => `
-    <div class="career-stat"><span>${label}</span><strong>${value}</strong></div>
-  `).join("");
-  ui.careerBests.innerHTML = TRACKS.map((track) => {
-    const best = profile.bestLaps[track.id];
-    return `<div class="career-best"><span>${track.name}</span><strong>${best ? formatLapTime(best.ms) : "—"}</strong></div>`;
-  }).join("");
+function careerForCup(cup, playerPlace) {
+  if (!cup) return { lines: [], saved: true };
+  const lines = cup.bonus > 0
+    ? [`<strong>Cup ${formatOrdinal(playerPlace)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
+    : [];
+  return { lines, saved: cup.saved };
 }
 
 // The cup bonus, recorded as soon as the cup's last race is finalised, so
@@ -1775,7 +1512,6 @@ function recordPlayerCup() {
     console.warn("Career: cup not recorded", error);
     state.lastCupCareer = null;
   }
-  renderCareerPanel();
 }
 
 function finalizeRace() {
@@ -1794,7 +1530,6 @@ function finalizeRace() {
     addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
   }
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
-  renderCareerPanel();
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
   if (state.raceIndex >= getActiveCup().tracks.length - 1) recordPlayerCup();
   showResults(finishers);
@@ -1815,83 +1550,56 @@ function completeRemainingFinishers(now) {
 
 function showResults(finishers) {
   const activeCup = getActiveCup();
-  exitFullscreenMode();
   const fastest = finishers.reduce((best, racer) => (
     racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
   ), null);
-  ui.resultsKicker.textContent = `Race ${state.raceIndex + 1} Results`;
-  ui.resultsTitle.textContent = `${state.track.name} Complete`;
-  ui.resultsTable.innerHTML = `
-    <div class="results-header">
-      <span>Place</span>
-      <span>Driver</span>
-      <span>Best Lap</span>
-      <span>Race Pts</span>
-      <span>Cup Pts</span>
-    </div>
-    ${finishers.map((racer, index) => {
+  state.phase = "results";
+  if (!window.Screens) return;
+  window.Screens.showResults({
+    kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
+    title: state.track.name,
+    nextLabel: state.raceIndex === activeCup.tracks.length - 1 ? "Show podium" : "Next race",
+    rows: finishers.map((racer, index) => {
       const cupEntry = state.cupEntries.find((entry) => entry.driver.id === racer.driver.id);
       const racePoints = POINTS_TABLE[index] || 0;
-      return `
-        <div class="results-row ${racer.isPlayer ? "player-row" : ""}">
-          <strong>${formatOrdinal(index + 1)}</strong>
-          <span>${racer.driver.name}</span>
-          <span class="${fastest && racer.id === fastest.id ? "fastest-lap" : ""}">${formatLapTime(racer.bestLapTime)}</span>
-          <span>${racePoints}</span>
-          <span>${cupEntry ? cupEntry.points : racePoints}</span>
-        </div>
-      `;
-    }).join("")}
-  `;
-  ui.resultsButton.textContent = state.raceIndex === activeCup.tracks.length - 1 ? "Show Podium" : "Next Race";
-  renderRaceCareer(state.lastRaceCareer);
-  ui.resultsModal.classList.remove("hidden");
-  state.phase = "results";
-  syncOverlayState();
+      return {
+        place: index + 1,
+        name: racer.driver.name,
+        code: racer.driver.code,
+        teamColor: racer.kart.body,
+        bestLap: formatLapTime(racer.bestLapTime),
+        fastest: Boolean(fastest && racer.id === fastest.id),
+        racePoints,
+        cupPoints: cupEntry ? cupEntry.points : racePoints,
+        isPlayer: racer.id === state.playerId,
+      };
+    }),
+    career: careerForRace(state.lastRaceCareer),
+  });
 }
 
 function showPodium() {
-  exitFullscreenMode();
   const activeCup = getActiveCup();
-  const topThree = [...state.cupEntries].slice(0, 3);
-  ui.podiumKicker.textContent = `${activeCup.icon} ${activeCup.name} Complete`;
-  ui.podiumTitle.textContent = `${activeCup.name} Trophy Stage`;
-  ui.podiumScene.innerHTML = `
-    <div class="podium-glow"></div>
-    ${[
-      { place: 2, entry: topThree[1], className: "second", medal: "silver", size: "medium" },
-      { place: 1, entry: topThree[0], className: "first", medal: "gold", size: "large" },
-      { place: 3, entry: topThree[2], className: "third", medal: "bronze", size: "small" },
-    ].map(({ place, entry, className, medal, size }) => `
-      <div class="podium-slot ${className}">
-        <div class="podium-trophy ${medal} ${size}">
-          <div class="cup"></div>
-          <div class="stem"></div>
-          <div class="base"></div>
-        </div>
-        <div class="podium-pedestal">
-          <p class="podium-place">${formatOrdinal(place)} Place</p>
-          <strong class="podium-name">${entry.driver.name}</strong>
-          <p class="podium-meta">${entry.points} points</p>
-          <p class="podium-meta">${entry.kart.name}</p>
-        </div>
-      </div>
-    `).join("")}
-  `;
   recordPlayerCup();
-  const cup = state.lastCupCareer;
-  renderCareerStrip(ui.podiumCareer, cup && cup.bonus > 0
-    ? [`<strong>Cup ${formatOrdinal(state.cupEntries.findIndex((entry) => entry.isPlayer) + 1)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
-    : [], cup ? cup.saved : true);
-  ui.podiumModal.classList.remove("hidden");
-  ui.resultsModal.classList.add("hidden");
   state.phase = "podium";
-  syncOverlayState();
+  if (!window.Screens) return;
+  const playerPlace = state.cupEntries.findIndex((entry) => entry.isPlayer) + 1;
+  window.Screens.showPodium({
+    kicker: `${activeCup.name} complete`,
+    title: playerPlace === 1 ? "Cup winner" : `You finished ${formatOrdinal(playerPlace)}`,
+    podium: state.cupEntries.slice(0, 3).map((entry, index) => ({
+      place: index + 1,
+      name: entry.driver.name,
+      team: entry.kart.name,
+      teamColor: entry.kart.body,
+      points: entry.points,
+      isPlayer: entry.isPlayer,
+    })),
+    career: careerForCup(state.lastCupCareer, playerPlace),
+  });
 }
 
 function nextRace() {
-  ui.resultsModal.classList.add("hidden");
-  syncOverlayState();
   if (state.raceIndex >= getActiveCup().tracks.length - 1) {
     showPodium();
     return;
@@ -1902,7 +1610,6 @@ function nextRace() {
 }
 
 function resetToGarage() {
-  exitFullscreenMode();
   const wasPaused = state.paused;
   state.paused = false;
   state.pausedAt = 0;
@@ -1919,11 +1626,8 @@ function resetToGarage() {
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
-  ui.resultsModal.classList.add("hidden");
-  ui.podiumModal.classList.add("hidden");
-  syncOverlayState();
   addFeed("Back in the pit lane.");
-  renderCareerPanel();
+  if (window.Screens) window.Screens.showPitLane();
 }
 
 function drawTrack(track) {
@@ -2817,10 +2521,7 @@ function setAudioEnabled(enabled) {
 }
 
 function updateSoundButton() {
-  if (ui.soundToggle) {
-    ui.soundToggle.textContent = audio.enabled ? "Sound: On" : "Sound: Off";
-    ui.soundToggle.setAttribute("aria-pressed", audio.enabled ? "true" : "false");
-  }
+  if (window.Screens) window.Screens.refreshSettings();
 }
 
 function audioReady() {
@@ -3880,14 +3581,14 @@ function togglePause() {
 }
 
 function handleEscapeKey() {
+  // An open overlay (career, settings, phone note) closes first.
+  if (window.Screens && window.Screens.closeOverlay()) return;
   // After a race or a cup there is nothing to pause, so Esc is the way home.
   if (state.phase === "results" || state.phase === "podium") {
     resetToGarage();
     return;
   }
-  if (state.phase === "race" || state.phase === "countdown") {
-    togglePause();
-  }
+  if (state.phase === "race" || state.phase === "countdown") togglePause();
 }
 
 function drawPauseOverlay() {
@@ -3936,89 +3637,39 @@ function drawGarageScene() {
   ctx.clearRect(0, 0, view.width, view.height);
   const driver = DRIVERS[state.selectedDriver];
   const team = getTeamForDriver(driver);
-  // In 3D the selected car turns on a showroom floor behind this canvas, and
-  // this canvas only lays the driver details over a fade on the left.
-  const showroom = Boolean(window.Render3D && window.Render3D.ready
-    && window.Render3D.renderGarage(team, driver, performance.now()));
-  if (showroom) {
-    const fade = ctx.createLinearGradient(0, 0, view.width * 0.55, 0);
-    fade.addColorStop(0, "rgba(8, 8, 18, 0.85)");
-    fade.addColorStop(1, "rgba(8, 8, 18, 0)");
-    ctx.fillStyle = fade;
-    ctx.fillRect(0, 0, view.width, view.height);
-  } else {
-    ctx.fillStyle = "#080812";
-    ctx.fillRect(0, 0, view.width, view.height);
-    // Carbon grid background
-    ctx.fillStyle = "#0e0e1e";
-    for (let y = 0; y < view.height; y += 32) {
-      ctx.fillRect(0, y, view.width, 16);
-    }
-  }
-  // Team color stripe
-  ctx.fillStyle = team.body;
-  ctx.fillRect(0, 0, 8, view.height);
-  ctx.fillStyle = team.trim;
-  ctx.fillRect(8, 0, 4, view.height);
-  // Title
-  ctx.fillStyle = "#f0f0f0";
-  ctx.font = "bold 36px Georgia";
-  ctx.fillText("Pit Lane", 56, 78);
-  // Driver name
-  ctx.fillStyle = team.body;
-  ctx.font = "bold 28px Georgia";
-  ctx.fillText(driver.name, 56, 120);
-  ctx.fillStyle = "#f0f0f0";
-  ctx.font = "18px Trebuchet MS";
-  ctx.fillText(`#${driver.number}  ${driver.title}`, 56, 148);
-  ctx.fillText(team.name, 56, 172);
-  ctx.fillText(team.car, 56, 196);
-  if (showroom) return;
-  // Draw the car large
-  drawKart(ctx, 320, 320, 0, team, driver, 5.5);
-  // Team color swatch
-  ctx.fillStyle = team.body;
-  ctx.fillRect(460, 158, 340, 220);
-  ctx.fillStyle = "#0a0a18";
-  ctx.fillRect(472, 170, 316, 196);
-  // Helmet preview
-  const hx = 630, hy = 260;
-  ctx.fillStyle = driver.color;
-  ctx.fillRect(hx - 60, hy - 55, 120, 90);
-  ctx.fillStyle = driver.accent;
-  ctx.fillRect(hx - 54, hy - 30, 108, 30);
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(hx - 54, hy - 30, 108, 30);
-  ctx.fillStyle = team.body;
-  ctx.fillRect(hx - 48, hy + 5, 96, 24);
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "bold 22px monospace";
-  ctx.textAlign = "center";
-  ctx.fillText(`#${driver.number}`, hx, hy + 24);
-  ctx.textAlign = "left";
+  // In 3D the car turns on the showroom floor behind this canvas.
+  if (window.Render3D && window.Render3D.ready && window.Render3D.renderGarage(team, driver, performance.now())) return;
+  // Without WebGL: the 2D car on the right, where the showroom car would be.
+  drawKart(ctx, view.width * 0.68, view.height * 0.58, 0, team, driver, 5.5);
 }
 
 function bindEvents() {
-  ui.startCup.addEventListener("click", startCup);
-  ui.resultsGarageButton.addEventListener("click", resetToGarage);
-  ui.resultsButton.addEventListener("click", nextRace);
-  ui.restartButton.addEventListener("click", resetToGarage);
-  if (ui.toggleView) {
-    ui.toggleView.addEventListener("click", toggleViewMode);
-  }
-  ui.fullscreenView.addEventListener("click", toggleFullscreen);
-  ui.soundToggle.addEventListener("click", () => {
-    initAudio();
-    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
-    setAudioEnabled(!audio.enabled);
-  });
   ui.canvasShell.addEventListener("dblclick", toggleFullscreen);
-  document.addEventListener("fullscreenchange", updateViewControls);
-  document.addEventListener("webkitfullscreenchange", updateViewControls);
+  const refreshSettings = () => window.Screens && window.Screens.refreshSettings();
+  document.addEventListener("fullscreenchange", refreshSettings);
+  document.addEventListener("webkitfullscreenchange", refreshSettings);
 
   window.addEventListener("keydown", (event) => {
     if (!audio.ready) initAudio();
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      handleEscapeKey();
+      return;
+    }
+    // Pit lane keys: arrows pick a driver, Enter starts the cup. Nothing else
+    // happens on these keys while in the garage.
+    if (state.phase === "garage") {
+      if (window.Screens && window.Screens.isOverlayOpen()) return;
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        selectDriver(state.selectedDriver + (event.key === "ArrowRight" ? 1 : -1));
+      } else if (event.key === "Enter" && !event.repeat) {
+        event.preventDefault();
+        startCup();
+      }
+      return;
+    }
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Shift"].includes(event.key) || event.code === "Space") {
       event.preventDefault();
     }
@@ -4027,10 +3678,6 @@ function bindEvents() {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
     if (event.key === "Shift") input.drift = true;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      handleEscapeKey();
-    }
     if (event.key.toLowerCase() === "p" && (state.phase === "race" || state.phase === "countdown")) {
       event.preventDefault();
       togglePause();
@@ -4045,7 +3692,6 @@ function bindEvents() {
       const player = getPlayer();
       if (player && state.phase === "race" && player.currentItem !== "none") {
         useItem(player, player.currentItem, performance.now());
-        updatePlayerUI();
       }
     }
   });
@@ -4062,12 +3708,30 @@ function bindEvents() {
   });
 }
 
+// The actions the screens may take, and the plain data they may read.
+window.Game = {
+  getPitLaneState,
+  selectDriver,
+  selectCup,
+  selectDifficulty,
+  startCup,
+  nextRace,
+  backToPitLane: resetToGarage,
+  setSound(on) {
+    initAudio();
+    if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
+    setAudioEnabled(on);
+  },
+  isSoundOn: () => audio.enabled,
+  toggleFullscreen,
+  isFullscreen: isFullscreenActive,
+};
+
 loadAudioPreference();
 loadDifficultyPreference();
-updateSoundButton();
-renderGarage();
-renderCareerPanel();
-updateViewControls();
-syncOverlayState();
+if (window.Screens) {
+  window.Screens.init();
+  window.Screens.showPitLane();
+}
 bindEvents();
 requestAnimationFrame(update);

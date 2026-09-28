@@ -1,0 +1,156 @@
+/* The game page: the canvases fill the window, and every screen is a layer
+   over them. Sizes that must line up with the canvas HUD use --hud-scale
+   (CSS px per HUD unit, set by game.js). */
+html, body { height: 100%; overflow: hidden; }
+
+.canvas-shell { position: fixed; inset: 0; line-height: 0; background: #080812; }
+.canvas-shell > canvas#game,
+.canvas-shell > canvas#game3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+.countdown-banner {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -60%);
+  font: italic 900 5rem/1 var(--font); color: #fff; pointer-events: none;
+}
+
+.screens { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+.screen { position: absolute; inset: 0; pointer-events: auto; }
+
+/* ---- Pit lane (Showroom) ---- */
+.pitlane {
+  background: linear-gradient(90deg, rgba(7, 7, 12, 0.94) 0%, rgba(7, 7, 12, 0.6) 34%, rgba(7, 7, 12, 0) 58%);
+  display: grid;
+  grid-template-columns: minmax(280px, 38%) 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "top choices choices"
+    "driver . ."
+    "strip strip start";
+  gap: 16px 24px;
+  padding: clamp(14px, 2.4vw, 28px);
+}
+.pitlane-top { grid-area: top; display: flex; align-items: center; gap: 14px; }
+.wordmark { font: italic 900 1.1rem/1 var(--font); text-decoration: none; letter-spacing: 0.02em; }
+.crumb { color: var(--muted); font: italic 700 0.8rem/1 var(--font); letter-spacing: 0.12em; }
+.pitlane-choices { grid-area: choices; justify-self: end; text-align: right; display: grid; gap: 8px; align-content: start; }
+.choice-row { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.choice-label { color: var(--muted); font: 700 0.7rem/1 var(--font); letter-spacing: 0.16em; text-transform: uppercase; margin-right: 4px; }
+.cup-circuits { margin: 2px 0 0; padding: 0; list-style: none; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font: 600 0.8rem/1.3 var(--font); }
+.cup-circuits li + li::before { content: "›"; margin-right: 12px; color: var(--red); }
+.pitlane-driver { grid-area: driver; align-self: center; max-width: 440px; }
+.driver-name { margin: 8px 0 4px; font-size: clamp(2.2rem, 5vw, 4.2rem); }
+.driver-title { margin: 0 0 18px; color: var(--muted); font-weight: 600; }
+.stat-bars { display: grid; gap: 8px; margin-bottom: 18px; }
+.stat span { display: block; color: var(--muted); font: 700 0.68rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px; }
+.stat-bar { height: 6px; background: rgba(255, 255, 255, 0.12); }
+.stat-bar i { display: block; height: 100%; background: var(--red); }
+.driver-strip { grid-area: strip; display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 6px; align-self: end; scrollbar-width: thin; }
+.driver-tile {
+  flex: 0 0 auto; width: 48px; height: 44px; border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(160deg, var(--team), rgba(0, 0, 0, 0.55)); color: #fff; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  font: 800 0.72rem/1 var(--font);
+}
+.driver-tile b { font-size: 0.95rem; }
+.driver-tile span { opacity: 0.85; font-size: 0.62rem; letter-spacing: 0.08em; }
+.driver-tile.is-on { outline: 2px solid #fff; outline-offset: 2px; }
+#start-cup { grid-area: start; justify-self: end; align-self: end; font-size: clamp(1rem, 1.6vw, 1.35rem); }
+
+@media (max-width: 760px) {
+  .pitlane {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-areas: "top" "choices" "driver" "strip" "start";
+    background: rgba(7, 7, 12, 0.72);
+    overflow-y: auto;
+  }
+  .pitlane-choices { justify-self: start; text-align: left; }
+  .choice-row, .cup-circuits { justify-content: flex-start; }
+  #start-cup { justify-self: stretch; text-align: center; }
+}
+
+/* ---- Race: timing tower and feed ticker, lined up with the HUD ---- */
+.tower {
+  position: absolute;
+  left: calc(20px * var(--hud-scale, 1));
+  top: calc(146px * var(--hud-scale, 1));
+  width: 190px;
+  transform: scale(var(--hud-scale, 1));
+  transform-origin: top left;
+  pointer-events: none;
+  border-left: 3px solid var(--red);
+}
+.tower-gap { height: 6px; background: rgba(8, 8, 14, 0.6); }
+.ticker {
+  position: absolute;
+  left: 50%;
+  bottom: calc(116px * var(--hud-scale, 1));
+  transform: translateX(-50%);
+  max-width: 80vw;
+  padding: 0.45em 1em;
+  background: rgba(8, 8, 14, 0.82);
+  border-left: 3px solid var(--red);
+  font: 700 0.9rem/1.2 var(--font);
+  pointer-events: none;
+  transition: opacity 0.4s;
+}
+.ticker.is-fading { opacity: 0; }
+
+/* ---- Overlays: results, podium, career, settings, phone note ---- */
+.overlay {
+  display: flex; align-items: center; justify-content: center;
+  padding: clamp(12px, 3vw, 36px);
+  background: rgba(5, 5, 10, 0.78);
+  backdrop-filter: blur(6px);
+}
+.overlay-card {
+  width: min(640px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  background: linear-gradient(160deg, var(--panel), var(--panel-2));
+  border-top: 3px solid var(--red);
+  padding: clamp(18px, 3vw, 32px);
+}
+.overlay-card.wide { width: min(880px, 100%); }
+.overlay-card.narrow { width: min(460px, 100%); }
+.overlay-title { margin: 8px 0 16px; font-size: clamp(1.8rem, 4vw, 2.8rem); }
+.overlay-actions { display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; margin-top: 22px; }
+
+.results-table { display: grid; margin-top: 14px; }
+.result-row, .result-head {
+  display: grid; grid-template-columns: 3rem 4px 1fr 6rem 4.5rem 4.5rem; gap: 10px; align-items: center;
+  padding: 0.42rem 0.6rem; border-bottom: 1px solid var(--line); font-weight: 600;
+}
+.result-head { color: var(--muted); font: 700 0.68rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; }
+.result-row b { color: var(--red); }
+.result-row i { display: block; width: 4px; height: 1.1em; }
+.result-row.is-player { background: rgba(225, 6, 0, 0.18); }
+.result-row .is-fastest { color: #c77dff; }
+#results-career { margin-top: 6px; }
+
+.podium { display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 10px; margin: 18px 0; }
+.podium-step { text-align: center; }
+.podium-step .block { margin-top: 8px; background: var(--panel-2); border-top: 4px solid var(--team); display: flex; align-items: flex-start; justify-content: center; padding-top: 10px; font: italic 900 2rem/1 var(--font); color: var(--red); }
+.podium-step.p1 .block { height: 150px; }
+.podium-step.p2 .block { height: 110px; }
+.podium-step.p3 .block { height: 80px; }
+.podium-step strong { display: block; font: italic 900 1.1rem/1.1 var(--font); text-transform: uppercase; }
+.podium-step span { color: var(--muted); font-size: 0.85rem; }
+.podium-step.is-player strong { color: var(--red); }
+
+.career-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
+.career-tier { font: italic 900 2.4rem/1 var(--font); text-transform: uppercase; }
+.career-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 16px 0; }
+.career-stat { background: rgba(8, 8, 14, 0.6); border-left: 3px solid var(--red); padding: 0.6em 0.8em; }
+.career-stat span { display: block; color: var(--muted); font: 700 0.66rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 6px; }
+.career-stat strong { font-size: 1.3rem; }
+.career-bests { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; }
+.career-best { display: flex; justify-content: space-between; gap: 10px; padding: 0.5em 0.7em; background: rgba(8, 8, 14, 0.5); font-weight: 600; }
+.career-best span { color: var(--muted); }
+.career-history { width: 100%; border-collapse: collapse; margin-top: 8px; font-weight: 600; }
+.career-history th { text-align: left; color: var(--muted); font: 700 0.66rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; padding: 6px; }
+.career-history td { padding: 6px; border-top: 1px solid var(--line); }
+.career-history .up { color: #39d98a; }
+.career-history .down { color: #ff6b6b; }
+.career-section { margin: 22px 0 8px; }
+
+.setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-weight: 700; }
