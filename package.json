@@ -1,0 +1,8 @@
+{
+  "name": "f1-pixel-cup",
+  "private": true,
+  "description": "F1 racing game in the browser. No build step; this file only runs the tests.",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\""
+  }
+}
