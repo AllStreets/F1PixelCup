@@ -267,7 +267,7 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 - `npm test` — unit tests (career scoring, game data, track maps, touch detection).
 - Browser checks in `tools/checks/` run through the Playwright MCP tool
   (`browser_run_code_unsafe` with the file) against a local server on port
-  8765: `play-check.js`, `landing-check.js`, `career-check.js`, `race-sim.js`.
+  8765: `play-check.js`, `keys-check.js`, `landing-check.js`, `career-check.js`, `race-sim.js`.
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with
   `sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg` and

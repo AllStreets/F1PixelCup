@@ -59,6 +59,8 @@ async (page) => {
   out.startInside520 = await p.evaluate(() => { const r = document.getElementById("start-cup").getBoundingClientRect(); return r.right <= innerWidth && r.bottom <= innerHeight && r.left >= 0; });
   await size(1440, 900);
 
+  // Enter starts the cup when no other control has focus.
+  await p.evaluate(() => document.activeElement && document.activeElement.blur());
   await p.keyboard.press("Enter");
   await p.waitForTimeout(400);
   out.startedOnce = await p.evaluate(() => state.phase === "countdown" && state.raceIndex === 0);

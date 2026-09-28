@@ -27,6 +27,8 @@ html, body { height: 100%; overflow: hidden; }
     "strip strip start";
   gap: 16px 24px;
   padding: clamp(14px, 2.4vw, 28px);
+  /* Short windows scroll rather than cut off the strip and Start. */
+  overflow-y: auto;
 }
 .pitlane-top { grid-area: top; display: flex; align-items: center; gap: 14px; }
 .wordmark { font: italic 900 1.1rem/1 var(--font); text-decoration: none; letter-spacing: 0.02em; }
@@ -37,7 +39,7 @@ html, body { height: 100%; overflow: hidden; }
 .cup-circuits { margin: 2px 0 0; padding: 0; list-style: none; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font: 600 0.8rem/1.3 var(--font); }
 .cup-circuits li + li::before { content: "›"; margin-right: 12px; color: var(--red); }
 .pitlane-driver { grid-area: driver; align-self: center; max-width: 440px; }
-.driver-name { margin: 8px 0 4px; font-size: clamp(2.2rem, 5vw, 4.2rem); }
+.driver-name { margin: 8px 0 4px; font-size: clamp(2rem, min(5vw, 7vh), 4.2rem); }
 .driver-title { margin: 0 0 18px; color: var(--muted); font-weight: 600; }
 .stat-bars { display: grid; gap: 8px; margin-bottom: 18px; }
 .stat span { display: block; color: var(--muted); font: 700 0.68rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px; }
@@ -54,6 +56,12 @@ html, body { height: 100%; overflow: hidden; }
 .driver-tile span { opacity: 0.85; font-size: 0.62rem; letter-spacing: 0.08em; }
 .driver-tile.is-on { outline: 2px solid #fff; outline-offset: 2px; }
 #start-cup { grid-area: start; justify-self: end; align-self: end; font-size: clamp(1rem, 1.6vw, 1.35rem); }
+
+@media (max-height: 620px) {
+  .pitlane { gap: 8px 24px; }
+  .driver-title { margin-bottom: 8px; }
+  .stat-bars { gap: 4px; margin-bottom: 8px; }
+}
 
 @media (max-width: 760px) {
   .pitlane {

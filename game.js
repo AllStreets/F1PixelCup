@@ -1601,6 +1601,9 @@ function showPodium() {
 }
 
 function nextRace() {
+  // Only from the results screen: a hidden, still-focused Next race button
+  // must not skip a race in progress.
+  if (state.phase !== "results") return;
   if (state.raceIndex >= getActiveCup().tracks.length - 1) {
     showPodium();
     return;
@@ -3666,6 +3669,9 @@ function bindEvents() {
         event.preventDefault();
         selectDriver(state.selectedDriver + (event.key === "ArrowRight" ? 1 : -1));
       } else if (event.key === "Enter" && !event.repeat) {
+        // Enter on a focused pill, link or button belongs to that control.
+        const control = event.target && event.target.closest ? event.target.closest("button, a") : null;
+        if (control && control.id !== "start-cup") return;
         event.preventDefault();
         startCup();
       }
