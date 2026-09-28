@@ -232,13 +232,43 @@ for i, y in enumerate((-0.4, -0.15, 0.15, 0.4)):
     plate(f"diffuser_{i}", -2.25, y, 0.14, 0.4, 0.015, 0.16)
 plate("diffuser_roof", -2.28, 0, 0.23, 0.36, 0.9, 0.015)
 
-# --- Front wing -------------------------------------------------------------
-wing("fw_main", 2.72, 0.08, 1.90, 0.42, 0.035, "carbon")
-wing("fw_flap1", 2.58, 0.15, 1.70, 0.30, 0.028, "livery_body", pitch=-0.25)
-wing("fw_flap2", 2.47, 0.22, 1.50, 0.24, 0.024, "livery_trim", pitch=-0.45)
+# --- Aero detail round the sidepods --------------------------------------
 for side, sgn in (("L", 1), ("R", -1)):
-    plate(f"fw_endplate_{side}", 2.62, sgn * 0.95, 0.15, 0.55, 0.02, 0.2, "livery_body")
-    rod(f"fw_pylon_{side}", (2.7, sgn * 0.08, 0.1), (2.6, sgn * 0.06, 0.24), 0.02)
+    for k, x in enumerate((1.05, 0.9, 0.75)):
+        plate(f"bargeboard_{k}_{side}", x, sgn * (0.42 + 0.05 * k), 0.2, 0.12, 0.012, 0.26 - 0.04 * k, "carbon")
+    plate(f"floor_edge_{side}", -0.5, sgn * 0.83, 0.11, 1.9, 0.02, 0.07, "carbon")
+    # Cooling louvres on top of the sidepod.
+    for k in range(5):
+        plate(f"louvre_{k}_{side}", -0.55 - 0.12 * k, sgn * 0.5, 0.465 - 0.02 * k, 0.05, 0.16, 0.012, "carbon")
+    # Side-impact / mirror fairing wing.
+    plate(f"halo_fairing_{side}", -0.35, sgn * 0.28, 0.82, 0.16, 0.02, 0.05, "livery_body")
+# T-camera on the airbox and the antenna behind it.
+plate("t_cam", -0.62, 0, 1.02, 0.12, 0.09, 0.035, "livery_trim")
+rod("antenna", (-0.95, 0, 0.98), (-1.0, 0, 1.12), 0.006, "carbon")
+# Cockpit: steering wheel and headrest pads.
+plate("steering_wheel", 0.2, 0, 0.72, 0.03, 0.2, 0.08, "carbon")
+for side, sgn in (("L", 1), ("R", -1)):
+    plate(f"headrest_{side}", -0.28, sgn * 0.19, 0.75, 0.22, 0.06, 0.06, "livery_trim")
+# Exhaust under the rain light.
+rod("exhaust", (-2.35, 0, 0.36), (-2.58, 0, 0.36), 0.045, "halo")
+
+# --- Front wing -------------------------------------------------------------
+wing("fw_main", 2.74, 0.075, 1.92, 0.44, 0.032, "carbon")
+for side, sgn in (("L", 1), ("R", -1)):
+    # Flaps sweep up and back towards the endplates, one element per step.
+    for k, (dx, dz, chord, pitch, mat_name) in enumerate((
+        (-0.14, 0.12, 0.26, -0.22, "carbon"),
+        (-0.24, 0.17, 0.21, -0.38, "livery_body"),
+        (-0.32, 0.22, 0.17, -0.55, "livery_trim"),
+    )):
+        wing(f"fw_flap{k}_{side}", 2.74 + dx, dz, 0.72, chord, 0.02, mat_name, pitch=pitch, yc=sgn * 0.56)
+    plate(f"fw_endplate_{side}", 2.62, sgn * 0.96, 0.15, 0.56, 0.02, 0.22, "livery_body")
+    plate(f"fw_footplate_{side}", 2.66, sgn * 0.90, 0.06, 0.5, 0.12, 0.015, "carbon")
+    rod(f"fw_pylon_{side}", (2.72, sgn * 0.08, 0.09), (2.62, sgn * 0.06, 0.25), 0.02)
+# Pitot tube and camera pods on the nose.
+rod("pitot", (2.9, 0, 0.2), (3.12, 0, 0.21), 0.006, "carbon")
+for side, sgn in (("L", 1), ("R", -1)):
+    plate(f"nose_cam_{side}", 2.1, sgn * 0.17, 0.44, 0.1, 0.035, 0.03, "carbon")
 
 # --- Rear wing --------------------------------------------------------------
 wing("rw_main", -2.38, 0.86, 1.02, 0.34, 0.05, "carbon", pitch=0.12)
@@ -328,6 +358,13 @@ def wheel(name, x, y, r, width):
         ret = bmesh.ops.create_circle(bm, cap_ends=True, segments=seg, radius=rin * 1.01)
         for v in ret["verts"]:
             v.co = (v.co.x, sgn * width * 0.36, v.co.y)
+    # Brake drum, visible through the wheel, and a hub nut.
+    bmesh.ops.create_cone(bm, cap_ends=True, segments=20, radius1=rin * 0.55, radius2=rin * 0.55, depth=width * 0.7,
+                          matrix=__import__("mathutils").Matrix.Rotation(math.pi / 2, 4, "X"))
+    for sgn in (1, -1):
+        bmesh.ops.create_cone(bm, cap_ends=True, segments=10, radius1=rin * 0.14, radius2=rin * 0.1, depth=0.03,
+                              matrix=__import__("mathutils").Matrix.Translation((0, sgn * width * 0.38, 0))
+                              @ __import__("mathutils").Matrix.Rotation(math.pi / 2, 4, "X"))
     rim = link(name + "_rim", bm, "rim")
     # Join the rim into the tyre so a wheel is one object.
     bpy.ops.object.select_all(action="DESELECT")

@@ -7,7 +7,7 @@ An F1 racing game in the browser — Three.js for the world, HTML5 Canvas for th
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **8 circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos. Roughly 4,100 units a lap with 54-66 corners, and around 390 degrees of counter-steer per lap, so you are genuinely turning left *and* right rather than circling an oval
+- **8 real circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos, traced from the real layouts (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
 - **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
 - **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
@@ -36,13 +36,39 @@ speed and the road-alignment assist are the same numbers for all 20 cars. The
 only thing reserved for the AI is steering avoidance, which stands in for the
 hands you have on the keyboard.
 
-Measured on Monza, best lap over four laps:
+A full five-lap race with all 20 cars on autopilot (Pro difficulty), simulated
+headless on every circuit. Every car finished the distance on every track:
 
-| Difficulty | Fastest AI | Median AI |
+| Circuit | Fastest AI lap | Median AI lap |
 |---|---|---|
-| Rookie | 24.7s | 27.2s |
-| Pro | 21.5s | 25.5s |
-| Legend | 23.3s | 24.5s |
+| Monza | 38.0s | 39.6s |
+| Spa-Francorchamps | 44.3s | 46.9s |
+| Silverstone | 37.6s | 39.5s |
+| Suzuka | 39.3s | 42.6s |
+| Monaco | 20.3s | 22.0s |
+| Marina Bay | 30.3s | 32.6s |
+| Bahrain | 34.2s | 36.2s |
+| Interlagos | 25.9s | 29.2s |
+
+## The circuits
+
+Each circuit is its real outline, from the open
+[bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) dataset (MIT),
+converted by `tools/tracks/build_tracks.py` into `tracks-data.js`:
+
+- Every circuit uses the same scale, so Spa is the longest lap and Monaco the shortest.
+- The game's road is wider, relative to its cars, than a real one. Two things are
+  adjusted, locally and only where needed: corners tighter than the road can turn
+  are opened out, and stretches that would overlap once widened (Monaco's harbour
+  front, parts of Singapore and Interlagos) are nudged apart. The largest shift
+  from the real line is about 45 m, at Monaco; Monza's is 12 m.
+- Suzuka really crosses itself, so the later pass climbs over the earlier one on
+  a bridge. The physics never confuses the two: each car only looks for road
+  near where it already is, so it can neither snap across the crossover nor cut
+  between two stretches that run side by side.
+- Grandstands, billboards, towers and item boxes are placed by the same tool,
+  and every piece of scenery in the 3D view checks its whole footprint against
+  the entire circuit before it is placed, so nothing ever sits on the track.
 
 ## Sound
 
@@ -70,25 +96,35 @@ The audio context can only start from a user gesture, so it initialises on the f
 
 The world is drawn in real 3D with **Three.js**; the HUD stays on a transparent
 2D canvas laid over the top. `game.js` still owns physics, AI, laps, items and
-audio, and hands the renderer the race state each frame, so none of the racing
-changed. If WebGL or the car model is unavailable it falls back to the original
-pseudo-3D canvas renderer.
+audio, and hands the renderer the race state each frame. If WebGL or the car
+model is unavailable it falls back to the original pseudo-3D canvas renderer.
 
-- **Blender-built F1 car** (`assets/f1_car.glb`) — one model, recoloured into all
-  ten liveries plus each driver's helmet, with wheels that roll with speed and
-  front wheels that steer
-- **Circuits built from the track data** — tarmac, run-off, white lines,
-  kerbs that appear only where the track bends, advertising barriers, a start
-  gantry, chequered line and grid boxes, all extruded from the same centreline
-  the physics runs on, so what you see is what you race
-- **Per-venue lighting** — Singapore runs at night under floodlights with lit
-  towers, Bahrain at desert dusk, Monaco beside the harbour
-- Real-time shadows, fog, a gradient sky with the sun, grandstands with crowds,
-  and a few hundred trees scattered clear of the circuit
-- Drift smoke and boost glow as 3D particles
-- **3D showroom** in the pit lane — the selected driver's car on a turntable
+- **Blender-built F1 car** (`assets/f1_car.glb`) with a four-element front wing,
+  bargeboards, louvres, halo, T-cam, brake drums and a driver. Each team has its
+  own paint scheme after its 2025 car (a split lower flank, a nose-to-tail fade,
+  a pinstripe, a painted nose), plus the driver's number on the nose and fin and
+  their helmet colour. Wheels roll and steer.
+- **The circuit** is extruded from the physics centreline: tarmac, kerbs only
+  where it bends, gravel traps on the outside of corners, run-off that narrows
+  wherever another stretch of the lap is close, advertising barriers, catch
+  fences on the street circuits, a start gantry and grid slots.
+- **Landmarks per venue.** Monaco's harbour, apartment blocks, yachts, casino and
+  mountains; Spa's Ardennes forest and hills; Monza's royal park and the old
+  banking; Silverstone's Wing and airfield hangars; Suzuka's Ferris wheel and
+  bridge; Marina Bay Sands, the Singapore Flyer and a lit skyline at night;
+  Bahrain's Sakhir tower, dunes and palms; the lake and São Paulo skyline at
+  Interlagos. Every circuit gets a pit building on the main straight.
+- **Camera with a sense of speed.** The field of view opens up as you go faster
+  (more under a boost), the camera drops and looks further ahead, and it shakes
+  over kerbs and off the track, with a kerb rumble on the audio.
+- Photographic ground textures from Poly Haven, reflections on the paint,
+  real-time shadows, fog, a sky with the sun, 3D smoke and boost glow.
+- **3D showroom** in the pit lane: the selected car on a turntable.
 
-Rebuild the car with `tools/blender/build_f1_car.py` (see `tools/BLENDER-MCP.md`).
+About 1–2 ms to render a frame on every circuit.
+
+Rebuild the car with `tools/blender/build_f1_car.py` (see `tools/BLENDER-MCP.md`),
+and the circuits with `tools/tracks/build_tracks.py`.
 
 ## Physics
 
@@ -108,14 +144,17 @@ Rebuild the car with `tools/blender/build_f1_car.py` (see `tools/BLENDER-MCP.md`
 F1_Pixel_Cup/
 ├── index.html      # Shell, HUD panels, modals
 ├── styles.css      # Dark F1 theme (carbon/scarlet/gold)
-├── render3d.js     # Three.js renderer: track mesh, cars, scenery, showroom
-├── assets/         # f1_car.glb, built in Blender
+├── tracks-data.js  # Real circuit outlines, generated by tools/tracks
+├── render3d.js     # Three.js renderer: camera, lighting, per-frame sync, showroom
+├── r3d/            # track.js, landmarks.js, car.js, textures.js
+├── assets/         # f1_car.glb (Blender), textures/ (Poly Haven, CC0)
 ├── vendor/three/   # Three.js r186, vendored so there is still no build step
 ├── tools/blender/  # build_f1_car.py, regenerates the car model
+├── tools/tracks/   # build_tracks.py, regenerates tracks-data.js
 └── game.js         # Game logic, HUD, and the 2D fallback renderer
     ├── TEAMS[]         10 constructor cars with stats
     ├── DRIVERS[]       20 F1 2025 drivers with stats
-    ├── TRACKS[]        8 circuits (waypoints, decor, item boxes)
+    ├── TRACKS[]        8 circuits (names, colours; shapes from tracks-data.js)
     ├── CUPS[]          Trophy Cup + Constructor Cup
     ├── Physics         updateRacer, alignRacerToSurface, barriers
     ├── AI              waypoint steering, traffic avoidance
@@ -202,6 +241,12 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 | 87 | Oliver Bearman | Haas VF-25 |
 
 ---
+
+## Credits
+
+- Circuit outlines: [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits), MIT
+- Ground textures: [Poly Haven](https://polyhaven.com), CC0 (see `assets/textures/CREDITS.md`)
+- Three.js: MIT
 
 ## License
 
