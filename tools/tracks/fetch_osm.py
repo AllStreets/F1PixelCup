@@ -45,7 +45,8 @@ CORNERS = {
     "spa": [(126835639, "EAU ROUGE", ""), (126835637, "RAIDILLON", "")],
     "monza": [(179968234, "CURVA ALBORETO", "PARABOLICA")],
     "suzuka": [(183391652, "130R", "")],
-    "interlagos": [(189535473, "S DO SENNA", "")],
+    # The S is two ways in OpenStreetMap: turn 1, then turn 2.
+    "interlagos": [((189535473, 807691487), "S DO SENNA", "")],
 }
 # The start/finish line, where the source outline puts it somewhere else:
 # level with the middle of the real pit lane.
@@ -77,7 +78,8 @@ def five_points(geometry):
 
 
 def main():
-    ids = list(PIT_LANES.values()) + list(TUNNELS.values()) + [c[0] for cs in CORNERS.values() for c in cs]
+    ways_of = lambda w: list(w) if isinstance(w, tuple) else [w]
+    ids = list(PIT_LANES.values()) + list(TUNNELS.values()) + [i for cs in CORNERS.values() for c in cs for i in ways_of(c[0])]
     query = f"[out:json][timeout:60];way(id:{','.join(map(str, ids))});out geom;"
     data = None
     # The public Overpass servers are often busy: try each, a few times.
@@ -107,8 +109,15 @@ def main():
     for gid, corners in CORNERS.items():
         out["corners"][gid] = []
         for wid, board, aka in corners:
-            points, length = five_points(ways[wid]["geometry"])
-            out["corners"][gid].append({"way": wid, "name": ways[wid]["tags"].get("name", ""), "board": board, "aka": aka, "metres": length, "points": points})
+            # A corner mapped as several ways, end to end: one line through them.
+            geometry = []
+            for i in ways_of(wid):
+                g = ways[i]["geometry"]
+                if geometry and (g[-1]["lat"], g[-1]["lon"]) == (geometry[-1]["lat"], geometry[-1]["lon"]):
+                    g = g[::-1]
+                geometry += g if not geometry else g[1:]
+            points, length = five_points(geometry)
+            out["corners"][gid].append({"way": ways_of(wid), "name": ways[ways_of(wid)[0]]["tags"].get("name", ""), "board": board, "aka": aka, "metres": length, "points": points})
     with open(os.path.join(HERE, "osm-features.json"), "w") as f:
         json.dump(out, f, indent=1)
         f.write("\n")

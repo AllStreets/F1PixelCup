@@ -47,3 +47,42 @@ test("where the source's first vertex isn't the real line, the line is level wit
     assert.ok(real.from < 0 && real.to > 0, `${id}: ${real.from}..${real.to}`);
   });
 });
+
+test("the signature corners are the real ones: in racing order, their real length", () => {
+  Object.entries(OSM.corners).forEach(([id, corners]) => {
+    const shape = SHAPES[id];
+    const total = lapLength(shape.points);
+    assert.equal(shape.corners.length, corners.length, id);
+    corners.forEach((real, k) => {
+      const c = shape.corners[k];
+      assert.equal(c.board, real.board);
+      const span = ((c.to - c.from) % total + total) % total;
+      const into = ((c.d - c.from) % total + total) % total;
+      assert.ok(into > 0 && into < span, `${id} ${c.board}: its middle ${c.d} is outside ${c.from}..${c.to}`);
+      // The relaxation opens tight corners out a little more than it
+      // stretches straights.
+      const want = real.metres * SCALE;
+      assert.ok(Math.abs(span - want) / want < 0.35, `${id} ${c.board}: ${span.toFixed(0)} against the real ${want.toFixed(0)}`);
+    });
+  });
+});
+
+test("every grandstand knows where round the lap it stands beside", () => {
+  Object.entries(SHAPES).forEach(([id, shape]) => {
+    const total = lapLength(shape.points);
+    shape.decor.filter((item) => item.type === "grandstand").forEach((stand) => {
+      assert.ok(stand.d >= 0 && stand.d < total, `${id}: stand at ${stand.d}`);
+      // Its own stretch is beside it: the point of the lap at d is near.
+      let run = 0;
+      let at = null;
+      for (let i = 0; i < shape.points.length && !at; i += 1) {
+        const a = shape.points[i];
+        const b = shape.points[(i + 1) % shape.points.length];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        if (run + len >= stand.d) { const t = (stand.d - run) / len; at = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+        run += len;
+      }
+      assert.ok(Math.hypot(at.x - stand.x, at.y - stand.y) < 300, `${id}: stand ${stand.x},${stand.y} far from its stretch`);
+    });
+  });
+});

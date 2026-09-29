@@ -243,8 +243,10 @@ function trackDefinition(definition) {
     // Where the engine rings (the tunnel, under a bridge) and where the
     // grandstands are, round the lap (venue.js).
     reverbZones: window.Venue ? Venue.reverbZones(shape.tunnel, (shape.bridges || []).map((b) => ({ d: cumulativeStarts[b.under % cumulativeStarts.length] })), totalLength) : [],
+    // (Each stand's lap distance is the track data's, from where it was
+    // placed: the nearest road to a stand can be another stretch.)
     crowdStands: (shape.decor || []).filter((item) => item.type === "grandstand")
-      .map((item) => ({ d: getRouteDistanceForPoint(item, segments, cumulativeStarts) })),
+      .map((item) => ({ d: item.d ?? getRouteDistanceForPoint(item, segments, cumulativeStarts), x: item.x, y: item.y })),
     // Each box knows its distance round the lap, so at Suzuka's crossover a box
     // on one level can't be taken by a car on the other.
     // None may sit on the grid or the qualifying roll-in (grid.js).
@@ -3511,8 +3513,8 @@ function makeReverbImpulse(ctxA, seconds) {
   return buffer;
 }
 
-function makeNoiseBuffer(ctx) {
-  const length = Math.floor(ctx.sampleRate * 1.4);
+function makeNoiseBuffer(ctx, seconds = 1.4) {
+  const length = Math.floor(ctx.sampleRate * seconds);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
@@ -3581,11 +3583,14 @@ function initAudio() {
   convolver.buffer = makeReverbImpulse(ctxA, 1.1);
   const reverbGain = ctxA.createGain();
   reverbGain.gain.value = 0;
-  engineGain.connect(convolver);
+  // (The engine feeds it only on circuits with somewhere to ring: see
+  // venueSound's caller.)
   convolver.connect(reverbGain);
   reverbGain.connect(audio.master);
   const crowdSource = ctxA.createBufferSource();
-  crowdSource.buffer = audio.noiseBuffer;
+  // Its own, longer noise: a short loop sustained past a grandstand would be
+  // heard repeating.
+  crowdSource.buffer = makeNoiseBuffer(ctxA, 6);
   crowdSource.loop = true;
   const crowdFilter = ctxA.createBiquadFilter();
   crowdFilter.type = "bandpass";
@@ -3610,7 +3615,7 @@ function initAudio() {
     osc.start();
   });
   humGain.connect(audio.master);
-  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain };
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, convolver, engineGain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -3764,6 +3769,13 @@ function updateEngineAudio(player) {
   audio.engine.gain.gain.setTargetAtTime(level, now, 0.09);
 
   if (audio.venue) {
+    // The convolver only runs where the circuit has a tunnel or a bridge.
+    const rings = Boolean(state.track && state.track.reverbZones && state.track.reverbZones.length);
+    if (rings !== audio.venue.feeding) {
+      if (rings) audio.venue.engineGain.connect(audio.venue.convolver);
+      else audio.venue.engineGain.disconnect(audio.venue.convolver);
+      audio.venue.feeding = rings;
+    }
     const venue = venueSound(player, racing);
     audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9, now, 0.08);
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);

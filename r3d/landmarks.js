@@ -199,7 +199,7 @@ function cornerBoards(course, group, venue) {
     // The outside of the bend first (curve > 0 turns toward +n, so the
     // outside is -n), then the inside, along the corner.
     const tries = [];
-    [1, -1].forEach((which) => [0, -40, 40, -80, 80, -120, 120].forEach((shift) => tries.push([which, shift])));
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift])));
     for (const [which, shift] of tries) {
       const p = course.sampleAt(((c.d + shift) % total + total) % total);
       const bend = course.sampleAt(c.d);

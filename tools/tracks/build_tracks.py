@@ -458,6 +458,9 @@ def place_scenery(pts, report, pit=None):
     clearance = HALF_WIDTH + 70  # beyond the barrier line in the renderer
     decor = []
     placed = []
+    run = [0.0]
+    for k in range(1, n):
+        run.append(run[-1] + math.dist(pts[k - 1], pts[k]))
 
     def try_place(i, side, kind, half_len, half_depth, extra):
         tx, ty = tangent(pts, i)
@@ -475,8 +478,9 @@ def place_scenery(pts, report, pit=None):
             if any(math.dist((x, y), q) < math.hypot(half_len, half_depth) + 10 for q in pit_pts):
                 continue
             face = math.atan2(pts[i][1] - y, pts[i][0] - x)
+            # d: where round the lap it stands beside (the crowd's sound).
             decor.append({"type": kind, "x": round(x), "y": round(y), "angle": round(angle, 3),
-                          "face": round(face, 3)})
+                          "face": round(face, 3), "d": round(run[i], 1)})
             placed.append((x, y, max(half_len, half_depth)))
             return True
         return False
@@ -685,7 +689,8 @@ def main():
         for c in OSM["corners"].get(game_id, []):
             pts_c = to_scaled(c["points"])
             i, j, _ = true_span(fine, pts_c)
-            mid = nearest_index(fine, pts_c[2])
+            # The middle, on the corner's own stretch.
+            mid = nearest_index(fine, pts_c[2], [(i + k) % len(fine) for k in range((j - i) % len(fine) + 1)])
             corners.append({"board": c["board"], "aka": c["aka"], "d": round(to_lap(mid), 1), "from": round(to_lap(i), 1), "to": round(to_lap(j), 1)})
         if corners:
             report["corners"] = ", ".join(f"{c['board']} {c['d']}" for c in corners)

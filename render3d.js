@@ -20,6 +20,7 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
 import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
+import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
@@ -325,11 +326,39 @@ function auditVenue(track) {
     const clear = world.course.clearance(o.position.x, o.position.z);
     boards.push({ board: o.userData.corner.board, wanted: Math.round(o.userData.corner.d), at: p ? Math.round(p.d) : null, clear: Math.round(clear) });
   });
+  // The tunnel's roof as built: the lowest point of its ceiling above the road.
   const tunnel = world.circuit.getObjectByName("tunnel");
+  let roof = null;
+  if (tunnel) {
+    const v = new THREE.Vector3();
+    roof = Infinity;
+    tunnel.updateMatrixWorld(true);
+    tunnel.traverse((m) => {
+      if (!m.isMesh || m.material.emissiveIntensity > 1) return;
+      const pos = m.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 1) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+        const p = world.course.nearestSample(v.x, v.z);
+        const off = p ? Math.abs((v.x - p.x) * p.nx + (v.z - p.y) * p.ny) : Infinity;
+        // Over the road (not its walls), how high it is.
+        if (p && off < world.course.width && v.y - p.h > 1) roof = Math.min(roof, v.y - p.h);
+      }
+    });
+  }
+  // Each bridge reverb zone lies on the lower road, with the bridge above.
+  const bridges = (track.reverbZones || []).filter((z) => z.kind === "bridge").map((z) => {
+    const total = track.totalLength;
+    const centre = (z.from + ((z.to - z.from) % total + total) % total / 2) % total;
+    const p = world.course.sampleAt(centre);
+    let deck = Infinity;
+    world.course.samples.forEach((q) => { if (q.h > p.h + 10) deck = Math.min(deck, Math.hypot(q.x - p.x, q.y - p.y)); });
+    return { centre: Math.round(centre), height: +p.h.toFixed(1), deckAbove: Math.round(deck) };
+  });
   return {
     corners: (track.corners || []).map((c) => c.board),
     boards,
-    tunnel: tunnel ? { roof: tunnel.userData.roof, from: track.tunnel.from, to: track.tunnel.to } : null,
+    tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
+    bridges,
   };
 }
 
@@ -446,10 +475,10 @@ function buildGround(course, venue, bg) {
   return ground;
 }
 
-// The tunnel's lamps: a warm light that only shines inside.
-const tunnelLight = new THREE.AmbientLight(0xffd6a0, 0);
-scene.add(tunnelLight);
-
+let tunnelPatchTick = 0;
+// In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
+// camera only adapts its exposure -- in over half a second, as a TV camera
+// does: dark going in, bright coming out.
 function updateTunnelLight(world, track, dt) {
   const base = world.light;
   let inside = 0;
@@ -460,11 +489,10 @@ function updateTunnelLight(world, track, dt) {
   const t = world.tunnel;
   t.inside = inside;
   t.adapted += (inside - t.adapted) * (1 - Math.exp(-dt / 0.5));
-  hemi.intensity = base.hemi * (1 - 0.85 * inside);
-  sun.intensity = base.sun * (1 - 0.9 * inside);
-  scene.environmentIntensity = base.env * (1 - 0.8 * inside);
-  tunnelLight.intensity = 0.9 * inside;
-  renderer.toneMappingExposure = base.exposure * (1 + 0.6 * t.adapted);
+  hemi.intensity = base.hemi;
+  sun.intensity = base.sun;
+  scene.environmentIntensity = base.env;
+  renderer.toneMappingExposure = base.exposure * (1 + 1.4 * t.adapted);
 }
 
 function applyLighting(bg, venue, night) {
@@ -536,6 +564,10 @@ function ensureWorld(track) {
   if (current) disposeWorld(current);
   current = buildWorld(track);
   scene.add(current.group);
+  // The tunnel's light: its shape for the shaders, and every lit material
+  // taught it (before the circuit's shaders are compiled).
+  setTunnel(current.course, track.tunnel, TUNNEL_ROOF);
+  lightInTunnel(scene);
   return current;
 }
 
@@ -618,6 +650,7 @@ function syncCars(world, racers, player, now, dt) {
     let car = world.cars.get(racer.id);
     if (!car) {
       car = buildCar(racer.kart, racer.driver);
+      lightInTunnel(car.root);
       world.cars.set(racer.id, car);
       scene.add(car.root);
     }
@@ -807,6 +840,8 @@ function render(frame) {
   // and the camera's exposure adapts (in over half a second, as a TV camera
   // does) -- dark going in, bright coming out.
   updateTunnelLight(world, track, dt);
+  // Models loaded since (car bodies, items) learn the tunnel's light too.
+  if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
 
   // Shadows follow the player.
   sun.position.set(player.x + SUN_DIR.x * 700, ground + SUN_DIR.y * 700 + 150, player.y + SUN_DIR.z * 700);

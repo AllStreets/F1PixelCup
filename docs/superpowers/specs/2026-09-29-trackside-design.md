@@ -143,9 +143,14 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
   - the hotel's floors (the Fairmont) rising 48 over the middle 60 %, windows and all;
   - two rows of lit lamp panels along the ceiling.
 
-  The walls, roof and slab are sun occluders for the flare. The street catch fence stops at the portals.
-- **Seen.** Inside, the sky and the sun are shut out: hemisphere ×0.15, sun ×0.1, environment ×0.2. The roof also casts its shadow, and a warm light stands in for the lamps. The exposure adapts toward ×1.6 with a 0.5 s time constant (`updateTunnelLight`, `render3d.js`): dark going in, bright coming out, as a TV camera does. The venue's own light is kept per world, so each frame starts from it; this also fixes the showroom's exposure lingering.
-- **Heard.** The engine also feeds a `ConvolverNode`: a generated impulse of stereo noise decaying over 1.1 s, with its wet level at 0.9 × `Venue.reverbAt(d, zones)`. The level is 0 outside, 1 inside, and eases over the first and last 40 (`RAMP`).
+  The hotel is a closed, double-sided block with end walls, and the slab is capped at both portals. The walls, roof, slab and hotel are all sun occluders for the flare. The street catch fence stops at the portals.
+- **Seen: the tunnel's own light** (`r3d/tunnel-light.js`).
+  - The tunnel is handed to the shaders as a chain of 24 boxes along its stretch, with a bounding-circle early-out, so other circuits pay nothing.
+  - Every lit (standard) material, and the kerbs' shader, scales its light by how deep inside the tunnel the pixel is. Sky (hemisphere), environment and sun all drop to 8 % deep inside, easing in over the 40 at each portal as daylight spills in. The lamps' warm light (0.3) is added in their place.
+  - So a car, or the road, is dark or lit by where it is, not by where the camera is. From the sunlit approach the mouth is dark; from inside, the exit is blown out.
+  - Only the exposure is camera-based. It adapts toward ×2.4 inside, with a 0.5 s time constant (`updateTunnelLight`, `render3d.js`): dark going in, bright coming out, as a TV camera does. The venue's own light is kept per world, so each frame starts from it; this also fixes the showroom's exposure lingering.
+  - Ruling: a first version dimmed the whole scene by the camera's position, plus a scene-wide ambient. Review found it physically dishonest: the approach saw the interior lit, and the world outside went dark from inside. It was replaced by the above.
+- **Heard.** The engine also feeds a `ConvolverNode`, but only on circuits with a reverb zone. It is a generated impulse of stereo noise decaying over 1.1 s, with its wet level at 0.9 × `Venue.reverbAt(d, zones)`. The level is 0 outside, 1 inside, and eases over the first and last 40 (`RAMP`).
 
 ### The other circuits
 
@@ -153,11 +158,11 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
   - Eau Rouge and Raidillon (Spa);
   - Curva Alboreto, with "Parabolica" beneath (Monza);
   - 130R (Suzuka);
-  - S do Senna (Interlagos).
+  - S do Senna (Interlagos), both of its ways, turn 1 and turn 2.
 
-  Each stands on the outside of its corner, past the barrier, facing the track, and claims its footprint like any scenery. Where the spot is taken it moves along the corner, then to the inside (130R's is on the inside).
+  Each stands on the outside of its corner, past the barrier, facing the track, and claims its footprint like any scenery. Where the spot is taken it moves along the corner (up to 80), then to the inside (130R's is on the inside).
 - **Suzuka's crossover.** Under the bridge the engine rings: a reverb zone of ±70 (`UNDER_BRIDGE`) round where the lower road passes beneath, from `bridges`.
-- **The crowd** swells past every grandstand: band-passed noise (650 Hz) whose level follows `Venue.crowdAt`, full level with a stand and gone by 420 (`CROWD_REACH`).
+- **The crowd** swells past every grandstand: band-passed noise (650 Hz, from its own 6 s buffer, so no audible loop) whose level follows `Venue.crowdAt`. It is full level with a stand and gone by 420 (`CROWD_REACH`). Each stand's lap distance is recorded in the track data where it was placed, since the nearest road to a stand can be another stretch.
 - **Floodlights** (Singapore at night, Bahrain at dusk):
   - each tower casts a soft warm pool of light across the near half of the road, stronger at night;
   - the pools lie on the ground (tagged as such), so they aren't scenery over the track;
@@ -171,12 +176,16 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
   - the reverb zones (the tunnel, and under a bridge);
   - the floodlit list against `VENUES`;
   - the tunnel against OpenStreetMap.
+- **Node:** the corners data (in racing order, the real length within 35 %) and every grandstand's `d` beside its stand.
 - **Browser** (`trackside-check.js`):
-  - `venueBuilt`: every corner has its board, past the barrier, within 130 of its corner; the tunnel's roof is at least 30 up;
-  - `tunnelRings`: through the real audio graph, the reverb is 0 before the tunnel, partial at the portal, full inside and 0 after;
-  - `bridgeRings`: full under Suzuka's bridge, 0 away from it;
-  - `crowdSwells`: the crowd is loudest at a grandstand;
-  - `tunnelDark`: on Monaco, the road's pixels inside the tunnel are under 0.6 of the sunlit approach's;
+  - `venueBuilt`:
+    - every corner has its board, past the barrier, within 90 of its corner;
+    - the tunnel's roof, measured from the built geometry, is at least 30 up;
+    - Suzuka's reverb zone is on the lower road with the bridge deck crossing above it.
+  - `tunnelRings`: the reverb gain node itself, with the audio running, is under 0.05 before and after the tunnel and over 0.8 inside. It failed with the gain never set.
+  - `reverbOnlyWhereItRings`: at Monza the convolver isn't fed.
+  - `crowdSwells`: every stand is heard beside its own stretch and loudest there, and there is silence far from every stand.
+  - `tunnelDark`: in one picture from the sunlit approach, the road just inside the mouth is under half as bright as the road just before it; from inside, the road is under 0.6 of the approach's. It failed with the tunnel's light off.
   - `auditScenery` stays at 0 everywhere, with the boards and pools included.
 
 ## G3 — Trackside life

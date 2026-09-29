@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { itemModel, swapBody } from "./items.js";
+import { tunnelUniforms, TUNNEL_GLSL } from "./tunnel-light.js";
 import {
   color, seeded, hashString, photo, canvasTexture, makeKerbTexture, makeCheckerTexture,
   makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture, buildingMaterial, luminance,
@@ -357,17 +358,21 @@ const fenceTex = makeFenceTexture();
 
 function kerbMaterial(a, b) {
   return new THREE.ShaderMaterial({
-    uniforms: { a: { value: color(a, "#dc0000") }, b: { value: color(b, "#ffffff") }, stripes: { value: kerbTex }, ...THREE.UniformsLib.fog },
+    // The kerbs are unlit paint; in the tunnel they take its light
+    // (r3d/tunnel-light.js) like everything else.
+    uniforms: { a: { value: color(a, "#dc0000") }, b: { value: color(b, "#ffffff") }, stripes: { value: kerbTex }, ...THREE.UniformsLib.fog, ...tunnelUniforms },
     fog: true,
     side: THREE.DoubleSide,
-    vertexShader: `varying vec2 vUv;
+    vertexShader: `varying vec2 vUv; varying vec3 vTunnelPos;
       #include <fog_pars_vertex>
-      void main(){ vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;
+      void main(){ vUv = uv; vTunnelPos = (modelMatrix * vec4(position, 1.0)).xyz; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform vec3 a; uniform vec3 b; uniform sampler2D stripes; varying vec2 vUv;
+    fragmentShader: `uniform vec3 a; uniform vec3 b; uniform sampler2D stripes; varying vec2 vUv; varying vec3 vTunnelPos;
+      ${TUNNEL_GLSL}
       #include <fog_pars_fragment>
-      void main(){ float s = texture2D(stripes, vec2(0.5, vUv.y)).r; gl_FragColor = vec4(mix(b, a, 1.0 - s) * 0.85, 1.0);
+      void main(){ float s = texture2D(stripes, vec2(0.5, vUv.y)).r; float lit = tunnelOpen(vTunnelPos);
+        gl_FragColor = vec4(mix(b, a, 1.0 - s) * 0.85 * (lit + (1.0 - lit) * tLamp), 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       #include <fog_fragment>
@@ -707,10 +712,28 @@ function buildTunnel(course, tunnel, occluders) {
     return into >= length * 0.2 && into <= length * 0.8;
   };
   const hotel = buildingMaterial({ night: course.track.bg && luminance(course.track.bg.sky) < 0.12, glass: "#7d8fa0", litShare: 0.35 });
+  // Seen from either side (a wall's front faces all point one way round).
+  hotel.side = THREE.DoubleSide;
   const top = TUNNEL_ROOF + 8;
   const floors = top + 48;
-  [L, R].forEach((off) => add(wall(samples, off, () => top, () => floors, 60, underHotel), hotel));
-  add(ribbon(samples, L, R, floors, 80, underHotel), concrete);
+  [L, R].forEach((off) => occluders.push(add(wall(samples, off, () => top, () => floors, 60, underHotel), hotel)));
+  occluders.push(add(ribbon(samples, L, R, floors, 80, underHotel), concrete));
+  // Closed boxes: end walls across the hotel's two ends, and across the
+  // slab above each portal.
+  const across = (d, y0, y1, mat) => {
+    const p = course.sampleAt(((d % total) + total) % total);
+    const left = p.outerL + 2;
+    const right = p.outerR + 2;
+    const cap = add(new THREE.BoxGeometry(1, y1 - y0, left + right), mat);
+    const mid = (right - left) / 2;
+    cap.position.set(p.x + p.nx * mid, p.h + (y0 + y1) / 2, p.y + p.ny * mid);
+    cap.rotation.y = -Math.atan2(p.ty, p.tx);
+    occluders.push(cap);
+  };
+  across(tunnel.from + length * 0.2, top, floors, hotel);
+  across(tunnel.from + length * 0.8, top, floors, hotel);
+  across(tunnel.from, TUNNEL_ROOF, top, concrete);
+  across(tunnel.to, TUNNEL_ROOF, top, concrete);
   // Lamps: two rows of lit panels along the ceiling.
   const lamp = new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffd08a, emissiveIntensity: 2.2, side: THREE.DoubleSide });
   [-0.4, 0.4].forEach((f) => {

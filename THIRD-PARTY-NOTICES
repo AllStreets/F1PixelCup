@@ -34,7 +34,8 @@ OpenStreetMap
 https://www.openstreetmap.org/copyright
 Used in tools/tracks/osm-features.json (fetched by tools/tracks/fetch_osm.py)
 and, through it, tracks-data.js: the positions of the real pit lanes, the
-Monaco and Silverstone start lines and the Monaco tunnel.
+Monaco and Silverstone start lines, the Monaco tunnel and the signature
+corners (their name boards).
 
 Contains information from OpenStreetMap, © OpenStreetMap contributors, which
 is made available under the Open Database License (ODbL) 1.0:
