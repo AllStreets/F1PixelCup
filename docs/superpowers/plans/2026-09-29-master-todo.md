@@ -200,15 +200,15 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 ## Stage H — Rain races (roadmap stage 8)
 
-- [ ] Spec: per-race weather (a pit-lane option, plus a chance of rain in the cup), with **real grip loss** in the `game.js` physics. The oil slick behaves worse in the wet.
-- [ ] Node or headless sim test (`tools/checks/race-sim.js` pattern): wet lap times are measurably slower, and cornering grip drops by the specified factor.
-- [ ] Visuals:
+- [x] Spec (docs/superpowers/specs/2026-09-29-rain-design.md): per-race weather (a pit-lane option, plus a chance of rain in the cup), with **real grip loss** in the `game.js` physics. The oil slick behaves worse in the wet.
+- [x] Node or headless sim test (`tools/checks/race-sim.js` pattern): wet lap times are measurably slower, and cornering grip drops by the specified factor.
+- [x] Visuals:
   - wet road reflections;
   - tyre spray from the real wheel positions;
   - droplets on the camera (post-FX);
   - rain particles, all quality-tiered.
-- [ ] Sound: rain ambience and a wet tyre hiss (WebAudio).
-- [ ] Browser check: the weather toggles, the grip change is measured in game, and there are no errors. Screenshots. Review, merge, push.
+- [x] Sound: rain ambience and a wet tyre hiss (WebAudio).
+- [x] Browser check: the weather toggles, the grip change is measured in game, and there are no errors. Screenshots. Review, merge, push.
 
 ## Stage I — Blender car v2 (roadmap stage 9)
 
