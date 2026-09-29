@@ -27,6 +27,8 @@ async (page) => {
     state.phase = "race";
     const now = performance.now();
     state.raceStart = now - 40000;
+    // Start the race clock the way lights-out does.
+    state.lastTick = now;
     state.racers.forEach((r) => { r.lapStartAt = now; });
   }, circuit);
   const run = (fn, arg) => p.evaluate(fn, arg);
@@ -213,17 +215,23 @@ async (page) => {
   await setup();
   results.pauseFreezes = await run(async () => {
     const pl = getPlayer();
-    pl.currentItem = "debris"; useItem(pl, performance.now());
+    pl.currentItem = "debris"; useItem(pl, raceNow());
     const s = state.shots[state.shots.length - 1];
-    state.boxHiddenUntil[0] = raceNow() + 3000;
+    s.expiresAt = raceNow() + 60000;
+    state.boxHiddenUntil[0] = raceNow() + 60000;
+    const clockBefore = raceNow();
     const leftShot = s.expiresAt - raceNow();
     const leftBox = state.boxHiddenUntil[0] - raceNow();
     togglePause();
     await new Promise((r) => setTimeout(r, 1500));
     togglePause();
+    // Let the race run two frames after resuming: the clock must have moved on
+    // by about two frames, not by the 1.5 s spent paused.
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const moved = raceNow() - clockBefore;
     const nowShot = s.expiresAt - raceNow();
     const nowBox = state.boxHiddenUntil[0] - raceNow();
-    return Math.abs(leftShot - nowShot) < 150 && Math.abs(leftBox - nowBox) < 150;
+    return moved > 0 && moved < 80 && Math.abs(leftShot - nowShot - moved) < 1 && Math.abs(leftBox - nowBox - moved) < 1;
   });
 
   // Player oil: tap drops, hold trails, key-up drops, losing focus drops.
@@ -628,6 +636,21 @@ async (page) => {
     await p.waitForTimeout(600);
     const out = await p.evaluate(() => ({ failed: Render3D.failed, fallback: state.fallbackFrames, running: state.phase === "race" }));
     return out.failed && out.fallback > 0 && out.running && errors.length === before;
+  })();
+
+
+  // A renderer crash in the pit lane hides the 3D view (no frozen 3D car
+  // behind the fallback) and the fallback is the team's showroom photo.
+  results.garageCrashCleansUp = await (async () => {
+    await p.evaluate(() => { Game.backToPitLane(); });
+    await p.waitForTimeout(300);
+    await p.evaluate(() => { window.Render3D.renderGarage = () => { throw new Error("test: showroom crashed"); }; window.Render3D.ready = true; window.Render3D.failed = false; });
+    await p.waitForTimeout(1200);
+    return p.evaluate(() => {
+      const canvas3d = document.getElementById("game3d");
+      const hidden = !canvas3d || getComputedStyle(canvas3d).display === "none";
+      return hidden && !document.getElementById("canvas-shell").classList.contains("has-3d") && state.garageFallback === "photo";
+    });
   })();
 
   await context.close();

@@ -24,6 +24,9 @@ import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer } from "./r3d/powerups.js";
 
 const MAX_PARTICLES = 256;
+
+// Tell the loading state the renderer itself has arrived (render3d-boot.js).
+if (window.Render3DBoot) window.Render3DBoot.moduleAt = performance.now();
 const BASE_FOV = 62;
 const DRS_OPEN = (12 * Math.PI) / 180;
 

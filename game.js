@@ -46,8 +46,12 @@ const ui = {
 // a slow connection keeps the loading state for as long as files keep arriving.
 const BOOT_AT = performance.now();
 const BOOT_TIMEOUT_MS = 10000;
+// Once the renderer is running, the car and textures report as they arrive:
+// 20 s of silence is a stall. Before that, Three.js itself is downloading, and
+// a large module gives no sign of progress until it lands, so allow longer.
 const STALL_TIMEOUT_MS = 20000;
-const downloadWatch = { files: 0, at: BOOT_AT };
+const MODULE_STALL_TIMEOUT_MS = 60000;
+const downloadWatch = { files: 0, at: BOOT_AT, stalled: false };
 function worldView() {
   const renderer = window.Render3D;
   if (renderer && renderer.ready) return "3d";
@@ -55,13 +59,21 @@ function worldView() {
   const now = performance.now();
   const boot = window.Render3DBoot;
   if (!boot) return now - BOOT_AT > BOOT_TIMEOUT_MS ? "2d" : "loading";
-  const files = performance.getEntriesByType("resource").length;
+  // Once a stall has put the 2D view up it stays up (unless the car does
+  // arrive, above), rather than flickering back to the loader.
+  if (downloadWatch.stalled) return "2d";
+  // Only the 3D renderer's own files count as progress -- not, say, the
+  // showroom photo the 2D view loads.
+  const files = performance.getEntriesByType("resource")
+    .filter((entry) => /\/(vendor\/three|r3d|render3d|assets\/(f1_car|textures))/.test(entry.name)).length;
   if (files !== downloadWatch.files) {
     downloadWatch.files = files;
     downloadWatch.at = now;
   }
-  const lastProgress = Math.max(downloadWatch.at, boot.startedAt || 0, boot.progressAt || 0);
-  return now - lastProgress > STALL_TIMEOUT_MS ? "2d" : "loading";
+  const lastProgress = Math.max(downloadWatch.at, boot.startedAt || 0, boot.moduleAt || 0, boot.progressAt || 0);
+  const limit = boot.moduleAt ? STALL_TIMEOUT_MS : MODULE_STALL_TIMEOUT_MS;
+  if (now - lastProgress > limit) downloadWatch.stalled = true;
+  return downloadWatch.stalled ? "2d" : "loading";
 }
 
 // A crash inside the 3D renderer must not freeze the game: report it once,
@@ -75,6 +87,10 @@ function render3dSafely(draw) {
       window.Render3D.ready = false;
       window.Render3D.failed = true;
     }
+    // Take the 3D canvas away too, so its last frame can't linger behind.
+    const canvas3d = document.getElementById("game3d");
+    if (canvas3d) canvas3d.style.display = "none";
+    ui.canvasShell.classList.remove("has-3d");
     return { ok: false, value: null };
   }
 }
@@ -255,8 +271,6 @@ const state = {
   fxFlashes: [],
   simOffset: 0,
   lastTick: null,
-  lastRaceWall: null,
-  lastRaceAdvance: 0,
   finishQueue: [],
   fallbackFrames: 0,
   particles: [],
@@ -806,8 +820,6 @@ function startRace(index) {
   state.fxFlashes = [];
   state.simOffset = 0;
   state.lastTick = null;
-  state.lastRaceWall = null;
-  state.lastRaceAdvance = 0;
   state.finishQueue = [];
   state.particles = [];
   state.cameraHeading = state.track.startHeading;
@@ -862,6 +874,9 @@ function updateCountdown(now) {
     ui.countdownBanner.classList.add("hidden");
     state.phase = "race";
     state.raceStart = now;
+    // Lights out starts the race clock here; from now on it moves only with the physics.
+    state.lastTick = now;
+    state.simOffset = 0;
     audio.lastBeepStep = -1;
     sfx.lightsOut();
     addFeed("Lights out — go go go!");
@@ -907,13 +922,11 @@ function getRaceProgress(racer) {
 // powerups.js; this is where their effects happen.
 // ---------------------------------------------------------------------------
 
-// The clock the picture is drawn at: frozen at the moment of pausing, so boxes,
-// glows, flaps and flashes hold still on the pause screen instead of running
-// out behind it (their deadlines are shifted when the race resumes).
-// The clock the picture is drawn at. In a race it is the race clock at the
-// last physics step; otherwise wall time, frozen while paused (the countdown).
+// The clock the picture is drawn at. From lights-out until the race is left
+// (results and podium included) it is the race clock at the last physics
+// step; before that, wall time, frozen while paused (the countdown).
 function renderClock() {
-  if (state.phase === "race" && state.lastTick !== null) return state.lastTick;
+  if (state.lastTick !== null) return state.lastTick;
   return state.paused && state.pausedAt ? state.pausedAt : performance.now();
 }
 
@@ -927,7 +940,7 @@ function renderClock() {
 // the race with their own clock pass their wall time in.
 function raceNow(wall) {
   if (wall !== undefined) return wall + (state.simOffset || 0);
-  if (state.phase === "race" && state.lastTick !== null) return state.lastTick;
+  if (state.lastTick !== null) return state.lastTick;
   return performance.now() + (state.simOffset || 0);
 }
 
@@ -1239,11 +1252,34 @@ function updateLapProgress(racer, now, dt = 0) {
   // threshold: at 120fps a car doing 60 advances well under a unit per frame,
   // and any such threshold silently swallows the crossing.
   const wrapped = previousDistance > lapLength * 0.75 && currentDistance < lapLength * 0.25;
+  // Reversing back over the line hands the lap back, so progress round the
+  // race stays continuous instead of jumping almost a lap ahead.
+  const unwrapped = previousDistance < lapLength * 0.25 && currentDistance > lapLength * 0.75;
+  if (unwrapped && delta < 0 && racer.startedRaceLap) {
+    racer.lapAccum += lapLength;
+    if (racer.lap > 0) {
+      racer.lap -= 1;
+      racer.lapStartAt = racer.previousLapStartAt ?? racer.lapStartAt;
+      racer.undoLapTime = true;
+    } else {
+      racer.startedRaceLap = false;
+    }
+    return;
+  }
   if (!wrapped || delta <= 0) return;
 
   // The moment the car actually crossed the line, between this step and the
-  // last: lap and race times are to the millisecond, not to the frame.
-  const pastLine = clamp(currentDistance / delta, 0, 1);
+  // last: lap and race times are to the millisecond, not to the frame. The car
+  // drove from where it was at the start of the step to where it is now; the
+  // point where that path meets the start line gives the moment exactly.
+  const line = getItemRoute(state.track).sample(0);
+  const side = (x, y) => (x - line.x) * line.tx + (y - line.y) * line.ty;
+  const was = side(racer.stepFromX ?? racer.x, racer.stepFromY ?? racer.y);
+  const is = side(racer.x, racer.y);
+  const pastLine = was < 0 && is >= 0
+    ? is / (is - was)
+    // (Pushed across in a tangle, say: fall back to distance round the lap.)
+    : clamp(currentDistance / delta, 0, 1);
   const crossedAt = now - dt * 1000 * pastLine;
 
   if (!racer.startedRaceLap) {
@@ -1263,13 +1299,16 @@ function updateLapProgress(racer, now, dt = 0) {
     if (racer.lap + 1 === state.track.laps - 1) sfx.finalLap();
   }
   // Fast-forwarded laps are timed on the race clock, so they are true times.
-  if (racer.lapStartAt) {
+  // A lap re-crossed after reversing over the line was already timed.
+  if (racer.lapStartAt && !racer.undoLapTime) {
     racer.lastLapTime = crossedAt - racer.lapStartAt;
     if (!racer.bestLapTime || racer.lastLapTime < racer.bestLapTime) {
       racer.bestLapTime = racer.lastLapTime;
     }
   }
-  racer.lapStartAt = crossedAt;
+  racer.previousLapStartAt = racer.lapStartAt;
+  racer.lapStartAt = racer.undoLapTime ? racer.lapStartAt : crossedAt;
+  racer.undoLapTime = false;
 
   racer.lap += 1;
   if (racer.lap >= state.track.laps) {
@@ -1279,6 +1318,9 @@ function updateLapProgress(racer, now, dt = 0) {
 
 function updateRacer(racer, dt, now) {
   if (racer.finished) return;
+  // Where this step starts from, for timing the line crossing exactly.
+  racer.stepFromX = racer.x;
+  racer.stepFromY = racer.y;
   if (racer.rouletteUntil && now >= racer.rouletteUntil) {
     finishRoulette(racer, now);
   }
@@ -1715,16 +1757,14 @@ function updateRace(dt, now) {
   // everything on track -- shots, oil, the safety car, contacts -- steps with
   // it, each sub-step on its own tick of the race clock. Cars obey the same
   // physics, corners and barriers; they just cover the distance faster.
-  // Carry the clock on from the last step of the previous frame: whatever
-  // wall time passed (a hitch, a pause, a hidden tab), the race only moves on
-  // by the simulated steps.
-  if (state.lastRaceWall !== null) {
-    state.simOffset += state.lastRaceAdvance - (now - state.lastRaceWall);
-  }
+  // Step the clock on from the last physics step by this frame's own steps:
+  // whatever wall time passed (a hitch, a pause, a hidden tab), the race only
+  // moves on by the time the physics actually simulates.
   const steps = state.flagOutAt ? FLAG_FAST_FORWARD : 1;
   const step = dt * 1000;
+  const from = state.lastTick !== null ? state.lastTick : now + state.simOffset - step;
   for (let index = 0; index < steps; index += 1) {
-    const tick = now + state.simOffset + index * step;
+    const tick = from + (index + 1) * step;
     state.racers.forEach((racer) => {
       if (racer.finished || (index > 0 && racer.isPlayer)) return;
       updateRacer(racer, dt, tick);
@@ -1737,9 +1777,9 @@ function updateRace(dt, now) {
     handleRacerContacts(tick);
     handleRacerContacts(tick);
   }
-  state.lastTick = now + state.simOffset + (steps - 1) * step;
-  state.lastRaceWall = now;
-  state.lastRaceAdvance = steps * step;
+  state.lastTick = from + steps * step;
+  // Kept for tools that drive the race with their own clock (raceNow(wall)).
+  state.simOffset = state.lastTick - now;
   const raceTime = state.lastTick;
   updateParticles(dt);
   updateStandingsUI();
@@ -1775,6 +1815,11 @@ function recordTimingPoint(racer, now) {
   if (racer.finished || progress < 0) return;
   const index = Math.floor(progress / (state.track.totalLength / TIMING_POINTS_PER_LAP));
   if (!racer.splits) racer.splits = [];
+  // Driving backwards: the next time it passes a point it is timed again.
+  if (index < (racer.lastSplit ?? -1)) racer.lastSplit = index;
+  // A jump of more than a few points in one step isn't driving (a rescue by
+  // the watchdog): time it from the next point it genuinely reaches.
+  if (index > (racer.lastSplit ?? -1) + 3) { racer.lastSplit = index; racer.splits[index] = now; return; }
   while ((racer.lastSplit ?? -1) < index) {
     racer.lastSplit = (racer.lastSplit ?? -1) + 1;
     racer.splits[racer.lastSplit] = now;
@@ -1792,8 +1837,11 @@ function timeGap(behind, ahead) {
 
 function gapSeconds(behind, ahead) {
   const gap = timeGap(behind, ahead);
-  if (gap !== null) return gap / 1000;
-  return (getRaceProgress(ahead) - getRaceProgress(behind)) / TOWER_REFERENCE_SPEED;
+  // A timed gap is used unless the cars swapped places since the last timing
+  // point they share (it would read negative); then, until the next point,
+  // the distance between them at race speed stands in.
+  if (gap !== null && gap >= 0) return gap / 1000;
+  return Math.max(0, getRaceProgress(ahead) - getRaceProgress(behind)) / TOWER_REFERENCE_SPEED;
 }
 
 function getRaceStandings() {
@@ -2024,8 +2072,6 @@ function resetToGarage() {
   state.fxFlashes = [];
   state.simOffset = 0;
   state.lastTick = null;
-  state.lastRaceWall = null;
-  state.lastRaceAdvance = 0;
   state.finishQueue = [];
   state.cameraHeading = 0;
   state.camPos = null;
@@ -2617,7 +2663,7 @@ function drawKartRear(targetCtx, x, y, scale, kart, driver, yaw, opts = {}) {
   targetCtx.save();
   targetCtx.translate(x, y);
   targetCtx.scale(scale, scale);
-  if (opts.spinning) targetCtx.rotate(Math.sin(performance.now() / 90) * 0.25);
+  if (opts.spinning) targetCtx.rotate(Math.sin(renderClock() / 90) * 0.25);
   // Lean the body into the direction the car is pointing.
   targetCtx.transform(1, 0, sway * 0.34, 1, 0, 0);
 
@@ -3240,7 +3286,7 @@ function drawSpeedLines(player) {
   const ratio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1.4);
   if (ratio < 0.62) return;
   const strength = (ratio - 0.62) / 0.6;
-  const now = performance.now();
+  const now = renderClock();
   ctx.save();
   ctx.globalAlpha = clamp(strength * 0.5, 0, 0.45);
   ctx.strokeStyle = "#fff0c9";
@@ -3378,7 +3424,7 @@ function drawMiniMap(track, player, frame) {
   });
   if (pu.safetyCar) {
     const point = toMap(pu.safetyCar);
-    ctx.fillStyle = Math.floor(performance.now() / 180) % 2 ? "#ffb000" : "#ffd000";
+    ctx.fillStyle = Math.floor(renderClock() / 180) % 2 ? "#ffb000" : "#ffd000";
     ctx.fillRect(point.x - 3, point.y - 3, 6, 6);
   }
 
@@ -3399,7 +3445,7 @@ function drawMiniMap(track, player, frame) {
   });
 
   const me = toMap(player);
-  const pulse = 5.5 + Math.sin(performance.now() / 260) * 1.4;
+  const pulse = 5.5 + Math.sin(renderClock() / 260) * 1.4;
   ctx.strokeStyle = "rgba(117, 213, 255, 0.85)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -3510,7 +3556,7 @@ function drawDriverHud(track, player) {
   const now = raceNow();
 
   // Flash the position panel whenever a place changes hands.
-  if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "racing") {
+  if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "race") {
     state.hudPlaceFlashUntil = now + 1400;
     state.hudPlaceFlashDir = place < state.hudLastPlace ? 1 : -1;
   }
@@ -4043,9 +4089,47 @@ function drawGarageScene() {
     const shown = render3dSafely(() => window.Render3D.renderGarage(team, driver, performance.now()));
     if (shown.ok && shown.value) return;
   }
-  // Only when 3D is unavailable: the 2D car where the showroom car would be.
+  // Only when 3D is unavailable: the team's showroom photo (taken from the
+  // real 3D showroom) where the car would stand -- never the old 2D sprite.
   state.fallbackFrames += 1;
-  drawKart(ctx, view.width * 0.68, view.height * 0.58, 0, team, driver, 5.5);
+  state.garageFallback = "photo";
+  drawShowroomPhoto(team);
+}
+
+const showroomPhotos = {};
+
+function drawShowroomPhoto(team) {
+  if (!showroomPhotos[team.id]) {
+    const img = new Image();
+    img.src = `./assets/shots/team-${team.id}.jpg`;
+    showroomPhotos[team.id] = img;
+  }
+  const img = showroomPhotos[team.id];
+  if (!img.complete || !img.naturalWidth) return;
+  // The frame the photos were captured in (tools/capture-shots.js).
+  const x = view.width * 0.42;
+  const y = view.height * 0.3;
+  const w = view.width * 0.54;
+  const h = view.height * 0.66;
+  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const sw = w / scale;
+  const sh = h / scale;
+  ctx.save();
+  ctx.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, x, y, w, h);
+  // Feather every edge into the page, so it reads as the showroom, not a pasted picture.
+  const fade = (x0, y0, x1, y1, rx, ry, rw, rh) => {
+    const g = ctx.createLinearGradient(x0, y0, x1, y1);
+    g.addColorStop(0, "rgba(7, 7, 12, 1)");
+    g.addColorStop(1, "rgba(7, 7, 12, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(rx, ry, rw, rh);
+  };
+  const edge = Math.min(w, h) * 0.18;
+  fade(x, 0, x + edge, 0, x, y, edge, h);
+  fade(x + w, 0, x + w - edge, 0, x + w - edge, y, edge, h);
+  fade(0, y, 0, y + edge, x, y, w, edge);
+  fade(0, y + h, 0, y + h - edge, x, y + h - edge, w, edge);
+  ctx.restore();
 }
 
 function bindEvents() {

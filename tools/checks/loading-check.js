@@ -51,7 +51,8 @@ async (page) => {
     const { context, p } = await open((route) => route.abort());
     await p.waitForTimeout(2500);
     const out = await p.evaluate(() => ({ failed: Boolean(window.Render3D && window.Render3D.failed), fallback: state.fallbackFrames, loader: !document.getElementById("view-loading").hidden }));
-    results.fallsBackOnFailure = out.failed && out.fallback > 0 && !out.loader;
+    const photo = await p.evaluate(() => state.garageFallback === "photo");
+    results.fallsBackOnFailure = out.failed && out.fallback > 0 && !out.loader && photo;
     await p.unrouteAll({ behavior: "ignoreErrors" });
     await context.close();
   }
@@ -141,16 +142,33 @@ async (page) => {
     await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 40, downloadThroughput: 60 * 1024, uploadThroughput: 64 * 1024 });
     await p.reload();
     let everFallback = false;
-    let ready = false;
-    for (let i = 0; i < 100 && !ready; i += 1) {
+    let readyAt = 0;
+    for (let i = 0; i < 100 && !readyAt; i += 1) {
       await p.waitForTimeout(500);
-      const s = await p.evaluate(() => ({ ready: Boolean(window.Render3D && window.Render3D.ready), fallback: typeof state === "undefined" ? 0 : state.fallbackFrames }));
+      const s = await p.evaluate(() => ({ ready: Boolean(window.Render3D && window.Render3D.ready), fallback: typeof state === "undefined" ? 0 : state.fallbackFrames, at: performance.now() }));
       everFallback = everFallback || s.fallback > 0;
-      ready = s.ready;
+      if (s.ready) readyAt = s.at;
     }
-    // It took longer than the 10 s boot timeout, so a fixed timer would have shown the stand-in car.
-    const elapsedPastTimeout = await p.evaluate(() => performance.now() > 10000);
-    results.slowDownloadKeepsLoader = ready && !everFallback && elapsedPastTimeout;
+    // The car arrived after the 10 s boot timeout, so a fixed timer would have shown the stand-in car.
+    results.slowDownloadKeepsLoader = readyAt > 10500 && !everFallback;
+    await context.close();
+  }
+
+
+  // A download that stalls outright (the car never finishes arriving) does
+  // fall back to 2D -- the showroom photo -- instead of loading forever.
+  {
+    const context = await page.context().browser().newContext({ viewport: null });
+    const p = await context.newPage();
+    p.on("pageerror", (e) => errors.push(String(e)));
+    await p.route("**/assets/f1_car.glb*", () => { /* never answered */ });
+    await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
+    await p.waitForTimeout(12000);
+    const early = await p.evaluate(() => ({ fallback: state.fallbackFrames, loader: !document.getElementById("view-loading").hidden }));
+    await p.waitForTimeout(12000);
+    const late = await p.evaluate(() => ({ fallback: state.fallbackFrames, loader: !document.getElementById("view-loading").hidden, photo: state.garageFallback === "photo" }));
+    results.stalledDownloadFallsBack = early.fallback === 0 && early.loader && late.fallback > 0 && !late.loader && late.photo;
+    await p.unrouteAll({ behavior: "ignoreErrors" });
     await context.close();
   }
 
