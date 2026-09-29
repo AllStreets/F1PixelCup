@@ -14,7 +14,7 @@
 
   function lapTime(ms) {
     if (!ms || ms <= 0) return "-:--.---";
-    const total = ms / 1000;
+    const total = Math.round(ms) / 1000;
     const minutes = Math.floor(total / 60);
     return `${minutes}:${(total - minutes * 60).toFixed(3).padStart(6, "0")}`;
   }

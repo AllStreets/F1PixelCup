@@ -185,7 +185,14 @@ html, body { height: 100%; overflow: hidden; }
 .result-row .r-gap { color: var(--muted); }
 .result-row > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 760px) {
-  /* Narrow windows keep time, gap and both points columns; the best lap goes. */
-  .result-row, .result-head { grid-template-columns: 2.2rem 4px minmax(0, 1fr) 5.6rem 4.8rem 2.6rem 2.6rem; gap: 8px; }
+  /* Narrow windows keep time, gap and both points columns; the best lap goes.
+     Gap is wide enough for its longest form, an estimate like "~+7:12.345". */
+  .result-row, .result-head { grid-template-columns: 2.2rem 4px minmax(4.5rem, 1fr) 5.4rem 6rem 2.2rem 2.2rem; gap: 6px; padding-inline: 0.4rem; }
   .result-row > span:nth-child(6), .result-head > span:nth-child(6) { display: none; }
+}
+@media (max-width: 520px) {
+  /* Phone widths: position, driver, race time and cup points. */
+  .result-row, .result-head { grid-template-columns: 2rem 4px minmax(4.5rem, 1fr) 5.4rem 2.2rem; gap: 6px; }
+  .result-row > span:nth-child(5), .result-head > span:nth-child(5),
+  .result-row > span:nth-child(7), .result-head > span:nth-child(7) { display: none; }
 }

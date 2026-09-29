@@ -215,14 +215,14 @@ async (page) => {
     const pl = getPlayer();
     pl.currentItem = "debris"; useItem(pl, performance.now());
     const s = state.shots[state.shots.length - 1];
-    state.boxHiddenUntil[0] = performance.now() + 3000;
-    const leftShot = s.expiresAt - performance.now();
-    const leftBox = state.boxHiddenUntil[0] - performance.now();
+    state.boxHiddenUntil[0] = raceNow() + 3000;
+    const leftShot = s.expiresAt - raceNow();
+    const leftBox = state.boxHiddenUntil[0] - raceNow();
     togglePause();
     await new Promise((r) => setTimeout(r, 1500));
     togglePause();
-    const nowShot = s.expiresAt - performance.now();
-    const nowBox = state.boxHiddenUntil[0] - performance.now();
+    const nowShot = s.expiresAt - raceNow();
+    const nowBox = state.boxHiddenUntil[0] - raceNow();
     return Math.abs(leftShot - nowShot) < 150 && Math.abs(leftBox - nowBox) < 150;
   });
 
@@ -257,7 +257,8 @@ async (page) => {
   // AI: holds items for a reason, and uses every item in a real race.
   results.aiUsesEveryItem = await run(() => {
     const seen = new Set();
-    window.addEventListener("f1:fx", (e) => { if (e.detail.type === "itemUsed") seen.add(e.detail.item); });
+    const watch = (e) => { if (e.detail.type === "itemUsed") seen.add(e.detail.item); };
+    window.addEventListener("f1:fx", watch);
     const all = CUPS.flatMap((cup, ci) => cup.tracks.map((_, ti) => [ci, ti]));
     for (const [ci, ti] of all.slice(0, 4)) {
       state.selectedCup = ci; state.activeCupIndex = ci; buildCupEntries(); startRace(ti);
@@ -271,6 +272,7 @@ async (page) => {
         updateRace(1 / 60, now);
       }
     }
+    window.removeEventListener("f1:fx", watch);
     return PowerUps.ITEM_ORDER.every((id) => seen.has(id)) && typeof window.__usedItems === "undefined";
   });
 
@@ -465,15 +467,24 @@ async (page) => {
     const lowBefore = { x: low.x, y: low.y };
     handleRacerContacts(raceNow());
     const untouched = low.spinUntil === 0 && Math.hypot(low.x - lowBefore.x, low.y - lowBefore.y) < 0.01;
-    // A box on the upper deck: a car underneath can't take it.
-    const boxD = best.b;
-    const bw = route.toWorld(boxD, 0);
-    state.track.itemBoxes[0] = { x: bw.x, y: bw.y };
-    delete state.track.itemBoxD;
+    // Traffic avoidance: a car on the other deck is not traffic.
+    high.speed = 0;
+    const avoided = applyTrafficAvoidance(low, 1, 0, 0);
+    const noPhantomTraffic = avoided.throttle === 1 && avoided.brake === 0 && avoided.steerInput === 0;
+    // A box on the upper deck: a car underneath can't take it...
+    const bw = route.toWorld(best.b, 0);
+    const saved = state.track.itemBoxes[0];
+    state.track.itemBoxes[0] = { x: bw.x, y: bw.y, d: best.b };
     state.boxHiddenUntil = [];
     low.currentItem = "none"; low.rouletteUntil = 0;
-    updateRacer(low, 1 / 60, raceNow());
-    return untouched && !(state.boxHiddenUntil[0] > raceNow());
+    const lowTook = (() => { const before = state.boxHiddenUntil[0]; updateRacer(low, 1 / 60, raceNow()); return state.boxHiddenUntil[0] !== before; })();
+    // ...and a car on that deck does.
+    put(high, best.b); high.currentItem = "none"; high.rouletteUntil = 0; high.protectedUntil = 0;
+    state.boxHiddenUntil = [];
+    updateRacer(high, 1 / 60, raceNow());
+    const highTook = state.boxHiddenUntil[0] > raceNow();
+    state.track.itemBoxes[0] = saved;
+    return untouched && noPhantomTraffic && !lowTook && highTook;
   });
 
   // An Undercut that loses its target really becomes Debris.
@@ -569,6 +580,55 @@ async (page) => {
     await new Promise((r) => setTimeout(r, 300));
     return Render3D.inspect().hazards === state.hazards.length;
   });
+
+
+  // An Undercut with nobody ahead is Debris from the start: Debris speed, and it drifts the way the car points.
+  await setup();
+  results.undercutWithNoTargetIsDebris = await run(() => {
+    const leader = firstUnfinished();
+    const route = getItemRoute(state.track);
+    const verdicts = [-0.4, 0.4].map((turn) => {
+      leader.heading = route.headingAt(leader.trackDistance) + turn;
+      leader.currentItem = "undercut"; useItem(leader, raceNow());
+      const s = state.shots[state.shots.length - 1];
+      const debrisSpeed = leader.physics.maxSpeed * PowerUps.SHOT_SPEEDS.debris;
+      return s.type === "debris" && Math.sign(s.latVel) === Math.sign(turn) && s.speed <= debrisSpeed + 1e-6;
+    });
+    return verdicts.every(Boolean);
+  });
+
+  // A tap on Space whose key-up comes during a pause drops the slick on resume.
+  await setup();
+  results.oilTapReleasedInPause = await run(() => {
+    const pl = getPlayer(); pl.currentItem = "oilSlick";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    togglePause();
+    const before = state.hazards.length;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " " }));
+    const held = pl.currentItem === "oilSlick" && state.hazards.length === before;
+    togglePause();
+    return held && pl.currentItem === "none" && state.hazards.length === before + 1 && !pl.trailingOil;
+  });
+
+  // Paused means still: no screen shake on the pause screen.
+  await setup();
+  results.noShakeWhilePaused = await run(() => {
+    addScreenShake(10, 420);
+    togglePause();
+    const shake = getScreenShake();
+    togglePause();
+    return shake.x === 0 && shake.y === 0;
+  });
+
+  // If the 3D renderer ever throws mid-race, the game carries on in 2D rather than freezing.
+  await setup();
+  results.rendererCrashFallsBack = await (async () => {
+    const before = errors.length;
+    await p.evaluate(() => { window.Render3D.render = () => { throw new Error("test: renderer crashed"); }; });
+    await p.waitForTimeout(600);
+    const out = await p.evaluate(() => ({ failed: Render3D.failed, fallback: state.fallbackFrames, running: state.phase === "race" }));
+    return out.failed && out.fallback > 0 && out.running && errors.length === before;
+  })();
 
   await context.close();
   return { results, errors };

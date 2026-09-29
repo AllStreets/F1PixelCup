@@ -140,6 +140,7 @@ let template = null;
 const materialCache = new Map();
 
 export function loadCar(onReady, onError) {
+  const progress = () => { if (window.Render3DBoot) window.Render3DBoot.progressAt = performance.now(); };
   new GLTFLoader().load("./assets/f1_car.glb", (gltf) => {
     template = gltf.scene;
     template.traverse((node) => {
@@ -149,7 +150,7 @@ export function loadCar(onReady, onError) {
       }
     });
     onReady();
-  }, undefined, onError);
+  }, progress, onError);
 }
 
 function materialsFor(kart, driver) {

@@ -41,15 +41,42 @@ const ui = {
 };
 
 // Which view draws the world. "loading" until the 3D renderer is ready (only a
-// loading state shows, never the old 2D car), "2d" only if 3D reports that it
-// failed or never answers at all.
+// loading state shows, never the old 2D car). "2d" only when 3D reports that
+// it failed, when its boot script never ran, or when its download has stalled:
+// a slow connection keeps the loading state for as long as files keep arriving.
 const BOOT_AT = performance.now();
-const VIEW_TIMEOUT_MS = 10000;
+const BOOT_TIMEOUT_MS = 10000;
+const STALL_TIMEOUT_MS = 20000;
+const downloadWatch = { files: 0, at: BOOT_AT };
 function worldView() {
   const renderer = window.Render3D;
   if (renderer && renderer.ready) return "3d";
-  if ((renderer && renderer.failed) || performance.now() - BOOT_AT > VIEW_TIMEOUT_MS) return "2d";
-  return "loading";
+  if (renderer && renderer.failed) return "2d";
+  const now = performance.now();
+  const boot = window.Render3DBoot;
+  if (!boot) return now - BOOT_AT > BOOT_TIMEOUT_MS ? "2d" : "loading";
+  const files = performance.getEntriesByType("resource").length;
+  if (files !== downloadWatch.files) {
+    downloadWatch.files = files;
+    downloadWatch.at = now;
+  }
+  const lastProgress = Math.max(downloadWatch.at, boot.startedAt || 0, boot.progressAt || 0);
+  return now - lastProgress > STALL_TIMEOUT_MS ? "2d" : "loading";
+}
+
+// A crash inside the 3D renderer must not freeze the game: report it once,
+// mark 3D as failed, and the race carries on in the 2D view.
+function render3dSafely(draw) {
+  try {
+    return { ok: true, value: draw() };
+  } catch (error) {
+    console.warn("3D renderer crashed; switching to the 2D view.", error);
+    if (window.Render3D) {
+      window.Render3D.ready = false;
+      window.Render3D.failed = true;
+    }
+    return { ok: false, value: null };
+  }
 }
 
 function showViewLoading(where) {
@@ -227,6 +254,10 @@ const state = {
   boxHiddenUntil: [],
   fxFlashes: [],
   simOffset: 0,
+  lastTick: null,
+  lastRaceWall: null,
+  lastRaceAdvance: 0,
+  finishQueue: [],
   fallbackFrames: 0,
   particles: [],
   countdownStart: 0,
@@ -451,6 +482,13 @@ function getActiveSurfaceInfo(racer, track, now) {
   return racer.shortcutActive ? shortcutSurface : mainSurface;
 }
 
+// Close on the map but far apart round the lap means the other level of
+// Suzuka's crossover: those cars never interact.
+const SAME_STRETCH = 80;
+function onSameStretch(a, b, within = SAME_STRETCH) {
+  return Math.abs(PowerUps.wrapDelta(a.trackDistance || 0, b.d ?? b.trackDistance ?? 0, state.track.totalLength)) <= within;
+}
+
 function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
   const cos = Math.cos(racer.heading);
   const sin = Math.sin(racer.heading);
@@ -459,7 +497,7 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
   let steerAdjust = 0;
 
   state.racers.forEach((other) => {
-    if (other.id === racer.id || other.finished) return;
+    if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
@@ -767,6 +805,10 @@ function startRace(index) {
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
+  state.lastTick = null;
+  state.lastRaceWall = null;
+  state.lastRaceAdvance = 0;
+  state.finishQueue = [];
   state.particles = [];
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
@@ -855,7 +897,7 @@ function getRelativeTrackDistance(racer, track) {
 
 function getRaceProgress(racer) {
   if (racer.finished) {
-    return 100000 - racer.finishPosition;
+    return 100000 - (racer.finishPosition || 0) - (racer.finishPosition ? 0 : racer.finishTime / 1e9);
   }
   return racer.lap * state.track.totalLength + getRelativeTrackDistance(racer, state.track);
 }
@@ -868,17 +910,25 @@ function getRaceProgress(racer) {
 // The clock the picture is drawn at: frozen at the moment of pausing, so boxes,
 // glows, flaps and flashes hold still on the pause screen instead of running
 // out behind it (their deadlines are shifted when the race resumes).
+// The clock the picture is drawn at. In a race it is the race clock at the
+// last physics step; otherwise wall time, frozen while paused (the countdown).
 function renderClock() {
-  return raceNow();
+  if (state.phase === "race" && state.lastTick !== null) return state.lastTick;
+  return state.paused && state.pausedAt ? state.pausedAt : performance.now();
 }
 
-// The race clock: wall time, frozen while paused, plus how far the
-// fast-forward after the chequered flag has run the field ahead of it. Every
-// deadline in the race (spins, boosts, shots, oil, the safety car, lap and
-// finish times) is on this clock, so fast-forwarded cars are timed truly.
-function raceNow(wall = performance.now()) {
-  const base = state.paused && state.pausedAt ? state.pausedAt : wall;
-  return base + (state.simOffset || 0);
+// The race clock is simulated time. It advances by exactly the time the
+// physics steps cover -- no more when a slow machine drops frames (dt is
+// capped), seven steps per frame when the field is fast-forwarded after the
+// flag, and not at all while paused or while the tab is hidden. Every deadline
+// in the race (spins, boosts, shots, oil, the safety car, the watchdog, lap
+// and finish times) is on this clock, so every time shown is a real one.
+// Between frames (key presses) it reads as the last step; tools that drive
+// the race with their own clock pass their wall time in.
+function raceNow(wall) {
+  if (wall !== undefined) return wall + (state.simOffset || 0);
+  if (state.phase === "race" && state.lastTick !== null) return state.lastTick;
+  return performance.now() + (state.simOffset || 0);
 }
 
 function raceSeconds(now) {
@@ -1046,12 +1096,16 @@ function carAhead(racer) {
   return best;
 }
 
-function fireShot(racer, type, now) {
+function fireShot(racer, requested, now) {
+  let type = requested;
   const T = PowerUps.TIMINGS;
   const route = getItemRoute(state.track);
   const d = racer.trackDistance || 0;
-  const speed = racer.physics.maxSpeed * PowerUps.SHOT_SPEEDS[type];
+  let speed;
   const target = type === "undercut" ? carAhead(racer) : type === "stewardPenalty" ? firstUnfinished() : null;
+  // An Undercut with no car ahead is Debris from the start, fired the way the car points.
+  if (type === "undercut" && !target) type = "debris";
+  speed = racer.physics.maxSpeed * PowerUps.SHOT_SPEEDS[type];
   // Debris flies the way the car points; across the track that is a sideways
   // drift that bounces off the barriers.
   const rel = normalizeAngle(racer.heading - route.headingAt(d));
@@ -1069,7 +1123,6 @@ function fireShot(racer, type, now) {
     expiresAt: now + T.lifeMs[type],
     age: 0,
   });
-  if (type === "undercut" && !target) becomeDebris(state.shots[state.shots.length - 1], now);
   if (type === "stewardPenalty" && target) addFeed(`Steward Penalty on ${target.driver.code}.`);
 }
 
@@ -1413,6 +1466,7 @@ function updateRacer(racer, dt, now) {
   const surfaceBlend = racer.isPlayer && racer.speed < -8 ? 0.04 : 0.22;
   alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
   updateLapProgress(racer, now, dt);
+  recordTimingPoint(racer, now);
   // Side offset from the centreline, for shots and oil (track coordinates).
   const along = getItemRoute(state.track).sample(racer.trackDistance || 0);
   racer.lat = (racer.x - along.x) * along.nx + (racer.y - along.y) * along.ny;
@@ -1446,8 +1500,7 @@ function updateRacer(racer, dt, now) {
   // slot is empty), then it is gone for three seconds.
   state.track.itemBoxes.forEach((box, index) => {
     if ((state.boxHiddenUntil[index] || 0) > now) return;
-    const sameLevel = Math.abs(PowerUps.wrapDelta(racer.trackDistance || 0, box.d, state.track.totalLength)) < 40;
-    if (sameLevel && distance(racer, box) < 18) {
+    if (onSameStretch(racer, box, 40) && distance(racer, box) < 18) {
       state.boxHiddenUntil[index] = now + PowerUps.TIMINGS.boxHiddenMs;
       startRoulette(racer, now);
     }
@@ -1466,10 +1519,21 @@ function finishRacer(racer, now) {
   if (racer.finished) return;
   racer.finished = true;
   if (racer.isPlayer) sfx.finish();
-  const finishedCount = state.racers.filter((entry) => entry.finished).length;
-  racer.finishPosition = finishedCount;
   racer.finishTime = now - state.raceStart;
-  addFeed(`${racer.driver.name} finished ${formatOrdinal(finishedCount)}.`);
+  // Placed once the step is over, so cars crossing in the same step are
+  // ordered by the moment each one actually crossed the line.
+  racer.finishPosition = 0;
+  state.finishQueue.push(racer);
+}
+
+function settleFinishers() {
+  if (!state.finishQueue.length) return;
+  const placed = state.racers.filter((racer) => racer.finished && racer.finishPosition > 0).length;
+  state.finishQueue.sort((a, b) => a.finishTime - b.finishTime).forEach((racer, index) => {
+    racer.finishPosition = placed + index + 1;
+    addFeed(`${racer.driver.name} finished ${formatOrdinal(racer.finishPosition)}.`);
+  });
+  state.finishQueue = [];
 }
 
 function updateShots(dt, now) {
@@ -1568,9 +1632,7 @@ function handleRacerContacts(now) {
       const a = state.racers[i];
       const b = state.racers[j];
       if (a.finished || b.finished) continue;
-      // Close on the map but far apart round the lap: different levels of
-      // Suzuka's crossover. They never touch.
-      if (Math.abs(PowerUps.wrapDelta(a.trackDistance || 0, b.trackDistance || 0, state.track.totalLength)) > 80) continue;
+      if (!onSameStretch(a, b)) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 0.001;
@@ -1653,13 +1715,21 @@ function updateRace(dt, now) {
   // everything on track -- shots, oil, the safety car, contacts -- steps with
   // it, each sub-step on its own tick of the race clock. Cars obey the same
   // physics, corners and barriers; they just cover the distance faster.
+  // Carry the clock on from the last step of the previous frame: whatever
+  // wall time passed (a hitch, a pause, a hidden tab), the race only moves on
+  // by the simulated steps.
+  if (state.lastRaceWall !== null) {
+    state.simOffset += state.lastRaceAdvance - (now - state.lastRaceWall);
+  }
   const steps = state.flagOutAt ? FLAG_FAST_FORWARD : 1;
-  for (let step = 0; step < steps; step += 1) {
-    const tick = now + (state.simOffset || 0) + step * dt * 1000;
+  const step = dt * 1000;
+  for (let index = 0; index < steps; index += 1) {
+    const tick = now + state.simOffset + index * step;
     state.racers.forEach((racer) => {
-      if (racer.finished || (step > 0 && racer.isPlayer)) return;
+      if (racer.finished || (index > 0 && racer.isPlayer)) return;
       updateRacer(racer, dt, tick);
     });
+    settleFinishers();
     updateShots(dt, tick);
     updateSafetyCar(dt, tick);
     updateHazards(tick);
@@ -1667,8 +1737,10 @@ function updateRace(dt, now) {
     handleRacerContacts(tick);
     handleRacerContacts(tick);
   }
-  state.simOffset = (state.simOffset || 0) + (steps - 1) * dt * 1000;
-  const raceTime = now + state.simOffset;
+  state.lastTick = now + state.simOffset + (steps - 1) * step;
+  state.lastRaceWall = now;
+  state.lastRaceAdvance = steps * step;
+  const raceTime = state.lastTick;
   updateParticles(dt);
   updateStandingsUI();
   updatePlayerUI();
@@ -1690,18 +1762,47 @@ function updateRace(dt, now) {
   }
 }
 
-// Typical race speed, for turning a distance lead into seconds on the tower.
+// Timing points: each lap is split into this many, and every car's race-clock
+// time at each one is kept, as real timing loops do. The gap between two cars
+// is the difference in their times at the last point the one behind passed.
+const TIMING_POINTS_PER_LAP = 24;
+// Before any timing point is shared (the first moments), a distance lead is
+// turned into seconds at a typical race speed.
 const TOWER_REFERENCE_SPEED = 180;
+
+function recordTimingPoint(racer, now) {
+  const progress = getRaceProgress(racer);
+  if (racer.finished || progress < 0) return;
+  const index = Math.floor(progress / (state.track.totalLength / TIMING_POINTS_PER_LAP));
+  if (!racer.splits) racer.splits = [];
+  while ((racer.lastSplit ?? -1) < index) {
+    racer.lastSplit = (racer.lastSplit ?? -1) + 1;
+    racer.splits[racer.lastSplit] = now;
+  }
+}
+
+// How far behind `ahead` the car `behind` is, in milliseconds; null if they
+// share no timing point yet.
+function timeGap(behind, ahead) {
+  if (behind.finished && ahead.finished) return behind.finishTime - ahead.finishTime;
+  const index = behind.lastSplit ?? -1;
+  if (index < 0 || !ahead.splits || ahead.splits[index] === undefined) return null;
+  return behind.splits[index] - ahead.splits[index];
+}
+
+function gapSeconds(behind, ahead) {
+  const gap = timeGap(behind, ahead);
+  if (gap !== null) return gap / 1000;
+  return (getRaceProgress(ahead) - getRaceProgress(behind)) / TOWER_REFERENCE_SPEED;
+}
 
 function getRaceStandings() {
   const sorted = getSortedRacers();
   const leader = sorted[0];
   return sorted.map((racer, index) => {
     let gap;
-    if (racer.finished) gap = "FIN";
-    else if (index === 0) gap = "LEADER";
-    else if (leader.finished) gap = "RUNNING";
-    else gap = `+${formatGap((getRaceProgress(leader) - getRaceProgress(racer)) / TOWER_REFERENCE_SPEED)}`;
+    if (index === 0) gap = leader.finished ? "FIN" : "LEADER";
+    else gap = `+${formatGap(gapSeconds(racer, leader))}`;
     return { position: index + 1, code: racer.driver.code, teamColor: racer.kart.body, isPlayer: racer.id === state.playerId, gap };
   });
 }
@@ -1922,6 +2023,10 @@ function resetToGarage() {
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
+  state.lastTick = null;
+  state.lastRaceWall = null;
+  state.lastRaceAdvance = 0;
+  state.finishQueue = [];
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
@@ -2646,7 +2751,7 @@ function drawDriverView(track) {
   if (mode === "3d") {
     const now = renderClock();
     ctx.clearRect(0, 0, view.width, view.height);
-    const surface = window.Render3D.render({
+    const surface = render3dSafely(() => window.Render3D.render({
       track,
       player,
       racers: state.racers,
@@ -2657,15 +2762,19 @@ function drawDriverView(track) {
       powerUps: powerUpFrame(now),
       particles: state.particles,
       now,
-    });
-    if (surface && surface.onKerb && state.phase === "race" && !state.paused && Math.abs(player.speed) > 40) sfx.kerb();
-    drawSpeedLines(player);
-    drawDriverItemBadge(player);
-    drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
-    drawDriverHud(track, player);
-    if (state.phase === "countdown") drawStartLights(now);
-    drawLightsOutFlash(now);
-    return;
+    }));
+    if (surface.ok) {
+      const onKerb = surface.value && surface.value.onKerb;
+      if (onKerb && state.phase === "race" && !state.paused && Math.abs(player.speed) > 40) sfx.kerb();
+      drawSpeedLines(player);
+      drawDriverItemBadge(player);
+      drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
+      drawDriverHud(track, player);
+      if (state.phase === "countdown") drawStartLights(now);
+      drawLightsOutFlash(now);
+      return;
+    }
+    // The 3D renderer failed on this frame: carry on in 2D from here.
   }
 
   state.fallbackFrames += 1;
@@ -2714,8 +2823,8 @@ function drawDriverView(track) {
   drawDriverItemBadge(player);
   drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
   drawDriverHud(track, player);
-  if (state.phase === "countdown") drawStartLights(performance.now());
-  drawLightsOutFlash(performance.now());
+  if (state.phase === "countdown") drawStartLights(renderClock());
+  drawLightsOutFlash(renderClock());
 }
 
 // Subtle speed streaks at the screen edges once you are really moving.
@@ -3052,6 +3161,7 @@ function addScreenShake(magnitude, durationMs) {
 }
 
 function getScreenShake() {
+  if (state.paused) return { x: 0, y: 0 };
   const now = performance.now();
   if (now > (state.shakeUntil || 0)) return { x: 0, y: 0 };
   const remaining = ((state.shakeUntil - now) / 220);
@@ -3364,7 +3474,7 @@ function hudPanel(x, y, w, h, accent) {
 
 function formatLapTime(ms) {
   if (!ms || ms <= 0) return "-:--.---";
-  const total = ms / 1000;
+  const total = Math.round(ms) / 1000;
   const minutes = Math.floor(total / 60);
   const seconds = total - minutes * 60;
   return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
@@ -3482,7 +3592,6 @@ function drawDriverHud(track, player) {
   // ---- Gap to the car ahead / behind ----
   const ahead = sorted[place - 2];
   const behind = sorted[place];
-  const referenceSpeed = Math.max(Math.abs(player.speed), 45);
   hudPanel(px + 178, view.height - 116, 150, 96);
   ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
   ctx.font = "bold 12px Trebuchet MS";
@@ -3498,8 +3607,9 @@ function drawDriverHud(track, player) {
       ctx.fillText("--.-", px + 232, y);
       return;
     }
-    const gap = Math.abs(getRaceProgress(other) - getRaceProgress(player)) / referenceSpeed;
-    ctx.fillText(`${formatGap(gap)}s`, px + 232, y);
+    // Real intervals from the timing points, like the tower.
+    const gap = other === ahead ? gapSeconds(player, ahead) : gapSeconds(behind, player);
+    ctx.fillText(`${formatGap(Math.max(0, gap))}s`, px + 232, y);
   };
   gapRow("AHD", ahead, view.height - 64, "#ff8f6b");
   gapRow("BHD", behind, view.height - 34, "#75d5ff");
@@ -3830,36 +3940,10 @@ function drawKart(targetCtx, x, y, heading, kart, driver, scale = 1) {
   targetCtx.restore();
 }
 
-// Pausing shifts every deadline in flight. Without this, a paused boost, spin,
-// item cooldown or lap timer would all expire the instant the game resumes.
-const RACER_TIME_FIELDS = ["rouletteUntil", "itemCooldownUntil", "boostUntil", "drsUntil", "protectedUntil", "formationUntil",
-  "spinUntil", "spinImmuneUntil", "lapStartAt", "itemReadyAt", "itemHeldSince", "trailSince", "oilHoldStart"];
-
+// Pausing. The race clock simply doesn't advance while paused, so race
+// deadlines stay put; only the few things timed on the wall clock move on.
 function shiftRaceClocks(delta) {
-  state.racers.forEach((racer) => {
-    RACER_TIME_FIELDS.forEach((field) => {
-      if (racer[field]) racer[field] += delta;
-    });
-  });
-  state.shots.forEach((shot) => {
-    shot.expiresAt += delta;
-    shot.armedAt += delta;
-  });
-  state.hazards.forEach((hazard) => {
-    hazard.expiresAt += delta;
-    hazard.armedAt += delta;
-  });
-  state.fxFlashes.forEach((flash) => {
-    flash.at += delta;
-    flash.until += delta;
-  });
-  state.boxHiddenUntil = state.boxHiddenUntil.map((t) => (t ? t + delta : t));
-  if (state.safetyCar) {
-    state.safetyCar.until += delta;
-    if (state.safetyCar.leaveUntil) state.safetyCar.leaveUntil += delta;
-  }
-  ["raceStart", "flagOutAt", "resultTimeoutAt", "countdownStart",
-   "hudPlaceFlashUntil", "finalLapAt", "shakeUntil"].forEach((field) => {
+  ["countdownStart", "flagOutAt", "resultTimeoutAt", "shakeUntil"].forEach((field) => {
     if (state[field]) state[field] += delta;
   });
 }
@@ -3955,7 +4039,10 @@ function drawGarageScene() {
   showViewLoading(mode === "loading" ? "garage" : null);
   if (mode === "loading") return;
   // In 3D the car turns on the showroom floor behind this canvas.
-  if (mode === "3d" && window.Render3D.renderGarage(team, driver, performance.now())) return;
+  if (mode === "3d") {
+    const shown = render3dSafely(() => window.Render3D.renderGarage(team, driver, performance.now()));
+    if (shown.ok && shown.value) return;
+  }
   // Only when 3D is unavailable: the 2D car where the showroom car would be.
   state.fallbackFrames += 1;
   drawKart(ctx, view.width * 0.68, view.height * 0.58, 0, team, driver, 5.5);

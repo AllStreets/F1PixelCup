@@ -1,6 +1,7 @@
-// Browser check: one race clock. After the player finishes, the rest of the
-// field is fast-forwarded -- and shots, oil and the safety car keep pace with
-// it -- and every driver's total race time is real and shown on the results.
+// Browser check: one race clock. It advances exactly as far as the physics
+// does (fast-forward after the flag, slow machines, pauses), so every lap and
+// race time is real; finishing order agrees with finish times; results and
+// the timing tower show true times; narrow windows still read.
 // Run with the Playwright MCP tool browser_run_code_unsafe,
 // filename: tools/checks/race-clock-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].
@@ -33,13 +34,21 @@ async (page) => {
     pl.finished = true; pl.finishPosition = 1;
     state.flagOutAt = now;
     const shooter = getSortedRacers().find((r) => !r.finished);
-    shooter.currentItem = "debris"; useItem(shooter, raceNow());
+    shooter.currentItem = "debris"; useItem(shooter, raceNow(now));
     const s = state.shots[state.shots.length - 1];
     s.latVel = 0;
+    // A clear stretch of road: nobody for it to hit during the seven steps.
+    s.d = (shooter.trackDistance + state.track.totalLength / 2) % state.track.totalLength;
+    shooter.currentItem = "safetyCar"; useItem(shooter, raceNow(now));
+    const sc = state.safetyCar;
+    sc.d = (s.d + 400) % state.track.totalLength;
     const d0 = s.d;
+    const sc0 = sc.d;
     updateRace(1 / 60, now + 16.7);
-    const moved = PowerUps.wrapDelta(s.d, d0, state.track.totalLength);
-    return Math.abs(moved - s.speed * (7 / 60)) < 1;
+    const L = state.track.totalLength;
+    const moved = PowerUps.wrapDelta(s.d, d0, L);
+    const scMoved = PowerUps.wrapDelta(sc.d, sc0, L);
+    return Math.abs(moved - s.speed * (7 / 60)) < 1 && Math.abs(scMoved - sc.pace * (7 / 60)) < 1;
   });
 
   // A whole race, the player retiring early so most of the field is
@@ -90,12 +99,102 @@ async (page) => {
   // Cars only placed by the safety valve are marked as estimated, never passed off as timed.
   results.estimatedTimesMarked = await p.evaluate(() => {
     Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(0);
+    state.racers.forEach((r) => { r.isPlayer = false; });
     state.phase = "race";
-    const now = performance.now();
-    state.raceStart = now - 60000;
-    completeRemainingFinishers(raceNow());
-    return state.racers.every((r) => r.finished && r.timeEstimated === true && r.finishTime > 0);
+    let now = 100000;
+    state.raceStart = now;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    // Race until half the field is home, then pull the safety valve.
+    for (let t = 0; t < 900 && state.racers.filter((r) => r.finished).length < 10; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
+    const timed = state.racers.filter((r) => r.finished);
+    const slowestTimed = Math.max(...timed.map((r) => r.finishTime));
+    const elapsed = raceNow(now) - state.raceStart;
+    completeRemainingFinishers(raceNow(now));
+    const placed = state.racers.filter((r) => r.timeEstimated).sort((a, b) => a.finishPosition - b.finishPosition);
+    return timed.every((r) => !r.timeEstimated) && placed.length === 10
+      && placed.every((r, i) => r.finishTime >= elapsed && r.finishTime > slowestTimed && (i === 0 || r.finishTime > placed[i - 1].finishTime));
   });
+
+  // A photo finish: two cars cross in the same step, in the opposite order to
+  // the order the game visits them. Places follow the times.
+  results.photoFinishOrder = await p.evaluate(() => {
+    Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(0);
+    state.phase = "race";
+    const [first, second] = state.racers;
+    state.raceStart = 1000;
+    finishRacer(first, 181000.9);
+    finishRacer(second, 181000.2);
+    settleFinishers();
+    return second.finishPosition === 1 && first.finishPosition === 2;
+  });
+
+  // A slow machine: 20 frames a second. Physics steps are capped, and the race
+  // clock follows the physics, so times match the same race run smoothly.
+  const raceWinner = (frameMs) => p.evaluate((frameMs) => {
+    Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(0);
+    state.racers.forEach((r) => { r.isPlayer = false; });
+    state.phase = "race";
+    let now = 100000;
+    state.raceStart = now;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    const dt = Math.min(frameMs / 1000, 0.033);
+    let guard = 0;
+    while (!state.resultsQueued && guard < 200000) { now += frameMs; updateRace(dt, now); guard += 1; }
+    const winner = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition)[0];
+    return { time: winner.finishTime, best: Math.min(...state.racers.map((r) => r.bestLapTime || Infinity)) };
+  }, frameMs);
+  const smooth = await raceWinner(1000 / 60);
+  const choppy = await raceWinner(50);
+  results.slowMachineTimesReal = Math.abs(choppy.time / smooth.time - 1) < 0.05 && Math.abs(choppy.best / smooth.best - 1) < 0.05;
+
+  // The timing tower shows real time gaps: finished cars by finish time,
+  // cars still running by the time they passed the same timing point.
+  results.towerGapsAreTimes = await p.evaluate(() => {
+    Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(0);
+    state.racers.forEach((r) => { r.isPlayer = false; });
+    state.phase = "race";
+    let now = 100000;
+    state.raceStart = now;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    for (let i = 0; i < 60 * 70; i += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+    const standings = getRaceStandings();
+    const sorted = getSortedRacers();
+    const leader = sorted[0];
+    const okRunning = sorted.slice(1, 8).every((r, i) => {
+      const expected = timeGap(r, leader);
+      return expected !== null && standings[i + 1].gap === `+${formatGap(expected / 1000)}`;
+    });
+    return okRunning && standings[0].gap === "LEADER";
+  });
+
+  // Lap times never show 60 seconds: they round to the millisecond first.
+  results.lapTimesRound = await p.evaluate(() => formatLapTime(59999.9) === "1:00.000" && formatRaceTime(119999.6) === "2:00.000");
+
+  // Narrow windows: the results still show every driver's name, on one screen width.
+  results.resultsNarrow = await (async () => {
+    await p.evaluate(() => {
+      Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(0);
+      state.racers.forEach((r) => { r.isPlayer = false; });
+      state.phase = "race";
+      let now = 100000; state.raceStart = now; state.racers.forEach((r) => { r.lapStartAt = now; });
+      for (let t = 0; t < 900 && !state.resultsQueued; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
+    });
+    const verdicts = [];
+    for (const width of [760, 520, 390]) {
+      await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height: 800 } });
+      await p.waitForTimeout(400);
+      verdicts.push(await p.evaluate(() => {
+        const rows = [...document.querySelectorAll("#results-table .result-row")];
+        const names = rows.map((r) => r.children[2].getBoundingClientRect().width);
+        const table = document.getElementById("results-table");
+        const cells = rows.flatMap((r) => [...r.children].filter((c) => getComputedStyle(c).display !== "none"));
+        const noSpill = cells.every((c) => c.scrollWidth <= c.clientWidth + 1 || c.tagName === "I");
+        return names.every((w) => w >= 70) && table.scrollWidth <= table.clientWidth + 1 && noSpill;
+      }));
+    }
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
+    return verdicts.every(Boolean);
+  })();
 
   await context.close();
   return { results, errors };

@@ -99,8 +99,58 @@ async (page) => {
     await p.evaluate(() => Game.startCup());
     await p.waitForTimeout(2000);
     const held = await p.evaluate(() => ({ phase: state.phase, raceStart: state.raceStart, loader: !document.getElementById("view-loading").hidden }));
-    results.lightsWaitForTheCar = held.phase === "countdown" && !held.raceStart && held.loader;
+    // ...and runs once the car has arrived.
+    await p.waitForTimeout(6500);
+    const went = await p.evaluate(() => ({ phase: state.phase, raceStart: state.raceStart }));
+    results.lightsWaitForTheCar = held.phase === "countdown" && !held.raceStart && held.loader && went.phase === "race" && went.raceStart > 0;
     await p.unrouteAll({ behavior: "ignoreErrors" });
+    await context.close();
+  }
+
+
+  // No WebGL at all: straight to the 2D view, no loader, no errors.
+  {
+    const context = await page.context().browser().newContext({ viewport: null });
+    const p = await context.newPage();
+    p.on("pageerror", (e) => errors.push(String(e)));
+    await p.addInitScript(() => {
+      const real = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (kind, ...rest) {
+        return /webgl/i.test(kind) ? null : real.call(this, kind, ...rest);
+      };
+    });
+    await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
+    await p.waitForTimeout(1500);
+    const out = await p.evaluate(() => ({ failed: Boolean(window.Render3D && window.Render3D.failed), fallback: state.fallbackFrames, loader: !document.getElementById("view-loading").hidden }));
+    results.noWebGLFallsBack = out.failed && out.fallback > 0 && !out.loader;
+    await context.close();
+  }
+
+  // A slow connection: the car takes longer than the safety timeout to
+  // download, but it is arriving, so the loader stays up (no stand-in car) and
+  // the 3D car appears when it lands.
+  {
+    const context = await page.context().browser().newContext({ viewport: null });
+    const p = await context.newPage();
+    p.on("pageerror", (e) => errors.push(String(e)));
+    const cdp = await context.newCDPSession(p);
+    await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
+    await p.waitForTimeout(100);
+    await cdp.send("Network.enable");
+    await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+    await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 40, downloadThroughput: 60 * 1024, uploadThroughput: 64 * 1024 });
+    await p.reload();
+    let everFallback = false;
+    let ready = false;
+    for (let i = 0; i < 100 && !ready; i += 1) {
+      await p.waitForTimeout(500);
+      const s = await p.evaluate(() => ({ ready: Boolean(window.Render3D && window.Render3D.ready), fallback: typeof state === "undefined" ? 0 : state.fallbackFrames }));
+      everFallback = everFallback || s.fallback > 0;
+      ready = s.ready;
+    }
+    // It took longer than the 10 s boot timeout, so a fixed timer would have shown the stand-in car.
+    const elapsedPastTimeout = await p.evaluate(() => performance.now() > 10000);
+    results.slowDownloadKeepsLoader = ready && !everFallback && elapsedPastTimeout;
     await context.close();
   }
 

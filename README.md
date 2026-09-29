@@ -13,7 +13,8 @@ An F1 racing game in the browser — Three.js for the world, HTML5 Canvas for th
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
 - **Power-ups: Mario Kart chaos, F1 rules** — eight items, each an F1 idea with a Mario Kart counterpart (see *Power-ups* below)
 - **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1, plus the bonus point for fastest lap (top ten finishers only)
-- **Real race times** — every driver's total race time and gap to the winner, timed to the millisecond at the line, including cars fast-forwarded home after you finish
+- **Real race times** — every driver's total race time and gap to the winner, timed to the millisecond at the line, including cars fast-forwarded home after you finish. The race clock is simulated time: it advances exactly as far as the physics does, so times stay true on a slow machine and stop while paused
+- **Real timing gaps** — the tower and the interval panel measure gaps at 24 timing points a lap, as real timing loops do, not from distance
 - **Pixel-art F1 cars** — team livery colours, front wing, rear wing, halo, helmet
 - **Driver-locked constructor cars** — pick a driver, race their team car
 - **Live championship standings** updated after each race
