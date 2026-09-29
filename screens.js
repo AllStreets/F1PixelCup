@@ -99,11 +99,11 @@
         </div>
       </section>
 
-      <section id="career-screen" class="screen overlay hidden" aria-label="Career">
+      <section id="career-screen" class="screen overlay hidden" role="dialog" aria-modal="true" aria-label="Career">
         <div id="career-card" class="overlay-card wide"></div>
       </section>
 
-      <section id="settings-screen" class="screen overlay hidden" aria-label="Settings">
+      <section id="settings-screen" class="screen overlay hidden" role="dialog" aria-modal="true" aria-label="Settings">
         <div class="overlay-card narrow">
           <p class="kicker">Pit lane</p>
           <h2 class="it-title overlay-title">Settings</h2>
@@ -113,7 +113,7 @@
         </div>
       </section>
 
-      <section id="phone-note" class="screen overlay hidden" aria-label="Best on a computer">
+      <section id="phone-note" class="screen overlay hidden" role="dialog" aria-modal="true" aria-label="Best on a computer">
         <div class="overlay-card narrow">
           <p class="kicker">Heads up</p>
           <h2 class="it-title overlay-title">Best played on a computer with a keyboard</h2>
@@ -161,10 +161,23 @@
   function hideMain() { ["pitlane", "tower", "ticker", "results-screen", "qualifying-screen", "podium-screen"].forEach(hide); }
 
   // ---- Pit lane ----
+  // Keyboard users always have somewhere to be: when focus is stranded on a
+  // screen that has just been hidden (or, with force, is nowhere at all), the
+  // pit lane's Start button takes it. A fresh page load is left alone.
+  function focusPitLane(force = false) {
+    const f = document.activeElement;
+    const stranded = f && f !== document.body && (!f.isConnected || f.getClientRects().length === 0);
+    const nowhere = !f || f === document.body;
+    if ((stranded || (force && nowhere)) && !$("pitlane").classList.contains("hidden") && !openOverlay) {
+      $("start-cup").focus({ preventScroll: true });
+    }
+  }
+
   function showPitLane() {
     hideMain();
     show("pitlane");
     refreshPitLane();
+    focusPitLane();
   }
 
   // The pit lane is redrawn on every pick; keep focus on the control that was
@@ -179,9 +192,13 @@
 
   function restoreFocus(was) {
     if (!was || $("pitlane").contains(document.activeElement)) return;
-    const el = was.key
-      ? [...$("pitlane").querySelectorAll(`[data-${was.key}]`)].find((n) => n.dataset[was.key] === was.value)
-      : (was.id && $(was.id));
+    // Driver tiles use roving focus: it follows the selection, so the arrow
+    // keys move it and Enter starts the cup with the driver on screen.
+    const el = was.key === "driver"
+      ? document.querySelector("#driver-strip .driver-tile.is-on")
+      : was.key
+        ? [...$("pitlane").querySelectorAll(`[data-${was.key}]`)].find((n) => n.dataset[was.key] === was.value)
+        : (was.id && $(was.id));
     if (el) el.focus({ preventScroll: true });
   }
 
@@ -414,7 +431,7 @@
           return `<tr class="${current ? "is-current" : ""}"${current ? ' aria-current="true"' : ""}><td>${label}</td><td>${esc(d.tier)}</td><td>${num(d.rating)}</td>
             <td>${num(d.careerPoints).toLocaleString()}</td><td>${num(d.races)}</td><td>${num(d.wins)}</td></tr>`;
         }).join("")}</tbody></table>` : `<p class="muted">No careers yet — pick any driver and race to start theirs.</p>`}
-      <div class="overlay-actions"><button class="ghost-btn" data-action="close" type="button">Back (Esc)</button></div>`;
+      <div class="overlay-actions"><button class="ghost-btn" data-action="close" data-autofocus type="button">Back (Esc)</button></div>`;
   }
 
   // ---- Settings, phone note, overlays ----
@@ -455,9 +472,14 @@
     OVERLAYS.forEach(hide);
     show(id);
     openOverlay = id;
-    // Focus moves into the overlay: its main action, else its first control.
+    // Behind it, the pit lane is out of reach: no focus, no clicks, no reading.
+    $("pitlane").inert = true;
+    // Focus moves into the overlay: the control it names (the career screen's
+    // Back, never a row that would switch driver), else its main action, else
+    // its first control.
     const inside = focusables(id);
-    const main = inside.find((el) => el.classList.contains("go-btn")) || inside[0];
+    const main = inside.find((el) => el.hasAttribute("data-autofocus"))
+      || inside.find((el) => el.classList.contains("go-btn")) || inside[0];
     if (main) main.focus({ preventScroll: true });
   }
 
@@ -466,6 +488,7 @@
     const closing = openOverlay;
     hide(openOverlay);
     openOverlay = null;
+    $("pitlane").inert = false;
     if (closing === "phone-note") {
       try {
         window.sessionStorage.setItem(PHONE_NOTE_KEY, "seen");
@@ -480,7 +503,8 @@
     }
     const back = focusBeforeOverlay;
     focusBeforeOverlay = null;
-    if (back && back.isConnected && back.getClientRects().length && typeof back.focus === "function") back.focus({ preventScroll: true });
+    if (back && back !== document.body && back.isConnected && back.getClientRects().length && typeof back.focus === "function") back.focus({ preventScroll: true });
+    else focusPitLane(true);
     return true;
   }
 
@@ -506,7 +530,16 @@
     if (event.key !== null && !String(event.key).startsWith("f1pixelcup.profile")) return;
     if (!$("pitlane")) return;
     refreshCareerChip();
-    if (openOverlay === "career-screen") renderCareer();
+    if (openOverlay === "career-screen") {
+      // Redraw, keeping focus on the same control.
+      const f = document.activeElement;
+      const same = f && $("career-card").contains(f)
+        ? (f.dataset.driver !== undefined ? `[data-driver="${f.dataset.driver}"]` : f.dataset.action ? `[data-action="${f.dataset.action}"]` : null)
+        : null;
+      renderCareer();
+      const again = same && $("career-card").querySelector(same);
+      if (again) again.focus({ preventScroll: true });
+    }
   }
 
   function init() {

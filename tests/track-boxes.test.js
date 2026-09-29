@@ -30,8 +30,8 @@ function lapDistance(points, p) {
 }
 
 test("the start zone covers the whole grid and the qualifying run-up", () => {
-  // 20 cars in pairs, 36 apart, the first 12 behind the line; qualifying rolls
-  // in from 260 + 320 before the line.
+  // 20 cars in pairs, 36 apart, the first 12 behind the line. Qualifying (boxes
+  // hidden) rolls in from 260 + 320 before the line: kept clear so it looks clear.
   assert.ok(Grid.START_ZONE_BEFORE >= 9 * 36 + 12 + 40);
   assert.ok(Grid.START_ZONE_BEFORE >= 260 + 320 + 20);
   assert.ok(Grid.START_ZONE_AFTER > 0);
@@ -75,4 +75,11 @@ test("boxesClearOfStart drops boxes in the start zone and keeps the rest in orde
   const total = 5000;
   const boxes = [{ id: 1, d: 900 }, { id: 2, d: total - 100 }, { id: 3, d: 40 }, { id: 4, d: 2600 }];
   assert.deepEqual(Grid.boxesClearOfStart(boxes, total).map((b) => b.id), [1, 4]);
+});
+
+test("the generator and the game agree on the start zone", () => {
+  const py = fs.readFileSync(path.join(__dirname, "..", "tools", "tracks", "build_tracks.py"), "utf8");
+  const m = py.match(/^START_ZONE_BEFORE = (\d+)$/m);
+  assert.ok(m, "build_tracks.py defines START_ZONE_BEFORE");
+  assert.equal(Number(m[1]), Grid.START_ZONE_BEFORE);
 });

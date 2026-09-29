@@ -231,7 +231,7 @@ F1_Pixel_Cup/
 | Use Power-Up | `Space` |
 | Pause | `Esc` or `P` |
 | Back to the pit lane | `Esc` on the results or podium screen |
-| Quit mid-race | `Q` while paused |
+| Quit mid-race | `Q` while paused (nothing is recorded; once you've taken the chequered flag, Q keeps your result, and on a cup's last race the cup too) |
 | Pick a driver | `←` `→` or click a tile in the pit lane |
 | Start the cup | `Enter` or Start cup |
 | Sound / Full Screen | Settings in the pit lane |
@@ -326,4 +326,4 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 
 ## License
 
-The code is released under the [MIT License](LICENSE). Third-party pieces keep their own licences: circuit outlines from bacinger/f1-circuits (MIT), textures from Poly Haven (CC0) and Three.js (MIT).
+The code is released under the [MIT License](LICENSE). Third-party pieces keep their own licences: circuit outlines from bacinger/f1-circuits (MIT), textures from Poly Haven (CC0) and Three.js (MIT). Their notices are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).

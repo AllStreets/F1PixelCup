@@ -86,11 +86,39 @@ async (page) => {
   results.arrowTileInView = seen.every(Boolean) || JSON.stringify(seen);
   await size(1440, 900);
 
+  // With a tile focused, the arrows move focus with the selection (roving
+  // focus), so Enter then starts the cup with the driver on screen.
+  await p.locator('.driver-tile[data-driver="7"]').focus();
+  await p.keyboard.press("Enter");
+  await p.keyboard.press("ArrowRight");
+  await p.keyboard.press("ArrowRight");
+  await p.waitForTimeout(100);
+  const roving = await p.evaluate(() => document.activeElement && document.activeElement.matches(".driver-tile.is-on")
+    && document.activeElement.dataset.driver === "9");
+  await p.keyboard.press("Enter");
+  await p.waitForTimeout(150);
+  const started = await p.evaluate(() => state.phase !== "garage" && DRIVERS[state.selectedDriver].id === DRIVERS[9].id);
+  results.arrowsMoveFocusAndEnterStarts = (roving && started) || JSON.stringify({ roving, started });
+  await p.evaluate(() => Game.backToPitLane());
+
   // An open overlay keeps focus inside it, and hands it back when it closes.
-  await p.evaluate(() => Game.selectDriver(DRIVERS.findIndex((d) => d.id === "leclerc")));
+  await p.evaluate(() => {
+    // Two careers, so the career screen has "Race as" rows to (not) land on.
+    const career = (id) => ({ driverId: id, careerPoints: 10, rating: 1210, ratedRaces: 1,
+      totals: { races: 1, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0, poles: 0 }, bestLaps: {}, history: [] });
+    localStorage.setItem(Career.STORAGE_KEY, JSON.stringify({ version: 2, profileId: "p", lastDriverId: "leclerc",
+      drivers: { leclerc: career("leclerc"), hamilton: career("hamilton") } }));
+    Game.selectDriver(DRIVERS.findIndex((d) => d.id === "leclerc"));
+  });
   await p.locator("#career-chip").focus();
   await p.keyboard.press("Enter");
   await p.waitForTimeout(150);
+  results.careerOpensOnBack = await step(p, () => document.querySelectorAll("#career-screen .career-drivers button").length === 2
+    && document.activeElement && document.activeElement.matches('#career-screen [data-action="close"]'));
+  results.overlayIsModal = await step(p, () => {
+    const o = document.getElementById("career-screen");
+    return o.getAttribute("role") === "dialog" && o.getAttribute("aria-modal") === "true" && document.getElementById("pitlane").inert === true;
+  });
   const inside = [await p.evaluate(() => document.getElementById("career-screen").contains(document.activeElement))];
   for (let i = 0; i < 12; i += 1) {
     await p.keyboard.press(i % 3 === 2 ? "Shift+Tab" : "Tab");
@@ -98,7 +126,8 @@ async (page) => {
   }
   await p.keyboard.press("Escape");
   await p.waitForTimeout(150);
-  const back = await p.evaluate(() => document.activeElement === document.getElementById("career-chip"));
+  const back = await p.evaluate(() => document.activeElement === document.getElementById("career-chip")
+    && document.getElementById("pitlane").inert === false);
   results.overlayTrapsFocus = (inside.every(Boolean) && back) || JSON.stringify({ inside, back });
 
   // Another tab's race shows up here without a reload.
@@ -110,6 +139,18 @@ async (page) => {
     localStorage.setItem(key, JSON.stringify(saved));
     window.dispatchEvent(new StorageEvent("storage", { key, newValue: localStorage.getItem(key) }));
     return /4,321 pts/.test(document.getElementById("career-chip").textContent);
+  });
+  results.otherTabUpdatesOpenCareer = await step(p, () => {
+    Screens.showCareer();
+    const key = Career.STORAGE_KEY;
+    const saved = JSON.parse(localStorage.getItem(key));
+    saved.drivers.leclerc.careerPoints = 5555;
+    localStorage.setItem(key, JSON.stringify(saved));
+    window.dispatchEvent(new StorageEvent("storage", { key, newValue: localStorage.getItem(key) }));
+    const shows = /5,555/.test(document.getElementById("career-card").innerText);
+    const focusKept = document.activeElement && document.activeElement.matches('#career-screen [data-action="close"]');
+    Screens.closeOverlay();
+    return (shows && focusKept) || JSON.stringify({ shows, focusKept });
   });
 
   // The first line of a race reaches the ticker.
@@ -128,36 +169,67 @@ async (page) => {
     const lines = careerForRace({ driverId: "leclerc", careerPoints: 4, racePoints: 2, multiplier: 2, careerTotal: 4,
       rating: { before: 1200, after: 1210, delta: 10 }, tier: "<b>F4</b>", newBestLap: { ms: 36000 } }).lines;
     state.track.name = name;
-    return lines.every((l) => !/<img|<b>/.test(l)) && lines.some((l) => l.includes("&lt;img"));
+    const entry = state.cupEntries.find((e) => e.isPlayer);
+    const realName = entry.driver.name;
+    entry.driver.name = "Evil <img>";
+    const cup = careerForCup({ bonus: 50, careerPoints: 100, multiplier: 2, careerTotal: 100, saved: true }, 1).lines;
+    entry.driver.name = realName;
+    return [...lines, ...cup].every((l) => !/<img|<b>/.test(l)) && lines.some((l) => l.includes("&lt;img"))
+      && cup.some((l) => l.includes("&lt;img"));
   });
 
-  // Quitting after the flag keeps the race: the player's result counts.
-  results.quitAfterFlagKeepsRace = await step(p, async () => {
-    for (let i = 0; i < 200 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+  // Drive race `index` of a fresh cup on autopilot with one CPU car held on the
+  // grid (so the race is still running), stopping when the player takes the
+  // flag -- or, with beforeFlag, a lap in. Then pause and press Q.
+  const quitRace = (index, beforeFlag) => step(p, async ({ index, beforeFlag }) => {
+    Game.backToPitLane();
+    Game.selectGridMode("back");
+    Game.startCup();
+    if (index > 0) { state.raceIndex = index; startRace(index); }
+    for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const me = getPlayer();
-    const before = Career.getDriver(me.driver.id).totals.races;
-    // One CPU car stays on the grid, so the race is still running when the player finishes.
+    const cupRun = state.cupRunId;
+    const before = Career.getDriver(me.driver.id);
     const stuck = state.racers.find((r) => !r.isPlayer);
-    const hold = { x: stuck.x, y: stuck.y, angle: stuck.angle };
-    const record = window.recordPlayerRace;
-    window.recordPlayerRace = (f, fl) => { me.isPlayer = true; return record(f, fl); };
-    me.isPlayer = false;
+    const hold = { x: stuck.x, y: stuck.y, heading: stuck.heading };
+    me.isPlayer = false; // autopilot for the drive
     state.phase = "race";
     let now = 900000; state.raceStart = now; state.lastTick = now;
     state.racers.forEach((r) => { r.lapStartAt = now; });
-    for (let t = 0; t < 900 && !me.finished; t += 1 / 60) {
+    for (let t = 0; t < 900 && !me.finished && !(beforeFlag && me.lap >= 2); t += 1 / 60) {
       now += 1000 / 60;
       Object.assign(stuck, hold); stuck.speed = 0;
       updateRace(1 / 60, now);
     }
+    // Back in the player's hands before they quit (a real player never left them).
     me.isPlayer = true;
-    const midway = me.finished && !state.resultsQueued;
+    const running = !state.resultsQueued && (beforeFlag ? !me.finished : me.finished);
     togglePause();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "q", code: "KeyQ" }));
-    window.recordPlayerRace = record;
-    const after = Career.getDriver(me.driver.id).totals.races;
-    return (midway && after === before + 1 && state.phase === "garage") || JSON.stringify({ midway, before, after, phase: state.phase });
-  });
+    const after = Career.getDriver(me.driver.id);
+    const cups = after.history.filter((h) => h.type === "cup" && h.cupRunId === cupRun).length;
+    const focus = document.activeElement;
+    return {
+      running,
+      races: after.totals.races - before.totals.races,
+      cupsCompleted: after.totals.cupsCompleted - before.totals.cupsCompleted,
+      cups,
+      garage: state.phase === "garage",
+      focusInPitLane: Boolean(focus) && document.getElementById("pitlane").contains(focus) && focus.getClientRects().length > 0,
+    };
+  }, { index, beforeFlag });
+  const afterFlag = await quitRace(0, false);
+  results.quitAfterFlagKeepsRace = (afterFlag.running && afterFlag.races === 1 && afterFlag.cupsCompleted === 0 && afterFlag.garage
+    && afterFlag.focusInPitLane) || JSON.stringify(afterFlag);
+  const lastRace = await quitRace(3, false);
+  results.quitAfterFlagOnLastRaceBanksCupOnce = (lastRace.running && lastRace.races === 1 && lastRace.cupsCompleted === 1
+    && lastRace.cups === 1) || JSON.stringify(lastRace);
+  const beforeFlagQuit = await quitRace(0, true);
+  results.quitBeforeFlagRecordsNothing = (beforeFlagQuit.running && beforeFlagQuit.races === 0 && beforeFlagQuit.garage)
+    || JSON.stringify(beforeFlagQuit);
+  // The pause screen says what Q will do.
+  results.pauseHintSaysWhatQDoes = await step(p, () => /quit to the pit lane/i.test(pauseQuitHint(false))
+    && /save .*result/i.test(pauseQuitHint(true)));
 
   // The "couldn't be saved" line appears only when saving failed -- never
   // because of where the car finished.
@@ -176,6 +248,16 @@ async (page) => {
     return (seen.every((w) => !w) && onFailure) || JSON.stringify({ seen, onFailure });
   });
 
+  // Opened by the address, the career screen has no opener: closing it lands
+  // focus in the pit lane rather than on the page.
+  await p.goto(`http://localhost:8765/play.html#career`);
+  await p.waitForTimeout(1200);
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(150);
+  results.closeWithoutOpenerFocusesPitLane = await step(p, () => {
+    const f = document.activeElement;
+    return Boolean(f) && document.getElementById("pitlane").contains(f) && f.getClientRects().length > 0;
+  });
   await context.close();
 
   // The landing page follows another tab too.
@@ -192,6 +274,22 @@ async (page) => {
           totals: { races: 3, wins: 1, podiums: 2, cupsCompleted: 0, cupsWon: 0, poles: 0 }, bestLaps: {}, history: [] } } }));
       window.dispatchEvent(new StorageEvent("storage", { key, newValue: localStorage.getItem(key) }));
       return /Latest · Lando Norris/i.test(document.getElementById("career-summary").innerText);
+    });
+    results.landingOtherTabKeepsFocus = await step(l, () => {
+      const link = document.querySelector("#career-summary a.ghost-btn");
+      link.focus();
+      const key = Career.STORAGE_KEY;
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.drivers.norris.careerPoints = 888;
+      localStorage.setItem(key, JSON.stringify(saved));
+      window.dispatchEvent(new StorageEvent("storage", { key, newValue: localStorage.getItem(key) }));
+      const f = document.activeElement;
+      const kept = Boolean(f) && f.matches("#career-summary a.ghost-btn");
+      // A backup key isn't the profile: nothing is redrawn.
+      const node = document.querySelector("#career-summary a.ghost-btn");
+      window.dispatchEvent(new StorageEvent("storage", { key: "f1pixelcup.profile.backup.1", newValue: "x" }));
+      const untouched = node.isConnected;
+      return (kept && untouched) || JSON.stringify({ kept, untouched });
     });
     await ctx.close();
   }

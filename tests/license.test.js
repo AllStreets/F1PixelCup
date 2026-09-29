@@ -18,3 +18,13 @@ test("the README and the site footer point at the license", () => {
   const index = fs.readFileSync(path.join(root, "index.html"), "utf8");
   assert.match(index, /<footer[\s\S]*href="https:\/\/github\.com\/AllStreets\/F1PixelCup\/blob\/main\/LICENSE"[\s\S]*<\/footer>/);
 });
+
+test("third-party notices carry each upstream licence and are linked from the README", () => {
+  const text = fs.readFileSync(path.join(root, "THIRD-PARTY-NOTICES"), "utf8");
+  assert.match(text, /Copyright \(c\) 2019-2025 Tomislav Bacinger/);
+  assert.match(text, /Copyright © 2010-2026 three\.js authors/);
+  assert.equal((text.match(/Permission is hereby granted, free of charge/g) || []).length, 2);
+  assert.match(text, /Poly Haven[\s\S]*CC0/);
+  const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
+  assert.match(readme, /\[THIRD-PARTY-NOTICES\]\(THIRD-PARTY-NOTICES\)/);
+});
