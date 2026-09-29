@@ -184,14 +184,14 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 ## Stage G — Trackside life (roadmap stage 7)
 
-- [x] Spec, covering all of (docs/superpowers/specs/2026-09-29-trackside-design.md; G1 pit lanes, garages and the Safety Car merged):
+- [x] Spec, covering all of (docs/superpowers/specs/2026-09-29-trackside-design.md; G1 pit lanes, garages and the Safety Car, and G2 venue moments merged):
   - moving crowds, flags, marshals, a TV helicopter and fireworks at the finish;
   - **pit lanes and team garages** on every circuit;
   - **signature venue moments, seen and heard**, per circuit: the Monaco tunnel (dark, lit, engine reverb), Eau Rouge at Spa, the Parabolica at Monza, the 130R and the bridge at Suzuka, the night lights at Singapore, the floodlights at Bahrain, and Senna S at Interlagos.
 - [x] `tools/tracks/build_tracks.py`: generate the pit-lane geometry (entry, lane and exit) clear of the racing surface, then regenerate `tracks-data.js`.
 - [ ] Add `r3d/trackside.js`: instanced crowds, flags, marshals, the helicopter path, garages and pit wall. Wire it into `r3d/track.js` and `render3d.js`.
 - [x] The **safety car exits into the real pit lane** instead of the run-off (`game.js`, `r3d/powerups.js`), with the `powerups-check.js` assertion updated.
-- [ ] Audio reverb zones tied to real track distances (a `ConvolverNode` in `game.js` audio), with a test that the zones map to the tunnel's real distances.
+- [x] Audio reverb zones tied to real track distances (a `ConvolverNode` in `game.js` audio), with a test that the zones map to the tunnel's real distances.
 - [ ] Checks:
   - `auditScenery` returns 0 on all circuits, pit lanes included;
   - the tunnel reverb switches in and out at the right distance;
