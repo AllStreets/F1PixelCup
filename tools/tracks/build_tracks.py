@@ -228,11 +228,145 @@ def footprint_clear(pts, x, y, angle, half_len, half_depth, need):
     return True
 
 
-def place_scenery(pts, report):
+# The pit lane (docs/superpowers/specs/2026-09-29-trackside-design.md, G1).
+# Offsets beyond the road's half-width; pitlane.js has the same numbers and
+# tests/pitlane.test.js checks they agree.
+PIT_WALL_IN = 8
+PIT_WALL_OUT = 11
+PIT_LANE_CENTRE = 29
+PIT_LANE_HALF = 18
+PIT_WORK_OUT = 59
+PIT_GARAGE_OUT = 95
+PIT_EDGE_IN = 6
+PIT_MOUTH = 160
+PIT_BAY = 30
+PIT_BAYS = 11
+# Clear of any other stretch's road edge by this much.
+PIT_CLEAR = 40
+
+
+class Lap:
+    """The lap as the game builds it: straight segments between the points."""
+
+    def __init__(self, pts):
+        self.pts = pts
+        self.n = len(pts)
+        self.cum = [0.0]
+        for i in range(self.n):
+            self.cum.append(self.cum[-1] + math.dist(pts[i], pts[(i + 1) % self.n]))
+        self.total = self.cum[-1]
+
+    def at(self, d):
+        d %= self.total
+        lo, hi = 0, self.n - 1
+        while lo < hi:
+            mid = (lo + hi + 1) // 2
+            if self.cum[mid] <= d:
+                lo = mid
+            else:
+                hi = mid - 1
+        a, b = self.pts[lo], self.pts[(lo + 1) % self.n]
+        seg = self.cum[lo + 1] - self.cum[lo] or 1
+        t = (d - self.cum[lo]) / seg
+        tx, ty = (b[0] - a[0]) / seg, (b[1] - a[1]) / seg
+        return a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, tx, ty, lo
+
+    def gap(self, d1, d2):
+        g = abs(d1 - d2) % self.total
+        return min(g, self.total - g)
+
+
+def pit_room(lap, side, r, reach):
+    """Whether the pit complex, from the pit wall out to `reach` beyond the
+    centreline, fits at lap distance r on this side: clear of every other
+    stretch of the lap, and not on the inside of a bend it would fold round."""
+    x, y, tx, ty, _ = lap.at(r)
+    nx, ny = -ty, tx
+    # The bend here: turning toward +n is positive.
+    _, _, ax, ay, _ = lap.at(r - 60)
+    _, _, bx, by, _ = lap.at(r + 60)
+    turn = math.atan2(ax * by - ay * bx, ax * bx + ay * by) / 120
+    if turn * side > 0 and 1 / abs(turn) < reach + 30:
+        return False
+    for off in (HALF_WIDTH + PIT_WALL_IN, (HALF_WIDTH + PIT_WALL_IN + reach) / 2, reach):
+        px, py = x + nx * side * off, y + ny * side * off
+        for j, q in enumerate(lap.pts):
+            if lap.gap(lap.cum[j], r) <= 300:
+                continue
+            if math.dist(q, (px, py)) - HALF_WIDTH < PIT_CLEAR:
+                return False
+    return True
+
+
+PIT_STEP = 10
+
+
+def place_pit_lane(pts, bridges, report):
+    """The pit lane: along the start/finish stretch, on whichever side has
+    room. Every point of the lane must have room for the lane and working
+    lane (W + PIT_WORK_OUT), and the eleven bays for the garages as well
+    (W + PIT_GARAGE_OUT); nowhere near a bridge. A lane that spans the line
+    wins, as real ones do; where the stretch after the line bends too tightly
+    (Monaco) it ends before it. Then the longest lane, then the one best
+    centred on the line. Returns { side, entry, exit }, signed distances from
+    the line."""
+    lap = Lap(pts)
+    need = 2 * PIT_MOUTH + PIT_BAY * PIT_BAYS
+    # Along the stretch before the line, to just short of the first item
+    # boxes after it (450 after the line); boxes keep out of the zone.
+    lo, hi = -START_ZONE_BEFORE - 260, 440
+    rs = list(range(lo, hi + 1, PIT_STEP))
+    bridge_d = [lap.cum[k] for b in bridges for k in (b["under"], b["over"])]
+    near_bridge = [any(lap.gap(bd, r) < 7 * WAYPOINT_STEP + PIT_MOUTH for bd in bridge_d) for r in rs]
+    best = None
+    for side in (1, -1):
+        lane_ok = [pit_room(lap, side, r, HALF_WIDTH + PIT_WORK_OUT) and not nb for r, nb in zip(rs, near_bridge)]
+        garage_ok = [ok and pit_room(lap, side, r, HALF_WIDTH + PIT_GARAGE_OUT) for r, ok in zip(rs, lane_ok)]
+        for i, entry in enumerate(rs):
+            if not lane_ok[i]:
+                continue
+            for k in range(i + 1, len(rs)):
+                if not lane_ok[k]:
+                    break
+                exit_ = rs[k]
+                if exit_ - entry < need or exit_ - entry > 1100:
+                    continue
+                # The garages sit in the middle of the flat part (pitlane.js).
+                flat_from, flat_to = entry + PIT_MOUTH, exit_ - PIT_MOUTH
+                g_from = flat_from + (flat_to - flat_from - PIT_BAY * PIT_BAYS) / 2
+                g_to = g_from + PIT_BAY * PIT_BAYS
+                if not all(garage_ok[j] for j, r in enumerate(rs) if g_from - PIT_STEP <= r <= g_to + PIT_STEP):
+                    continue
+                score = (entry < -PIT_MOUTH and exit_ > PIT_MOUTH, exit_ - entry, -abs(entry + exit_))
+                if best is None or score > best[0]:
+                    best = (score, {"side": side, "entry": entry, "exit": exit_})
+    assert best, "no room for a pit lane"
+    pit = best[1]
+    report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']}"
+    return pit
+
+
+def pit_footprint(pts, pit):
+    """Points spread over the pit complex, for keeping scenery off it."""
+    lap = Lap(pts)
+    out = []
+    r = pit["entry"]
+    while r <= pit["exit"]:
+        x, y, tx, ty, _ = lap.at(r)
+        nx, ny = -ty, tx
+        for off in range(int(HALF_WIDTH), int(HALF_WIDTH + PIT_GARAGE_OUT) + 1, 12):
+            out.append((x + nx * pit["side"] * off, y + ny * pit["side"] * off))
+        r += 12
+    return out
+
+
+def place_scenery(pts, report, pit=None):
     """Grandstands on the main straight and at the big corners, plus billboards
     and towers. Everything is checked against the whole circuit, not just the
-    nearest stretch, so nothing can end up on the road."""
+    nearest stretch, so nothing can end up on the road -- or on the pit
+    complex."""
     n = len(pts)
+    pit_pts = pit_footprint(pts, pit) if pit else []
     curv = curvature_series(pts, 3)
     clearance = HALF_WIDTH + 70  # beyond the barrier line in the renderer
     decor = []
@@ -250,6 +384,8 @@ def place_scenery(pts, report):
             if not footprint_clear(pts, x, y, angle, half_len, half_depth, clearance):
                 continue
             if any(math.dist((x, y), q[:2]) < q[2] + max(half_len, half_depth) for q in placed):
+                continue
+            if any(math.dist((x, y), q) < math.hypot(half_len, half_depth) + 10 for q in pit_pts):
                 continue
             face = math.atan2(pts[i][1] - y, pts[i][0] - x)
             decor.append({"type": kind, "x": round(x), "y": round(y), "angle": round(angle, 3),
@@ -303,7 +439,7 @@ def place_scenery(pts, report):
 START_ZONE_BEFORE = 640
 
 
-def place_item_boxes(pts, bridges=()):
+def place_item_boxes(pts, bridges=(), pit=None):
     """Rows of three across the road on the straightest stretches, between a
     launch run after the line and the start zone before it, and never at a
     crossover (under or on the bridge)."""
@@ -322,10 +458,16 @@ def place_item_boxes(pts, bridges=()):
     def near_bridge(i):
         return any(min(abs(i - k), n - abs(i - k)) <= 7 for b in bridges for k in (b["under"], b["over"]))
 
+    def in_pit_zone(i):
+        if not pit:
+            return False
+        rel = dist[i] if dist[i] <= run / 2 else dist[i] - run
+        return pit["entry"] - WAYPOINT_STEP <= rel <= pit["exit"] + WAYPOINT_STEP
+
     for r in range(rows):
         lo = skip + (end - skip) * r // rows
         hi = skip + (end - skip) * (r + 1) // rows
-        candidates = [i for i in range(lo, hi) if not near_bridge(i)]
+        candidates = [i for i in range(lo, hi) if not near_bridge(i) and not in_pit_zone(i)]
         assert candidates, "a box row has nowhere to go"
         best = min(candidates, key=lambda i: sum(abs(curv[(i + d) % n]) for d in range(-2, 3)))
         tx, ty = tangent(pts, best)
@@ -393,8 +535,9 @@ def main():
             for i, j in fin:
                 bridges.append({"under": i, "over": j})
             report["bridges"] = bridges
-        decor = place_scenery(pts, report)
-        boxes = place_item_boxes(pts, bridges)
+        pit = place_pit_lane(pts, bridges, report)
+        decor = place_scenery(pts, report, pit)
+        boxes = place_item_boxes(pts, bridges, pit)
         out[game_id] = {
             "source": src_id,
             "world": {"width": round(world_w), "height": round(world_h)},
@@ -402,6 +545,7 @@ def main():
             "bridges": bridges,
             "decor": decor,
             "itemBoxes": boxes,
+            "pit": pit,
         }
         print(game_id, report, file=sys.stderr)
         if plot_dir:
