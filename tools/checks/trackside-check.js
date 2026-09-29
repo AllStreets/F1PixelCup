@@ -244,12 +244,15 @@ async (page) => {
   results.tunnelDark = (numbers && within < approachRoad * 0.5 && insideRoad < approachRoad * 0.6) || JSON.stringify({ approachRoad, within, insideRoad });
 
   // G3 -- trackside life. Marshal posts all round every circuit (a few may
-  // have had to give way to other scenery).
+  // have had to give way to other scenery), all on the ground; the starter on
+  // clear ground by the line.
   results.marshalsPosted = await step(() => {
     const bad = [];
     CIRCUITS.forEach((c) => {
-      const m = Render3D.auditVenue(TRACKS.find((t) => t.id === c.id)).marshals;
-      if (m.placed < m.wanted * 0.8) bad.push(`${c.id}: ${m.placed} of ${m.wanted}`);
+      const v = Render3D.auditVenue(TRACKS.find((t) => t.id === c.id));
+      const m = v.marshals;
+      if (m.placed < m.wanted * 0.8 || m.offGround) bad.push(`${c.id}: ${m.placed} of ${m.wanted}, ${m.offGround} off the ground`);
+      if (!v.starter || v.starter.clear < 6) bad.push(`${c.id}: starter ${JSON.stringify(v.starter)}`);
     });
     return bad.length === 0 || JSON.stringify(bad);
   });
@@ -292,23 +295,34 @@ async (page) => {
     const L = state.track.totalLength;
     const route = PowerUps.makeRoute(state.track.points, state.track.roadWidth);
     // The lap distance the helicopter is beside: the nearest point of the lap.
+    // (Only the stretch round where it should be: another stretch may pass
+    // nearer the helicopter than its own.)
     let best = { gap: Infinity, d: 0 };
-    for (let d = 0; d < L; d += 5) { const q = route.sample(d); const gap = Math.hypot(q.x - life.helicopter.x, q.y - life.helicopter.z); if (gap < best.gap) best = { gap, d }; }
+    for (let k = -900; k <= 100; k += 5) { const d = ((leader.trackDistance + k) % L + L) % L; const q = route.sample(d); const gap = Math.hypot(q.x - life.helicopter.x, q.y - life.helicopter.z); if (gap < best.gap) best = { gap, d }; }
     const behind = ((leader.trackDistance - best.d) % L + L) % L;
     return (life.helicopter.height >= 200 && behind > 280 && behind < 560) || JSON.stringify({ height: life.helicopter.height, behind });
   });
-  // Its rotor is heard near it, and not far from it.
-  results.helicopterHeard = await step(() => {
+  // Its rotor is heard near it, and not far from it: the rotor's gain node,
+  // with the audio running.
+  await p.mouse.click(5, 5);
+  results.helicopterHeard = await step(async () => {
+    initAudio();
+    await audio.ctx.resume();
+    state.paused = true;
     const pl = getPlayer();
     const leader = firstUnfinished();
     const L = state.track.totalLength;
     const keep = pl.trackDistance;
-    pl.trackDistance = ((leader.trackDistance - 400) % L + L) % L;
-    const near = venueSound(pl, true).helicopter;
-    pl.trackDistance = ((leader.trackDistance + L / 2) % L + L) % L;
-    const far = venueSound(pl, true).helicopter;
+    const hold = async (d) => {
+      const until = audio.ctx.currentTime + 1.2;
+      while (audio.ctx.currentTime < until) { pl.trackDistance = ((d % L) + L) % L; updateEngineAudio(pl); await new Promise((r) => setTimeout(r, 30)); }
+      return audio.venue.rotor.gain.value;
+    };
+    const near = await hold(leader.trackDistance - 400);
+    const far = await hold(leader.trackDistance + L / 2);
     pl.trackDistance = keep;
-    return (near > 0.3 && far === 0) || JSON.stringify({ near, far });
+    state.paused = false;
+    return (near > 0.012 && far < 0.002) || JSON.stringify({ near, far, ctx: audio.ctx.state });
   });
   // No fireworks and no chequered flag before the leader finishes; then both.
   results.fireworksAtTheFlag = await step(async () => {
@@ -324,6 +338,26 @@ async (page) => {
     await frames(2);
     const show = (x) => ({ fireworks: x.fireworks, starter: x.starterWaving });
     return (before.fireworks === 0 && !before.starterWaving && after.fireworks > 0 && after.starterWaving && later.fireworks > 0) || JSON.stringify({ before: show(before), after: show(after), later: show(later) });
+  });
+
+  // The player's own chequered flag: the finish shot looks back at the line,
+  // and the starter's flag and the fireworks are in the picture.
+  results.finishShotShowsTheShow = await step(async () => {
+    const pl = getPlayer();
+    pl.finished = true;
+    state.chequerAt = renderClock();
+    const samples = [];
+    for (let i = 0; i < 12; i += 1) {
+      await new Promise((r) => setTimeout(r, 300));
+      const life = Render3D.inspect().life;
+      samples.push({ shot: life.finishShot, starter: life.starterOnScreen, sparks: life.sparksOnScreen });
+    }
+    state.chequerAt = 0;
+    pl.finished = false;
+    const shot = samples.every((x) => x.shot);
+    const starter = samples.filter((x) => x.starter).length;
+    const sparks = Math.max(...samples.map((x) => x.sparks));
+    return (shot && starter >= 10 && sparks > 50) || JSON.stringify(samples);
   });
 
   await context.close();

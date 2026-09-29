@@ -359,10 +359,36 @@ function auditVenue(track) {
   return {
     corners: (track.corners || []).map((c) => c.board),
     boards,
-    marshals: { wanted: (track.marshalPosts || []).length, placed: world.marshals ? world.marshals.children.length : 0 },
+    marshals: {
+      wanted: (track.marshalPosts || []).length,
+      placed: world.marshals ? world.marshals.children.length : 0,
+      // Standing on the ground (the flat plane), none floating.
+      offGround: world.marshals ? world.marshals.children.filter((g) => Math.abs(g.position.y) > 0.01).length : 0,
+    },
+    // The starter's rostrum: clear of the barriers and of other scenery.
+    starter: world.starter ? { clear: Math.round(world.course.clearance(world.starter.position.x, world.starter.position.z)) } : null,
     tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
     bridges,
   };
+}
+
+function showOnScreen(world) {
+  const v = new THREE.Vector3();
+  const inView = () => v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+  let starterOnScreen = false;
+  if (world.starter) {
+    world.starter.userData.flag.getWorldPosition(v);
+    v.project(camera);
+    starterOnScreen = inView();
+  }
+  let sparksOnScreen = 0;
+  const pos = fireworks.geometry.attributes.position;
+  const count = fireworks.visible ? fireworks.geometry.drawRange.count : 0;
+  for (let i = 0; i < count; i += 1) {
+    v.fromBufferAttribute(pos, i).project(camera);
+    if (inView()) sparksOnScreen += 1;
+  }
+  return { starterOnScreen, sparksOnScreen };
 }
 
 // What is on screen right now, for the browser checks.
@@ -380,6 +406,10 @@ function inspect() {
     helicopter: helicopter.visible ? { x: helicopter.position.x, y: helicopter.position.y, z: helicopter.position.z, height: helicopter.position.y - current.course.heightAt(0) } : null,
     fireworks: current.life.fireworks || 0,
     starterWaving: Boolean(current.life.starter),
+    finishShot: Boolean(current.life.finishShot),
+    // What of the show is in the picture: the starter's flag, and how many of
+    // the fireworks' sparks.
+    ...showOnScreen(current),
   } : null;
   return { flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
@@ -492,24 +522,56 @@ scene.add(helicopter, fireworks);
 
 let tunnelPatchTick = 0;
 
+// The finish shot: once the player has taken the chequered flag, for the
+// first seconds of the show, a TV camera past the line looks back at it --
+// the starter waving the flag, the fireworks over the stands, the cars
+// coming home.
+const FINISH_SHOT_MS = 9000;
+const finishFrom = new THREE.Vector3();
+function finishShot(world, life, player) {
+  const show = world.life.show;
+  if (!life || !life.flagOutAt || !player || !player.finished || !show || show.flag !== life.flagOutAt || show.ms > FINISH_SHOT_MS) {
+    world.life.finishShot = false;
+    return false;
+  }
+  const { course } = world;
+  const lane = course.pitLane;
+  const side = lane ? -lane.side : -1;
+  const ahead = course.sampleAt(160);
+  const back = course.sampleAt(course.track.totalLength - 140);
+  const off = side * ((side > 0 ? ahead.outerR : ahead.outerL) - 10);
+  // Above the street circuits' catch fences (32 high).
+  finishFrom.set(ahead.x + ahead.nx * off, ahead.h + (course.street ? 46 : 34), ahead.y + ahead.ny * off);
+  camera.position.copy(finishFrom);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(back.x, back.h + 55, back.y);
+  setFov(72);
+  world.life.finishShot = true;
+  return true;
+}
+
 let lastWallMs = 0;
 function updateTrackside(world, track, life, now, dt) {
   const wall = performance.now();
   const wallDt = lastWallMs ? Math.min(100, wall - lastWallMs) : 0;
   lastWallMs = wall;
-  const t = wall / 1000;
+  // Trackside time: real time, held while the race is paused (flags, the
+  // crowd and the show all stop with it).
+  const paused = Boolean(life && life.paused);
+  if (!paused) world.life.clock = (world.life.clock || 0) + wallDt;
+  const t = (world.life.clock || 0) / 1000;
   // The show after the flag runs on real time (the race is fast-forwarded
   // then), held while paused: show.ms since the flag fell.
   const show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
   const flag = life && life.flagOutAt ? life.flagOutAt : 0;
   if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
-  else if (flag && !life.paused) show.ms += wallDt;
+  else if (flag && !paused) show.ms += wallDt;
   crowdUniforms.uTime.value = t;
   // At the flag the crowd's wave runs along the stands.
   crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
   updateMarshalPosts(world.marshals, life && life.flags, t);
   updateHelicopter(helicopter, world, life && life.helicopter, dt);
-  world.life.fireworks = updateFireworks(fireworks, world.course, life && { ...life, stands: track.crowdStands }, flag ? show.ms : 0, currentTier());
+  world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
   world.life.starter = updateStarter(world.starter, flag, show.ms, t);
 }
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
@@ -575,7 +637,7 @@ function buildWorld(track) {
   const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
   group.add(marshals);
   const starter = buildStarter(course);
-  group.add(starter);
+  if (starter) group.add(starter);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -870,6 +932,8 @@ function render(frame) {
     camera.up.set(0, 1, 0);
     camera.lookAt(lookTarget);
     if (photoCamera.fov) setFov(photoCamera.fov);
+  } else {
+    finishShot(world, frame.trackside, player);
   }
   // The "?" in each box keeps facing the camera (turning about the vertical
   // only), placed now the camera is: no frame's lag.

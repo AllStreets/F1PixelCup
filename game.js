@@ -1281,6 +1281,9 @@ function startRace(index) {
   state.resultsQueued = false;
   state.resultTimeoutAt = 0;
   state.flagOutAt = 0;
+  state.chequerAt = 0;
+  // The marshals' flags start afresh each race.
+  state.marshalMemory = null;
   state.finalLapAt = 0;
   state.paused = false;
   state.pausedAt = 0;
@@ -1431,17 +1434,17 @@ const MARSHAL_GRACE_MS = 5000;
 function tracksideFrame(now) {
   const track = state.track;
   if (!track || !window.Marshals) return null;
-  if (!state.marshalMemory || state.marshalMemory.track !== track.id) state.marshalMemory = { track: track.id, posts: {} };
+  if (!state.marshalMemory) state.marshalMemory = { posts: {} };
   // Off the line every car is slow: no flags for the first seconds.
   const racing = state.phase === "race" && !state.preparing && now - (state.raceStart || now) > MARSHAL_GRACE_MS;
   const flags = Marshals.flags(track.marshalPosts, state.racers, now, track.totalLength, state.marshalMemory.posts, racing);
   const leader = firstUnfinished() || getSortedRacers()[0];
-  const winner = state.flagOutAt ? getSortedRacers().find((r) => r.finished) : null;
+  const winner = state.chequerAt || state.flagOutAt ? getSortedRacers().find((r) => r.finished) : null;
   return {
     posts: track.marshalPosts,
     flags,
     helicopter: leader ? { d: wrapLap((leader.trackDistance || 0) - 400) } : null,
-    flagOutAt: state.flagOutAt || 0,
+    flagOutAt: state.chequerAt || state.flagOutAt || 0,
     winnerColour: winner && winner.kart ? winner.kart.body : null,
     // (The race runs fast-forward after the flag; the show runs on real
     // time, held while paused.)
@@ -2085,7 +2088,12 @@ function updateRacer(racer, dt, now) {
 function finishRacer(racer, now) {
   if (racer.finished) return;
   racer.finished = true;
-  if (racer.isPlayer) sfx.finish();
+  if (racer.isPlayer) {
+    sfx.finish();
+    // The player's chequered flag: the trackside show starts (even when they
+    // are the last car home).
+    state.chequerAt = now;
+  }
   racer.finishTime = now - state.raceStart;
   // Placed once the step is over, so cars crossing in the same step are
   // ordered by the moment each one actually crossed the line.

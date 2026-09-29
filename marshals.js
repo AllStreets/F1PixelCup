@@ -7,9 +7,10 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.Marshals = api;
 }(typeof globalThis !== "undefined" ? globalThis : this, () => {
-  // A post every SPACING round the lap, each watching the stretch AHEAD of it.
+  // A post every SPACING round the lap, each watching the stretch AHEAD of it
+  // -- up to the next post, so every stretch is watched.
   const SPACING = 600;
-  const AHEAD = 300;
+  const AHEAD = SPACING;
   // A car slower than this share of its top speed is stopped (or near it).
   const CRAWL = 0.1;
   // After the incident clears, the green flag for this long.
@@ -48,7 +49,8 @@
         return "yellow";
       }
       const last = memory[post.index];
-      return last !== undefined && now - last < GREEN_MS ? "green" : "none";
+      // (A time ahead of now is a stale memory, not a recent incident.)
+      return last !== undefined && now >= last && now - last < GREEN_MS ? "green" : "none";
     });
   }
 

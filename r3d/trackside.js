@@ -49,7 +49,9 @@ export function buildMarshalPosts(course, posts, venue) {
   };
   const total = course.track.totalLength;
   (posts || []).forEach((post) => {
-    for (const shift of [0, 30, -30, 60, -60, 90, -90]) {
+    // Moved only back along the lap where the spot is taken, so a post still
+    // watches the whole of its stretch.
+    for (const shift of [0, -30, -60, -90, -120]) {
       const p = course.sampleAt(((post.d + shift) % total + total) % total);
       const side = p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1);
       const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
@@ -59,8 +61,9 @@ export function buildMarshalPosts(course, posts, venue) {
       course.occupied.add(x, z, 7);
       const g = new THREE.Group();
       const add = (geo, m, px, py, pz) => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(px, py, pz); mesh.castShadow = true; g.add(mesh); return mesh; };
-      // Up on a platform, to see (and be seen) over the barrier.
-      const deck = 8;
+      // Up on a platform, to see (and be seen) over the barrier -- standing
+      // on the ground, and taller beside a bridge's raised road.
+      const deck = 8 + p.h;
       [[-3.5, -1], [3.5, -1], [-3.5, 6], [3.5, 6]].forEach(([lx, lz]) => add(new THREE.BoxGeometry(0.6, deck, 0.6), pole, lx, deck / 2, lz));
       add(new THREE.BoxGeometry(9, 0.6, 8.5), pole, 0, deck, 2.5);
       add(new THREE.BoxGeometry(8, 7, 4.5), hut, 0, deck + 3.5, 4);
@@ -69,15 +72,21 @@ export function buildMarshalPosts(course, posts, venue) {
       // the road), the flag in hand.
       add(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), orange, 2, deck + 2.3, -0.5);
       add(new THREE.SphereGeometry(0.8, 10, 8), skin, 2, deck + 4.9, -0.5);
-      add(new THREE.CylinderGeometry(0.12, 0.12, 7, 6), pole, 3.1, deck + 5.2, -0.5);
+      // The flag on its pole, held at the marshal's hand, swung to and fro.
+      const hand = new THREE.Group();
+      hand.position.set(2.9, deck + 3.6, -0.5);
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 7, 6), pole);
+      staff.position.y = 3.2;
+      hand.add(staff);
       const flag = flagCloth(5, 3, flagMats.yellow);
-      flag.position.set(3.1, deck + 7.1, -0.5);
-      flag.visible = false;
-      g.add(flag);
-      g.position.set(x, p.h, z);
+      flag.position.set(0, 5.2, 0);
+      hand.add(flag);
+      hand.visible = false;
+      g.add(hand);
+      g.position.set(x, 0, z);
       // Local -z toward the road.
       g.rotation.y = Math.atan2(x - p.x, z - p.y);
-      g.userData.post = { index: post.index, d: post.d, flag, flagMats, state: "none" };
+      g.userData.post = { index: post.index, d: post.d, flag, hand, flagMats, state: "none" };
       group.add(g);
       return;
     }
@@ -91,11 +100,11 @@ export function updateMarshalPosts(group, flags, t) {
     const post = g.userData.post;
     const state = flags ? flags[post.index] || "none" : "none";
     post.state = state;
-    post.flag.visible = state !== "none";
+    post.hand.visible = state !== "none";
     if (state === "none") return;
     post.flag.material = post.flagMats[state];
-    // Waved: swung to and fro on its pole, the cloth rippling.
-    post.flag.rotation.y = Math.sin(t * 6 + post.index) * 0.9;
+    // Waved: the pole swung side to side, the cloth rippling.
+    post.hand.rotation.z = Math.sin(t * 6 + post.index) * 0.7;
     waveCloth(post.flag, t, 1);
   });
 }
@@ -136,12 +145,13 @@ export function buildHelicopter() {
   return g;
 }
 
+const heliWant = new THREE.Vector3();
 export function updateHelicopter(heli, world, target, dt) {
   if (!heli) return;
   const course = world && world.course;
   if (!target || !course) { heli.visible = false; return; }
   const p = course.sampleAt(target.d);
-  const want = new THREE.Vector3(p.x + p.nx * HELI_ASIDE, p.h + HELI_HEIGHT, p.y + p.ny * HELI_ASIDE);
+  const want = heliWant.set(p.x + p.nx * HELI_ASIDE, p.h + HELI_HEIGHT, p.y + p.ny * HELI_ASIDE);
   // On a new circuit, or far behind (a restart), it is simply there.
   if (heli.userData.world !== world || heli.position.distanceTo(want) > 900) { heli.position.copy(want); heli.userData.world = world; }
   // Easing after them (quick enough to keep station 400 behind).
@@ -195,7 +205,7 @@ function burstSites(course, stands) {
 
 // `since`: milliseconds of the show so far (render3d.js keeps it, on real
 // time held while paused).
-export function updateFireworks(points, course, frame, since, tier) {
+export function updateFireworks(points, course, frame, stands, since, tier) {
   if (!points) return 0;
   const data = points.userData;
   const flagAt = frame && frame.flagOutAt;
@@ -203,7 +213,7 @@ export function updateFireworks(points, course, frame, since, tier) {
   if (data.forFlag !== flagAt) {
     // A new show: plan its shells.
     data.forFlag = flagAt;
-    const sites = burstSites(course, frame.stands);
+    const sites = burstSites(course, stands);
     const count = FIREWORK_SHELLS[tier] || FIREWORK_SHELLS.low;
     const colours = [frame.winnerColour || "#ffd400", "#ffd400", "#ffffff"].map((c) => new THREE.Color(c));
     let seed = 7;
@@ -250,12 +260,24 @@ export function updateFireworks(points, course, frame, since, tier) {
 // ---------------------------------------------------------------------------
 
 export function buildStarter(course) {
-  // Just before the line, clear of the gantry's post, on the side away from
-  // the pit wall.
-  const p = course.sampleAt(course.track.totalLength - 20);
+  // Just before the line, past the barrier on the side away from the pit
+  // wall; like any scenery it needs its ground clear (moved back along the
+  // lap where it isn't).
   const lane = course.pitLane;
   const side = lane ? -lane.side : -1;
-  const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
+  const total = course.track.totalLength;
+  let spot = null;
+  for (const back of [20, 50, 80, 110, 140]) {
+    const p = course.sampleAt(total - back);
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
+    const x = p.x + p.nx * off;
+    const z = p.y + p.ny * off;
+    if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;
+    course.occupied.add(x, z, 5);
+    spot = { p, x, z };
+    break;
+  }
+  if (!spot) return null;
   const g = new THREE.Group();
   g.name = "starter";
   const stand = new THREE.Mesh(new THREE.BoxGeometry(5, 12, 5), mat(0x2a2d34));
@@ -264,16 +286,27 @@ export function buildStarter(course) {
   const person = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), mat(0xffffff));
   person.position.y = 14;
   g.add(person);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), mat(0xd9a07a));
+  head.position.y = 16.6;
+  g.add(head);
   const chequer = canvasTexture(64, 40, (g2, w, h) => {
     for (let i = 0; i < 8; i += 1) for (let j = 0; j < 5; j += 1) { g2.fillStyle = (i + j) % 2 ? "#111" : "#f4f4f4"; g2.fillRect(i * 8, j * 8, 8, 8); }
   }, { repeat: false });
-  const flag = flagCloth(7, 4.5, new THREE.MeshStandardMaterial({ map: chequer, side: THREE.DoubleSide, roughness: 0.6 }));
-  flag.position.set(0.8, 18, 0);
-  flag.visible = false;
-  g.add(flag);
-  g.position.set(p.x + p.nx * off, p.h, p.y + p.ny * off);
-  g.rotation.y = Math.atan2(p.x - g.position.x, p.y - g.position.z);
+  // The chequered flag on its pole, in the starter's raised hand.
+  const hand = new THREE.Group();
+  hand.position.set(0.9, 15.4, 0);
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6, 6), mat(0x333338, { metalness: 0.5 }));
+  staff.position.y = 3;
+  hand.add(staff);
+  const flag = flagCloth(6, 4, new THREE.MeshStandardMaterial({ map: chequer, side: THREE.DoubleSide, roughness: 0.6 }));
+  flag.position.set(0, 4.6, 0);
+  hand.add(flag);
+  hand.visible = false;
+  g.add(hand);
+  g.position.set(spot.x, spot.p.h, spot.z);
+  g.rotation.y = Math.atan2(spot.p.x - spot.x, spot.p.y - spot.z);
   g.userData.flag = flag;
+  g.userData.hand = hand;
   return g;
 }
 
@@ -281,11 +314,11 @@ export function buildStarter(course) {
 export function updateStarter(starter, flagOutAt, since, t) {
   if (!starter) return false;
   const waving = Boolean(flagOutAt) && since < 20000;
-  const flag = starter.userData.flag;
-  flag.visible = waving;
+  starter.userData.hand.visible = waving;
   if (waving) {
-    flag.rotation.x = Math.sin(t * 7) * 0.8;
-    waveCloth(flag, t, 1);
+    // Waved over the head, side to side.
+    starter.userData.hand.rotation.z = Math.sin(t * 7) * 0.8;
+    waveCloth(starter.userData.flag, t, 1);
   }
   return waving;
 }
