@@ -25,8 +25,8 @@ baseColorFactor hold. Only the box glass is double-sided.
 
 Built with Blender 5.2: the item box's "?" uses Blender's built-in font, so a
 different Blender version may draw it slightly differently. The script clears
-the scene first, so it refuses to run in a saved .blend file unless
-F1_BUILD_FORCE=1 is set.
+the scene first, so it refuses to run over any work (a saved .blend, or
+unsaved changes) unless F1_BUILD_FORCE=1 is set.
 """
 import bpy
 import bmesh
@@ -38,8 +38,8 @@ OUT = os.environ.get("F1_ITEMS_OUT", "")
 
 
 def reset():
-    if bpy.data.filepath and os.environ.get("F1_BUILD_FORCE") != "1":
-        raise RuntimeError(f"build_items.py clears the scene; {bpy.data.filepath} is open. Use a new file, or set F1_BUILD_FORCE=1.")
+    if (bpy.data.filepath or bpy.data.is_dirty) and os.environ.get("F1_BUILD_FORCE") != "1":
+        raise RuntimeError("build_items.py clears the scene, and this one has work in it (saved or not). Use a new file, or set F1_BUILD_FORCE=1.")
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.curves, bpy.data.collections):

@@ -9,6 +9,18 @@ the middle of the car. Materials are named by role (livery_body, livery_trim,
 helmet, ...) so the game can recolour one model into all ten liveries. The
 four wheels and the DRS flap (`drs_flap`, origin on its leading edge) are
 separate objects, so the game can spin and steer the wheels and open the flap.
+
+The helmet (material `helmet`, with the rear spoiler) has equirectangular UVs
+(its visor is painted on, not modelled):
+u runs round the head with the front at u = 0.5 (the seam at the back), v up
+to the crown. r3d/car.js paints each driver's design onto it.
+
+The colours below are linear values, tuned by eye on the car as it renders;
+the game recolours the livery and paints the helmet itself. (The power-up
+models in build_items.py are written as sRGB instead, to match their icons.)
+
+The script clears the scene first, so it refuses to run over any work (a
+saved .blend, or unsaved changes) unless F1_BUILD_FORCE=1 is set.
 """
 import bpy
 import bmesh
@@ -19,6 +31,8 @@ OUT = os.environ.get("F1_CAR_OUT", "")
 
 
 def reset():
+    if (bpy.data.filepath or bpy.data.is_dirty) and os.environ.get("F1_BUILD_FORCE") != "1":
+        raise RuntimeError("build_f1_car.py clears the scene, and this one has work in it (saved or not). Use a new file, or set F1_BUILD_FORCE=1.")
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.curves):
@@ -53,7 +67,6 @@ MATS = {
     "tyre_band": mat("tyre_band", (0.95, 0.8, 0.05), 0.0, 0.6),
     "rim": mat("rim", (0.12, 0.12, 0.13), 0.9, 0.3),
     "helmet": mat("helmet", (1.0, 1.0, 1.0), 0.1, 0.2),
-    "visor": mat("visor", (0.02, 0.02, 0.03), 0.8, 0.1),
     "halo": mat("halo", (0.05, 0.05, 0.06), 0.6, 0.35),
     "rain_light": mat("rain_light", (1.0, 0.06, 0.03), 0.0, 0.3, emit=4.0),
 }
@@ -311,19 +324,67 @@ cu.materials.append(MATS["halo"])
 rod("halo_strut", (0.45, 0, 0.68), (0.27, 0, 0.895), 0.022, "halo")
 
 # --- Driver -----------------------------------------------------------------
+# The helmet: an egg a little longer than it is wide, a flatter chin, a skirt
+# flared at the neck, and UVs for the painted design (seam at the back).
 bm = bmesh.new()
-bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=0.135)
+bm.loops.layers.uv.new("UVMap")
+bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=0.135, calc_uvs=True)
 for v in bm.verts:
-    v.co.x *= 1.12
-    v.co.z += 0.74
-    v.co.x += -0.12
+    x, y, z = v.co
+    # (Blender's UV sphere puts u = 0.5 on +X, the front, and its seam at the back.)
+    x *= 1.12
+    if z < -0.03:
+        # Flatter chin at the front, a flared skirt at the neck.
+        k = (-0.03 - z) / 0.105
+        x *= 1 - 0.18 * k if x > 0 else 1 + 0.04 * k
+        y *= 1 + 0.05 * k
+    v.co = (x - 0.12, y, z + 0.74)
 helmet = link("helmet", bm, "helmet")
 for p in helmet.data.polygons:
     p.use_smooth = True
-loft("visor", [
-    (-0.03, 0.095, 0.745, 0.785),
-    (0.005, 0.085, 0.75, 0.78),
-], segs=16, material="visor")
+# The rear spoiler: a lip moulded to the top back of the shell. Its underside
+# follows the shell (sunk a hair into it), and it thickens toward the trailing
+# edge, as the real ones do.
+def shell_z(x, y):
+    k = 1 - ((x + 0.12) / 0.151) ** 2 - (y / 0.135) ** 2
+    return 0.74 + 0.135 * math.sqrt(max(k, 0.0))
+
+
+bm = bmesh.new()
+NX, NY = 8, 7
+X0, X1, HALF_SPAN = -0.168, -0.215, 0.058
+grid = {}
+for i in range(NX):
+    x = X0 + (X1 - X0) * i / (NX - 1)
+    lift = 0.002 + 0.008 * (i / (NX - 1)) ** 1.5
+    for j in range(NY):
+        y = -HALF_SPAN + 2 * HALF_SPAN * j / (NY - 1)
+        # Taper toward the ends of the span.
+        t = lift * (1 - 0.6 * abs(y) / HALF_SPAN)
+        zb = shell_z(x, y) - 0.003
+        grid[(i, j, 0)] = bm.verts.new((x, y, zb))
+        grid[(i, j, 1)] = bm.verts.new((x, y, zb + t + 0.003))
+for i in range(NX - 1):
+    for j in range(NY - 1):
+        bm.faces.new((grid[(i, j, 1)], grid[(i + 1, j, 1)], grid[(i + 1, j + 1, 1)], grid[(i, j + 1, 1)]))
+        bm.faces.new((grid[(i, j, 0)], grid[(i, j + 1, 0)], grid[(i + 1, j + 1, 0)], grid[(i + 1, j, 0)]))
+for i in range(NX - 1):
+    for j in (0, NY - 1):
+        bm.faces.new((grid[(i, j, 0)], grid[(i + 1, j, 0)], grid[(i + 1, j, 1)], grid[(i, j, 1)]))
+for j in range(NY - 1):
+    for i in (0, NX - 1):
+        bm.faces.new((grid[(i, j, 0)], grid[(i, j, 1)], grid[(i, j + 1, 1)], grid[(i, j + 1, 0)]))
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+spoiler = link("helmet_spoiler", bm, "helmet")
+for p in spoiler.data.polygons:
+    p.use_smooth = True
+# Every spoiler UV points at (0.25, 0.98) -- v = 0.02 once in glTF, the top rows
+# of the painted design at x = 64 -- which every motif paints in the crown
+# colour; so the spoiler wears the crown colour. A new motif must keep that.
+uv = spoiler.data.uv_layers.new(name="UVMap")
+for loop in uv.data:
+    loop.uv = (0.25, 0.98)
+# The visor is painted onto the helmet (r3d/car.js), so it follows the shell.
 
 # --- Suspension ---------------------------------------------------------------
 FRONT_X, REAR_X, TRACK_Y, R_FRONT, R_REAR = 1.85, -1.72, 0.80, 0.355, 0.36

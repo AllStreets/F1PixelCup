@@ -18,7 +18,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
-import { loadCar, buildCar, CAR_SCALE } from "./r3d/car.js";
+import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -64,7 +64,13 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo };
+
+// A driver's painted helmet, read back (for the checks).
+function helmetInfo(driverId) {
+  const driver = (typeof DRIVERS !== "undefined" ? DRIVERS : []).find((d) => d.id === driverId);
+  return driver ? paintedHelmet(driver) : null;
+}
 
 // Photo mode, for the site's promo shots (tools/capture-shots.js): a camera
 // placed by hand instead of the chase camera. Each point is { x, y, d, h }:
@@ -91,7 +97,10 @@ function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
   const layer = powerUpLayer.inspect();
-  return { flaps, ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // Which painted helmet each car on track wears, by driver.
+  const helmets = {};
+  if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
+  return { flaps, helmets, ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
