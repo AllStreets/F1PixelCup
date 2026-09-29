@@ -282,7 +282,7 @@ function syncCars(world, racers, player, now, dt) {
     const steer = Math.max(-0.45, Math.min(0.45, (racer.steer || 0) * 0.45));
     if (car.wheels.FLpivot) car.wheels.FLpivot.rotation.y = -steer;
     if (car.wheels.FRpivot) car.wheels.FRpivot.rotation.y = -steer;
-    const boosting = racer.bulletUntil > now || racer.boostUntil > now;
+    const boosting = racer.formationUntil > now || racer.boostUntil > now;
     car.model.rotation.x = Math.max(-0.05, Math.min(0.05, -(racer.steer || 0) * 0.03 * Math.min(1, Math.abs(racer.speed) / 200)));
     car.glow.visible = boosting;
     if (boosting) car.glow.scale.setScalar(1.6 + Math.sin(now / 30) * 0.5);
@@ -367,7 +367,7 @@ function render(frame) {
     renderer.compile(scene, camera);
     world.compiled = true;
   }
-  syncItems(items, now, course);
+  syncItems(items || [], now, course);
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
     b.userData.box.rotation.set(now / 900 + i, now / 700 + i, 0);
@@ -379,7 +379,7 @@ function render(frame) {
   // aim further down the road as the car gets going.
   const speed = Math.abs(player.speed || 0);
   const sf = Math.min(1, speed / 230);
-  const boosting = player.bulletUntil > now || player.boostUntil > now;
+  const boosting = player.formationUntil > now || player.boostUntil > now;
   const targetFov = BASE_FOV + 15 * Math.pow(sf, 1.4) + (boosting ? 8 : 0);
   world.fov += (targetFov - world.fov) * Math.min(1, dt * 4);
   setFov(world.fov);

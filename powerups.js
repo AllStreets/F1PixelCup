@@ -200,12 +200,15 @@
       && Math.abs((body.lat || 0) - (shot.lat || 0)) < CAR_WIDTH;
   }
 
+  // Arming only protects the car that fired (and its own trailed oil): a car
+  // right in front is hit at once, as a Mario Kart shell would.
   function firstHit(shot, bodies, lapLength, nowMs) {
-    if (nowMs < (shot.armedAt || 0)) return null;
+    const armed = nowMs >= (shot.armedAt || 0);
     let best = null;
     let bestGap = Infinity;
     for (const b of bodies) {
-      if (shot.type === "undercut" && (b.id === shot.ownerId || b.ownerId === shot.ownerId)) continue;
+      const own = b.id === shot.ownerId || b.ownerId === shot.ownerId;
+      if (own && (shot.type === "undercut" || !armed)) continue;
       if (!shotHits(shot, b, lapLength)) continue;
       const gap = Math.abs(wrapDelta(b.d, shot.d, lapLength));
       if (gap < bestGap) { best = b; bestGap = gap; }

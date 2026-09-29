@@ -209,3 +209,13 @@ test("nearestGaps finds the closest car each way round the lap", () => {
   assert.equal(g.behind, 30);
   assert.deepEqual(P.nearestGaps({ id: "me", d: 0 }, [], L), { ahead: null, behind: null });
 });
+
+test("arming only protects the car that fired: a car right in front is hit at once", () => {
+  const L = 1000;
+  const close = { id: "close", d: 110, lat: 0 };
+  const me = { id: "me", d: 100, lat: 0 };
+  assert.equal(P.firstHit(shot("undercut", { d: 100, armedAt: 500 }), [me, close], L, 0).id, "close");
+  assert.equal(P.firstHit(shot("debris", { d: 100, armedAt: 500 }), [me, close], L, 0).id, "close");
+  assert.equal(P.firstHit(shot("debris", { d: 100, armedAt: 500 }), [me], L, 0), null);
+  assert.equal(P.firstHit({ type: "oilSlick", ownerId: "me", d: 100, lat: 0, armedAt: 500 }, [me], L, 0), null);
+});

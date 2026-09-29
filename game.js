@@ -209,8 +209,12 @@ const state = {
   track: CUPS[0].tracks[0],
   racers: [],
   playerId: "",
-  items: [],
+  shots: [],
   hazards: [],
+  safetyCar: null,
+  lastSafetyCarAt: null,
+  boxHiddenUntil: [],
+  fxFlashes: [],
   particles: [],
   countdownStart: 0,
   raceStart: 0,
@@ -524,19 +528,25 @@ function createRacer(driver, kart, isPlayer, slot) {
     rouletteUntil: 0,
     itemCooldownUntil: 0,
     boostUntil: 0,
-    starUntil: 0,
-    bulletUntil: 0,
-    shrinkUntil: 0,
     spinUntil: 0,
     spinImmuneUntil: 0,
     mistakeUntil: 0,
+    lat: 0,
+    drsUntil: 0,
+    protectedUntil: 0,
+    formationUntil: 0,
+    trailingOil: false,
+    trailSince: 0,
+    oilHoldStart: 0,
+    itemReadyAt: 0,
+    itemHeldSince: 0,
+    wasBoosting: false,
     lapAccum: 0,
     stallCheckAt: 0,
     stallDistance: 0,
     lapStartAt: 0,
     lastLapTime: 0,
     bestLapTime: 0,
-    inkUntil: 0,
     driftCharge: 0,
     drifting: false,
     driftSide: 0,
@@ -736,8 +746,12 @@ function startRace(index) {
   state.track = activeCup.tracks[index];
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
-  state.items = [];
+  state.shots = [];
   state.hazards = [];
+  state.safetyCar = null;
+  state.lastSafetyCarAt = null;
+  state.boxHiddenUntil = [];
+  state.fxFlashes = [];
   state.particles = [];
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
@@ -767,7 +781,7 @@ function startRace(index) {
   state.camPos = null;
   state.countdownStart = performance.now();
   state.raceStart = 0;
-  addFeed(`${state.track.name} loaded. DRS shortcut zone is somewhere on circuit.`);
+  addFeed(`${state.track.name} loaded. Red boxes hold the power-ups.`);
   updateStandingsUI();
   updatePlayerUI();
 }
@@ -831,113 +845,180 @@ function getRaceProgress(racer) {
   return racer.lap * state.track.totalLength + getRelativeTrackDistance(racer, state.track);
 }
 
-function assignItemForPlace(place) {
-  const pools = [
-    ["oilSlick", "debris", "drsSignPost"],
-    ["oilSlick", "debris", "undercut", "drsSignPost"],
-    ["debris", "undercut", "overtake", "graining"],
-    ["undercut", "overtake", "graining", "engineBlast"],
-    ["overtake", "safetyCar", "graining", "engineBlast", "formationLap"],
-    ["overtake", "powerDeploy", "safetyCar", "engineBlast", "formationLap", "stewardPenalty"],
-  ];
-  const poolIndex = place <= 2 ? 0 : place <= 4 ? 1 : place <= 6 ? 2 : place <= 8 ? 3 : place <= 10 ? 4 : 5;
-  const pool = pools[poolIndex];
-  return pool[Math.floor(Math.random() * pool.length)];
+// ---------------------------------------------------------------------------
+// Power-ups. The rules (odds, limits, how shots move and hit) live in
+// powerups.js; this is where their effects happen.
+// ---------------------------------------------------------------------------
+
+function raceSeconds(now) {
+  return state.raceStart ? Math.max(0, (now - state.raceStart) / 1000) : 0;
 }
 
-function startRoulette(racer) {
-  if (racer.currentItem !== "none" || racer.rouletteUntil > performance.now()) return;
-  racer.rouletteUntil = performance.now() + 1100;
+function getItemRoute(track) {
+  if (!track.itemRoute) track.itemRoute = PowerUps.makeRoute(track.points, track.roadWidth);
+  return track.itemRoute;
+}
+
+function wrapLap(d) {
+  const L = state.track.totalLength;
+  return ((d % L) + L) % L;
+}
+
+function racerById(id) {
+  return state.racers.find((racer) => racer.id === id);
+}
+
+function firstUnfinished() {
+  return getSortedRacers().find((racer) => !racer.finished) || null;
+}
+
+function isProtected(racer, now) {
+  return racer.protectedUntil > now || racer.formationUntil > now;
+}
+
+// Hooks for the later post-processing pass. Nothing listens yet.
+function emitFx(type, racer) {
+  if (typeof window === "undefined" || typeof CustomEvent !== "function") return;
+  window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type, racerId: racer.id } }));
+}
+
+function addFlash(d, lat, color, size, now, ms = 400) {
+  const w = getItemRoute(state.track).toWorld(d, lat);
+  state.fxFlashes.push({ x: w.x, y: w.y, d, color, size, at: now, until: now + ms });
+}
+
+function itemBodies() {
+  return state.racers.filter((r) => !r.finished).map((r) => ({ id: r.id, d: r.trackDistance || 0, lat: r.lat, speed: r.speed }));
+}
+
+function trailBodies() {
+  return state.racers.filter((r) => r.trailingOil && !r.finished)
+    .map((r) => ({ id: `trail:${r.id}`, ownerId: r.id, d: wrapLap((r.trackDistance || 0) - PowerUps.TRAIL_GAP), lat: r.lat, isTrail: true }));
+}
+
+function startRoulette(racer, now) {
+  if (racer.currentItem !== "none" || racer.rouletteUntil > now) return;
+  racer.rouletteUntil = now + PowerUps.TIMINGS.rouletteMs;
   if (racer.isPlayer) sfx.itemGet();
-  addFeed(`${racer.driver.name} hit a power-up box.`);
 }
 
-function finishRoulette(racer) {
-  const sorted = getSortedRacers();
-  const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
-  racer.currentItem = assignItemForPlace(place);
+function finishRoulette(racer, now) {
+  const leader = firstUnfinished() || racer;
+  const gapFraction = Math.max(0, (getRaceProgress(leader) - getRaceProgress(racer)) / state.track.totalLength);
+  racer.currentItem = PowerUps.rollItem({
+    gapFraction,
+    isLeader: leader.id === racer.id,
+    raceTime: raceSeconds(now),
+    lastSafetyCarAt: state.lastSafetyCarAt,
+    stewardInFlight: state.shots.some((shot) => shot.type === "stewardPenalty"),
+  });
   racer.rouletteUntil = 0;
-  if (racer.isPlayer) {
-    addFeed(`Power-up ready: ${labelizeItem(racer.currentItem)}.`);
-  }
+  racer.itemHeldSince = now;
+  // A human-like pause before the AI uses what it got.
+  racer.itemReadyAt = now + (racer.isPlayer ? 0 : 500 + Math.random() * 1000);
+  if (racer.isPlayer) addFeed(`Power-up ready: ${labelizeItem(racer.currentItem)}.`);
 }
 
 function maybeUseAiItem(racer, now, dt) {
-  if (state.flagOutAt) return;
-  if (racer.isPlayer || racer.currentItem === "none" || racer.itemCooldownUntil > now || racer.spinUntil > now) return;
-  const sorted = getSortedRacers();
-  const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
-  // Expressed per second rather than per frame, otherwise a high refresh rate
-  // turns the field into a firing squad and nobody can move.
-  const usesPerSecond = 0.16 + place * 0.011;
-  if (Math.random() < usesPerSecond * Math.max(dt, 0)) {
-    useItem(racer, racer.currentItem, now);
-  }
+  // Task 5 gives the AI real rules; until then it holds its items.
+  return;
 }
 
-function useItem(racer, item, now) {
+function useItem(racer, now, { trail = false } = {}) {
+  const item = racer.currentItem;
   if (!item || item === "none") return;
-  racer.currentItem = "none";
-  racer.itemCooldownUntil = now + 2600;
-  if (racer.isPlayer) sfx.itemUse();
-  if (item === "oilSlick" || item === "drsSignPost") {
-    state.hazards.push({
-      type: item,
-      x: racer.x - Math.cos(racer.heading) * 18,
-      y: racer.y - Math.sin(racer.heading) * 18,
-      radius: item === "oilSlick" ? 10 : 12,
-      ownerId: racer.id,
-      expiresAt: now + 22000,
-    });
-  } else if (item === "debris" || item === "undercut" || item === "stewardPenalty" || item === "engineBlast") {
-    const target = item === "debris" ? null : chooseTarget(racer, item);
-    state.items.push({
-      type: item,
-      x: racer.x + Math.cos(racer.heading) * 18,
-      y: racer.y + Math.sin(racer.heading) * 18,
-      heading: racer.heading,
-      speed: item === "engineBlast" ? 140 : item === "stewardPenalty" ? 220 : 205,
-      ownerId: racer.id,
-      targetId: target ? target.id : "",
-      expiresAt: now + 12000,
-      armedAt: now + 500,
-    });
-  } else if (item === "overtake") {
-    racer.boostUntil = Math.max(racer.boostUntil, now + 1550);
-  } else if (item === "powerDeploy") {
-    racer.starUntil = now + 5000;
-    racer.boostUntil = Math.max(racer.boostUntil, now + 2600);
-  } else if (item === "safetyCar") {
-    state.racers.forEach((other) => {
-      if (other.id !== racer.id && !other.finished) {
-        other.shrinkUntil = now + 4700;
-        other.spinUntil = Math.max(other.spinUntil, now + 600);
-      }
-    });
-  } else if (item === "graining") {
-    state.racers.forEach((other) => {
-      if (other.id !== racer.id && !other.finished) {
-        other.inkUntil = now + 6200;
-      }
-    });
-  } else if (item === "formationLap") {
-    racer.bulletUntil = now + 4200;
-    racer.boostUntil = Math.max(racer.boostUntil, now + 4200);
+  const T = PowerUps.TIMINGS;
+  const d = racer.trackDistance || 0;
+  if (item === "oilSlick" && trail) {
+    racer.trailingOil = true;
+    racer.trailSince = now;
+    return;
   }
-  addFeed(`${racer.driver.name} used ${labelizeItem(item)}.`);
+  racer.currentItem = "none";
+  racer.trailingOil = false;
+  racer.oilHoldStart = 0;
+  if (racer.isPlayer) sfx.itemUse();
+  if (item === "drs") {
+    racer.drsUntil = now + (PowerUps.isStraight(getItemRoute(state.track), d) ? T.drsStraightMs : T.drsMs);
+    racer.boostUntil = Math.max(racer.boostUntil, racer.drsUntil);
+  } else if (item === "overtakeMode") {
+    racer.protectedUntil = now + T.overtakeModeMs;
+    emitFx("overtakeMode", racer);
+  } else if (item === "formationLap") {
+    racer.formationUntil = now + T.formationLapMs;
+  } else if (item === "oilSlick") {
+    dropOil(racer, now, PowerUps.DROP_GAP);
+  } else if (item === "undercut" || item === "debris" || item === "stewardPenalty") {
+    fireShot(racer, item, now);
+  } else if (item === "safetyCar") {
+    deploySafetyCar(racer, now);
+  }
+  addFeed(`${racer.driver.code} used ${labelizeItem(item)}.`);
 }
 
-function chooseTarget(racer, item) {
-  const sorted = getSortedRacers();
-  if (item === "stewardPenalty") return sorted[0].id === racer.id ? sorted[1] : sorted[0];
-  const ahead = sorted.filter((entry) => getRaceProgress(entry) > getRaceProgress(racer) && !entry.finished);
-  return ahead[0] || null;
+function dropOil(racer, now, gap) {
+  const T = PowerUps.TIMINGS;
+  state.hazards.push({
+    type: "oilSlick",
+    ownerId: racer.id,
+    d: wrapLap((racer.trackDistance || 0) - gap),
+    lat: racer.lat,
+    armedAt: now + T.oilArmMs,
+    expiresAt: now + T.oilLifeMs,
+  });
 }
 
-function spinRacer(racer, duration = 900) {
-  const now = performance.now();
+function releaseTrail(racer, now) {
+  if (!racer.trailingOil) return;
+  racer.trailingOil = false;
+  racer.currentItem = "none";
+  racer.oilHoldStart = 0;
+  dropOil(racer, now, PowerUps.TRAIL_GAP);
+}
+
+// The car directly ahead, if it is within a quarter of a lap.
+function carAhead(racer) {
+  const L = state.track.totalLength;
+  let best = null;
+  let bestGap = Infinity;
+  state.racers.forEach((other) => {
+    if (other.id === racer.id || other.finished) return;
+    const gap = getRaceProgress(other) - getRaceProgress(racer);
+    if (gap > 0 && gap <= L / 4 && gap < bestGap) { best = other; bestGap = gap; }
+  });
+  return best;
+}
+
+function fireShot(racer, type, now) {
+  const T = PowerUps.TIMINGS;
+  const route = getItemRoute(state.track);
+  const d = racer.trackDistance || 0;
+  const speed = racer.physics.maxSpeed * PowerUps.SHOT_SPEEDS[type];
+  const target = type === "undercut" ? carAhead(racer) : type === "stewardPenalty" ? firstUnfinished() : null;
+  // Debris flies the way the car points; across the track that is a sideways
+  // drift that bounces off the barriers.
+  const rel = normalizeAngle(racer.heading - route.headingAt(d));
+  const free = type === "debris";
+  state.shots.push({
+    type,
+    ownerId: racer.id,
+    d: wrapLap(d + PowerUps.DROP_GAP),
+    lat: racer.lat,
+    speed: free ? speed * Math.max(0.35, Math.cos(rel)) : speed,
+    latVel: free || !target ? speed * Math.sin(rel) : 0,
+    targetId: target ? target.id : "",
+    targetLat: target ? target.lat : racer.lat,
+    armedAt: now + T.armMs,
+    expiresAt: now + T.lifeMs[type],
+    age: 0,
+  });
+  if (type === "stewardPenalty" && target) addFeed(`Steward Penalty on ${target.driver.code}.`);
+}
+
+function spinRacer(racer, duration = 900, now = performance.now()) {
+  if (!racer || isProtected(racer, now)) return false;
   // Brief grace period after recovering, so overlapping hits cannot pin a car.
-  if (now < (racer.spinImmuneUntil || 0)) return;
+  if (now < (racer.spinImmuneUntil || 0)) return false;
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
   racer.spinImmuneUntil = now + duration + 1400;
   if (racer.isPlayer) {
@@ -945,10 +1026,16 @@ function spinRacer(racer, duration = 900) {
     sfx.spin();
   }
   racer.speed *= 0.55;
+  emitFx("hitTaken", racer);
+  return true;
+}
+
+function deploySafetyCar(racer, now) {
+  // Replaced in Task 5.
 }
 
 function applyTrackBarrier(racer, surface) {
-  const kartClearance = racer.shrinkUntil > performance.now() ? 8 : 12;
+  const kartClearance = 12;
   const roadClamp = Math.max(6, surface.segmentWidth - kartClearance);
   if (surface.distance <= roadClamp) return;
   const fallbackDx = racer.x - surface.point.x;
@@ -1038,7 +1125,7 @@ function updateLapProgress(racer, now) {
 function updateRacer(racer, dt, now) {
   if (racer.finished) return;
   if (racer.rouletteUntil && now >= racer.rouletteUntil) {
-    finishRoulette(racer);
+    finishRoulette(racer, now);
   }
 
   const nextPoint = state.track.points[racer.waypointIndex % state.track.points.length];
@@ -1108,7 +1195,7 @@ function updateRacer(racer, dt, now) {
     steerInput = Math.sin(now / 60) * 1.2;
   }
 
-  if (racer.bulletUntil > now) {
+  if (racer.formationUntil > now) {
     throttle = 1;
     brake = 0;
     reverse = 0;
@@ -1118,16 +1205,15 @@ function updateRacer(racer, dt, now) {
 
   ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
 
-  const turnRate = racer.physics.turnRate * (0.45 + clamp(racer.speed / 180, 0.2, 1)) * (racer.shrinkUntil > now ? 0.9 : 1);
+  const turnRate = racer.physics.turnRate * (0.45 + clamp(racer.speed / 180, 0.2, 1));
   racer.heading += steerInput * turnRate * dt;
 
   let targetSpeed = racer.physics.maxSpeed;
   const reverseTargetSpeed = -racer.physics.maxSpeed * 0.5;
   if (offroad) targetSpeed *= racer.physics.offroadFactor;
-  if (racer.boostUntil > now) targetSpeed *= 1.22;
-  if (racer.starUntil > now) targetSpeed *= 1.1;
-  if (racer.bulletUntil > now) targetSpeed = racer.physics.maxSpeed * 1.42;
-  if (racer.shrinkUntil > now) targetSpeed *= 0.76;
+  if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
+  if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
+  if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
 
   if (!racer.isPlayer) {
     const difficulty = getDifficulty();
@@ -1202,6 +1288,9 @@ function updateRacer(racer, dt, now) {
   const surfaceBlend = racer.isPlayer && racer.speed < -8 ? 0.04 : 0.22;
   alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
   updateLapProgress(racer, now);
+  // Side offset from the centreline, for shots and oil (track coordinates).
+  const along = getItemRoute(state.track).sample(racer.trackDistance || 0);
+  racer.lat = (racer.x - along.x) * along.nx + (racer.y - along.y) * along.ny;
 
   const wantedWaypoint = desiredWaypointIndex(racer, state.track);
   if (wantedWaypoint !== racer.waypointIndex) {
@@ -1228,11 +1317,21 @@ function updateRacer(racer, dt, now) {
     racer.stallDistance = racer.trackDistance || 0;
   }
 
-  state.track.itemBoxes.forEach((box) => {
+  // Mario Kart boxes: the first car through breaks it (an item only if its
+  // slot is empty), then it is gone for three seconds.
+  state.track.itemBoxes.forEach((box, index) => {
+    if ((state.boxHiddenUntil[index] || 0) > now) return;
     if (distance(racer, box) < 18) {
-      startRoulette(racer);
+      state.boxHiddenUntil[index] = now + PowerUps.TIMINGS.boxHiddenMs;
+      startRoulette(racer, now);
     }
   });
+
+  const boosting = racer.boostUntil > now || racer.formationUntil > now;
+  if (boosting !== racer.wasBoosting) {
+    racer.wasBoosting = boosting;
+    emitFx(boosting ? "boostStart" : "boostEnd", racer);
+  }
 
   emitRacerParticles(racer, dt, now, offroad);
 }
@@ -1247,59 +1346,83 @@ function finishRacer(racer, now) {
   addFeed(`${racer.driver.name} finished ${formatOrdinal(finishedCount)}.`);
 }
 
-function updateItems(dt, now) {
-  state.items = state.items.filter((item) => {
-    if (item.expiresAt < now) return false;
-    const owner = state.racers.find((racer) => racer.id === item.ownerId);
-    if (!owner) return false;
-    if (item.targetId) {
-      const target = state.racers.find((racer) => racer.id === item.targetId);
-      if (target && !target.finished) {
-        const angle = Math.atan2(target.y - item.y, target.x - item.x);
-        item.heading += normalizeAngle(angle - item.heading) * 0.08;
+function updateShots(dt, now) {
+  const L = state.track.totalLength;
+  const route = getItemRoute(state.track);
+  const bodies = itemBodies();
+  const trails = trailBodies();
+  state.shots = state.shots.filter((shot) => {
+    if (now > shot.expiresAt) return false;
+    if (shot.type === "stewardPenalty") {
+      const leader = firstUnfinished();
+      if (!leader) return false;
+      shot.targetId = leader.id;
+    } else if (shot.type === "undercut" && shot.targetId) {
+      const target = racerById(shot.targetId);
+      if (!target || target.finished || PowerUps.wrapDelta(target.trackDistance || 0, shot.d, L) > L / 4) {
+        shot.targetId = "";
+      } else {
+        shot.targetLat = target.lat;
       }
     }
-    item.x += Math.cos(item.heading) * item.speed * dt;
-    item.y += Math.sin(item.heading) * item.speed * dt;
+    PowerUps.advanceShot(shot, dt, route);
+    if (shot.bouncedAt === shot.age) addFlash(shot.d, shot.lat, "#ffb347", 5, now, 250);
 
-    const hit = state.racers.find((racer) => {
-      if (racer.id === item.ownerId || racer.finished) return false;
-      return distance(item, racer) < 16;
-    });
-
-    if (hit && item.armedAt <= now) {
-      spinRacer(hit, item.type === "blueShell" ? 1200 : 850);
-      if (item.type === "bobOmb") {
-        applyAreaBlast(item, 86, item.ownerId);
-      }
+    if (shot.type === "stewardPenalty") {
+      const victims = PowerUps.stewardVictims(shot, bodies, L, now);
+      if (!victims.length) return true;
+      victims.forEach((id, i) => spinRacer(racerById(id), i === 0 ? PowerUps.SPIN_MS.stewardLeader : PowerUps.SPIN_MS.stewardSplash, now));
+      const leader = racerById(victims[0]);
+      addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 26, now, 500);
+      addFeed(`Steward Penalty lands on ${leader.driver.code}.`);
       return false;
     }
 
-    return item.x > -40 && item.x < WORLD.width + 40 && item.y > -40 && item.y < WORLD.height + 40;
-  });
-}
-
-function applyAreaBlast(point, radius, ownerId) {
-  state.racers.forEach((racer) => {
-    if (racer.id !== ownerId && !racer.finished && distance(point, racer) < radius) {
-      spinRacer(racer, 1000);
+    const hit = PowerUps.firstHit(shot, [...trails, ...bodies], L, now);
+    if (!hit) return true;
+    const label = labelizeItem(shot.type);
+    if (hit.isTrail) {
+      const owner = racerById(hit.ownerId);
+      owner.trailingOil = false;
+      owner.currentItem = "none";
+      addFeed(`${owner.driver.code}'s oil slick stopped a ${label}.`);
+    } else {
+      const victim = racerById(hit.id);
+      spinRacer(victim, PowerUps.SPIN_MS[shot.type], now);
+      addFeed(`${label} hit ${victim.driver.code}.`);
     }
+    addFlash(shot.d, shot.lat, shot.type === "undercut" ? "#ff3b30" : "#00d2be", 12, now);
+    return false;
   });
 }
 
 function updateHazards(now) {
+  const L = state.track.totalLength;
+  const bodies = itemBodies();
   state.hazards = state.hazards.filter((hazard) => {
-    if (hazard.expiresAt < now) return false;
-    const victim = state.racers.find((racer) => {
-      if (racer.id === hazard.ownerId || racer.finished) return false;
-      return distance(hazard, racer) < hazard.radius + 8;
-    });
-    if (victim) {
-      spinRacer(victim, hazard.type === "drsSignPost" ? 1050 : 820);
-      return false;
-    }
-    return true;
+    if (now > hazard.expiresAt) return false;
+    const victim = PowerUps.firstHit(hazard, bodies, L, now);
+    if (!victim) return true;
+    spinRacer(racerById(victim.id), PowerUps.SPIN_MS.oilSlick, now);
+    return false;
   });
+  state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
+}
+
+// World positions of everything the renderers draw.
+function powerUpFrame(now) {
+  if (!state.track) return { shots: [], hazards: [], trails: [], safetyCar: null, boxHidden: [], flashes: [] };
+  const route = getItemRoute(state.track);
+  const place = (d, lat) => ({ d, ...route.toWorld(d, lat) });
+  return {
+    shots: state.shots.map((shot) => ({ type: shot.type, ...place(shot.d, shot.lat), age: shot.age })),
+    hazards: state.hazards.map((hazard) => ({ type: hazard.type, ...place(hazard.d, hazard.lat) })),
+    trails: state.racers.filter((r) => r.trailingOil && !r.finished)
+      .map((r) => ({ ownerId: r.id, ...place(wrapLap((r.trackDistance || 0) - PowerUps.TRAIL_GAP), r.lat) })),
+    safetyCar: state.safetyCar ? { ...place(state.safetyCar.d, state.safetyCar.lat), leaving: now >= state.safetyCar.until } : null,
+    boxHidden: state.track.itemBoxes.map((_, i) => (state.boxHiddenUntil[i] || 0) > now),
+    flashes: state.fxFlashes.map((flash) => ({ ...flash, t: (now - flash.at) / (flash.until - flash.at) })),
+  };
 }
 
 function handleRacerContacts(now) {
@@ -1364,8 +1487,8 @@ function handleRacerContacts(now) {
           addScreenShake(clamp(overlap * 0.7, 2, 9), 220);
           if (overlap > 4) sfx.impact();
         }
-        if (a.starUntil > now || a.bulletUntil > now) spinRacer(b, 700);
-        if (b.starUntil > now || b.bulletUntil > now) spinRacer(a, 700);
+        if (isProtected(a, now)) spinRacer(b, PowerUps.SPIN_MS.contact, now);
+        if (isProtected(b, now)) spinRacer(a, PowerUps.SPIN_MS.contact, now);
 
         a.x = clamp(a.x, 24, WORLD.width - 24);
         a.y = clamp(a.y, 24, WORLD.height - 24);
@@ -1394,7 +1517,7 @@ function updateRace(dt, now) {
     const steps = state.flagOutAt && !racer.isPlayer ? FLAG_FAST_FORWARD : 1;
     for (let step = 0; step < steps; step += 1) updateRacer(racer, dt, now);
   });
-  updateItems(dt, now);
+  updateShots(dt, now);
   updateHazards(now);
   updateParticles(dt);
   handleRacerContacts(now);
@@ -1625,8 +1748,12 @@ function resetToGarage() {
   state.track = getSelectedCup().tracks[0];
   state.cupEntries = [];
   state.racers = [];
-  state.items = [];
+  state.shots = [];
   state.hazards = [];
+  state.safetyCar = null;
+  state.lastSafetyCarAt = null;
+  state.boxHiddenUntil = [];
+  state.fxFlashes = [];
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
@@ -2127,6 +2254,7 @@ function drawDriverItemBoxesInScene(track, player, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
   const now = performance.now();
   track.itemBoxes
+    .filter((box, index) => !((state.boxHiddenUntil[index] || 0) > now))
     .map((box) => ({ box, ...projectScene(camOrigin, cameraHeading, box, ITEM_BOX_HEIGHT) }))
     .filter((entry) => entry.visible && entry.forward < 700 && entry.forward > 26
       && isOnRenderedStretch(entry.box, track, player, entry.box))
@@ -2152,20 +2280,25 @@ function drawDriverItemBoxesInScene(track, player, cameraHeading) {
 
 function drawDriverItemsInScene(player, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
-  state.items
-    .map((item) => ({ item, ...projectScene(camOrigin, cameraHeading, item, 4) }))
-    .filter((entry) => entry.visible && entry.forward < 700
-      && isOnRenderedStretch(entry.item, state.track, player, null))
+  const frame = powerUpFrame(performance.now());
+  const colours = { undercut: "#dc0000", stewardPenalty: "#0090ff", debris: "#00d2be", oilSlick: "#111111", safetyCar: "#c9ced6" };
+  [...frame.shots, ...frame.hazards, ...frame.trails.map((t) => ({ ...t, type: "oilSlick" })),
+    ...(frame.safetyCar ? [{ ...frame.safetyCar, type: "safetyCar" }] : [])]
+    .map((item) => ({ item, ...projectScene(camOrigin, cameraHeading, item, item.type === "stewardPenalty" ? 16 : 3) }))
+    .filter((entry) => entry.visible && entry.forward < 700 && isOnRenderedStretch(entry.item, state.track, player, null))
     .sort((a, b) => b.forward - a.forward)
     .forEach(({ item, x, y, scale }) => {
-      const size = clamp(9 * scale, 2, 46);
+      const size = clamp((item.type === "safetyCar" ? 16 : 9) * scale, 2, 60);
       ctx.save();
       ctx.translate(x, y);
-      ctx.fillStyle = item.type === "undercut" ? "#dc0000" : item.type === "stewardPenalty" ? "#0090ff" : "#00d2be";
-      ctx.fillRect(-size, -size * 0.8, size * 2, size * 1.6);
-      ctx.strokeStyle = "rgba(255, 240, 201, 0.75)";
-      ctx.lineWidth = Math.max(1, size * 0.16);
-      ctx.strokeRect(-size, -size * 0.8, size * 2, size * 1.6);
+      ctx.fillStyle = colours[item.type] || "#ffffff";
+      if (item.type === "oilSlick") {
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 1.4, size * 0.45, 0, 0, TAU);
+        ctx.fill();
+      } else {
+        ctx.fillRect(-size, -size * 0.8, size * 2, size * 1.6);
+      }
       ctx.restore();
     });
 }
@@ -2199,7 +2332,7 @@ function drawDriverRacers(player, track, cameraHeading) {
       const yaw = normalizeAngle(racer.heading - cameraHeading);
       drawKartRear(ctx, x, y, spriteScale, racer.kart, racer.driver, yaw, {
         isPlayer: racer.id === player.id,
-        boosting: racer.bulletUntil > now || racer.boostUntil > now,
+        boosting: racer.formationUntil > now || racer.boostUntil > now,
         spinning: racer.spinUntil > now,
       });
     });
@@ -2346,7 +2479,7 @@ function drawDriverView(track) {
       camPos: state.camPos,
       roll: state.camRoll,
       shake: getScreenShake(),
-      items: state.items,
+      powerUps: powerUpFrame(now),
       particles: state.particles,
       now,
     });
@@ -2357,7 +2490,6 @@ function drawDriverView(track) {
     drawDriverHud(track, player);
     if (state.phase === "countdown") drawStartLights(now);
     drawLightsOutFlash(now);
-    drawPlayerEffects();
     return;
   }
 
@@ -2408,7 +2540,6 @@ function drawDriverView(track) {
   drawDriverHud(track, player);
   if (state.phase === "countdown") drawStartLights(performance.now());
   drawLightsOutFlash(performance.now());
-  drawPlayerEffects();
 }
 
 // Subtle speed streaks at the screen edges once you are really moving.
@@ -2667,7 +2798,7 @@ function spawnParticle(particle) {
 }
 
 function emitRacerParticles(racer, dt, now, offroad) {
-  const boosting = racer.boostUntil > now || racer.bulletUntil > now;
+  const boosting = racer.boostUntil > now || racer.formationUntil > now;
   const sliding = racer.drifting;
   const scuffing = offroad && Math.abs(racer.speed) > 40;
   if (!boosting && !sliding && !scuffing) return;
@@ -3424,67 +3555,6 @@ function drawStartLine(track) {
   ctx.restore();
 }
 
-function drawItemBoxes(track) {
-  const pulse = 6 + Math.sin(performance.now() / 180) * 2;
-  track.itemBoxes.forEach((box) => {
-    ctx.save();
-    ctx.translate(box.x, box.y);
-    ctx.rotate(performance.now() / 700);
-    ctx.fillStyle = "#dc0000";
-    ctx.fillRect(-pulse, -pulse, pulse * 2, pulse * 2);
-    ctx.strokeStyle = "#fff0c9";
-    ctx.strokeRect(-pulse, -pulse, pulse * 2, pulse * 2);
-    ctx.restore();
-  });
-}
-
-function drawHazards() {
-  state.hazards.forEach((hazard) => {
-    if (hazard.type === "oilSlick") {
-      ctx.fillStyle = "#888800";
-      ctx.beginPath();
-      ctx.moveTo(hazard.x, hazard.y - 10);
-      ctx.lineTo(hazard.x + 8, hazard.y + 10);
-      ctx.lineTo(hazard.x - 8, hazard.y + 10);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.fillStyle = "#dc0000";
-      ctx.fillRect(hazard.x - 9, hazard.y - 9, 18, 18);
-      ctx.strokeStyle = "#ffffff";
-      ctx.strokeRect(hazard.x - 9, hazard.y - 9, 18, 18);
-    }
-  });
-}
-
-function drawItems() {
-  state.items.forEach((item) => {
-    ctx.save();
-    ctx.translate(item.x, item.y);
-    ctx.rotate(item.heading);
-    ctx.fillStyle = item.type === "engineBlast" ? "#ff4400" : item.type === "stewardPenalty" ? "#0090ff" : item.type === "undercut" ? "#dc0000" : "#00d2be";
-    ctx.fillRect(-8, -6, 16, 12);
-    ctx.fillStyle = "#fff0c9";
-    ctx.fillRect(-3, -8, 6, 4);
-    ctx.restore();
-  });
-}
-
-function drawRacers() {
-  const sorted = [...state.racers].sort((a, b) => a.y - b.y);
-  sorted.forEach((racer) => {
-    drawKart(ctx, racer.x, racer.y, racer.heading, racer.kart, racer.driver, racer.shrinkUntil > performance.now() ? 0.82 : 1);
-    if (racer.starUntil > performance.now()) {
-      ctx.strokeStyle = "#ffe36e";
-      ctx.strokeRect(racer.x - 16, racer.y - 16, 32, 32);
-    }
-    if (racer.isPlayer) {
-      ctx.fillStyle = "#fff0c9";
-      ctx.fillRect(racer.x - 14, racer.y - 30, 28, 4);
-    }
-  });
-}
-
 function drawKart(targetCtx, x, y, heading, kart, driver, scale = 1) {
   targetCtx.save();
   targetCtx.translate(x, y);
@@ -3528,25 +3598,10 @@ function drawKart(targetCtx, x, y, heading, kart, driver, scale = 1) {
   targetCtx.restore();
 }
 
-function drawPlayerEffects() {
-  const player = getPlayer();
-  if (!player) return;
-  if (player.inkUntil > performance.now()) {
-    ctx.save();
-    ctx.fillStyle = "rgba(18, 10, 21, 0.22)";
-    ctx.fillRect(0, 0, view.width, 24);
-    ctx.fillRect(0, 0, 34, 184);
-    ctx.fillRect(view.width - 34, 0, 34, 184);
-    [[92, 46, 88, 22], [view.width - 184, 42, 96, 24], [view.width / 2 - 44, 28, 88, 18]].forEach(([x, y, w, h]) => {
-      ctx.fillRect(x, y, w, h);
-    });
-    ctx.restore();
-  }
-}
-
 // Pausing shifts every deadline in flight. Without this, a paused boost, spin,
 // item cooldown or lap timer would all expire the instant the game resumes.
-const RACER_TIME_FIELDS = ["rouletteUntil", "itemCooldownUntil", "boostUntil", "starUntil", "bulletUntil", "shrinkUntil", "spinUntil", "spinImmuneUntil", "inkUntil", "lapStartAt"];
+const RACER_TIME_FIELDS = ["rouletteUntil", "itemCooldownUntil", "boostUntil", "drsUntil", "protectedUntil", "formationUntil",
+  "spinUntil", "spinImmuneUntil", "lapStartAt", "itemReadyAt", "itemHeldSince", "trailSince", "oilHoldStart"];
 
 function shiftRaceClocks(delta) {
   state.racers.forEach((racer) => {
@@ -3554,13 +3609,23 @@ function shiftRaceClocks(delta) {
       if (racer[field]) racer[field] += delta;
     });
   });
-  state.items.forEach((item) => {
-    if (item.expiresAt) item.expiresAt += delta;
-    if (item.armedAt) item.armedAt += delta;
+  state.shots.forEach((shot) => {
+    shot.expiresAt += delta;
+    shot.armedAt += delta;
   });
   state.hazards.forEach((hazard) => {
-    if (hazard.expiresAt) hazard.expiresAt += delta;
+    hazard.expiresAt += delta;
+    hazard.armedAt += delta;
   });
+  state.fxFlashes.forEach((flash) => {
+    flash.at += delta;
+    flash.until += delta;
+  });
+  state.boxHiddenUntil = state.boxHiddenUntil.map((t) => (t ? t + delta : t));
+  if (state.safetyCar) {
+    state.safetyCar.until += delta;
+    if (state.safetyCar.leaveUntil) state.safetyCar.leaveUntil += delta;
+  }
   ["raceStart", "flagOutAt", "resultTimeoutAt", "countdownStart",
    "hudPlaceFlashUntil", "finalLapAt", "shakeUntil"].forEach((field) => {
     if (state[field]) state[field] += delta;
@@ -3697,8 +3762,11 @@ function bindEvents() {
     if (event.code === "Space") {
       event.preventDefault();
       const player = getPlayer();
-      if (player && state.phase === "race" && player.currentItem !== "none") {
-        useItem(player, player.currentItem, performance.now());
+      if (event.repeat || !player || state.phase !== "race" || state.paused) return;
+      if (player.currentItem === "oilSlick") {
+        if (!player.trailingOil) player.oilHoldStart = performance.now();
+      } else if (player.currentItem !== "none") {
+        useItem(player, performance.now());
       }
     }
   });
