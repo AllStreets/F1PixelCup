@@ -3,6 +3,7 @@
 // filename: tools/checks/grid-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors []. `measured` reports the
 // difficulty margins.
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   const errors = [];
   const results = {};

@@ -4,6 +4,7 @@
 // on http://localhost:8765. Expected: races 4, cupsCompleted 1, the bonus
 // counted once (careerAfterSecondPodium === careerAfterCup), quitRecorded 0,
 // every perDriver and remembered value true, no errors.
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -169,5 +170,5 @@ async (page) => {
     return Boolean(row) && row.textContent.includes("Charles Leclerc");
   });
   await context.close();
-  return { ...result, perDriver, remembered, errors };
+  return { results: { ...result, perDriver, remembered }, errors };
 }

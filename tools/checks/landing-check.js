@@ -2,7 +2,9 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split and v1LeftAlone true.
+// yourDrivers, latestByRace, v1Split and v1LeftAlone true; threeLoaded false
+// (the site never loads the 3D engine); every noSideScroll true; errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -148,5 +150,5 @@ async (page) => {
   out.phoneNote = await q.evaluate(() => { const n = document.getElementById("phone-play-note"); return Boolean(n) && n.open === true; });
   out.phoneStayed = !q.url().includes("play.html");
   await phone.close();
-  return { ...out, errors };
+  return { results: out, errors };
 }

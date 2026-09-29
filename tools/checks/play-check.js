@@ -1,6 +1,8 @@
 // Browser check for play.html. Run with the Playwright MCP tool
 // browser_run_code_unsafe, filename: tools/checks/play-check.js, dev server on
 // http://localhost:8765. Uses the real window size (viewport: null).
+// Expected: every boolean in `results` true, tiles 20, errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -103,5 +105,5 @@ async (page) => {
   out.deepLinkCareer = await visible("career-screen");
 
   await context.close();
-  return { ...out, errors };
+  return { results: out, errors };
 }

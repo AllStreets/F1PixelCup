@@ -41,41 +41,41 @@ The full regression set, run before every merge:
 ## Stage A — Finish stage 3: one career per driver (branch `driver-careers`)
 
 - [x] Spec: `docs/superpowers/specs/2026-09-29-driver-careers-design.md` (`4019515`)
-- [ ] Build a profile v2 in `career.js`:
-  - [ ] the `drivers` map, `lastDriverId`, `getDriver` and `listDrivers`;
-  - [ ] v1 → v2 migration, with the raw backup `f1pixelcup.profile.backup.v1-<ts>`;
-  - [ ] `recordRace` and `recordCup` require `driverId`.
-- [ ] Rewrite `tests/career.store.test.js` for v2: independence, cups once per `cupRunId`, two tabs, corrupt/newer/throwing storage, quota failures.
-- [ ] Migration tests:
-  - [ ] a mixed history splits exactly, with ratings replayed per driver;
-  - [ ] cups go by `cupRunId`;
-  - [ ] leftovers go to the most-raced driver;
-  - [ ] an empty save goes to Leclerc;
-  - [ ] a backup failure leaves the save untouched;
-  - [ ] migrating twice changes nothing.
-- [ ] Wire up the UI:
-  - [ ] the pit-lane career chip follows the selected driver (`screens.js`, `game.js`, `play.css`);
-  - [ ] the career screen gets its "Your drivers" list, and choosing a row selects that driver;
-  - [ ] the results and podium strips name the driver.
-- [ ] The landing "Your drivers" section (`index.html`, `landing.js`, `landing.css`): a feature card plus rows, and the empty state "1200 · F4".
-- [ ] The README and How to play say one career per driver.
-- [ ] Extend the browser checks:
-  - [ ] `career-check.js`: two drivers keep two careers, the chip follows, and the row selects;
-  - [ ] `landing-check.js`: renders from v2, and from v1 through migration;
-  - [ ] update `grid-check.js` for the v2 profile.
-- [ ] Fix the check harness: `tools/checks/keys-check.js` returns a flat `{ ...out, errors }`, not `{ results, errors }`. Make the harness and plan docs read it correctly, or align it with the other checks. Pick one convention and document it at the top of each check.
-- [ ] Investigate the `pauseFreezesPicture` flake (`tools/checks/powerups-check.js:423`).
-  - [ ] Reproduce it 20× and find the root cause: rAF timing versus the fixed-step clock, or the render still easing after pause.
-  - [ ] Fix the cause rather than widening a tolerance.
-  - [ ] Pass 20/20.
-- [ ] Final fresh review of the whole branch, with every finding fixed.
-- [ ] Run the full regression set, merge `driver-careers` to `main`, push, check live, and tick this stage in the roadmap.
+- [x] Build a profile v2 in `career.js`:
+  - [x] the `drivers` map, `lastDriverId`, `getDriver` and `listDrivers`;
+  - [x] v1 → v2 migration. Ruling from the final review: v2 moved to its own key, `f1pixelcup.profile.v2`, and the v1 save stays put as the backup, so no copy is made;
+  - [x] `recordRace` and `recordCup` require `driverId`.
+- [x] Rewrite `tests/career.store.test.js` for v2: independence, cups once per `cupRunId`, two tabs, corrupt/newer/throwing storage, quota failures.
+- [x] Migration tests:
+  - [x] a mixed history splits exactly, with ratings replayed per driver;
+  - [x] cups go by `cupRunId`;
+  - [x] leftovers go to the most-raced driver;
+  - [x] an empty save goes to Leclerc;
+  - [x] a failed v2 write leaves the v1 save untouched and doesn't migrate again;
+  - [x] migrating twice changes nothing.
+- [x] Wire up the UI:
+  - [x] the pit-lane career chip follows the selected driver (`screens.js`, `game.js`, `play.css`);
+  - [x] the career screen gets its "Your drivers" list, and choosing a row selects that driver;
+  - [x] the results and podium strips name the driver.
+- [x] The landing "Your drivers" section (`index.html`, `landing.js`, `landing.css`): a feature card plus rows, and the empty state "1200 · F4".
+- [x] The README and How to play say one career per driver.
+- [x] Extend the browser checks:
+  - [x] `career-check.js`: two drivers keep two careers, the chip follows, and the row selects;
+  - [x] `landing-check.js`: renders from v2, and from v1 through migration;
+  - [x] update `grid-check.js` for the v2 profile.
+- [x] Fix the check harness: `tools/checks/keys-check.js` returns a flat `{ ...out, errors }`, not `{ results, errors }`. Make the harness and plan docs read it correctly, or align it with the other checks. Pick one convention and document it at the top of each check.
+- [x] Investigate the `pauseFreezesPicture` flake (`tools/checks/powerups-check.js:423`).
+  - [x] Reproduce it 20× and find the root cause: rAF timing versus the fixed-step clock, or the render still easing after pause.
+  - [x] Fix the cause rather than widening a tolerance.
+  - [x] Pass 20/20.
+- [x] Final fresh review of the whole branch, with every finding fixed (`45c33fd`). There were 6 Important and 15 Minor findings, all fixed except the scope minor: the stage-3 commit also carried check timing waits and this list, and it isn't rewritten after the fact.
+- [x] Run the full regression set, merge `driver-careers` to `main`, push, check live, and tick this stage in the roadmap.
 
 ## Stage B — Quick wins
 
 ### B1. MIT license
 
-- [ ] Add `LICENSE` at the repo root: the standard MIT text, `Copyright (c) 2026 Connor Evans`.
+- [ ] Add `LICENSE` at the repo root: the standard MIT text, `Copyright (c) 2026 AllStreets`. This is the public GitHub identity that owns the repo; the user's real name isn't published without asking.
 - [ ] Make the README "License" section link to `LICENSE`.
 - [ ] Mention it in the landing footer (`index.html`).
 - [ ] Check `.vercelignore` doesn't matter here (LICENSE may deploy; harmless). Merge and push.

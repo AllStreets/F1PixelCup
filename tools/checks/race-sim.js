@@ -3,6 +3,7 @@
 // browser_run_code_unsafe, filename: tools/checks/race-sim.js, with the dev
 // server on http://localhost:8765. Expected: every circuit finished: 20,
 // laps [5,5], no errors.
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {

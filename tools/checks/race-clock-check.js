@@ -5,6 +5,7 @@
 // Run with the Playwright MCP tool browser_run_code_unsafe,
 // filename: tools/checks/race-clock-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   const errors = [];
   const results = {};
