@@ -4,16 +4,16 @@
 // the tests.
 
 const TEAMS = [
-  { id: "redBull", name: "Red Bull Racing", car: "RB21", style: "Navy livery, fastest car on the grid.", body: "#1e41b2", trim: "#e8bf00", stats: { speed: 0.06, acceleration: 0.01, handling: 0.02, weight: 0.04, traction: 0.03, drift: 0.01 } },
-  { id: "ferrari", name: "Scuderia Ferrari", car: "SF-25", style: "Iconic Scuderia red with yellow accents.", body: "#dc0000", trim: "#ffed00", stats: { speed: 0.04, acceleration: 0.03, handling: 0.04, weight: 0.01, traction: 0.02, drift: 0.03 } },
-  { id: "mclaren", name: "McLaren F1 Team", car: "MCL39", style: "Papaya orange with electric blue trim.", body: "#ff8000", trim: "#0093cc", stats: { speed: 0.05, acceleration: 0.04, handling: 0.03, weight: -0.01, traction: 0.03, drift: 0.02 } },
-  { id: "mercedes", name: "Mercedes-AMG F1", car: "W16", style: "Silver arrows with teal highlights.", body: "#00d2be", trim: "#c0c0c0", stats: { speed: 0.02, acceleration: 0.03, handling: 0.03, weight: 0.01, traction: 0.02, drift: 0.01 } },
-  { id: "astonMartin", name: "Aston Martin F1", car: "AMR25", style: "British racing green with lime.", body: "#006f62", trim: "#cedc00", stats: { speed: -0.01, acceleration: -0.01, handling: 0.02, weight: 0.02, traction: 0.02, drift: 0.01 } },
-  { id: "alpine", name: "BWT Alpine F1", car: "A525", style: "French blue with pink BWT gradient.", body: "#0090ff", trim: "#ff87bc", stats: { speed: -0.02, acceleration: -0.01, handling: 0.01, weight: -0.01, traction: -0.01, drift: 0 } },
-  { id: "williams", name: "Williams Racing", car: "FW47", style: "Royal blue and white livery.", body: "#005aff", trim: "#ffffff", stats: { speed: -0.03, acceleration: -0.01, handling: -0.01, weight: -0.01, traction: -0.01, drift: -0.01 } },
-  { id: "haas", name: "MoneyGram Haas F1", car: "VF-25", style: "White and red with black accents.", body: "#e8002d", trim: "#ffffff", stats: { speed: -0.03, acceleration: -0.02, handling: -0.01, weight: 0, traction: -0.01, drift: -0.01 } },
-  { id: "racingBulls", name: "Visa Cash App RB", car: "VCARB 02", style: "White with blue and red accents.", body: "#6692ff", trim: "#ffffff", stats: { speed: -0.02, acceleration: 0.01, handling: 0.01, weight: -0.01, traction: 0, drift: 0 } },
-  { id: "sauber", name: "Stake F1 / Sauber", car: "C45", style: "Black with neon green Stake branding.", body: "#2a2a2a", trim: "#39ff14", stats: { speed: -0.04, acceleration: -0.02, handling: -0.01, weight: -0.01, traction: -0.01, drift: -0.01 } },
+  { id: "redBull", short: "Red Bull", name: "Red Bull Racing", car: "RB21", style: "Navy livery, fastest car on the grid.", body: "#1e41b2", trim: "#e8bf00", stats: { speed: 0.06, acceleration: 0.01, handling: 0.02, weight: 0.04, traction: 0.03, drift: 0.01 } },
+  { id: "ferrari", short: "Ferrari", name: "Scuderia Ferrari", car: "SF-25", style: "Iconic Scuderia red with yellow accents.", body: "#dc0000", trim: "#ffed00", stats: { speed: 0.04, acceleration: 0.03, handling: 0.04, weight: 0.01, traction: 0.02, drift: 0.03 } },
+  { id: "mclaren", short: "McLaren", name: "McLaren F1 Team", car: "MCL39", style: "Papaya orange with electric blue trim.", body: "#ff8000", trim: "#0093cc", stats: { speed: 0.05, acceleration: 0.04, handling: 0.03, weight: -0.01, traction: 0.03, drift: 0.02 } },
+  { id: "mercedes", short: "Mercedes", name: "Mercedes-AMG F1", car: "W16", style: "Silver arrows with teal highlights.", body: "#00d2be", trim: "#c0c0c0", stats: { speed: 0.02, acceleration: 0.03, handling: 0.03, weight: 0.01, traction: 0.02, drift: 0.01 } },
+  { id: "astonMartin", short: "Aston Martin", name: "Aston Martin F1", car: "AMR25", style: "British racing green with lime.", body: "#006f62", trim: "#cedc00", stats: { speed: -0.01, acceleration: -0.01, handling: 0.02, weight: 0.02, traction: 0.02, drift: 0.01 } },
+  { id: "alpine", short: "Alpine", name: "BWT Alpine F1", car: "A525", style: "French blue with pink BWT gradient.", body: "#0090ff", trim: "#ff87bc", stats: { speed: -0.02, acceleration: -0.01, handling: 0.01, weight: -0.01, traction: -0.01, drift: 0 } },
+  { id: "williams", short: "Williams", name: "Williams Racing", car: "FW47", style: "Royal blue and white livery.", body: "#005aff", trim: "#ffffff", stats: { speed: -0.03, acceleration: -0.01, handling: -0.01, weight: -0.01, traction: -0.01, drift: -0.01 } },
+  { id: "haas", short: "Haas", name: "MoneyGram Haas F1", car: "VF-25", style: "White and red with black accents.", body: "#e8002d", trim: "#ffffff", stats: { speed: -0.03, acceleration: -0.02, handling: -0.01, weight: 0, traction: -0.01, drift: -0.01 } },
+  { id: "racingBulls", short: "Racing Bulls", name: "Visa Cash App RB", car: "VCARB 02", style: "White with blue and red accents.", body: "#6692ff", trim: "#ffffff", stats: { speed: -0.02, acceleration: 0.01, handling: 0.01, weight: -0.01, traction: 0, drift: 0 } },
+  { id: "sauber", short: "Sauber", name: "Stake F1 / Sauber", car: "C45", style: "Black with neon green Stake branding.", body: "#2a2a2a", trim: "#39ff14", stats: { speed: -0.04, acceleration: -0.02, handling: -0.01, weight: -0.01, traction: -0.01, drift: -0.01 } },
 ];
 
 function getTeamForDriver(driver) {
@@ -123,6 +123,21 @@ const POWER_UPS = [
     controls: "Space to deploy it." },
 ];
 
+// Who drives in each promo shot on the site (tools/capture-shots.js takes the
+// pictures; landing.js names them in the alt text): Leclerc first and Hamilton
+// second, in the order the site shows them, then the rest of the grid.
+const SHOT_DRIVERS = {
+  hero: "leclerc",
+  items: {
+    oilSlick: "leclerc", debris: "hamilton", drs: "norris", undercut: "verstappen",
+    overtakeMode: "piastri", stewardPenalty: "russell", formationLap: "alonso", safetyCar: "albon",
+  },
+  circuits: {
+    monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
+    monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
+  },
+};
+
 if (typeof module === "object" && module.exports) {
-  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, POWER_UPS, getTeamForDriver };
+  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, POWER_UPS, SHOT_DRIVERS, getTeamForDriver };
 }

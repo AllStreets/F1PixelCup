@@ -2,7 +2,7 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split and v1LeftAlone true; threeLoaded false
+// yourDrivers, latestByRace, v1Split, v1LeftAlone, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true; threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; errors [].
 // Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
@@ -57,6 +57,29 @@ async (page) => {
   out.puOddsRows = await p.locator("#power-ups table.pu-odds tbody tr").count();
   out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "9%");
   out.navLink = await p.locator('nav a[href="#power-ups"]').count();
+  // The promo shots show the whole grid: each alt text names its driver and
+  // team (from SHOT_DRIVERS), Leclerc first and Hamilton second, and each set
+  // spans six teams or more.
+  out.shotsSpanTheGrid = await p.evaluate(() => {
+    const teamsIn = (sel) => [...document.querySelectorAll(sel)].map((img) => {
+      const driver = DRIVERS.find((d) => img.alt.startsWith(`${d.name}'s `));
+      return driver ? driver.teamId : null;
+    });
+    const firstTwo = (sel) => [...document.querySelectorAll(sel)].slice(0, 2).map((img) => img.alt.split("'s")[0]);
+    const sets = ["#circuits .circuit-shot img", "#power-ups .pu-shot img"];
+    return sets.every((sel) => {
+      const teams = teamsIn(sel);
+      return teams.length === 8 && teams.every(Boolean) && new Set(teams).size >= 6
+        && firstTwo(sel).join("|") === "Charles Leclerc|Lewis Hamilton";
+    });
+  });
+  // The cards show the new icons (the broadcast style's own tile), and the
+  // hero's caption names the driver the picture was taken with.
+  out.cardsShowNewIcons = await p.evaluate(() => [...document.querySelectorAll("#power-ups .pu-card")].every((card) => {
+    const svg = card.querySelector(".pu-icon svg");
+    return svg && svg.querySelector(`linearGradient#tile-${card.dataset.id}`) && svg.getAttribute("width") === "64";
+  }));
+  out.heroFromData = await p.evaluate(() => document.querySelector("#hero img").alt.startsWith(`${DRIVERS.find((d) => d.id === SHOT_DRIVERS.hero).name}'s Ferrari`));
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   await clearProfiles();

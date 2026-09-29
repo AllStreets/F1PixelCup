@@ -19,9 +19,10 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
 import { loadCar, buildCar, CAR_SCALE } from "./r3d/car.js";
-import { buildCourse, buildCircuit, buildDecor, buildItemBox } from "./r3d/track.js";
+import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { createPowerUpLayer } from "./r3d/powerups.js";
+import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
+import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 
 const MAX_PARTICLES = 256;
 
@@ -63,7 +64,16 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect, prepare };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera };
+
+// Photo mode, for the site's promo shots (tools/capture-shots.js): a camera
+// placed by hand instead of the chase camera. Each point is { x, y, d, h }:
+// world x/y as the game has them, d a lap distance for the road height there,
+// h the height above the road. null goes back to the chase camera.
+let photoCamera = null;
+function setPhotoCamera(shot) {
+  photoCamera = shot || null;
+}
 
 // Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
 // the heavy work happens behind a loading panel instead of mid-countdown.
@@ -80,9 +90,61 @@ function prepare(track) {
 function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
-  return { flaps, ...powerUpLayer.inspect(), boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [] };
+  const layer = powerUpLayer.inspect();
+  return { flaps, ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
+
+// The power-up models load alongside; nothing waits on them.
+// The power-up models load alongside; nothing waits on them. Before they swap
+// in, their shaders (and the game's own oil surface) are compiled, so the swap
+// never stalls a frame mid-race.
+loadItemModels({
+  prepare(templates) {
+    const holder = new THREE.Group();
+    Object.values(templates).forEach((t) => holder.add(t.clone(true)));
+    const plane = new THREE.PlaneGeometry(1, 1);
+    itemRuntimeMaterials().forEach((m) => holder.add(new THREE.Mesh(plane, m)));
+    scene.add(holder);
+    const done = () => { scene.remove(holder); plane.dispose(); };
+    const compiling = renderer.compileAsync ? renderer.compileAsync(scene, camera) : Promise.resolve(renderer.compile(scene, camera));
+    return compiling.then(done, done);
+  },
+});
+whenItemsReady(() => { if (current) current.boxes.forEach(upgradeItemBox); });
+
+// What the checks see of the item models: whether each is in, and its size
+// (measured once, from the model itself).
+const ITEM_KINDS = ["itemBox", "oil", "debris", "undercut", "steward", "safetyCar"];
+const itemSizes = {};
+function itemsInspect(layer) {
+  const { ready, failed } = itemsState();
+  const templates = itemTemplates();
+  const models = {};
+  ITEM_KINDS.forEach((kind) => {
+    const t = ready && templates[kind];
+    if (!t) { models[kind] = { fromGlb: false }; return; }
+    if (!itemSizes[kind]) itemSizes[kind] = new THREE.Box3().setFromObject(t).getSize(new THREE.Vector3()).toArray();
+    models[kind] = { fromGlb: true, size: itemSizes[kind] };
+  });
+  const boxesFromGlb = Boolean(current) && current.boxes.length > 0 && current.boxes.every((b) => b.userData.body.userData.fromGlb);
+  return { ready, failed, models, boxesFromGlb, visibleFromGlb: layer.visibleFromGlb, inViewFromGlb: itemsInView() };
+}
+
+// How many power-ups drawn from their models are inside the camera's view.
+const frustum = new THREE.Frustum();
+const viewMatrix = new THREE.Matrix4();
+function itemsInView() {
+  camera.updateMatrixWorld();
+  frustum.setFromProjectionMatrix(viewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+  let n = 0;
+  powerUpLayer.group.children.forEach((holder) => {
+    const body = holder.userData.body;
+    if (!holder.visible || !body || !body.userData.fromGlb) return;
+    if (frustum.intersectsBox(new THREE.Box3().setFromObject(body))) n += 1;
+  });
+  return n;
+}
 
 loadCar(() => { api.ready = true; }, (error) => {
   console.warn("3D car model failed to load; using the 2D view.", error);
@@ -184,8 +246,13 @@ function buildWorld(track) {
 function disposeWorld(world) {
   scene.remove(world.group);
   world.cars.forEach((car) => scene.remove(car.root));
+  // The item boxes' geometry belongs to the shared models: leave it; free only
+  // what each box owns (its cloned glow materials).
+  const shared = new Set();
+  Object.values(itemTemplates()).forEach((t) => t.traverse((n) => { if (n.geometry) shared.add(n.geometry); }));
+  world.boxes.forEach((b) => { if (b.userData.body.userData.fromGlb) disposeItemCopy(b.userData.body); });
   world.group.traverse((o) => {
-    if (o.geometry) o.geometry.dispose();
+    if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
   });
 }
 
@@ -386,8 +453,10 @@ function render(frame) {
     u.scale = (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
     b.scale.setScalar(Math.max(0.0001, u.scale));
     b.visible = u.scale > 0.001;
-    const mat = u.box.material;
-    mat.emissiveIntensity = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+    // It glows brighter while it grows back.
+    const glow = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+    // Relative to each material's own resting glow (0.35 for the stand-in).
+    u.glow.forEach((m) => { m.emissiveIntensity = (m.userData.baseEmissive ?? 0.35) * (glow / 0.35); });
     u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
     b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
   });
@@ -423,6 +492,20 @@ function render(frame) {
   camera.up.set(0, 1, 0);
   camera.lookAt(lookTarget);
   camera.rotateZ(-(roll || 0) * 0.8 + jitter(t, 13) * r * 0.012);
+  if (photoCamera) {
+    const { from, at } = photoCamera;
+    camera.position.set(from.x, course.heightAt(from.d) + from.h, from.y);
+    lookTarget.set(at.x, course.heightAt(at.d) + at.h, at.y);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookTarget);
+    if (photoCamera.fov) setFov(photoCamera.fov);
+  }
+  // The "?" in each box keeps facing the camera (turning about the vertical
+  // only), placed now the camera is: no frame's lag.
+  world.boxes.forEach((b) => {
+    const mark = b.userData.mark;
+    if (mark) mark.rotation.y = Math.atan2(-(camera.position.z - b.position.z), camera.position.x - b.position.x);
+  });
 
   // Shadows follow the player.
   sun.position.set(player.x + SUN_DIR.x * 700, ground + SUN_DIR.y * 700 + 150, player.y + SUN_DIR.z * 700);
@@ -471,6 +554,43 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
     }
   });
   return hits;
+}
+
+// Every item box of a circuit over open road: rays straight down through its
+// middle and corners meet no scenery above the road, and its lowest point (at
+// the bottom of its bob) stays above the road. Returns what is wrong, if anything.
+function auditItemBoxes(track) {
+  const world = ensureWorld(track);
+  world.group.updateMatrixWorld(true);
+  const targets = [world.decor, world.landmarks];
+  const ray = new THREE.Raycaster();
+  const down = new THREE.Vector3(0, -1, 0);
+  const origin = new THREE.Vector3();
+  const problems = [];
+  if (world.boxes.length !== track.itemBoxes.length) problems.push(`${world.boxes.length} boxes drawn for ${track.itemBoxes.length}`);
+  world.boxes.forEach((b, i) => {
+    // Measured at rest: the box spins, and a turned box's bounds are bigger.
+    const spin = b.userData.box.rotation.clone();
+    const scale = b.scale.clone();
+    b.userData.box.rotation.set(0, 0, 0);
+    b.scale.setScalar(1);
+    b.updateMatrixWorld(true);
+    const size = new THREE.Box3().setFromObject(b.userData.box).getSize(new THREE.Vector3());
+    b.userData.box.rotation.copy(spin);
+    b.scale.copy(scale);
+    b.updateMatrixWorld(true);
+    const half = Math.max(size.x, size.z) / 2;
+    const road = world.course.heightAtPoint(b.position.x, b.position.z);
+    // The bob moves the box 1.5 either way (see render()).
+    if (b.userData.baseY - 1.5 - size.y / 2 < road) problems.push(`box ${i} dips into the road`);
+    [[0, 0], [half, half], [half, -half], [-half, half], [-half, -half]].forEach(([dx, dz]) => {
+      origin.set(b.position.x + dx, 3000, b.position.z + dz);
+      ray.set(origin, down);
+      const hit = ray.intersectObjects(targets, true).find((h) => !h.object.userData.ground && h.point.y > road + 0.5);
+      if (hit) problems.push(`box ${i} under ${hit.object.name || hit.object.type}`);
+    });
+  });
+  return problems;
 }
 
 // ---------------------------------------------------------------------------

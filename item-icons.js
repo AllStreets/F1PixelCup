@@ -1,21 +1,86 @@
-// One painted icon per power-up, 64×64. The site inlines the SVG; the game's
-// HUD turns each into an image once and draws it in the item slot, so the two
-// always show the same picture.
+// One icon per power-up, 64×64, in one broadcast-graphics style (see
+// docs/superpowers/specs/2026-09-29-power-ups-beauty-design.md): a top-lit dark
+// tile with an accent bar, and a flat glyph in white plus the item's accent on
+// a 4 px grid -- letters drawn as paths, no fonts, no glows. The site inlines
+// the SVG; the game's HUD turns each into an image once and draws it in the
+// item slot, so the two always show the same picture.
 (function (root, factory) {
   const icons = factory();
   if (typeof module === "object" && module.exports) module.exports = icons;
   else root.ITEM_ICONS = icons;
 }(typeof self !== "undefined" ? self : this, function () {
-  const svg = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${body}</svg>`;
-  const tile = (fill) => `<rect width="64" height="64" rx="12" fill="${fill}"/>`;
-  return {
-    oilSlick: svg(`${tile("#1b1330")}<path d="M12 38C8 28 22 22 30 26C36 16 54 20 52 32C60 38 50 50 38 46C30 54 14 50 12 38Z" fill="#07070b"/><path d="M20 34C24 28 34 28 38 32" stroke="#b36bff" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M26 40C32 36 42 36 46 40" stroke="#3de0ff" stroke-width="2.5" fill="none" stroke-linecap="round"/><ellipse cx="42" cy="30" rx="4" ry="2" fill="#ffffff" opacity=".5"/>`),
-    debris: svg(`${tile("#06201e")}<path d="M14 44L30 12L50 30L38 52Z" fill="#2b2f36" stroke="#00d2be" stroke-width="3" stroke-linejoin="round"/><path d="M22 40L31 20M30 44L40 26M18 32L44 36" stroke="#4a515c" stroke-width="2"/><circle cx="52" cy="14" r="2" fill="#ffd166"/><circle cx="56" cy="22" r="1.5" fill="#ffd166"/>`),
-    drs: svg(`${tile("#0b5e33")}<rect x="12" y="22" width="5" height="26" rx="1" fill="#10151c"/><rect x="47" y="22" width="5" height="26" rx="1" fill="#10151c"/><rect x="12" y="40" width="40" height="6" rx="2" fill="#10151c"/><path d="M17 32L47 26L47 30L17 36Z" fill="#e6f7ee"/><path d="M20 16H34V11L45 18L34 25V20H20Z" fill="#7dffb0"/>`),
-    undercut: svg(`${tile("#2a0508")}<path d="M6 38L30 30V46Z" fill="#ff3b30" opacity=".45"/><ellipse cx="40" cy="41" rx="16" ry="7" fill="#7a0000"/><ellipse cx="40" cy="36" rx="16" ry="7" fill="#dc0000"/><ellipse cx="40" cy="35" rx="8" ry="3.5" fill="#ff8a80"/>`),
-    overtakeMode: svg(`${tile("#3a2a00")}<circle cx="32" cy="32" r="22" fill="#ffc81e"/><circle cx="32" cy="32" r="22" fill="none" stroke="#fff3b0" stroke-width="3"/><path d="M35 12L20 36H30L27 52L44 26H34Z" fill="#fff8dc" stroke="#8a5a00" stroke-width="2" stroke-linejoin="round"/>`),
-    stewardPenalty: svg(`${tile("#04142e")}<ellipse cx="32" cy="38" rx="25" ry="8" fill="none" stroke="#7cc4ff" stroke-width="3"/><ellipse cx="32" cy="42" rx="14" ry="6" fill="#004a99"/><ellipse cx="32" cy="37" rx="14" ry="6" fill="#0090ff"/><rect x="29" y="10" width="6" height="16" rx="3" fill="#ffffff"/><circle cx="32" cy="30" r="3" fill="#ffffff"/>`),
-    formationLap: svg(`${tile("#2c1206")}<path d="M8 20L24 32L8 44ZM22 20L38 32L22 44ZM36 20L52 32L36 44Z" fill="#fff4e0" stroke="#ff9a3c" stroke-width="2" stroke-linejoin="round"/>`),
-    safetyCar: svg(`${tile("#2a2412")}<rect x="22" y="17" width="9" height="6" rx="2" fill="#ffb000"/><rect x="33" y="17" width="9" height="6" rx="2" fill="#ffd000"/><path d="M8 44L14 32L24 27H42L52 33L56 44Z" fill="#c9ced6"/><path d="M23 32L27 29H40L46 33Z" fill="#26303b"/><circle cx="19" cy="45" r="6" fill="#111111"/><circle cx="45" cy="45" r="6" fill="#111111"/><rect x="28" y="36" width="10" height="4" rx="1" fill="#1b1b1b"/>`),
+  const WHITE = "#f5f7fb";
+  const INK = "#0c0e13";
+  const ACCENTS = {
+    drs: "#00d46a",
+    overtakeMode: "#ffd400",
+    oilSlick: "#9b7bff",
+    debris: "#8a94a6",
+    undercut: "#e8002d",
+    stewardPenalty: "#2f7bff",
+    formationLap: "#ff8a00",
+    safetyCar: "#ffb000",
   };
+  // The shared tile. Gradient ids are per icon: the site inlines all eight.
+  const icon = (id, glyph) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">`
+    + `<defs><linearGradient id="tile-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d212b"/><stop offset="1" stop-color="#0c0e13"/></linearGradient></defs>`
+    + `<rect width="64" height="64" rx="14" fill="url(#tile-${id})"/>`
+    + `<rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity=".09"/>`
+    + `<rect x="14" y="55" width="36" height="4" rx="2" fill="${ACCENTS[id]}"/>`
+    + glyph(ACCENTS[id]) + `</svg>`;
+
+  const icons = {
+    // The on-screen DRS mark: the letters on a green plate.
+    drs: icon("drs", (a) => `<rect x="8" y="18" width="48" height="28" rx="6" fill="${a}"/>`
+      + `<path fill="${INK}" fill-rule="evenodd" d="M12 24h6a6 6 0 0 1 6 6v4a6 6 0 0 1-6 6h-6zM16 28v8h2a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2z"/>`
+      + `<path fill="${INK}" fill-rule="evenodd" d="M26 24h7a5 5 0 0 1 5 5v1a5 5 0 0 1-3 4.6L38 40h-4.4l-2.6-5.5H30V40h-4zM30 28v3h3a1.5 1.5 0 0 0 0-3z"/>`
+      + `<path fill="${INK}" d="M52 24h-8a4 4 0 0 0-4 4v1.5a4 4 0 0 0 4 4h4V36h-8v4h8a4 4 0 0 0 4-4v-1.5a4 4 0 0 0-4-4h-4V28h8z"/>`),
+    // A bolt over speed lines.
+    overtakeMode: icon("overtakeMode", (a) => `<rect x="11" y="21" width="9" height="3" rx="1.5" fill="${WHITE}"/>`
+      + `<rect x="11" y="29" width="6" height="3" rx="1.5" fill="${WHITE}" fill-opacity=".7"/>`
+      + `<rect x="11" y="37" width="8" height="3" rx="1.5" fill="${WHITE}" fill-opacity=".45"/>`
+      + `<path fill="${a}" d="M38 11 20 34.5h11L27.5 52 46 27.5H35z"/>`),
+    // A drop over an iridescent pool.
+    oilSlick: icon("oilSlick", (a) => `<ellipse cx="32" cy="45" rx="19" ry="6" fill="${a}"/>`
+      + `<ellipse cx="25" cy="44" rx="6.5" ry="1.7" fill="${WHITE}" fill-opacity=".55"/>`
+      + `<path fill="${WHITE}" d="M32 11c-4.5 6-10 13.2-10 19a10 10 0 0 0 20 0c0-5.8-5.5-13-10-19z"/>`
+      + `<ellipse cx="28" cy="31" rx="2.2" ry="3.4" fill="${INK}" fill-opacity=".18"/>`),
+    // Carbon shards flying apart.
+    debris: icon("debris", (a) => `<path fill="${WHITE}" d="M15 40 29 16l7 18z"/>`
+      + `<path fill="${a}" d="M38 14l13 8-9 7z"/>`
+      + `<path fill="${WHITE}" d="M36 41l13-6-2 15z"/>`
+      + `<path fill="${a}" d="M19 47l6-3 1 5z"/>`),
+    // A fresh set of softs, and the chevron of a homing shot.
+    undercut: icon("undercut", (a) => `<circle cx="27" cy="32" r="17" fill="#2b303b"/>`
+      // The TV tyre mark: the compound's ring round an S (the soft).
+      + `<circle cx="27" cy="32" r="12.5" fill="none" stroke="${a}" stroke-width="5"/>`
+      + `<path fill="${WHITE}" transform="translate(27 32) scale(.62) translate(-46 -32)" d="M52 24h-8a4 4 0 0 0-4 4v1.5a4 4 0 0 0 4 4h4V36h-8v4h8a4 4 0 0 0 4-4v-1.5a4 4 0 0 0-4-4h-4V28h8z"/>`
+      + `<path fill="${a}" d="M47 23l7 9-7 9-2.6-2 5.4-7-5.4-7z"/>`),
+    // A stopwatch with a plus: time added.
+    stewardPenalty: icon("stewardPenalty", (a) => `<rect x="27" y="11" width="8" height="4" rx="1.5" fill="${WHITE}"/>`
+      + `<rect x="29.5" y="14" width="3" height="5" fill="${WHITE}"/>`
+      + `<circle cx="31" cy="34" r="14" fill="none" stroke="${WHITE}" stroke-width="4"/>`
+      + `<rect x="29.5" y="24" width="3" height="11.5" rx="1.5" fill="${WHITE}"/>`
+      + `<circle cx="31" cy="34" r="2.5" fill="${WHITE}"/>`
+      + `<circle cx="46" cy="20" r="9.5" fill="#141821"/>`
+      + `<circle cx="46" cy="20" r="8" fill="${a}"/>`
+      + `<rect x="41.5" y="18.75" width="9" height="2.5" rx="1" fill="${WHITE}"/>`
+      + `<rect x="44.75" y="15.5" width="2.5" height="9" rx="1" fill="${WHITE}"/>`),
+    // Three chevrons: the field in line, on autopilot.
+    formationLap: icon("formationLap", (a) => [12, 24, 36].map((x, i) => {
+      const fill = i === 2 ? WHITE : a;
+      const opacity = i === 0 ? ` fill-opacity=".45"` : "";
+      return `<path fill="${fill}"${opacity} d="M${x} 18h6l10 14-10 14h-6l10-14z"/>`;
+    }).join("")),
+    // A long, low GT with its light bar on the roof.
+    safetyCar: icon("safetyCar", (a) => `<rect x="28" y="21" width="14" height="3.5" rx="1.75" fill="${a}"/>`
+      + `<path fill="${WHITE}" d="M8 40v-3c0-2 1.4-3.3 3.6-3.7L21 31.2c3.6-3.7 7.6-5.7 13.2-5.7h4.6c3.6 0 6.8 2.4 9.8 5.9l4.2.9c1.9.4 3.2 1.9 3.2 3.8V40a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z"/>`
+      + `<path fill="${INK}" d="M24.5 31.2c3-3 6-4.2 9.8-4.2h4.3c2.4 0 4.8 1.5 6.9 4.2z"/>`
+      + `<rect x="12" y="36" width="42" height="1.4" rx=".7" fill="${INK}" fill-opacity=".35"/>`
+      + `<circle cx="17" cy="42" r="5.5" fill="${INK}"/><circle cx="17" cy="42" r="2.2" fill="${WHITE}"/>`
+      + `<circle cx="46" cy="42" r="5.5" fill="${INK}"/><circle cx="46" cy="42" r="2.2" fill="${WHITE}"/>`),
+  };
+  // The accents ride along, but not as an icon: the map's keys are the items.
+  Object.defineProperty(icons, "ACCENTS", { value: ACCENTS, enumerable: false });
+  return icons;
 }));
