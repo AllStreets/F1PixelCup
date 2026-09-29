@@ -27,10 +27,12 @@
     if (touchOnly) return "medium";
     if (!cores && !memoryGb && !g) return "medium";
     // Integrated graphics on a PC laptop: medium. Apple silicon, discrete
-    // GPUs and anything with the cores to spare: high.
-    const integrated = /intel|uhd|iris|mali|adreno|powervr/.test(g);
+    // GPUs and anything with the cores to spare: high. Intel's Arc cards are
+    // discrete; AMD's integrated graphics report a bare "Radeon Graphics".
+    const integrated = (/intel|uhd|iris|mali|adreno|powervr/.test(g) && !/\barc\b|arc\(tm\)/.test(g))
+      || /radeon(\(tm\))? graphics/.test(g);
     if (integrated) return "medium";
-    if ((cores || 0) >= 6 || /apple m\d|nvidia|geforce|radeon|rtx|gtx/.test(g)) return "high";
+    if ((cores || 0) >= 6 || /apple m\d|nvidia|geforce|radeon|rtx|gtx|\barc\b|arc\(tm\)/.test(g)) return "high";
     return "medium";
   }
 

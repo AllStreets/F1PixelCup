@@ -170,6 +170,7 @@ html, body { height: 100%; overflow: hidden; }
   color: var(--muted); font: italic 700 0.8rem/1 var(--font); letter-spacing: 0.16em; text-transform: uppercase;
 }
 .view-loading[hidden] { display: none; }
+#graphics-setting[hidden] { display: none; }
 .view-loading[data-where="garage"] { left: 68%; top: 58%; }
 .view-loading[data-where="race"] { left: 50%; top: 50%; }
 .view-loading-bar { position: relative; width: 140px; height: 3px; background: var(--line); overflow: hidden; }

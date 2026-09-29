@@ -3350,6 +3350,10 @@ function drawDriverView(track) {
       powerUps: powerUpFrame(now),
       particles: state.particles,
       now,
+      // Real racing frames only, for the graphics auto tier: not the
+      // countdown, qualifying, a pause, the loading panel, or the
+      // fast-forward after the flag.
+      racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
     }));
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;

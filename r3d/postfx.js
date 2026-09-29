@@ -164,10 +164,26 @@ export function createPostFx(renderer, scene, camera) {
     composer.addPass(finish);
   }
 
+  // Low keeps nothing on the GPU: the composer's buffers, the bloom's mips
+  // and the frame copy are freed, and built again if a higher tier returns.
+  function release() {
+    if (!composer) return;
+    bloom.dispose();
+    finish.material.dispose();
+    composer.passes.forEach((pass) => { if (pass !== bloom && pass !== finish && pass.material) pass.material.dispose(); });
+    composer.dispose();
+    frameTexture.dispose();
+    composer = null;
+    bloom = null;
+    finish = null;
+    frameTexture = null;
+  }
+
   function setTier(next) {
     tier = next;
     passes = (window.Quality ? window.Quality.passesFor(next) : passes);
     if (passes.composer && !composer) build();
+    if (!passes.composer) release();
     if (bloom) bloom.enabled = passes.bloom;
     if (!passes.bursts) { burst.gold = 0; burst.red = 0; burst.blur = 0; }
   }
@@ -235,7 +251,9 @@ export function createPostFx(renderer, scene, camera) {
     u.uHaze.value = passes.haze ? grade.haze || 0 : 0;
     u.uFlare.value = passes.flare && !grade.night ? 1 : 0;
     const speed = Math.max(0, Math.min(1, ((frame.speedFraction || 0) - 0.55) / 0.45));
-    u.uBlur.value = passes.speedBlur ? Math.min(1, speed * 0.4 + burst.blur * 0.7 + (frame.boosting ? 0.12 : 0)) : 0;
+    // The speed blur is High's; the DRS surge is a burst, so Medium has it too.
+    const steady = passes.speedBlur ? speed * 0.4 + (frame.boosting ? 0.12 : 0) : 0;
+    u.uBlur.value = Math.min(1, steady + (passes.bursts ? burst.blur * 0.7 : 0));
     u.uGold.value = burst.gold;
     u.uRed.value = burst.red;
     // Bloom only on real highlights (the sun, the floodlights, the item
@@ -246,8 +264,9 @@ export function createPostFx(renderer, scene, camera) {
     const wall = performance.now();
     const wallDt = lastWall ? Math.min(0.1, (wall - lastWall) / 1000) : 0;
     lastWall = wall;
-    if (passes.flare && frame.sunPosition) updateSun(frame.sunPosition, frame.occluders || [], wallDt);
-    else u.uSunVisible.value = 0;
+    // No sun to find at night (and no rays spent looking for it).
+    if (passes.flare && !grade.night && frame.sunPosition) updateSun(frame.sunPosition, frame.occluders || [], wallDt);
+    else { sunVisible = 0; u.uSunVisible.value = 0; }
     renderer.setRenderTarget(null);
     renderer.render(scene, camera);
     renderer.copyFramebufferToTexture(frameTexture);
@@ -264,6 +283,9 @@ export function createPostFx(renderer, scene, camera) {
       burst: { ...burst },
       sunVisible,
       sun: { onScreen: sunOnScreen, blocked: sunBlocked, by: sunBlocker },
+      blur: finish ? finish.uniforms.uBlur.value : 0,
+      // What the effects hold on the GPU: the copied frame's size, or null.
+      frame: frameTexture ? { width: frameTexture.image.width, height: frameTexture.image.height } : null,
     }),
   };
 }

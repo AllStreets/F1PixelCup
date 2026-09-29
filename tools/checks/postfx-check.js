@@ -32,11 +32,33 @@ async (page) => {
     requestAnimationFrame(tick);
   }), n);
 
-  // A race to look at.
-  await step(async () => {
+  // Auto judges the machine on real racing frames only: not the qualifying
+  // simulation behind the loading panel, not the loading itself, not a pause.
+  results.autoSamplesRacingOnly = await step(async () => {
+    const wait = (n) => new Promise((resolve) => { let left = n; const t = () => (--left <= 0 ? resolve() : requestAnimationFrame(t)); requestAnimationFrame(t); });
+    Game.selectGridMode("qualifying");
+    Game.startCup();
+    const seen = [];
+    for (let i = 0; i < 90 && state.phase !== "race"; i += 1) {
+      await wait(1);
+      seen.push(state.phase);
+    }
+    const afterQualifying = Render3D.graphics().sampled;
+    Game.backToPitLane();
     Game.selectGridMode("back");
     Game.startCup();
-    for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 300 && state.preparing; i += 1) await wait(1);
+    const afterLoading = Render3D.graphics().sampled;
+    for (let i = 0; i < 600 && state.phase !== "race"; i += 1) await wait(1);
+    state.paused = true; state.pausedAt = performance.now();
+    const before = Render3D.graphics().sampled;
+    await wait(20);
+    const whilePaused = Render3D.graphics().sampled;
+    state.paused = false;
+    await wait(20);
+    const racing = Render3D.graphics().sampled;
+    const ok = seen.includes("qualifyingSim") && afterQualifying === 0 && afterLoading === 0 && whilePaused === before && racing > whilePaused;
+    return ok || JSON.stringify({ phases: [...new Set(seen)], afterQualifying, afterLoading, before, whilePaused, racing });
   });
 
   // Each tier switches the real passes on and off.
@@ -107,6 +129,24 @@ async (page) => {
     return (toward > 0.3 && away < 0.05) || JSON.stringify({ toward, away });
   });
 
+  // The circuit's own structures hide the sun too: with the start gantry's
+  // beam right between the camera and the sun, there is no flare.
+  results.flareHiddenByGantry = await step(async () => {
+    state.paused = true; state.pausedAt = performance.now();
+    const s = state.track.points[0];
+    const len = Math.hypot(0.5, 0.42, 0.6);
+    const sun = { x: 0.5 / len, up: 0.42 / len, y: -0.6 / len }; // SUN_DIR, game axes
+    const back = 30;
+    const from = { x: s.x - sun.x * back, y: s.y - sun.y * back, d: 0, h: 44 - sun.up * back };
+    const at = { x: from.x + sun.x * 400, y: from.y + sun.y * 400, d: 0, h: from.h + sun.up * 400 };
+    Render3D.setPhotoCamera({ from, at, fov: 70 });
+    await new Promise((r) => { const end = performance.now() + 1000; const t = () => (performance.now() >= end ? r() : requestAnimationFrame(t)); requestAnimationFrame(t); });
+    const fx = Render3D.inspect().postfx;
+    Render3D.setPhotoCamera(null);
+    state.paused = false;
+    return (fx.sun.onScreen && fx.sun.blocked && fx.sunVisible < 0.05) || JSON.stringify({ sun: fx.sun, visible: fx.sunVisible });
+  });
+
   // Every tier draws the scene the same way: High is Low with the effects on
   // top, never a different exposure. The sky away from the sun, in the top
   // middle of the frame (clear of the vignette), stays within a grade's reach.
@@ -148,14 +188,62 @@ async (page) => {
   results.highKeepsLowExposure = (Array.isArray(lowSky) && Array.isArray(highSky)
     && lowSky.every((v, i) => Math.abs(v - highSky[i]) <= 24) && lowSky.some((v) => v > 0)) || JSON.stringify({ lowSky, highSky });
 
-  // The advert barriers read from the track: printed on the side facing it,
-  // the right-hand one mirrored so that its words run forward.
-  results.advertsReadFromTrack = await step(() => {
-    const ads = Render3D.inspect().adverts;
-    const left = ads.find((a) => a.side === "left");
-    const right = ads.find((a) => a.side === "right");
-    return (ads.length === 2 && left.printedTowardTrack && right.printedTowardTrack && !left.mirrored && right.mirrored) || JSON.stringify(ads);
+  // The advert barriers read forward from both sides on every circuit, all
+  // the way round; none stands on a road, and none loops over itself on the
+  // inside of a tight bend.
+  results.advertsReadForward = await step(() => {
+    const bad = [];
+    CIRCUITS.forEach((c) => {
+      const ads = Render3D.auditAdverts(TRACKS.find((t) => t.id === c.id));
+      const wrong = (x) => !x.readsBothWays || x.backwards.length || x.onRoad.length || x.loops || x.quads < 100;
+      if (ads.length !== 2 || ads.some(wrong)) bad.push({ id: c.id, ads });
+    });
+    return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   });
+
+  // The DRS blur surge is a burst, so Medium has it as well as High.
+  results.drsBurstOnMedium = await step(async () => {
+    Render3D.setGraphics("medium");
+    window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type: "itemUsed", item: "drs", racerId: state.playerId } }));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const blur = Render3D.inspect().postfx.blur;
+    Render3D.setGraphics("high");
+    return blur > 0.4 || JSON.stringify({ blur });
+  });
+
+  // Bursts fade on race time: a paused race holds them.
+  results.burstsFreezeWhilePaused = await step(async () => {
+    state.paused = true; state.pausedAt = performance.now();
+    window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type: "overtakeMode", racerId: state.playerId } }));
+    await new Promise((r) => setTimeout(r, 700));
+    const held = Render3D.inspect().postfx.burst.gold;
+    state.paused = false;
+    await new Promise((r) => setTimeout(r, 1500));
+    const later = Render3D.inspect().postfx.burst.gold;
+    return (held > 0.9 && later < 0.1) || JSON.stringify({ held, later });
+  });
+
+  // Low holds nothing on the GPU for the effects; High's frame copy is the
+  // drawing buffer's size, and follows the window when it is resized.
+  results.lowFreesTheEffects = await step(async () => {
+    Render3D.setGraphics("low");
+    await new Promise((r) => requestAnimationFrame(r));
+    const low = Render3D.inspect().postfx.frame;
+    Render3D.setGraphics("high");
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const high = Render3D.inspect().postfx.frame;
+    const c = document.getElementById("game3d");
+    return (low === null && high && high.width === c.width && high.height === c.height) || JSON.stringify({ low, high, canvas: [c.width, c.height] });
+  });
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1180, height: 760 } });
+  await p.waitForTimeout(600);
+  results.frameFollowsResize = await step(() => {
+    const f = Render3D.inspect().postfx.frame;
+    const c = document.getElementById("game3d");
+    return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Math.min(devicePixelRatio, 2))) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
+  });
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
+  await p.waitForTimeout(400);
 
   // Frame time per tier, the race running: Low is never slower than High.
   for (const tier of ["high", "medium", "low"]) {
@@ -179,6 +267,22 @@ async (page) => {
   // kept across a reload; Auto shows what it picked.
   await step(() => { Render3D.setGraphics("auto"); Game.backToPitLane(); Screens.showSettings(); });
   results.settingsShowsAuto = await step(() => /^Auto \((High|Medium|Low)\)$/.test(document.getElementById("graphics-toggle").textContent));
+  // Each setting's button is named for its setting, not just "On" or "High".
+  results.settingsNamed = (await p.getByRole("button", { name: /^Graphics Auto \(/ }).count()) === 1
+    && (await p.getByRole("button", { name: /^Sound (On|Off)$/ }).count()) === 1
+    && (await p.getByRole("button", { name: /^Full screen (On|Off)$/ }).count()) === 1;
+  // Without the 3D renderer there is no Graphics choice: the row and its note
+  // are gone, not an empty button.
+  results.noGraphicsWithout3D = await step(() => {
+    const saved = window.Render3D;
+    window.Render3D = undefined;
+    Screens.showSettings();
+    const box = document.getElementById("graphics-setting");
+    const gone = box.hidden && getComputedStyle(box).display === "none" && !document.getElementById("graphics-note").getClientRects().length;
+    window.Render3D = saved;
+    Screens.showSettings();
+    return gone || JSON.stringify({ hidden: box.hidden, display: getComputedStyle(box).display });
+  });
   await p.locator("#graphics-toggle").click();
   results.settingsCyclesAndKeeps = await step(() => document.getElementById("graphics-toggle").textContent === "High"
     && localStorage.getItem("f1pixelcup.graphics") === "high");

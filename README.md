@@ -327,7 +327,7 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   measured difficulty ladder), `race-clock-check.js` (fast-forward after
   the flag, real race times on the results), `loading-check.js` (no stand-in car while the
   3D car loads; 2D only when 3D fails) and `postfx-check.js` (graphics tiers, bursts, the
-  flare, High keeping Low's exposure, adverts reading from the track). Expected for each: every result true, errors [].
+  flare, High keeping Low's exposure, adverts reading forward from both sides). Expected for each: every result true, errors [].
   Every check minimises the test tool's own blank tab so only the window under test shows.
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with
