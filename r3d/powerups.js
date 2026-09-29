@@ -281,7 +281,8 @@ export function createPowerUpLayer(scene) {
     trails.forEach((m, i) => {
       const t = powerUps.trails[i];
       m.visible = Boolean(t);
-      if (t) { m.position.set(t.x, course.heightAt(t.d) + 0.35, t.y); m.rotation.z = -(t.heading || 0); }
+      // A trailed slick is the drip behind the car, smaller than a dropped pool.
+      if (t) { m.position.set(t.x, course.heightAt(t.d) + 0.35, t.y); m.rotation.z = -(t.heading || 0); m.scale.setScalar(0.6); }
     });
 
     const sc = powerUps.safetyCar;

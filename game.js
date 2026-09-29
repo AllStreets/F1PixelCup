@@ -56,21 +56,6 @@ function getDifficulty() {
 const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 const TRACK_WIDTH_SCALE = 1.5;
 const SHORTCUT_WIDTH_SCALE = 1.65;
-const ITEM_ICONS = {
-  none: "?",
-  roulette: "7",
-  oilSlick: "O",
-  debris: "D",
-  undercut: "U",
-  overtake: "OT",
-  powerDeploy: "PD",
-  safetyCar: "SC",
-  graining: "G",
-  engineBlast: "EB",
-  formationLap: "FL",
-  stewardPenalty: "SP",
-  drsSignPost: "DS",
-};
 
 
 
@@ -3460,15 +3445,42 @@ function drawDriverHud(track, player) {
 }
 
 
-function drawDriverItemBadge(player) {
-  const rouletteActive = player.rouletteUntil > performance.now();
-  const hasItem = player.currentItem && player.currentItem !== "none";
-  if (!rouletteActive && !hasItem) return;
+const iconImages = {};
 
-  const itemKey = rouletteActive ? "roulette" : player.currentItem;
-  const itemLabel = rouletteActive ? "Roulette" : labelizeItem(player.currentItem);
-  const icon = ITEM_ICONS[itemKey] || "?";
-  const panelWidth = 186;
+function itemIconImage(id) {
+  if (!iconImages[id]) {
+    const img = new Image();
+    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(ITEM_ICONS[id])}`;
+    iconImages[id] = img;
+  }
+  return iconImages[id];
+}
+
+// What the item slot shows. The roulette flicks through the real icons.
+function hudItemState(player, now) {
+  if (player.rouletteUntil > now) {
+    const order = PowerUps.ITEM_ORDER;
+    return { key: order[Math.floor(now / 90) % order.length], label: "Rolling…", hint: "Spinning now", rolling: true };
+  }
+  const key = player.currentItem;
+  if (!key || key === "none") return null;
+  let hint = "Press Space to use";
+  if (key === "oilSlick") hint = player.trailingOil ? "TRAILING · release Space to drop" : "Tap Space: drop · Hold: trail";
+  return { key, label: labelizeItem(key), hint, rolling: false };
+}
+
+function drawDriverItemBadge(player) {
+  const now = performance.now();
+  const slot = hudItemState(player, now);
+  if (!slot) return;
+  // Wide enough for the longest line (the TRAILING hint is the longest).
+  ctx.save();
+  ctx.font = "bold 18px Georgia";
+  const labelWidth = ctx.measureText(slot.label).width;
+  ctx.font = "12px Trebuchet MS";
+  const hintWidth = ctx.measureText(slot.hint).width;
+  ctx.restore();
+  const panelWidth = Math.ceil(Math.max(236, 70 + Math.max(labelWidth, hintWidth) + 16));
   const panelHeight = 84;
   const panelX = Math.round(view.width / 2 - panelWidth / 2);
   const panelY = view.height - 104;
@@ -3476,29 +3488,25 @@ function drawDriverItemBadge(player) {
   ctx.save();
   ctx.fillStyle = "rgba(18, 10, 21, 0.84)";
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-  ctx.strokeStyle = rouletteActive ? "#ffd166" : "rgba(255, 240, 201, 0.26)";
+  ctx.strokeStyle = slot.rolling ? "#ffd166" : player.trailingOil ? "#b36bff" : "rgba(255, 240, 201, 0.26)";
   ctx.lineWidth = 2;
   ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
 
-  ctx.fillStyle = rouletteActive ? "#ffd166" : "#fff0c9";
+  ctx.fillStyle = slot.rolling ? "#ffd166" : "#fff0c9";
   ctx.font = "bold 12px Trebuchet MS";
   ctx.fillText("POWER UP", panelX + 14, panelY + 18);
 
-  ctx.fillStyle = rouletteActive ? "#ffe08a" : "#75d5ff";
-  ctx.fillRect(panelX + 14, panelY + 28, 42, 42);
-  ctx.fillStyle = "#20152c";
-  ctx.font = "bold 24px Georgia";
-  ctx.fillText(icon, panelX + 28, panelY + 58);
+  const img = itemIconImage(slot.key);
+  if (img.complete && img.naturalWidth) ctx.drawImage(img, panelX + 12, panelY + 24, 48, 48);
 
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 18px Georgia";
-  ctx.fillText(itemLabel, panelX + 70, panelY + 48);
-  ctx.font = "13px Trebuchet MS";
-  ctx.fillStyle = "rgba(255, 240, 201, 0.8)";
-  ctx.fillText(rouletteActive ? "Spinning now" : "Press Space to use", panelX + 70, panelY + 67);
+  ctx.fillText(slot.label, panelX + 70, panelY + 46);
+  ctx.font = "12px Trebuchet MS";
+  ctx.fillStyle = player.trailingOil ? "#d9b8ff" : "rgba(255, 240, 201, 0.8)";
+  ctx.fillText(slot.hint, panelX + 70, panelY + 66);
   ctx.restore();
 }
-
 
 
 function drawQuad(ax, ay, bx, by, cx, cy, dx, dy, fill) {
@@ -3891,6 +3899,8 @@ function bindEvents() {
   });
 
   // Losing focus loses the key-up; drop a trailed slick rather than keep it forever.
+  PowerUps.ITEM_ORDER.forEach(itemIconImage);
+
   window.addEventListener("blur", () => {
     const player = getPlayer();
     if (player && player.trailingOil) releaseTrail(player, performance.now());

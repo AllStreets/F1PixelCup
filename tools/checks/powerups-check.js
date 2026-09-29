@@ -308,6 +308,27 @@ async (page) => {
   results.auditClean = await run(() => CIRCUITS.map((c) => TRACKS.find((t) => t.id === c.id))
     .every((track) => Render3D.auditScenery(track).length === 0));
 
+  // HUD: the slot shows the real icon, cycles real icons while rolling, and says TRAILING.
+  await setup();
+  results.hud = await run(async () => {
+    const pl = getPlayer();
+    const now = performance.now();
+    pl.currentItem = "none"; pl.rouletteUntil = now + 1000;
+    const a = hudItemState(pl, now).key;
+    const b = hudItemState(pl, now + 90).key;
+    pl.rouletteUntil = 0; pl.currentItem = "oilSlick";
+    const oil = hudItemState(pl, now);
+    pl.trailingOil = true;
+    const trail = hudItemState(pl, now);
+    pl.trailingOil = false; pl.currentItem = "drs";
+    const drs = hudItemState(pl, now);
+    const img = itemIconImage("safetyCar");
+    await new Promise((r) => setTimeout(r, 200));
+    return PowerUps.ITEM_ORDER.includes(a) && a !== b
+      && oil.hint === "Tap Space: drop · Hold: trail" && trail.hint === "TRAILING · release Space to drop"
+      && drs.label === "DRS" && drs.hint === "Press Space to use" && img.complete && img.naturalWidth > 0;
+  });
+
   await context.close();
   return { results, errors };
 }
