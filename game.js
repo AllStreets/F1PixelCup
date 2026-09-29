@@ -325,6 +325,11 @@ const state = {
   // Starting grid: "back" (Mario Kart style, the default) or "qualifying".
   gridMode: "back",
   cupGridMode: "back",
+  // The weather: the pit-lane choice, the cup's (fixed once it starts), and
+  // the current race's ("dry" or "wet"; weather.js).
+  weatherMode: "dry",
+  cupWeatherMode: "dry",
+  weather: "dry",
   gridOrder: [],
   qualifying: null,
   finishQueue: [],
@@ -715,6 +720,8 @@ function getPitLaneState() {
     selectedDifficulty: state.difficulty,
     gridModes: GRID_MODES,
     gridMode: state.gridMode,
+    weatherModes: Weather.MODES,
+    weatherMode: state.weatherMode,
     // Drivers can be changed only in the pit lane, between cups.
     canChooseDriver: state.phase === "garage",
   };
@@ -737,7 +744,31 @@ function selectGridMode(mode) {
   renderGarage();
 }
 
+// Chosen in the pit lane, fixed for the whole cup once it starts.
+function selectWeatherMode(mode) {
+  if (state.phase !== "garage" || !Weather.MODES.some((m) => m.id === mode)) return;
+  state.weatherMode = mode;
+  try {
+    window.localStorage.setItem("f1pixelcup.weather", mode);
+  } catch (err) {
+    // Preference just will not persist.
+  }
+  renderGarage();
+}
+
+// A race's weather, from the cup's choice: seeded by the cup run, so its
+// qualifying and its race share it, and it never rerolls.
+function setRaceWeather(index) {
+  state.weather = Weather.raceWeather(state.cupWeatherMode, hashSeed(`${state.cupRunId || "run"}:weather`), index);
+}
+
 function loadGridPreference() {
+  try {
+    const weather = window.localStorage.getItem("f1pixelcup.weather");
+    if (Weather.MODES.some((m) => m.id === weather)) state.weatherMode = weather;
+  } catch (err) {
+    // Keep the default.
+  }
   try {
     const stored = window.localStorage.getItem("f1pixelcup.grid");
     if (GRID_MODES.some((m) => m.id === stored)) state.gridMode = stored;
@@ -960,6 +991,7 @@ function startQualifying(index) {
   const cup = getActiveCup();
   state.raceIndex = index;
   state.track = cup.tracks[index];
+  setRaceWeather(index);
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
     shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
@@ -1243,6 +1275,7 @@ function startCup() {
   state.cupDifficulty = state.difficulty;
   state.feed = [];
   state.cupGridMode = state.gridMode;
+  state.cupWeatherMode = state.weatherMode;
   state.qualifying = null;
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
@@ -1262,6 +1295,7 @@ function startRace(index) {
   state.phase = "countdown";
   if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
+  setRaceWeather(index);
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
   state.shots = [];
@@ -1317,6 +1351,7 @@ function startRace(index) {
   state.countdownStart = performance.now();
   state.raceStart = 0;
   addFeed(`${state.track.name} loaded. Red boxes hold the power-ups.`);
+  if (state.weather === "wet") addFeed(`Rain at ${state.track.name}: the grip is down.`);
   updateStandingsUI();
   updatePlayerUI();
 }
@@ -1902,7 +1937,9 @@ function updateRacer(racer, dt, now) {
     steerInput = clamp(angleDiff * 1.7, -1, 1);
     const turnSeverity = Math.abs(angleDiff);
     // A better driver carries the corner further before lifting.
-    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62) {
+    // A wet road: they lift earlier (the speed a corner allows goes as the
+    // square root of grip).
+    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather)) {
       brake = 1;
     }
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
@@ -1935,11 +1972,16 @@ function updateRacer(racer, dt, now) {
   ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
 
   const turnRate = racer.physics.turnRate * (0.45 + clamp(racer.speed / 180, 0.2, 1));
-  racer.heading += steerInput * turnRate * dt;
+  // The yaw this step asks for (a drift adds to it, below); it is applied
+  // once the grip has had its say.
+  let yaw = steerInput * turnRate;
+  const wet = state.weather === "wet";
+  const traction = wet ? Weather.WET.accel : 1;
+  const braking = wet ? Weather.WET.brake : 1;
 
   let targetSpeed = racer.physics.maxSpeed;
   const reverseTargetSpeed = -racer.physics.maxSpeed * 0.5;
-  if (offroad) targetSpeed *= racer.physics.offroadFactor;
+  if (offroad) targetSpeed *= racer.physics.offroadFactor * (wet ? Weather.WET.offroad : 1);
   if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
   if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
   if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
@@ -1964,14 +2006,14 @@ function updateRacer(racer, dt, now) {
 
   if (throttle > 0) {
     if (racer.speed < 0) {
-      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * 0.95 * dt);
+      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * braking * 0.95 * dt);
     }
-    racer.speed = Math.min(targetSpeed, racer.speed + racer.physics.accelRate * throttle * dt);
+    racer.speed = Math.min(targetSpeed, racer.speed + racer.physics.accelRate * traction * throttle * dt);
   } else if (reverse > 0) {
     if (racer.speed > 0) {
-      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * 1.08 * reverse * dt);
+      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * braking * 1.08 * reverse * dt);
     } else {
-      racer.speed = Math.max(reverseTargetSpeed, racer.speed - racer.physics.accelRate * reverse * dt);
+      racer.speed = Math.max(reverseTargetSpeed, racer.speed - racer.physics.accelRate * traction * reverse * dt);
     }
   } else {
     // Lifting off should coast, not anchor the car to the tarmac.
@@ -1984,9 +2026,9 @@ function updateRacer(racer, dt, now) {
 
   if (brake > 0) {
     if (racer.speed > 0) {
-      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * brake * dt);
+      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * braking * brake * dt);
     } else {
-      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * 0.6 * brake * dt);
+      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * braking * 0.6 * brake * dt);
     }
   }
 
@@ -2014,7 +2056,7 @@ function updateRacer(racer, dt, now) {
     racer.drifting = true;
     racer.driftSide = driftSide >= 0 ? 1 : -1;
     racer.driftCharge += racer.physics.driftChargeRate * dt;
-    racer.heading += racer.driftSide * 0.8 * dt;
+    yaw += racer.driftSide * Weather.DRIFT_YAW;
   } else if (racer.drifting) {
     if (racer.driftCharge > 1.6) {
       racer.boostUntil = Math.max(racer.boostUntil, now + 1400);
@@ -2026,6 +2068,18 @@ function updateRacer(racer, dt, now) {
     racer.drifting = false;
     racer.driftCharge = 0;
   }
+
+  // On a wet road the car can't corner as hard as it asks: past the grip,
+  // it understeers. (The dry limit is beyond anything a car can ask, so the
+  // dry is untouched.)
+  const gripLimit = Weather.dryLimit(racer.physics) * Weather.grip(state.weather);
+  if (wet) yaw = Weather.capYaw(yaw, racer.speed, gripLimit);
+  racer.yawRate = yaw;
+  // How hard it is cornering (speed x yaw), for the checks and the spray.
+  racer.latAccel = Math.abs(yaw * racer.speed);
+  // A wet tyre near its limit slides, and scrubs speed.
+  if (wet) racer.speed *= Weather.scrub(racer.latAccel, gripLimit, dt);
+  racer.heading += yaw * dt;
 
   racer.x += Math.cos(racer.heading) * racer.speed * dt;
   racer.y += Math.sin(racer.heading) * racer.speed * dt;
@@ -2182,7 +2236,8 @@ function updateHazards(now) {
     if (now > hazard.expiresAt) return false;
     const victim = PowerUps.firstHit(hazard, bodies, L, now);
     if (!victim) return true;
-    spinRacer(racerById(victim.id), PowerUps.SPIN_MS.oilSlick, now);
+    // Oil on a wet road: the spin lasts longer.
+    spinRacer(racerById(victim.id), PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" ? Weather.WET.oilSpin : 1), now);
     return false;
   });
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
@@ -5004,6 +5059,7 @@ window.Game = {
   selectCup,
   selectDifficulty,
   selectGridMode,
+  selectWeatherMode,
   startCup,
   startRaceFromQualifying,
   nextRace,
