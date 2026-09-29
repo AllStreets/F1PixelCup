@@ -206,6 +206,16 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
 - **Paused** means paused: the flags, the crowd, the helicopter and the show all stop, on one trackside clock of real time that holds while the race is paused.
 - All of it is scenery for the audit: the marshal posts and the starter are in `auditScenery`'s targets, and it stays at 0 on every circuit.
 
+### Starting without freezing
+
+G3's regression run showed a race's start freezing the page for 4–6 s when the car arrived. That already happened on main. Profiling found the time was spent waiting on shader compiles, and all of it happened on the first frame. Now:
+- three's shader error checking is off (`?debug` turns it back on), so compiles no longer wait on the driver one by one;
+- `prepare()` sizes the canvas, builds the race's cars, and compiles the circuit, the cars and the hidden things (the helicopter, the fireworks, rolled-up flags) with `compileAsync`, behind the loading panel;
+- until that compile is done, `render()` shows only the sky's colour instead of compiling everything at once;
+- the tunnel-light shader patch is applied only on the circuit that has a tunnel.
+
+The long freeze became a few blocks of about 1 s; the rest is the first shadow and post-processing passes. `loading-check`'s `lightsWaitForTheCar` now polls for the lights (within 15 s) instead of assuming a fixed start time.
+
 ### Tests (G3)
 
 - **Node** (`tests/marshals.test.js`):

@@ -112,7 +112,10 @@ function prepareCircuit() {
     return;
   }
   const track = TRACKS.find((t) => t.id === job.trackId) || state.track;
-  render3dSafely(() => window.Render3D.prepare(track));
+  // Not ready yet (its shaders still compiling): ask again next frame. A
+  // renderer failure ends the wait (the 2D view takes over).
+  const ready = render3dSafely(() => window.Render3D.prepare(track, state.racers));
+  if (ready.ok && ready.value === false) return;
   state.preparing = null;
   state.preparedAt = performance.now();
   // The lights start from here.

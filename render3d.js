@@ -48,6 +48,10 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// Checking every shader for errors as it compiles makes each compile wait
+// for the GPU driver (seconds of frozen page when a circuit and its cars
+// first draw). The shaders are known good; ?debug turns the check back on.
+renderer.debug.checkShaderErrors = /[?&]debug\b/.test(window.location.search);
 setAnisotropy(renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
@@ -159,13 +163,33 @@ function setPhotoCamera(shot) {
 
 // Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
 // the heavy work happens behind a loading panel instead of mid-countdown.
-function prepare(track) {
+// Returns true once the circuit is ready to draw. Its shaders compile in the
+// background where the browser can (compileAsync), so the loading panel keeps
+// moving instead of the page freezing; until then it returns false, and the
+// game asks again next frame.
+function prepare(track, racers) {
   const world = ensureWorld(track);
-  if (!world.compiled) {
-    renderer.compile(scene, camera);
-    world.compiled = true;
+  if (world.compiled) return true;
+  if (!world.compiling) {
+    // The canvas at its size (the render targets are made now, not on the
+    // first frame of the countdown), and the race's cars built.
+    resize();
+    (racers || []).forEach((racer) => ensureCar(world, racer));
+    // Hidden things (the helicopter, the fireworks, rolled-up flags) are
+    // compiled too: shown for the moment the compile gathers them.
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible && (o.isMesh || o.isPoints || o.isGroup)) { hidden.push(o); o.visible = true; } });
+    const done = () => { world.compiled = true; };
+    if (!renderer.compileAsync) {
+      renderer.compile(scene, camera);
+      hidden.forEach((o) => { o.visible = false; });
+      done();
+      return true;
+    }
+    world.compiling = renderer.compileAsync(scene, camera).catch(() => renderer.compile(scene, camera)).then(done);
+    hidden.forEach((o) => { o.visible = false; });
   }
-  return true;
+  return false;
 }
 
 // The advert barriers, for the checks. Each quad's front is to the right of
@@ -671,7 +695,9 @@ function ensureWorld(track) {
   // The tunnel's light: its shape for the shaders, and every lit material
   // taught it (before the circuit's shaders are compiled).
   setTunnel(current.course, track.tunnel, TUNNEL_ROOF);
-  lightInTunnel(scene);
+  // Only where there is a tunnel: the patch is a new shader for every lit
+  // material, and compiling those everywhere would stall the start.
+  if (track.tunnel) lightInTunnel(scene);
   return current;
 }
 
@@ -747,17 +773,23 @@ function syncParticles(list, course) {
 // Cars
 // ---------------------------------------------------------------------------
 
+// A racer's car in this world, built the first time it is needed.
+function ensureCar(world, racer) {
+  let car = world.cars.get(racer.id);
+  if (!car) {
+    car = buildCar(racer.kart, racer.driver);
+    if (world.course.track.tunnel) lightInTunnel(car.root);
+    world.cars.set(racer.id, car);
+    scene.add(car.root);
+  }
+  return car;
+}
+
 function syncCars(world, racers, player, now, dt) {
   const { course } = world;
   const seen = new Set();
   racers.forEach((racer) => {
-    let car = world.cars.get(racer.id);
-    if (!car) {
-      car = buildCar(racer.kart, racer.driver);
-      lightInTunnel(car.root);
-      world.cars.set(racer.id, car);
-      scene.add(car.root);
-    }
+    const car = ensureCar(world, racer);
     seen.add(racer.id);
     const visible = !racer.finished || racer.id === player.id;
     car.root.visible = visible;
@@ -863,6 +895,15 @@ function render(frame) {
   lastNow = now;
   resize();
   const world = ensureWorld(track);
+  // Its shaders still compiling in the background (prepare): nothing to draw
+  // yet but the sky's colour, under the loading panel -- drawing now would
+  // compile them all at once and freeze the page.
+  if (!prepare(track, racers)) {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
+    renderer.clear();
+    return { onKerb: false };
+  }
   const { course } = world;
   garage.group.visible = false;
   world.group.visible = true;
