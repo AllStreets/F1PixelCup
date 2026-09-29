@@ -11,6 +11,12 @@
   const $ = (id) => document.getElementById(id);
   let openOverlay = null;
   let tickerTimer = 0;
+  // Where focus was before an overlay opened: it goes back there on close.
+  let focusBeforeOverlay = null;
+  // Asked for by the address (#career) while the phone note was up first.
+  let careerAfterNote = false;
+  // The phone note is shown once per visit (the site's own note counts).
+  const PHONE_NOTE_KEY = "f1pixelcup.phoneNote";
 
   function lapTime(ms) {
     if (!ms || ms <= 0) return "-:--.---";
@@ -161,8 +167,27 @@
     refreshPitLane();
   }
 
+  // The pit lane is redrawn on every pick; keep focus on the control that was
+  // picked (its replacement) instead of dropping it on the page.
+  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "action"];
+  function focusedControl() {
+    const el = document.activeElement;
+    if (!el || !$("pitlane").contains(el)) return null;
+    const key = FOCUS_KEYS.find((k) => el.dataset && el.dataset[k] !== undefined);
+    return key ? { key, value: el.dataset[key], id: el.id } : (el.id ? { id: el.id } : null);
+  }
+
+  function restoreFocus(was) {
+    if (!was || $("pitlane").contains(document.activeElement)) return;
+    const el = was.key
+      ? [...$("pitlane").querySelectorAll(`[data-${was.key}]`)].find((n) => n.dataset[was.key] === was.value)
+      : (was.id && $(was.id));
+    if (el) el.focus({ preventScroll: true });
+  }
+
   function refreshPitLane() {
     if (!window.Game || !$("pitlane")) return;
+    const was = focusedControl();
     const s = Game.getPitLaneState();
     $("pitlane").style.setProperty("--team", s.team.body);
     $("driver-kicker").textContent = `#${s.driver.number} · ${s.team.name} ${s.team.car}`;
@@ -186,6 +211,13 @@
         type="button" role="option" aria-selected="${d.index === s.selectedDriver}" title="${esc(d.name)}"><b>${num(d.number)}</b><span>${esc(d.code)}</span></button>`).join("");
     $("start-cup").innerHTML = `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
     refreshCareerChip();
+    restoreFocus(was);
+  }
+
+  // After the arrow keys change driver: bring the chosen tile into view.
+  function revealSelectedDriver() {
+    const tile = document.querySelector("#driver-strip .driver-tile.is-on");
+    if (tile) tile.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
 
   // Every driver has their own career; the pit lane shows the selected one's.
@@ -405,28 +437,95 @@
     openOverlayId("phone-note");
   }
 
+  function phoneNoteSeen() {
+    try {
+      return window.sessionStorage.getItem(PHONE_NOTE_KEY) === "seen";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  const FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex='-1'])";
+  function focusables(id) {
+    return [...$(id).querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0);
+  }
+
   function openOverlayId(id) {
+    if (!openOverlay) focusBeforeOverlay = document.activeElement;
     OVERLAYS.forEach(hide);
     show(id);
     openOverlay = id;
+    // Focus moves into the overlay: its main action, else its first control.
+    const inside = focusables(id);
+    const main = inside.find((el) => el.classList.contains("go-btn")) || inside[0];
+    if (main) main.focus({ preventScroll: true });
   }
 
   function closeOverlay() {
     if (!openOverlay) return false;
+    const closing = openOverlay;
     hide(openOverlay);
     openOverlay = null;
+    if (closing === "phone-note") {
+      try {
+        window.sessionStorage.setItem(PHONE_NOTE_KEY, "seen");
+      } catch (error) {
+        // Shown again next time, that's all.
+      }
+      if (careerAfterNote) {
+        careerAfterNote = false;
+        showCareer();
+        return true;
+      }
+    }
+    const back = focusBeforeOverlay;
+    focusBeforeOverlay = null;
+    if (back && back.isConnected && back.getClientRects().length && typeof back.focus === "function") back.focus({ preventScroll: true });
     return true;
+  }
+
+  // Tab and Shift+Tab stay inside an open overlay.
+  function trapFocus(event) {
+    if (event.key !== "Tab" || !openOverlay) return;
+    const inside = focusables(openOverlay);
+    if (!inside.length) return;
+    const first = inside[0];
+    const last = inside[inside.length - 1];
+    const within = $(openOverlay).contains(document.activeElement);
+    if (event.shiftKey && (!within || document.activeElement === first)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (!within || document.activeElement === last)) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
+  // Another tab raced: show its progress here too.
+  function onStorage(event) {
+    if (event.key !== null && !String(event.key).startsWith("f1pixelcup.profile")) return;
+    if (!$("pitlane")) return;
+    refreshCareerChip();
+    if (openOverlay === "career-screen") renderCareer();
   }
 
   function init() {
     build();
-    if (window.Device && Device.isTouchOnly(window.matchMedia && window.matchMedia.bind(window))) showPhoneNote();
-    if (window.location.hash === "#career") showCareer();
+    document.addEventListener("keydown", trapFocus, true);
+    window.addEventListener("storage", onStorage);
+    const wantsCareer = window.location.hash === "#career";
+    if (window.Device && Device.isTouchOnly(window.matchMedia && window.matchMedia.bind(window)) && !phoneNoteSeen()) {
+      // The note comes first; the career opens when it is closed.
+      showPhoneNote();
+      careerAfterNote = wantsCareer;
+    } else if (wantsCareer) {
+      showCareer();
+    }
   }
 
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
-    showResults, showQualifying, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings,
+    showResults, showQualifying, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

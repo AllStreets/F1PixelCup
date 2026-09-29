@@ -2395,25 +2395,27 @@ function careerForRace(summary) {
   // Every driver has their own career: the strip names whose it is.
   const driver = DRIVERS.find((d) => d.id === summary.driverId);
   const whose = driver ? `${surnameOf(driver.name)}: ` : "";
+  // These lines are HTML (for the bold parts): every piece of text in them is escaped.
+  const n = (value) => escapeHtml(Number(value) || 0);
   const lines = [
-    `${escapeHtml(whose)}<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier}) · total ${summary.careerTotal.toLocaleString()}`,
-    `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
+    `${escapeHtml(whose)}<strong>+${n(summary.careerPoints)} career points</strong> (${n(summary.racePoints)} × ${escapeHtml(difficulty)} ×${n(summary.multiplier)}) · total ${escapeHtml((Number(summary.careerTotal) || 0).toLocaleString())}`,
+    `Rating ${n(before)} → <strong>${n(after)}</strong> ${escapeHtml(trend)} · ${escapeHtml(summary.tier)}`,
   ];
   if (summary.qualifying) {
     const q = summary.qualifying;
     lines.push(q.careerPoints > 0
-      ? `Qualifying P${q.position}: <strong>+${q.careerPoints}</strong> (${q.points} × ${difficulty} ×${q.multiplier})${q.position === 1 ? " · Pole position" : ""}`
-      : `Qualifying P${q.position}: no points (top ten score)`);
+      ? `Qualifying P${n(q.position)}: <strong>+${n(q.careerPoints)}</strong> (${n(q.points)} × ${escapeHtml(difficulty)} ×${n(q.multiplier)})${q.position === 1 ? " · Pole position" : ""}`
+      : `Qualifying P${n(q.position)}: no points (top ten score)`);
   }
-  if (summary.newBestLap) lines.push(`New best at ${state.track.name}: <strong>${formatLapTime(summary.newBestLap.ms)}</strong>`);
+  if (summary.newBestLap) lines.push(`New best at ${escapeHtml(state.track.name)}: <strong>${escapeHtml(formatLapTime(summary.newBestLap.ms))}</strong>`);
   return { lines, saved: summary.saved };
 }
 
 function careerForCup(cup, playerPlace) {
   if (!cup) return { lines: [], saved: true };
   const lines = cup.bonus > 0
-    ? [`<strong>Cup ${formatOrdinal(playerPlace)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
-    : [`Cup ${formatOrdinal(playerPlace)}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${cup.careerTotal.toLocaleString()}`];
+    ? [`<strong>Cup ${escapeHtml(formatOrdinal(playerPlace))} bonus +${escapeHtml(Number(cup.careerPoints) || 0)}</strong> (${escapeHtml(Number(cup.bonus) || 0)} × ${escapeHtml(careerDifficultyName(getDifficulty().id))} ×${escapeHtml(Number(cup.multiplier) || 0)}) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`]
+    : [`Cup ${escapeHtml(formatOrdinal(playerPlace))}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`];
   const driver = state.cupEntries.find((entry) => entry.isPlayer);
   if (driver && lines.length) lines[0] = `${escapeHtml(surnameOf(driver.driver.name))}: ${lines[0]}`;
   return { lines, saved: cup.saved };
@@ -2557,6 +2559,19 @@ function nextRace() {
   state.raceIndex += 1;
   enterFullscreenMode();
   startRaceWeekend(state.raceIndex);
+}
+
+// Leaving a race. Once the player has taken the flag their race is done: it is
+// finalised (the cars still running are placed on their pace, as the time
+// limit would) and counts, before going back to the pit lane.
+function quitToPitLane() {
+  const player = getPlayer();
+  if (state.phase === "race" && player && player.finished && !state.resultsQueued) {
+    state.resultsQueued = true;
+    completeRemainingFinishers(raceNow());
+    finalizeRace();
+  }
+  resetToGarage();
 }
 
 function resetToGarage() {
@@ -4722,6 +4737,7 @@ function bindEvents() {
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
         event.preventDefault();
         selectDriver(state.selectedDriver + (event.key === "ArrowRight" ? 1 : -1));
+        if (window.Screens) window.Screens.revealSelectedDriver();
       } else if (event.key === "Enter" && !event.repeat) {
         // Enter on a focused pill, link or button belongs to that control.
         const control = event.target && event.target.closest ? event.target.closest("button, a") : null;
@@ -4753,7 +4769,7 @@ function bindEvents() {
     // A way out mid-race without having to finish it.
     if (event.key.toLowerCase() === "q" && state.paused) {
       event.preventDefault();
-      resetToGarage();
+      quitToPitLane();
     }
     if (event.code === "Space") {
       event.preventDefault();
@@ -4811,7 +4827,7 @@ window.Game = {
   startCup,
   startRaceFromQualifying,
   nextRace,
-  backToPitLane: resetToGarage,
+  backToPitLane: quitToPitLane,
   setSound(on) {
     initAudio();
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
