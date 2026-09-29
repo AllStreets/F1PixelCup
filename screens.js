@@ -44,6 +44,8 @@
           <div class="choice-row"><span class="choice-label" id="difficulty-label">Difficulty</span><span id="difficulty-pills" role="group" aria-labelledby="difficulty-label"></span></div>
           <div class="choice-row"><span class="choice-label" id="grid-label">Grid</span><span id="grid-pills" role="group" aria-labelledby="grid-label" aria-describedby="grid-hint"></span></div>
           <p id="grid-hint" class="choice-hint"></p>
+          <div class="choice-row"><span class="choice-label" id="weather-label">Weather</span><span id="weather-pills" role="group" aria-labelledby="weather-label" aria-describedby="weather-hint"></span></div>
+          <p id="weather-hint" class="choice-hint"></p>
           <ol id="cup-circuits" class="cup-circuits"></ol>
         </div>
         <div class="pitlane-driver">
@@ -133,7 +135,7 @@
   }
 
   function onClick(event) {
-    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid]");
+    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather]");
     if (!target || !window.Game) return;
     if (target.dataset.driver !== undefined) {
       Game.selectDriver(Number(target.dataset.driver));
@@ -147,6 +149,7 @@
     else if (target.dataset.cup !== undefined) Game.selectCup(Number(target.dataset.cup));
     else if (target.dataset.difficulty !== undefined) Game.selectDifficulty(Number(target.dataset.difficulty));
     else if (target.dataset.grid !== undefined) Game.selectGridMode(target.dataset.grid);
+    else if (target.dataset.weather !== undefined) Game.selectWeatherMode(target.dataset.weather);
     else {
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
@@ -188,7 +191,7 @@
 
   // The pit lane is redrawn on every pick; keep focus on the control that was
   // picked (its replacement) instead of dropping it on the page.
-  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "action"];
+  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "weather", "action"];
   function focusedControl() {
     const el = document.activeElement;
     if (!el || !$("pitlane").contains(el)) return null;
@@ -228,6 +231,13 @@
     $("grid-hint").textContent = s.gridMode === "qualifying"
       ? "Before every race: one flying lap sets your grid, and pays career points."
       : "You start every race last and fight through the field.";
+    $("weather-pills").innerHTML = s.weatherModes.map((m) => `
+      <button class="pill ${m.id === s.weatherMode ? "is-on" : ""}" data-weather="${esc(m.id)}" type="button" aria-pressed="${m.id === s.weatherMode}">${esc(m.name)}</button>`).join("");
+    $("weather-hint").textContent = s.weatherMode === "wet"
+      ? "Every race in the rain: less grip in the corners, longer braking."
+      : s.weatherMode === "changeable"
+        ? "Each race has a one-in-three chance of rain."
+        : "Dry races all cup.";
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"

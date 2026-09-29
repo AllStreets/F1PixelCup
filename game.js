@@ -114,7 +114,7 @@ function prepareCircuit() {
   const track = TRACKS.find((t) => t.id === job.trackId) || state.track;
   // Not ready yet (its shaders still compiling): ask again next frame. A
   // renderer failure ends the wait (the 2D view takes over).
-  const ready = render3dSafely(() => window.Render3D.prepare(track, state.racers));
+  const ready = render3dSafely(() => window.Render3D.prepare(track, state.racers, state.weather));
   if (ready.ok && ready.value === false) return;
   state.preparing = null;
   state.preparedAt = performance.now();
@@ -325,6 +325,11 @@ const state = {
   // Starting grid: "back" (Mario Kart style, the default) or "qualifying".
   gridMode: "back",
   cupGridMode: "back",
+  // The weather: the pit-lane choice, the cup's (fixed once it starts), and
+  // the current race's ("dry" or "wet"; weather.js).
+  weatherMode: "dry",
+  cupWeatherMode: "dry",
+  weather: "dry",
   gridOrder: [],
   qualifying: null,
   finishQueue: [],
@@ -715,6 +720,8 @@ function getPitLaneState() {
     selectedDifficulty: state.difficulty,
     gridModes: GRID_MODES,
     gridMode: state.gridMode,
+    weatherModes: Weather.MODES,
+    weatherMode: state.weatherMode,
     // Drivers can be changed only in the pit lane, between cups.
     canChooseDriver: state.phase === "garage",
   };
@@ -737,7 +744,31 @@ function selectGridMode(mode) {
   renderGarage();
 }
 
+// Chosen in the pit lane, fixed for the whole cup once it starts.
+function selectWeatherMode(mode) {
+  if (state.phase !== "garage" || !Weather.MODES.some((m) => m.id === mode)) return;
+  state.weatherMode = mode;
+  try {
+    window.localStorage.setItem("f1pixelcup.weather", mode);
+  } catch (err) {
+    // Preference just will not persist.
+  }
+  renderGarage();
+}
+
+// A race's weather, from the cup's choice: seeded by the cup run, so its
+// qualifying and its race share it, and it never rerolls.
+function setRaceWeather(index) {
+  state.weather = Weather.raceWeather(state.cupWeatherMode, hashSeed(`${state.cupRunId || "run"}:weather`), index);
+}
+
 function loadGridPreference() {
+  try {
+    const weather = window.localStorage.getItem("f1pixelcup.weather");
+    if (Weather.MODES.some((m) => m.id === weather)) state.weatherMode = weather;
+  } catch (err) {
+    // Keep the default.
+  }
   try {
     const stored = window.localStorage.getItem("f1pixelcup.grid");
     if (GRID_MODES.some((m) => m.id === stored)) state.gridMode = stored;
@@ -960,6 +991,7 @@ function startQualifying(index) {
   const cup = getActiveCup();
   state.raceIndex = index;
   state.track = cup.tracks[index];
+  setRaceWeather(index);
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
     shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
@@ -1243,6 +1275,7 @@ function startCup() {
   state.cupDifficulty = state.difficulty;
   state.feed = [];
   state.cupGridMode = state.gridMode;
+  state.cupWeatherMode = state.weatherMode;
   state.qualifying = null;
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
@@ -1262,6 +1295,7 @@ function startRace(index) {
   state.phase = "countdown";
   if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
+  setRaceWeather(index);
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
   state.shots = [];
@@ -1317,6 +1351,7 @@ function startRace(index) {
   state.countdownStart = performance.now();
   state.raceStart = 0;
   addFeed(`${state.track.name} loaded. Red boxes hold the power-ups.`);
+  if (state.weather === "wet") addFeed(`Rain at ${state.track.name}: the grip is down.`);
   updateStandingsUI();
   updatePlayerUI();
 }
@@ -1902,7 +1937,9 @@ function updateRacer(racer, dt, now) {
     steerInput = clamp(angleDiff * 1.7, -1, 1);
     const turnSeverity = Math.abs(angleDiff);
     // A better driver carries the corner further before lifting.
-    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62) {
+    // A wet road: they lift earlier (the speed a corner allows goes as the
+    // square root of grip).
+    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather === "wet" && !racer.underRoof ? "wet" : "dry")) {
       brake = 1;
     }
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
@@ -1935,11 +1972,19 @@ function updateRacer(racer, dt, now) {
   ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
 
   const turnRate = racer.physics.turnRate * (0.45 + clamp(racer.speed / 180, 0.2, 1));
-  racer.heading += steerInput * turnRate * dt;
+  // The yaw this step asks for (a drift adds to it, below); it is applied
+  // once the grip has had its say.
+  let yaw = steerInput * turnRate;
+  // Wet, unless the car is under the tunnel's roof, where the road is dry.
+  racer.underRoof = Boolean(state.track.tunnel && window.Venue
+    && Venue.reverbAt(racer.trackDistance || 0, [state.track.tunnel], state.track.totalLength) > 0.5);
+  const wet = state.weather === "wet" && !racer.underRoof;
+  const traction = wet ? Weather.WET.accel : 1;
+  const braking = wet ? Weather.WET.brake : 1;
 
   let targetSpeed = racer.physics.maxSpeed;
   const reverseTargetSpeed = -racer.physics.maxSpeed * 0.5;
-  if (offroad) targetSpeed *= racer.physics.offroadFactor;
+  if (offroad) targetSpeed *= racer.physics.offroadFactor * (wet ? Weather.WET.offroad : 1);
   if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
   if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
   if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
@@ -1964,14 +2009,14 @@ function updateRacer(racer, dt, now) {
 
   if (throttle > 0) {
     if (racer.speed < 0) {
-      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * 0.95 * dt);
+      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * braking * 0.95 * dt);
     }
-    racer.speed = Math.min(targetSpeed, racer.speed + racer.physics.accelRate * throttle * dt);
+    racer.speed = Math.min(targetSpeed, racer.speed + racer.physics.accelRate * traction * throttle * dt);
   } else if (reverse > 0) {
     if (racer.speed > 0) {
-      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * 1.08 * reverse * dt);
+      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * braking * 1.08 * reverse * dt);
     } else {
-      racer.speed = Math.max(reverseTargetSpeed, racer.speed - racer.physics.accelRate * reverse * dt);
+      racer.speed = Math.max(reverseTargetSpeed, racer.speed - racer.physics.accelRate * traction * reverse * dt);
     }
   } else {
     // Lifting off should coast, not anchor the car to the tarmac.
@@ -1984,9 +2029,9 @@ function updateRacer(racer, dt, now) {
 
   if (brake > 0) {
     if (racer.speed > 0) {
-      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * brake * dt);
+      racer.speed = Math.max(0, racer.speed - racer.physics.brakeRate * braking * brake * dt);
     } else {
-      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * 0.6 * brake * dt);
+      racer.speed = Math.min(0, racer.speed + racer.physics.brakeRate * braking * 0.6 * brake * dt);
     }
   }
 
@@ -2014,7 +2059,7 @@ function updateRacer(racer, dt, now) {
     racer.drifting = true;
     racer.driftSide = driftSide >= 0 ? 1 : -1;
     racer.driftCharge += racer.physics.driftChargeRate * dt;
-    racer.heading += racer.driftSide * 0.8 * dt;
+    yaw += racer.driftSide * Weather.DRIFT_YAW;
   } else if (racer.drifting) {
     if (racer.driftCharge > 1.6) {
       racer.boostUntil = Math.max(racer.boostUntil, now + 1400);
@@ -2026,6 +2071,19 @@ function updateRacer(racer, dt, now) {
     racer.drifting = false;
     racer.driftCharge = 0;
   }
+
+  // On a wet road the car can't corner as hard as it asks: past the grip's
+  // share of the hardest it could corner in the dry at this speed, it
+  // understeers. (Only wet: the dry is never capped. A spinning car is
+  // already past any grip.)
+  const gripLimit = Weather.dryLimitAt(racer.physics, racer.speed) * Weather.WET.corner;
+  if (wet && !(racer.spinUntil > now)) yaw = Weather.capYaw(yaw, racer.speed, gripLimit);
+  racer.yawRate = yaw;
+  // How hard it is cornering (speed x yaw), for the checks and the spray.
+  racer.latAccel = Math.abs(yaw * racer.speed);
+  // A wet tyre near its limit slides, and scrubs speed.
+  if (wet) racer.speed *= Weather.scrub(racer.latAccel, gripLimit, dt);
+  racer.heading += yaw * dt;
 
   racer.x += Math.cos(racer.heading) * racer.speed * dt;
   racer.y += Math.sin(racer.heading) * racer.speed * dt;
@@ -2182,7 +2240,9 @@ function updateHazards(now) {
     if (now > hazard.expiresAt) return false;
     const victim = PowerUps.firstHit(hazard, bodies, L, now);
     if (!victim) return true;
-    spinRacer(racerById(victim.id), PowerUps.SPIN_MS.oilSlick, now);
+    // Oil on a wet road: the spin lasts longer.
+    const spun = racerById(victim.id);
+    spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && spun && !spun.underRoof ? Weather.WET.oilSpin : 1), now);
     return false;
   });
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
@@ -2673,6 +2733,8 @@ function resetToGarage() {
   state.phase = "garage";
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
+  // Nothing run from the pit lane is wet.
+  state.weather = "dry";
   state.cupEntries = [];
   state.racers = [];
   state.shots = [];
@@ -3414,7 +3476,7 @@ function drawDriverView(track) {
   const mode = worldView();
   // Timing the field shows its progress in the loading panel, over the circuit.
   const timing = state.phase === "qualifyingSim";
-  if (state.preparing) setViewLoadingText("Building the circuit…");
+  if (state.preparing) setViewLoadingText(state.weather === "wet" ? "Building the circuit… it's raining" : "Building the circuit…");
   else if (!timing) setViewLoadingText("Warming up the car…");
   showViewLoading(mode === "loading" || timing || state.preparing ? "race" : null);
   if (mode === "loading") {
@@ -3440,6 +3502,7 @@ function drawDriverView(track) {
       // fast-forward after the flag.
       racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
       trackside: tracksideFrame(now),
+      weather: state.weather,
     }));
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
@@ -3679,7 +3742,38 @@ function initAudio() {
   rotorGain.connect(audio.master);
   rotorSource.start();
   beat.start();
-  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, convolver, engineGain, feeding: false };
+  // Rain: a steady hiss of drops (the noise with its lows and highs taken
+  // off), and the wet tyres' hiss, brighter and following the speed.
+  const rainSource = ctxA.createBufferSource();
+  rainSource.buffer = makeNoiseBuffer(ctxA, 5);
+  rainSource.loop = true;
+  const rainLow = ctxA.createBiquadFilter();
+  rainLow.type = "highpass";
+  rainLow.frequency.value = 500;
+  const rainHigh = ctxA.createBiquadFilter();
+  rainHigh.type = "lowpass";
+  rainHigh.frequency.value = 5200;
+  const rainGain = ctxA.createGain();
+  rainGain.gain.value = 0;
+  rainSource.connect(rainLow);
+  rainLow.connect(rainHigh);
+  rainHigh.connect(rainGain);
+  rainGain.connect(audio.master);
+  rainSource.start();
+  const hissSource = ctxA.createBufferSource();
+  hissSource.buffer = makeNoiseBuffer(ctxA, 2.3);
+  hissSource.loop = true;
+  const hissFilter = ctxA.createBiquadFilter();
+  hissFilter.type = "bandpass";
+  hissFilter.frequency.value = 2600;
+  hissFilter.Q.value = 0.8;
+  const hissGain = ctxA.createGain();
+  hissGain.gain.value = 0;
+  hissSource.connect(hissFilter);
+  hissFilter.connect(hissGain);
+  hissGain.connect(audio.master);
+  hissSource.start();
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, rain: rainGain, hiss: hissGain, convolver, engineGain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -3804,7 +3898,7 @@ const sfx = {
 // and the crowd's. Kept in state.venueSound (the checks read it).
 function venueSound(player, racing) {
   const track = state.track;
-  const out = { reverb: 0, crowd: 0, hum: 0, helicopter: 0 };
+  const out = { reverb: 0, crowd: 0, hum: 0, helicopter: 0, rain: 0, hiss: 0 };
   if (track && player && racing && window.Venue) {
     // The helicopter flies 400 behind the leader, 260 up and 220 aside:
     // heard faintly when it is near.
@@ -3817,6 +3911,12 @@ function venueSound(player, racing) {
     out.reverb = Venue.reverbAt(player.trackDistance || 0, track.reverbZones, track.totalLength);
     out.crowd = Venue.crowdAt(player.trackDistance || 0, track.crowdStands, track.totalLength);
     out.hum = Venue.FLOODLIT.includes(track.id) ? 1 : 0;
+    if (state.weather === "wet") {
+      // Under the tunnel's roof the rain is shut out, and the road is dry.
+      const covered = track.tunnel ? Venue.reverbAt(player.trackDistance || 0, [track.tunnel], track.totalLength) : 0;
+      out.rain = 1 - covered;
+      out.hiss = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1) * (1 - covered);
+    }
   }
   state.venueSound = out;
   return out;
@@ -3853,6 +3953,8 @@ function updateEngineAudio(player) {
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
     audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05, now, 0.3);
+    audio.venue.rain.gain.setTargetAtTime(venue.rain * 0.045, now, 0.4);
+    audio.venue.hiss.gain.setTargetAtTime(venue.hiss * 0.06, now, 0.1);
   }
 
   if (audio.screech) {
@@ -4319,7 +4421,7 @@ function drawQualifyingHud(track, player) {
   hudPanel(20, 16, 300, 134, "#c77dff");
   ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
   ctx.font = "bold 11px Trebuchet MS";
-  ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING`, 34, 34);
+  ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING${state.weather === "wet" ? " · WET" : ""}`, 34, 34);
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 22px Georgia";
   const label = state.phase === "qualifyingSim" ? "Timing the field…" : state.phase === "qualifyingResults" ? "Session over"
@@ -4363,7 +4465,7 @@ function drawDriverHud(track, player) {
   hudPanel(20, 16, 262, 116, placeStyle.fill);
   ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
   ctx.font = "bold 11px Trebuchet MS";
-  ctx.fillText(track.name.toUpperCase(), 34, 34);
+  ctx.fillText(`${track.name.toUpperCase()}${state.weather === "wet" ? " · WET" : ""}`, 34, 34);
 
   ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
   ctx.font = "bold 12px Trebuchet MS";
@@ -5004,6 +5106,7 @@ window.Game = {
   selectCup,
   selectDifficulty,
   selectGridMode,
+  selectWeatherMode,
   startCup,
   startRaceFromQualifying,
   nextRace,

@@ -27,6 +27,7 @@ import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
+import { createRain, wettable, WET_GRASS, WET_RUNOFF } from "./r3d/rain.js";
 
 const MAX_PARTICLES = 256;
 
@@ -99,6 +100,9 @@ const frameSamples = [];
 let lastFrameAt = 0;
 const currentTier = () => Quality.effectiveTier(graphicsChoice, autoTier);
 postfx.setTier(currentTier());
+// Rain and spray (r3d/rain.js), tiered with the rest.
+const rain = createRain(scene);
+rain.setTier(currentTier());
 
 // The first 90 frames of racing (not paused) decide whether auto steps down.
 function sampleFrame(racing) {
@@ -114,6 +118,7 @@ function sampleFrame(racing) {
     if (next !== autoTier) {
       autoTier = next;
       postfx.setTier(currentTier());
+      rain.setTier(currentTier());
     }
   }
 }
@@ -126,6 +131,7 @@ function setGraphics(choice) {
     // The choice holds for this visit only.
   }
   postfx.setTier(currentTier());
+  rain.setTier(currentTier());
   return graphics();
 }
 
@@ -167,8 +173,10 @@ function setPhotoCamera(shot) {
 // of the scene at a time, and the browser finishes them in the background
 // (compileAsync), so the loading panel keeps moving instead of the page
 // freezing; until then it returns false, and the game asks again next frame.
-function prepare(track, racers) {
+function prepare(track, racers, weather) {
   const world = ensureWorld(track);
+  // Wet or dry before the first frame (only uniforms: nothing to compile).
+  rain.apply(world, scene, weather === "wet");
   if (world.compiled) return true;
   if (!world.preparedFrom) {
     // The canvas at its size (the render targets are made now, not on the
@@ -585,7 +593,18 @@ function inspect() {
   // Whether the race's world is being drawn (its shaders compiled), not held
   // behind the loading panel.
   const drawing = Boolean(current && current.compiled && !garage.group.visible);
-  return { drawing, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // The weather as drawn: the road's roughness, the rain and the spray.
+  let road = null;
+  let kerb = null;
+  if (current) current.circuit.traverse((o) => {
+    if (!road && o.material && o.material.userData.surface === "road") road = o.material;
+    if (!kerb && o.material && o.material.uniforms && o.material.uniforms.wet) kerb = o.material;
+  });
+  const weather = {
+    ...rain.inspect(), roadRoughness: road ? road.roughness : null, kerbWet: kerb ? kerb.uniforms.wet.value : null,
+    sunIntensity: sun.intensity, fogFar: scene.fog ? scene.fog.far : null,
+  };
+  return { drawing, weather, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -659,13 +678,17 @@ function buildSky(bg, night, fogColor) {
       sunDir: { value: SUN_DIR },
       sunColor: { value: color(bg.sun, "#ffe08a") },
       night: { value: night ? 1 : 0 },
+      // Rain: the sky greyed and the sun behind cloud (r3d/rain.js).
+      overcast: { value: 0 },
     },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-    fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunColor; uniform float night; varying vec3 vDir;
+    fragmentShader: `uniform vec3 top; uniform vec3 bottom; uniform vec3 sunDir; uniform vec3 sunColor; uniform float night; uniform float overcast; varying vec3 vDir;
       void main(){ float h = clamp(vDir.y*2.2, 0.0, 1.0); vec3 c = mix(bottom, top, pow(h, 0.7));
+        float grey = dot(c, vec3(0.3, 0.55, 0.15));
+        c = mix(c, vec3(grey) * mix(0.9, 0.55, night), overcast * 0.75);
         float s = max(dot(normalize(vDir), sunDir), 0.0);
-        c += sunColor * (pow(s, 900.0) * 3.0 + pow(s, 12.0) * 0.25) * (1.0 - night);
-        c += sunColor * pow(s, 400.0) * night * 1.5;
+        c += sunColor * (pow(s, 900.0) * 3.0 + pow(s, 12.0) * 0.25) * (1.0 - night) * (1.0 - overcast * 0.9);
+        c += sunColor * pow(s, 400.0) * night * 1.5 * (1.0 - overcast * 0.8);
         gl_FragColor = vec4(c, 1.0); }`,
   });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), mat);
@@ -678,9 +701,9 @@ function buildGround(course, venue, bg) {
   const tile = 48;
   let mat;
   if (venue.ground === "water") mat = waterMaterial("#2a6f96");
-  else if (venue.ground === "sand") mat = new THREE.MeshStandardMaterial({ map: photo("aerial_sand", size / 160), color: color("#e6c898"), roughness: 1 });
-  else if (venue.ground === "city") mat = new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", size / 90), color: color("#55535a"), roughness: 0.95 });
-  else mat = new THREE.MeshStandardMaterial({ map: photo("leafy_grass", size / tile), color: color(venue.groundTint || bg.grass), roughness: 0.95 });
+  else if (venue.ground === "sand") mat = wettable(new THREE.MeshStandardMaterial({ map: photo("aerial_sand", size / 160), color: color("#e6c898"), roughness: 1 }), WET_GRASS);
+  else if (venue.ground === "city") mat = wettable(new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", size / 90), color: color("#55535a"), roughness: 0.95 }), WET_RUNOFF);
+  else mat = wettable(new THREE.MeshStandardMaterial({ map: photo("leafy_grass", size / tile), color: color(venue.groundTint || bg.grass), roughness: 0.95 }), WET_GRASS);
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), mat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.set(course.bounds.cx, -0.4, course.bounds.cz);
@@ -1048,7 +1071,7 @@ function render(frame) {
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would
   // compile them all at once and freeze the page.
-  if (!prepare(track, racers)) {
+  if (!prepare(track, racers, frame.weather)) {
     renderer.setRenderTarget(null);
     renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
     renderer.clear();
@@ -1130,8 +1153,13 @@ function render(frame) {
   // In the tunnel: the sky and the sun are shut out and the lamps take over,
   // and the camera's exposure adapts (in over half a second, as a TV camera
   // does) -- dark going in, bright coming out.
+  // The weather: the circuit wet or dry, the rain round the camera, the
+  // spray off the wheels.
+  const wet = frame.weather === "wet";
+  rain.apply(world, scene, wet);
   updateTunnelLight(world, track, dt);
   updateTrackside(world, track, frame.trackside, now, dt);
+  rain.update({ camera, world, racers, dt, isWet: wet });
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
 
@@ -1146,6 +1174,8 @@ function render(frame) {
   sampleFrame(Boolean(frame.racing));
   postfx.render({
     dt, now, trackId: track.id, speedFraction: sf, boosting, playerId: player.id,
+    // Drops on the lens, out of the tunnel.
+    rain: wet ? 1 - world.tunnel.adapted : 0,
     sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
     occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
   });
@@ -1266,6 +1296,7 @@ function renderGarage(kart, driver, now) {
     current = null;
   }
   powerUpLayer.group.visible = particles.visible = false;
+  rain.update({ camera, world: null, racers: [], dt: 0, isWet: false });
   garage.group.visible = true;
   scene.fog = null;
   scene.environmentIntensity = 0.6;
