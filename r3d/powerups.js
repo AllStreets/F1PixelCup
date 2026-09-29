@@ -48,8 +48,10 @@ function stewardMesh() {
 }
 
 function debrisMesh() {
-  const m = new THREE.Mesh(new THREE.TetrahedronGeometry(4.2, 0),
-    new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.35, metalness: 0.6, emissive: 0x00d2be, emissiveIntensity: 0.25 }));
+  // A jagged carbon shard with teal-lit edges so it reads against the tarmac.
+  const m = new THREE.Mesh(new THREE.OctahedronGeometry(5.5, 0),
+    new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.25, metalness: 0.8, emissive: 0x00d2be, emissiveIntensity: 0.3, flatShading: true }));
+  m.scale.set(1.3, 0.55, 0.9);
   m.castShadow = true;
   return m;
 }
@@ -97,7 +99,8 @@ function makeOilTexture() {
 function oilMesh() {
   if (!oilTexture) oilTexture = makeOilTexture();
   const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({
-    map: oilTexture, transparent: true, depthWrite: false, roughness: 0.08, metalness: 0.25,
+    map: oilTexture, emissiveMap: oilTexture, emissive: 0xffffff, emissiveIntensity: 0.35,
+    transparent: true, depthWrite: false, roughness: 0.32, metalness: 0.05,
     polygonOffset: true, polygonOffsetFactor: -3,
   }));
   m.rotation.x = -Math.PI / 2;
