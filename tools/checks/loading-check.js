@@ -101,9 +101,13 @@ async (page) => {
     await p.evaluate(() => Game.startCup());
     await p.waitForTimeout(2000);
     const held = await p.evaluate(() => ({ phase: state.phase, raceStart: state.raceStart, loader: !document.getElementById("view-loading").hidden }));
-    // ...and runs once the car has arrived.
-    await p.waitForTimeout(6500);
-    const went = await p.evaluate(() => ({ phase: state.phase, raceStart: state.raceStart }));
+    // ...and runs once the car has arrived (and the circuit's shaders have
+    // compiled in the background): within 15 s of the start.
+    let went = null;
+    for (let i = 0; i < 26 && !(went && went.raceStart); i += 1) {
+      await p.waitForTimeout(500);
+      went = await p.evaluate(() => ({ phase: state.phase, raceStart: state.raceStart }));
+    }
     results.lightsWaitForTheCar = held.phase === "countdown" && !held.raceStart && held.loader && went.phase === "race" && went.raceStart > 0;
     await p.unrouteAll({ behavior: "ignoreErrors" });
     await context.close();

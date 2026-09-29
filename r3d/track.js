@@ -670,6 +670,27 @@ function buildPitLane(course, lane, occluders) {
   return group;
 }
 
+// The crowd in the stands: each spectator bobs a little, and at the flag a
+// wave runs along the stand (render3d.js drives the time and the wave).
+export const crowdUniforms = { uTime: { value: 0 }, uWave: { value: 0 } };
+function crowdMaterial(map) {
+  const m = new THREE.MeshStandardMaterial({ map, roughness: 0.9 });
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, crowdUniforms);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform float uTime;\nuniform float uWave;")
+      .replace("#include <map_fragment>", `
+        vec2 crowdUv = vMapUv;
+        float seat = floor(crowdUv.x * 96.0);
+        float bob = sin(uTime * 5.0 + seat * 1.7) * 0.05;
+        float wave = uWave * max(0.0, sin(crowdUv.x * 3.0 - uTime * 4.0)) * 0.35;
+        crowdUv.y += bob + wave;
+        vec4 sampledDiffuseColor = texture2D(map, crowdUv);
+        diffuseColor *= sampledDiffuseColor;`);
+  };
+  return m;
+}
+
 // The tunnel: from track.tunnel.from to .to (lap distances, racing order).
 export const TUNNEL_ROOF = 36;
 export function inTunnelAt(tunnel, total, d) {
@@ -861,7 +882,7 @@ function buildDecorPiece(d, bg, venue, i) {
     const roof = add(new THREE.BoxGeometry(len + 8, 2, 64), std(0xe8e8ec), 0, 50, -2);
     roof.rotation.x = -0.08;
     [-len / 2, 0, len / 2].forEach((x) => add(new THREE.BoxGeometry(2, 50, 2), std(0x55555c), x, 25, 28));
-    const crowd = new THREE.MeshStandardMaterial({ map: makeCrowdTexture(i + 99), roughness: 0.9 });
+    const crowd = crowdMaterial(makeCrowdTexture(i + 99));
     for (let row = 0; row < 7; row += 2) {
       const face = new THREE.Mesh(new THREE.PlaneGeometry(len, 4.5), crowd);
       face.position.set(0, 5.3 + row * 5, -28 + row * 8 - 4.05);

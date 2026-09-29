@@ -190,19 +190,50 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
 
 ## G3 — Trackside life
 
-- **Crowds.** The grandstand crowd texture gets a shader: per-seat colour and a small, slow bob, phase-offset by seat. When the player takes the chequered flag or overtakes in front of a stand, a Mexican wave runs along it: a sweep of the bob, following the car.
-- **Marshal posts** every 600 units round the lap, outside the barrier (claimed like any scenery): a small orange-clad figure with a flag. A post waves a waved yellow while a car within 300 units ahead of it is spun or stopped (`spinUntil`, or speed < 10 %). Otherwise the flag is furled. The green flag is waved at the post after an incident, for 2 s.
-- **The TV helicopter** flies at 260 above the ground, trailing the race leader by 400 units along the lap and offset to the outside. Its rotor turns, with a faint thump only when it is within 600 of the camera. It is never lower than 200, so it is never near anything on the track.
-- **Fireworks at the finish.** When the chequered flag falls (`flagOutAt`), bursts go off above the grandstands by the line for 6 s:
-  - 8 shells on High, 5 on Medium, 3 on Low;
-  - team colours of the winner.
-- **Flags on the gantry.** The start gantry's banner is joined by a chequered flag waved by the starter at the finish.
+- **Marshal posts** (`marshals.js`, pure).
+  - **Placement.** There is a post every 600 round the lap (`Marshals.posts`). Each stands on the outside of the bend, 14 past the barrier, on the ground, on a raised platform so it sees (and is seen) over the barrier. The platform is taller beside a bridge's raised road, so the marshal is always 8 above the road. It claims its footprint like any scenery (`r3d/trackside.js`) and moves only back along the lap (up to 120) where the spot is taken, so it still watches its whole stretch. At least 80 % of posts must be placed.
+  - **Flags.** A post watches the stretch up to the next post (`AHEAD = SPACING`, so the whole lap is covered). It waves yellow while a car there is spun (`spinUntil`) or crawling (under 10 % of its top speed), then green for 2 s after the car clears; otherwise the flag is furled. There are no flags in the first 5 s after the lights, when every car is slow. The flags start afresh each race; a remembered time from a later clock is ignored. The flag is waved: the pole swings in the marshal's hand and the cloth ripples.
+  - Ruling: the spec's 300 left half of every lap unwatched. Review found this, so each post now covers up to the next.
+- **The TV helicopter.** It flies 260 up and 220 aside, keeping station 400 behind the race leader (`game.js tracksideFrame`), easing after them. It jumps there on a new circuit. Its rotor turns, and its beat (low noise pulsed at 11 Hz) is heard faintly when it is within about 700 of the player.
+- **Fireworks** start when the player takes the chequered flag (`chequerAt`, even as the last car home), or when the flag comes out:
+  - 8 shells on High, 5 on Medium, 3 on Low, over 6 s, in the winner's team colour, gold and white;
+  - they burst over the grandstands near the line (or over the line if it has none);
+  - they run on real time, held while paused, because the race itself fast-forwards after the flag.
+  - Ruling: the first version ran on race time, and the 7× fast-forward after the flag burned the whole show out in under a second. It was found in the check.
+- **The crowd.** The spectators bob in their seats (a UV shift per seat in the crowd's shader), and at the flag a wave runs along the stands.
+- **The starter** stands on a rostrum just before the line, past the barrier on the side away from the pit wall, on clear ground (checked like any scenery, moved back where it isn't). They wave the chequered flag over their head for 20 s of the show.
+- **The finish shot.** For the first 9 s of the show after the player takes the flag, a TV camera past the line looks back at it, so the starter's flag and the fireworks over the stands are in the picture. It sits higher on the street circuits, above the catch fences.
+- **Paused** means paused: the flags, the crowd, the helicopter and the show all stop, on one trackside clock of real time that holds while the race is paused.
+- All of it is scenery for the audit: the marshal posts and the starter are in `auditScenery`'s targets, and it stays at 0 on every circuit.
+
+### Starting without freezing
+
+G3's regression run showed a race's start freezing the page for 4–6 s when the car arrived. That already happened on main. Profiling found the time was spent waiting on shader compiles, and all of it happened on the first frame. Now:
+- three's shader error checking is off (`?debug` turns it back on), so compiles no longer wait on the driver one by one.
+- `prepare()` sizes the canvas and builds the race's cars. It then compiles the scene a piece at a time (`compileAsync`, at most 12 ms and 4 new programs a loading frame), including the hidden things (the helicopter, the fireworks, rolled-up flags).
+  - The lights it compiles against are the race's own. The garage and its studio lights are put away first: compiling with them made every material compile a second time on the first frame.
+- It also compiles the shaders three draws with materials of its own:
+  - the shadow pass's depth material for each kind of caster, with the scene's lights but none of its fog, as three's shadow pass draws it;
+  - the effects' passes, with the targets they draw to.
+- It sends the textures to the GPU a few a frame. It waits (up to 4 s) for photos still loading, and those are decoded off the page's thread as ImageBitmaps, one source per photo.
+- Until all of that is done, `render()` shows only the sky's colour instead of compiling everything at once.
+- A new graphics tier's effects compile in the background too, and the frame is drawn without them until they are ready.
+- The tunnel-light shader patch is applied only on the circuit that has a tunnel.
+
+After this, the first frame links no programs and uploads no textures, and every loading frame but the one that builds the circuit stays under 100 ms. `grid-check`'s `noHitchTimingTheField` holds both. `loading-check`'s `lightsWaitForTheCar` polls for the lights (within 15 s) instead of assuming a fixed start time.
 
 ### Tests (G3)
 
-Browser (`trackside-check.js`):
-- the marshal nearest a car forced to spin shows a waved yellow within 0.5 s, and furls after the car moves off;
-- the helicopter's lap distance tracks the leader's (−400 ± 60), and its height is ≥ 200;
-- fireworks start at `flagOutAt`, and none before;
-- `auditScenery` is 0 with the marshal posts in place;
-- there are no errors on any circuit.
+- **Node** (`tests/marshals.test.js`):
+  - the posts are evenly spaced;
+  - yellow for a spun or stopped car ahead, and not for one behind, beyond the stretch, or finished;
+  - green for 2 s, then furled;
+  - nothing before the start;
+  - posts watch round the line.
+- **Browser** (`trackside-check.js`):
+  - `marshalsPosted`: at least 80 % of posts placed on every circuit, all on the ground; the starter on clear ground;
+  - `marshalYellow`: a car spun just past a post brings that post's yellow, and green once it is away, with no other post flagging;
+  - `helicopterFollows`: 280 to 560 behind the leader (station 400, easing), at least 200 up;
+  - `helicopterHeard`: the rotor's gain node itself, with the audio running, is heard near it and silent far from it;
+  - `fireworksAtTheFlag`: none before the flag, fireworks and the starter's flag after it, still going 3.4 s in;
+  - `finishShotShowsTheShow`: after the player's flag, the finish shot holds, the starter's flag is on screen, and over 50 sparks are in the picture (projected through the camera).

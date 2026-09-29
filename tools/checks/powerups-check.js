@@ -200,7 +200,13 @@ async (page) => {
     let t = performance.now();
     state.safetyCar.until = t;
     const resumed = !safetyCarActive(t + 1);
-    for (let i = 0; i < 60 * 120 && !state.safetyCar.parked; i += 1) { t += 16.7; updateRace(1 / 60, t); }
+    // Called in just past the pit entry, it goes round a whole lap first: the
+    // race is kept going meanwhile (nobody reaches the flag).
+    for (let i = 0; i < 60 * 200 && !state.safetyCar.parked; i += 1) {
+      t += 16.7;
+      if (i % 600 === 0) state.racers.forEach((r) => { if (!r.finished) r.lap = Math.min(r.lap, 1); });
+      updateRace(1 / 60, t);
+    }
     const sc = state.safetyCar;
     const bay = state.track.pitLane.garages.bays.find((b) => b.safetyCar);
     return (resumed && sc.parked && Math.abs(sc.d - bay.d) < 1) || JSON.stringify({ resumed, parked: sc.parked, d: sc.d, bay: bay.d });

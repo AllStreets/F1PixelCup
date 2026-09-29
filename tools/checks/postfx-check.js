@@ -204,6 +204,12 @@ async (page) => {
   // The DRS blur surge is a burst, so Medium has it as well as High.
   results.drsBurstOnMedium = await step(async () => {
     Render3D.setGraphics("medium");
+    // The circuit drawing again (the audits above rebuilt it) and Medium's
+    // effects compiled.
+    const until = performance.now() + 15000;
+    while (!(Render3D.inspect().drawing && Render3D.inspect().postfx.drawing) && performance.now() < until) {
+      await new Promise((r) => requestAnimationFrame(r));
+    }
     window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type: "itemUsed", item: "drs", racerId: state.playerId } }));
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const blur = Render3D.inspect().postfx.blur;

@@ -34,6 +34,13 @@ const GRADES = {
 };
 const NEUTRAL = { gain: [1, 1, 1], lift: [0, 0, 0], contrast: 1, saturation: 1 };
 
+// The passes draw on three's full-screen triangle: a position and a uv, no
+// normal (one would compile them differently), for compiling them ahead.
+const QUAD = new THREE.BufferGeometry();
+QUAD.setAttribute("position", new THREE.Float32BufferAttribute([-1, 3, 0, -1, -1, 0, 3, -1, 0], 3));
+QUAD.setAttribute("uv", new THREE.Float32BufferAttribute([0, 2, 0, 0, 2, 0], 2));
+const QUAD_CAMERA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+
 const FinishShader = {
   uniforms: {
     tDiffuse: { value: null },
@@ -119,6 +126,11 @@ export function createPostFx(renderer, scene, camera) {
   let bloom = null;
   let finish = null;
   let frameTexture = null;
+  // The effects' shaders, compiled in the background when they are built;
+  // until they are ready the frame is drawn without them rather than
+  // stalling on them.
+  let ready = false;
+  let warming = null;
   const burst = { gold: 0, red: 0, blur: 0 };
   let playerId = null;
   let sunVisible = 0;
@@ -162,6 +174,10 @@ export function createPostFx(renderer, scene, camera) {
     composer.addPass(bloom);
     finish = new ShaderPass(FinishShader);
     composer.addPass(finish);
+    ready = false;
+    warming = null;
+    if (renderer.compileAsync) warm();
+    else ready = true;
   }
 
   // Low keeps nothing on the GPU: the composer's buffers, the bloom's mips
@@ -177,6 +193,8 @@ export function createPostFx(renderer, scene, camera) {
     bloom = null;
     finish = null;
     frameTexture = null;
+    ready = false;
+    warming = null;
   }
 
   function setTier(next) {
@@ -236,7 +254,7 @@ export function createPostFx(renderer, scene, camera) {
     burst.gold *= Math.exp(-dt / 0.5);
     burst.red *= Math.exp(-dt / 0.3);
     burst.blur *= Math.exp(-dt / 0.7);
-    if (!passes.composer || !composer) {
+    if (!passes.composer || !composer || !ready) {
       renderer.render(scene, camera);
       return;
     }
@@ -273,12 +291,36 @@ export function createPostFx(renderer, scene, camera) {
     composer.render(dt);
   }
 
+  // Compile the effects' shaders (the scene's compile never sees them) with
+  // the targets they draw to: all but the last into the effects' buffers, the
+  // last to the screen.
+  function warm() {
+    if (!composer) return Promise.resolve();
+    if (warming) return warming;
+    const quads = (list) => { const g = new THREE.Group(); list.forEach((m) => g.add(new THREE.Mesh(QUAD, m))); return g; };
+    const offscreen = [composer.passes[0].material, composer.copyPass.material, bloom.materialHighPassFilter,
+      ...bloom.separableBlurMaterials, bloom.compositeMaterial, bloom.blendMaterial];
+    const before = renderer.getRenderTarget();
+    renderer.setRenderTarget(composer.readBuffer);
+    const jobs = [renderer.compileAsync(quads(offscreen), QUAD_CAMERA)];
+    renderer.setRenderTarget(null);
+    jobs.push(renderer.compileAsync(quads([finish.material]), QUAD_CAMERA));
+    renderer.setRenderTarget(before);
+    const built = composer;
+    const done = () => { if (composer === built) ready = true; };
+    warming = Promise.all(jobs).then(done, done);
+    return warming;
+  }
+
   return {
     render,
     setTier,
     setSize,
+    warm,
     inspect: () => ({
       tier,
+      // Whether the effects are drawing (their shaders compiled).
+      drawing: Boolean(composer && ready),
       passes: { ...passes, bloom: Boolean(bloom && bloom.enabled && passes.bloom) },
       burst: { ...burst },
       sunVisible,

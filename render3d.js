@@ -21,6 +21,8 @@ import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/
 import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
+import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
+import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
@@ -46,6 +48,10 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// Checking every shader for errors as it compiles makes each compile wait
+// for the GPU driver (seconds of frozen page when a circuit and its cars
+// first draw). The shaders are known good; ?debug turns the check back on.
+renderer.debug.checkShaderErrors = /[?&]debug\b/.test(window.location.search);
 setAnisotropy(renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
@@ -157,13 +163,180 @@ function setPhotoCamera(shot) {
 
 // Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
 // the heavy work happens behind a loading panel instead of mid-countdown.
-function prepare(track) {
+// Returns true once the circuit is ready to draw. Its shaders compile a piece
+// of the scene at a time, and the browser finishes them in the background
+// (compileAsync), so the loading panel keeps moving instead of the page
+// freezing; until then it returns false, and the game asks again next frame.
+function prepare(track, racers) {
   const world = ensureWorld(track);
-  if (!world.compiled) {
-    renderer.compile(scene, camera);
-    world.compiled = true;
+  if (world.compiled) return true;
+  if (!world.preparedFrom) {
+    // The canvas at its size (the render targets are made now, not on the
+    // first frame of the countdown), and the race's cars built.
+    resize();
+    (racers || []).forEach((racer) => ensureCar(world, racer));
+    // The scene as the race draws it: the garage (and its studio lights) put
+    // away, or every material would compile for lights the race doesn't
+    // have and compile again, all at once, on the first frame.
+    garage.group.visible = false;
+    world.group.visible = true;
+    powerUpLayer.group.visible = particles.visible = true;
+    world.preparedFrom = performance.now();
+    world.uploads = texturesIn();
+    world.sent = new Map();
+    if (!renderer.compileAsync) {
+      renderer.compile(scene, camera);
+      world.compiled = true;
+      return true;
+    }
+    // Hidden things (the helicopter, the fireworks, rolled-up flags) compile
+    // too: compile() takes every material under what it's given.
+    world.toCompile = compileUnits(scene);
+    world.lit = litBy(scene);
+    world.compileJobs = compileUnseen(world);
+    // The compile starts next frame: this one has built the circuit.
+    world.steppedAt = performance.now();
+    return false;
   }
-  return true;
+  let start = performance.now();
+  // Once a frame (the game asks, and so does its draw).
+  if (start - (world.steppedAt || 0) < STEP_GAP_MS) return false;
+  world.steppedAt = start;
+  if (world.toCompile.length) {
+    // A few new programs a frame: the browser compiles them in the
+    // background, but a big batch still holds up the frames after it.
+    const programs = renderer.info.programs.length;
+    while (world.toCompile.length && performance.now() - start < COMPILE_BUDGET_MS
+      && renderer.info.programs.length - programs < PROGRAMS_PER_FRAME) {
+      world.compileJobs.push(renderer.compileAsync(world.toCompile.pop(), camera, world.lit));
+    }
+    if (!world.toCompile.length) {
+      const ready = () => { world.shadersReady = true; };
+      Promise.all(world.compileJobs).then(ready, ready);
+    }
+    return false;
+  }
+  // Its textures go to the GPU a few at a time while the shaders finish, not
+  // all at once on the first frame. Images still loading are waited for, a
+  // while (one that never arrives mustn't hold the start).
+  start = performance.now();
+  let left = 0;
+  world.uploads.forEach((tex) => {
+    if (world.sent.get(tex) === tex.version) return;
+    if (tex.version === 0) {
+      const image = tex.image;
+      if (!image || (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement && !image.complete)) left += 1;
+      return;
+    }
+    if (performance.now() - start > UPLOAD_BUDGET_MS) { left += 1; return; }
+    renderer.initTexture(tex);
+    world.sent.set(tex, tex.version);
+  });
+  const waited = start - world.preparedFrom > IMAGE_WAIT_MS;
+  if (world.shadersReady && (left === 0 || waited)) world.compiled = true;
+  return Boolean(world.compiled);
+}
+
+// Per loading frame: the time spent handing shaders to the browser, and how
+// many new programs; and the shortest gap between two steps (one a frame).
+const COMPILE_BUDGET_MS = 12;
+const PROGRAMS_PER_FRAME = 4;
+const STEP_GAP_MS = 8;
+
+// Everything that draws, as pieces to compile one at a time (a piece's
+// children compile with it); not the garage, which the race never shows.
+function compileUnits(root) {
+  const units = [];
+  const walk = (o) => {
+    if (o === garage.group || o.isLight) return;
+    if (o.isMesh || o.isPoints || o.isLine || o.isSprite) { units.push(o); return; }
+    o.children.forEach(walk);
+  };
+  walk(root);
+  return units;
+}
+
+// The scene as compile() needs it for one piece: the race's lights (those
+// lit now) without a walk of the whole scene for every piece; its fog and
+// environment are the scene's own.
+function litBy(root) {
+  const lights = [];
+  root.traverseVisible((o) => { if (o.isLight) lights.push(o); });
+  const stage = Object.create(root);
+  stage.traverseVisible = (visit) => lights.forEach(visit);
+  return stage;
+}
+
+// Every drawable in the race's scene, hidden ones too (not the garage).
+function eachDrawable(visit) {
+  const walk = (o) => {
+    if (o === garage.group) return;
+    if (o.material) visit(o);
+    o.children.forEach(walk);
+  };
+  walk(scene);
+}
+
+// Time spent sending textures to the GPU per loading frame, and the longest
+// the start waits for images still loading.
+const UPLOAD_BUDGET_MS = 8;
+const IMAGE_WAIT_MS = 4000;
+
+// Every texture the scene's materials draw with (their maps and shader
+// uniforms), once each.
+function texturesIn() {
+  const found = new Set();
+  const look = (value) => { if (value && value.isTexture && !value.isRenderTargetTexture && !value.isFramebufferTexture) found.add(value); };
+  eachDrawable((o) => {
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      Object.values(m).forEach(look);
+      if (m.uniforms) Object.values(m.uniforms).forEach((u) => look(u && u.value));
+    });
+  });
+  return [...found];
+}
+
+const FLIP_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
+// Shaders three draws with materials of its own, which the scene's compile
+// never sees: the shadow pass's depth material for each kind of caster
+// (three's WebGLShadowMap shapes it from the caster's material), and the
+// effects' passes. Compiled now with the lights and targets they are drawn
+// with, so the first frame links none of them. The stand-in depth materials
+// stay with the world (freeing them would free their programs).
+function compileUnseen(world) {
+  const jobs = [];
+  const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
+  const before = renderer.getRenderTarget();
+  const casters = new THREE.Group();
+  const kinds = new Set();
+  eachDrawable((o) => {
+    if (!o.isMesh || !o.castShadow) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      if (!m || !m.visible) return;
+      if (o.customDepthMaterial) { casters.add(new THREE.Mesh(o.geometry, o.customDepthMaterial)); return; }
+      const side = m.shadowSide ?? FLIP_SIDE[m.side];
+      const alphaTest = m.alphaToCoverage ? 0.5 : m.alphaTest;
+      const kind = [o.isInstancedMesh, Boolean(o.instanceColor), side, Boolean(m.map), Boolean(m.alphaMap), alphaTest > 0,
+        Boolean(m.displacementMap), m.wireframe, Object.keys(o.geometry.attributes).sort().join()].join("|");
+      if (kinds.has(kind)) return;
+      kinds.add(kind);
+      const depth = new THREE.MeshDepthMaterial({ side, map: m.map, alphaMap: m.alphaMap, alphaTest, displacementMap: m.displacementMap, wireframe: m.wireframe });
+      world.warmMaterials.push(depth);
+      const stand = o.isInstancedMesh ? new THREE.InstancedMesh(o.geometry, depth, 1) : new THREE.Mesh(o.geometry, depth);
+      if (o.isInstancedMesh && o.instanceColor) stand.instanceColor = o.instanceColor;
+      casters.add(stand);
+    });
+  });
+  // The shadow pass draws with the scene's lights but none of its fog.
+  const fog = scene.fog;
+  scene.fog = null;
+  renderer.setRenderTarget(target);
+  jobs.push(renderer.compileAsync(casters, sun.shadow.camera, scene));
+  scene.fog = fog;
+  renderer.setRenderTarget(before);
+  target.dispose();
+  jobs.push(postfx.warm());
+  return jobs;
 }
 
 // The advert barriers, for the checks. Each quad's front is to the right of
@@ -357,9 +530,36 @@ function auditVenue(track) {
   return {
     corners: (track.corners || []).map((c) => c.board),
     boards,
+    marshals: {
+      wanted: (track.marshalPosts || []).length,
+      placed: world.marshals ? world.marshals.children.length : 0,
+      // Standing on the ground (the flat plane), none floating.
+      offGround: world.marshals ? world.marshals.children.filter((g) => Math.abs(g.position.y) > 0.01).length : 0,
+    },
+    // The starter's rostrum: clear of the barriers and of other scenery.
+    starter: world.starter ? { clear: Math.round(world.course.clearance(world.starter.position.x, world.starter.position.z)) } : null,
     tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
     bridges,
   };
+}
+
+function showOnScreen(world) {
+  const v = new THREE.Vector3();
+  const inView = () => v.z > -1 && v.z < 1 && Math.abs(v.x) < 1 && Math.abs(v.y) < 1;
+  let starterOnScreen = false;
+  if (world.starter) {
+    world.starter.userData.flag.getWorldPosition(v);
+    v.project(camera);
+    starterOnScreen = inView();
+  }
+  let sparksOnScreen = 0;
+  const pos = fireworks.geometry.attributes.position;
+  const count = fireworks.visible ? fireworks.geometry.drawRange.count : 0;
+  for (let i = 0; i < count; i += 1) {
+    v.fromBufferAttribute(pos, i).project(camera);
+    if (inView()) sparksOnScreen += 1;
+  }
+  return { starterOnScreen, sparksOnScreen };
 }
 
 // What is on screen right now, for the browser checks.
@@ -371,11 +571,24 @@ function inspect() {
   // Which painted helmet each car on track wears, by driver.
   const helmets = {};
   if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
-  return { flaps, helmets, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  const posts = current && current.marshals ? current.marshals.children.map((g) => ({ index: g.userData.post.index, flag: g.userData.post.state, x: Math.round(g.position.x), z: Math.round(g.position.z) })) : [];
+  const life = current ? {
+    posts,
+    helicopter: helicopter.visible ? { x: helicopter.position.x, y: helicopter.position.y, z: helicopter.position.z, height: helicopter.position.y - current.course.heightAt(0) } : null,
+    fireworks: current.life.fireworks || 0,
+    starterWaving: Boolean(current.life.starter),
+    finishShot: Boolean(current.life.finishShot),
+    // What of the show is in the picture: the starter's flag, and how many of
+    // the fireworks' sparks.
+    ...showOnScreen(current),
+  } : null;
+  // Whether the race's world is being drawn (its shaders compiled), not held
+  // behind the loading panel.
+  const drawing = Boolean(current && current.compiled && !garage.group.visible);
+  return { drawing, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
-// The power-up models load alongside; nothing waits on them.
 // The power-up models load alongside; nothing waits on them. Before they swap
 // in, their shaders (and the game's own oil surface) are compiled, so the swap
 // never stalls a frame mid-race.
@@ -475,7 +688,65 @@ function buildGround(course, venue, bg) {
   return ground;
 }
 
+// The TV helicopter and the fireworks belong to no one circuit.
+const helicopter = buildHelicopter();
+const fireworks = buildFireworks();
+scene.add(helicopter, fireworks);
+
 let tunnelPatchTick = 0;
+
+// The finish shot: once the player has taken the chequered flag, for the
+// first seconds of the show, a TV camera past the line looks back at it --
+// the starter waving the flag, the fireworks over the stands, the cars
+// coming home.
+const FINISH_SHOT_MS = 9000;
+const finishFrom = new THREE.Vector3();
+function finishShot(world, life, player) {
+  const show = world.life.show;
+  if (!life || !life.flagOutAt || !player || !player.finished || !show || show.flag !== life.flagOutAt || show.ms > FINISH_SHOT_MS) {
+    world.life.finishShot = false;
+    return false;
+  }
+  const { course } = world;
+  const lane = course.pitLane;
+  const side = lane ? -lane.side : -1;
+  const ahead = course.sampleAt(160);
+  const back = course.sampleAt(course.track.totalLength - 140);
+  const off = side * ((side > 0 ? ahead.outerR : ahead.outerL) - 10);
+  // Above the street circuits' catch fences (32 high).
+  finishFrom.set(ahead.x + ahead.nx * off, ahead.h + (course.street ? 46 : 34), ahead.y + ahead.ny * off);
+  camera.position.copy(finishFrom);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(back.x, back.h + 55, back.y);
+  setFov(72);
+  world.life.finishShot = true;
+  return true;
+}
+
+let lastWallMs = 0;
+function updateTrackside(world, track, life, now, dt) {
+  const wall = performance.now();
+  const wallDt = lastWallMs ? Math.min(100, wall - lastWallMs) : 0;
+  lastWallMs = wall;
+  // Trackside time: real time, held while the race is paused (flags, the
+  // crowd and the show all stop with it).
+  const paused = Boolean(life && life.paused);
+  if (!paused) world.life.clock = (world.life.clock || 0) + wallDt;
+  const t = (world.life.clock || 0) / 1000;
+  // The show after the flag runs on real time (the race is fast-forwarded
+  // then), held while paused: show.ms since the flag fell.
+  const show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
+  const flag = life && life.flagOutAt ? life.flagOutAt : 0;
+  if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
+  else if (flag && !paused) show.ms += wallDt;
+  crowdUniforms.uTime.value = t;
+  // At the flag the crowd's wave runs along the stands.
+  crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
+  updateMarshalPosts(world.marshals, life && life.flags, t);
+  updateHelicopter(helicopter, world, life && life.helicopter, dt);
+  world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
+  world.life.starter = updateStarter(world.starter, flag, show.ms, t);
+}
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
 // does: dark going in, bright coming out.
@@ -534,6 +805,12 @@ function buildWorld(track) {
   group.add(decor);
   const landmarks = buildLandmarks(course, venue);
   group.add(landmarks);
+  // Trackside life: the marshal posts (after everything else has claimed its
+  // ground) and the starter by the line.
+  const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
+  group.add(marshals);
+  const starter = buildStarter(course);
+  if (starter) group.add(starter);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -543,7 +820,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 } };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -557,6 +834,7 @@ function disposeWorld(world) {
   world.group.traverse((o) => {
     if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
   });
+  world.warmMaterials.forEach((m) => m.dispose());
 }
 
 function ensureWorld(track) {
@@ -567,7 +845,9 @@ function ensureWorld(track) {
   // The tunnel's light: its shape for the shaders, and every lit material
   // taught it (before the circuit's shaders are compiled).
   setTunnel(current.course, track.tunnel, TUNNEL_ROOF);
-  lightInTunnel(scene);
+  // Only where there is a tunnel: the patch is a new shader for every lit
+  // material, and compiling those everywhere would stall the start.
+  if (track.tunnel) lightInTunnel(scene);
   return current;
 }
 
@@ -643,17 +923,23 @@ function syncParticles(list, course) {
 // Cars
 // ---------------------------------------------------------------------------
 
+// A racer's car in this world, built the first time it is needed.
+function ensureCar(world, racer) {
+  let car = world.cars.get(racer.id);
+  if (!car) {
+    car = buildCar(racer.kart, racer.driver);
+    if (world.course.track.tunnel) lightInTunnel(car.root);
+    world.cars.set(racer.id, car);
+    scene.add(car.root);
+  }
+  return car;
+}
+
 function syncCars(world, racers, player, now, dt) {
   const { course } = world;
   const seen = new Set();
   racers.forEach((racer) => {
-    let car = world.cars.get(racer.id);
-    if (!car) {
-      car = buildCar(racer.kart, racer.driver);
-      lightInTunnel(car.root);
-      world.cars.set(racer.id, car);
-      scene.add(car.root);
-    }
+    const car = ensureCar(world, racer);
     seen.add(racer.id);
     const visible = !racer.finished || racer.id === player.id;
     car.root.visible = visible;
@@ -759,18 +1045,21 @@ function render(frame) {
   lastNow = now;
   resize();
   const world = ensureWorld(track);
+  // Its shaders still compiling in the background (prepare): nothing to draw
+  // yet but the sky's colour, under the loading panel -- drawing now would
+  // compile them all at once and freeze the page.
+  if (!prepare(track, racers)) {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
+    renderer.clear();
+    return { onKerb: false };
+  }
   const { course } = world;
   garage.group.visible = false;
   world.group.visible = true;
   powerUpLayer.group.visible = particles.visible = true;
 
   syncCars(world, racers, player, now, dt);
-  // Compile every shader in the new scene while the grid is lining up, so
-  // nothing stalls the first time it comes into view mid-race.
-  if (!world.compiled) {
-    renderer.compile(scene, camera);
-    world.compiled = true;
-  }
   if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
@@ -828,6 +1117,8 @@ function render(frame) {
     camera.up.set(0, 1, 0);
     camera.lookAt(lookTarget);
     if (photoCamera.fov) setFov(photoCamera.fov);
+  } else {
+    finishShot(world, frame.trackside, player);
   }
   // The "?" in each box keeps facing the camera (turning about the vertical
   // only), placed now the camera is: no frame's lag.
@@ -840,6 +1131,7 @@ function render(frame) {
   // and the camera's exposure adapts (in over half a second, as a TV camera
   // does) -- dark going in, bright coming out.
   updateTunnelLight(world, track, dt);
+  updateTrackside(world, track, frame.trackside, now, dt);
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
 
@@ -871,7 +1163,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const world = ensureWorld(track);
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks];
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
@@ -907,7 +1199,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
 function auditItemBoxes(track) {
   const world = ensureWorld(track);
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks];
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
