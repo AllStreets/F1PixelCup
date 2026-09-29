@@ -2561,6 +2561,11 @@ function nextRace() {
   startRaceWeekend(state.raceIndex);
 }
 
+// What Q does from the pause screen: once you've taken the flag it keeps your result.
+function pauseQuitHint(finished) {
+  return finished ? "Q to save your result and go to the pit lane" : "Q to quit to the pit lane";
+}
+
 // Leaving a race. Once the player has taken the flag their race is done: it is
 // finalised (the cars still running are placed on their pace, as the time
 // limit would) and counts, before going back to the pit lane.
@@ -4623,7 +4628,8 @@ function drawPauseOverlay() {
   ctx.fillStyle = "rgba(255, 240, 201, 0.7)";
   ctx.fillText("Esc or P to resume", view.width / 2, view.height / 2 + 30);
   ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
-  ctx.fillText("Q to quit to the pit lane", view.width / 2, view.height / 2 + 54);
+  const me = getPlayer();
+  ctx.fillText(pauseQuitHint(Boolean(me && me.finished && state.phase === "race")), view.width / 2, view.height / 2 + 54);
   ctx.textAlign = "left";
   ctx.restore();
 }
@@ -4739,9 +4745,12 @@ function bindEvents() {
         selectDriver(state.selectedDriver + (event.key === "ArrowRight" ? 1 : -1));
         if (window.Screens) window.Screens.revealSelectedDriver();
       } else if (event.key === "Enter" && !event.repeat) {
-        // Enter on a focused pill, link or button belongs to that control.
+        // Enter on a focused pill, link or button belongs to that control --
+        // except the driver tile already chosen: there, as with the arrow keys'
+        // roving focus, Enter means "go with this driver" and starts the cup.
         const control = event.target && event.target.closest ? event.target.closest("button, a") : null;
-        if (control && control.id !== "start-cup") return;
+        const chosenTile = control && control.matches(".driver-tile.is-on");
+        if (control && control.id !== "start-cup" && !chosenTile) return;
         event.preventDefault();
         startCup();
       }
