@@ -1939,7 +1939,7 @@ function updateRacer(racer, dt, now) {
     // A better driver carries the corner further before lifting.
     // A wet road: they lift earlier (the speed a corner allows goes as the
     // square root of grip).
-    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather)) {
+    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather === "wet" && !racer.underRoof ? "wet" : "dry")) {
       brake = 1;
     }
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
@@ -1975,7 +1975,10 @@ function updateRacer(racer, dt, now) {
   // The yaw this step asks for (a drift adds to it, below); it is applied
   // once the grip has had its say.
   let yaw = steerInput * turnRate;
-  const wet = state.weather === "wet";
+  // Wet, unless the car is under the tunnel's roof, where the road is dry.
+  racer.underRoof = Boolean(state.track.tunnel && window.Venue
+    && Venue.reverbAt(racer.trackDistance || 0, [state.track.tunnel], state.track.totalLength) > 0.5);
+  const wet = state.weather === "wet" && !racer.underRoof;
   const traction = wet ? Weather.WET.accel : 1;
   const braking = wet ? Weather.WET.brake : 1;
 
@@ -2069,11 +2072,12 @@ function updateRacer(racer, dt, now) {
     racer.driftCharge = 0;
   }
 
-  // On a wet road the car can't corner as hard as it asks: past the grip,
-  // it understeers. (The dry limit is beyond anything a car can ask, so the
-  // dry is untouched.)
-  const gripLimit = Weather.dryLimit(racer.physics) * Weather.grip(state.weather);
-  if (wet) yaw = Weather.capYaw(yaw, racer.speed, gripLimit);
+  // On a wet road the car can't corner as hard as it asks: past the grip's
+  // share of the hardest it could corner in the dry at this speed, it
+  // understeers. (Only wet: the dry is never capped. A spinning car is
+  // already past any grip.)
+  const gripLimit = Weather.dryLimitAt(racer.physics, racer.speed) * Weather.WET.corner;
+  if (wet && !(racer.spinUntil > now)) yaw = Weather.capYaw(yaw, racer.speed, gripLimit);
   racer.yawRate = yaw;
   // How hard it is cornering (speed x yaw), for the checks and the spray.
   racer.latAccel = Math.abs(yaw * racer.speed);
@@ -2237,7 +2241,8 @@ function updateHazards(now) {
     const victim = PowerUps.firstHit(hazard, bodies, L, now);
     if (!victim) return true;
     // Oil on a wet road: the spin lasts longer.
-    spinRacer(racerById(victim.id), PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" ? Weather.WET.oilSpin : 1), now);
+    const spun = racerById(victim.id);
+    spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && spun && !spun.underRoof ? Weather.WET.oilSpin : 1), now);
     return false;
   });
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
@@ -2728,6 +2733,8 @@ function resetToGarage() {
   state.phase = "garage";
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
+  // Nothing run from the pit lane is wet.
+  state.weather = "dry";
   state.cupEntries = [];
   state.racers = [];
   state.shots = [];

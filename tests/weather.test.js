@@ -23,12 +23,24 @@ test("grip is 1 in the dry and the wet factors are all losses", () => {
   assert.ok(Weather.WET.oilSpin > 1);
 });
 
-test("the dry limit is at least anything the car can do, so the dry is unchanged", () => {
-  const limit = Weather.dryLimit(physics);
-  // Full steer at top speed (turn rate at speed is up to 1.45x), plus the drift yaw.
-  const most = physics.maxSpeed * (physics.turnRate * 1.45 + Weather.DRIFT_YAW);
-  assert.ok(limit >= most);
-  assert.equal(Weather.capYaw(physics.turnRate * 1.45 + Weather.DRIFT_YAW, physics.maxSpeed, limit), physics.turnRate * 1.45 + Weather.DRIFT_YAW);
+test("the dry limit is the dry car's own hardest cornering at its speed", () => {
+  // Full steer, drifting: turn rate x (0.45 + speed/180, capped at 1), plus the drift yaw.
+  assert.ok(Math.abs(Weather.dryLimitAt(physics, 90) - 90 * (3.6 * (0.45 + 0.5) + 0.8)) < 1e-9);
+  assert.ok(Math.abs(Weather.dryLimitAt(physics, 238) - 238 * (3.6 * 1.45 + 0.8)) < 1e-9);
+  // Past 180 the turn rate stops growing; reversing counts its speed.
+  assert.ok(Math.abs(Weather.dryLimitAt(physics, 300) - 300 * (3.6 * 1.45 + 0.8)) < 1e-9);
+  assert.equal(Weather.dryLimitAt(physics, -50), Weather.dryLimitAt(physics, 50));
+});
+
+test("wet, the most a car can corner is the grip share of the dry at every speed", () => {
+  for (const v of [60, 119, 178, 238]) {
+    const dryMost = Weather.dryLimitAt(physics, v);
+    const yaw = dryMost / v;
+    const wet = Weather.capYaw(yaw, v, Weather.dryLimitAt(physics, v) * Weather.grip("wet"));
+    assert.ok(Math.abs(wet * v / dryMost - Weather.WET.corner) < 1e-9, `at ${v}`);
+    // A gentle corner asks for less than the wet limit: untouched.
+    assert.equal(Weather.capYaw(yaw * 0.5, v, dryMost * Weather.grip("wet")), yaw * 0.5);
+  }
 });
 
 test("capYaw leaves yaw under the limit alone, and caps it at limit / speed above it", () => {

@@ -191,7 +191,7 @@
 
   // The pit lane is redrawn on every pick; keep focus on the control that was
   // picked (its replacement) instead of dropping it on the page.
-  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "action"];
+  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "weather", "action"];
   function focusedControl() {
     const el = document.activeElement;
     if (!el || !$("pitlane").contains(el)) return null;

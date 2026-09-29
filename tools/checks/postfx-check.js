@@ -252,9 +252,13 @@ async (page) => {
   await p.waitForTimeout(400);
 
   // Frame time per tier, the race running: Low is never slower than High.
-  for (const tier of ["high", "medium", "low"]) {
+  // Measured there and back (high, medium, low, low, medium, high) and each
+  // tier's two medians averaged, so the machine warming or loading up over
+  // the run doesn't count against whichever tier came last.
+  const samples = { high: [], medium: [], low: [] };
+  for (const tier of ["high", "medium", "low", "low", "medium", "high"]) {
     await step((t) => Render3D.setGraphics(t), tier);
-    measured[tier] = await step(() => new Promise((resolve) => {
+    samples[tier].push(await step(() => new Promise((resolve) => {
       const times = [];
       let last = performance.now();
       const tick = () => {
@@ -265,8 +269,9 @@ async (page) => {
         else resolve(times.slice(10).sort((a, b) => a - b)[40]);
       };
       requestAnimationFrame(tick);
-    }));
+    })));
   }
+  Object.keys(samples).forEach((tier) => { measured[tier] = (samples[tier][0] + samples[tier][1]) / 2; });
   results.lowNotSlowerThanHigh = measured.low <= measured.high + 2 || JSON.stringify(measured);
 
   // Settings: the Graphics row cycles Auto, High, Medium, Low; the choice is

@@ -595,8 +595,15 @@ function inspect() {
   const drawing = Boolean(current && current.compiled && !garage.group.visible);
   // The weather as drawn: the road's roughness, the rain and the spray.
   let road = null;
-  if (current) current.circuit.traverse((o) => { if (!road && o.material && o.material.userData.surface === "road") road = o.material; });
-  const weather = { ...rain.inspect(), roadRoughness: road ? road.roughness : null, sunIntensity: sun.intensity, fogFar: scene.fog ? scene.fog.far : null };
+  let kerb = null;
+  if (current) current.circuit.traverse((o) => {
+    if (!road && o.material && o.material.userData.surface === "road") road = o.material;
+    if (!kerb && o.material && o.material.uniforms && o.material.uniforms.wet) kerb = o.material;
+  });
+  const weather = {
+    ...rain.inspect(), roadRoughness: road ? road.roughness : null, kerbWet: kerb ? kerb.uniforms.wet.value : null,
+    sunIntensity: sun.intensity, fogFar: scene.fog ? scene.fog.far : null,
+  };
   return { drawing, weather, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;

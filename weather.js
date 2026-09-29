@@ -18,10 +18,8 @@
   // pace as shares of the dry; how much longer an oil spin lasts; and the
   // speed a tyre sliding at its limit scrubs off per second (as a rate).
   const WET = { corner: 0.72, accel: 0.85, brake: 0.75, offroad: 0.85, oilSpin: 1.4, scrub: 0.4 };
-  // The extra yaw a drift adds (game.js), and the most the turn rate grows
-  // with speed (0.45 + 1).
+  // The extra yaw a drift adds (game.js).
   const DRIFT_YAW = 0.8;
-  const TURN_AT_SPEED = 1.45;
 
   function mix(a, b) {
     let h = (Math.imul(a >>> 0, 2654435761) ^ Math.imul((b + 1) >>> 0, 1597334677)) >>> 0;
@@ -43,11 +41,14 @@
     return weather === "wet" ? WET.corner : 1;
   }
 
-  // The most lateral acceleration a car can pull in the dry: full steer at
-  // top speed, drifting. Nothing it can do goes beyond it, so the dry is
-  // exactly as it was.
-  function dryLimit(physics) {
-    return physics.maxSpeed * (physics.turnRate * TURN_AT_SPEED + DRIFT_YAW);
+  // The hardest a car can corner in the dry at this speed: full steer
+  // (the turn rate grows with speed up to 180, as game.js turns) and a
+  // drift. In the wet, the grip's share of it is the limit -- at every speed,
+  // not only flat out. (The dry itself is never capped.)
+  function dryLimitAt(physics, speed) {
+    const v = Math.abs(speed);
+    const turn = physics.turnRate * (0.45 + Math.min(Math.max(v / 180, 0.2), 1));
+    return v * (turn + DRIFT_YAW);
   }
 
   // Yaw (rad/s) kept to what the grip allows at this speed: lateral
@@ -72,5 +73,5 @@
     return Math.sqrt(grip(weather));
   }
 
-  return { MODES, RAIN_CHANCE, WET, DRIFT_YAW, TURN_AT_SPEED, raceWeather, grip, dryLimit, capYaw, scrub, cornerSpeedScale };
+  return { MODES, RAIN_CHANCE, WET, DRIFT_YAW, raceWeather, grip, dryLimitAt, capYaw, scrub, cornerSpeedScale };
 }));

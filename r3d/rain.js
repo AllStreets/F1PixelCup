@@ -31,6 +31,7 @@ const SPRAY_LIFE = 0.55;
 const SPRAY_GRAVITY = 140;
 const SPRAY_FROM = 45;
 const SPRAY_NEAR = 900;
+const REAR = ["RL", "RR"];
 // The overcast: the sun's share, the sky's grey, the fog in closer.
 const OVERCAST = { sun: 0.3, hemi: 0.85, env: 0.9, fog: 0.6, near: 0.55, far: 0.6 };
 const GREY = new THREE.Color("#7c838b");
@@ -156,7 +157,7 @@ export function createRain(scene) {
   const lastCamera = new THREE.Vector3();
   const camVel = new THREE.Vector3();
   const wheelAt = new THREE.Vector3();
-  let emitted = 0;
+  let sprayLive = 0;
 
   // Make a circuit wet or dry: its surfaces, its light, its fog and its sky.
   // The dry values are kept, so a dry race after a wet one is dry again.
@@ -174,8 +175,10 @@ export function createRain(scene) {
         m.color.copy(dry.color);
         if (isWet) m.color.multiplyScalar(w.tint);
       });
-      const sky = o.material.uniforms && o.material.uniforms.overcast;
-      if (sky) sky.value = isWet ? (world.venue.night ? 0.5 : 1) : 0;
+      const uniforms = o.material.uniforms;
+      if (uniforms && uniforms.overcast) uniforms.overcast.value = isWet ? (world.venue.night ? 0.5 : 1) : 0;
+      // Unlit paint (the kerbs) darkens by a uniform of its own.
+      if (uniforms && uniforms.wet) uniforms.wet.value = isWet ? 1 : 0;
     });
     if (!world.dryLight) world.dryLight = { ...world.light };
     const dl = world.dryLight;
@@ -193,18 +196,30 @@ export function createRain(scene) {
     }
   }
 
-  function setTier(next) {
-    tier = next;
+  function setTier(chosen) {
+    tier = chosen;
     streaks.geometry.setDrawRange(0, STREAKS[tier] * 2);
+    // Drops past the new tier's share are gone (not left to resume later).
+    for (let i = SPRAY[tier]; i < drops.length; i += 1) drops[i].life = 0;
   }
 
   // Each frame: the rain round the camera, and the spray behind every car
-  // near it that is going fast enough to throw any.
+  // near it that is going forward fast enough to throw any (none under the
+  // tunnel's roof, where the road is dry).
   function update({ camera, world, racers, dt, isWet }) {
     wet = isWet;
     streaks.visible = wet;
     const sprayOn = wet && SPRAY[tier] > 0;
     spray.visible = sprayOn;
+    const cap = SPRAY[tier];
+    if (!sprayOn) {
+      // Nothing carried into the next wet race.
+      if (sprayLive) {
+        for (let i = 0; i < drops.length; i += 1) drops[i].life = 0;
+        sprayLive = 0;
+        spray.userData.live = 0;
+      }
+    }
     if (!wet) {
       lastCamera.copy(camera.position);
       return;
@@ -218,22 +233,24 @@ export function createRain(scene) {
     u.uTime.value = time;
     u.uCamera.value.copy(camera.position);
     u.uCamVel.value.copy(camVel);
+    if (!sprayOn) return;
+    if (next >= cap) next = 0;
 
-    emitted = 0;
-    const cap = SPRAY[tier];
-    if (sprayOn && world) {
-      racers.forEach((racer) => {
+    if (world) {
+      for (let r = 0; r < racers.length; r += 1) {
+        const racer = racers[r];
         const car = world.cars.get(racer.id);
-        if (!car || !car.root.visible) return;
-        const speed = Math.abs(racer.speed || 0);
-        if (speed < SPRAY_FROM) return;
-        if (car.root.position.distanceTo(camera.position) > SPRAY_NEAR) return;
+        if (!car || !car.root.visible || racer.underRoof) continue;
+        const speed = racer.speed || 0;
+        if (speed < SPRAY_FROM) continue;
+        if (car.root.position.distanceTo(camera.position) > SPRAY_NEAR) continue;
         const share = Math.min(1, (speed - SPRAY_FROM) / 150);
         const heading = racer.heading || 0;
-        const back = { x: -Math.cos(heading), z: -Math.sin(heading) };
-        ["RL", "RR"].forEach((id) => {
-          const wheel = car.wheels && car.wheels[id];
-          if (!wheel) return;
+        const fx = Math.cos(heading);
+        const fz = Math.sin(heading);
+        for (let w = 0; w < REAR.length; w += 1) {
+          const wheel = car.wheels && car.wheels[REAR[w]];
+          if (!wheel) continue;
           wheel.getWorldPosition(wheelAt);
           // Per wheel, per second: up to 90 puffs at speed.
           let count = share * 90 * dt;
@@ -244,23 +261,22 @@ export function createRain(scene) {
             next = (next + 1) % cap;
             const spread = (Math.random() - 0.5) * 30;
             d.life = 1;
-            d.x = wheelAt.x + back.x * 4;
+            d.x = wheelAt.x - fx * 4;
             d.y = wheelAt.y - 1;
-            d.z = wheelAt.z + back.z * 4;
-            d.vx = back.x * speed * 0.25 - back.z * spread + racer.speed * Math.cos(heading) * 0.55;
-            d.vz = back.z * speed * 0.25 + back.x * spread + racer.speed * Math.sin(heading) * 0.55;
+            d.z = wheelAt.z - fz * 4;
+            // Thrown back off the tyre, carried on by the car's own speed.
+            d.vx = fx * speed * 0.3 + fz * spread;
+            d.vz = fz * speed * 0.3 - fx * spread;
             d.vy = 30 + Math.random() * 45 * share;
-            emitted += 1;
           }
-        });
-      });
+        }
+      }
     }
     const pos = spray.geometry.attributes.position;
     const life = spray.geometry.attributes.aLife;
     let live = 0;
-    for (let i = 0; i < SPRAY.high; i += 1) {
+    for (let i = 0; i < cap; i += 1) {
       const d = drops[i];
-      if (i >= cap || !sprayOn) d.life = 0;
       if (d.life > 0) {
         d.life -= dt / SPRAY_LIFE;
         d.vy -= SPRAY_GRAVITY * dt;
@@ -270,8 +286,13 @@ export function createRain(scene) {
       pos.setXYZ(i, d.x, d.y, d.z);
       life.setX(i, Math.max(0, d.life));
     }
+    // Only the tier's share of the pool is drawn and sent.
+    spray.geometry.setDrawRange(0, cap);
+    pos.clearUpdateRanges(); pos.addUpdateRange(0, cap * 3);
+    life.clearUpdateRanges(); life.addUpdateRange(0, cap);
     pos.needsUpdate = true;
     life.needsUpdate = true;
+    sprayLive = live;
     spray.userData.live = live;
   }
 

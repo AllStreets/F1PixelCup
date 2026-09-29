@@ -361,7 +361,8 @@ function kerbMaterial(a, b) {
   return new THREE.ShaderMaterial({
     // The kerbs are unlit paint; in the tunnel they take its light
     // (r3d/tunnel-light.js) like everything else.
-    uniforms: { a: { value: color(a, "#dc0000") }, b: { value: color(b, "#ffffff") }, stripes: { value: kerbTex }, ...THREE.UniformsLib.fog, ...tunnelUniforms },
+    // Wet (r3d/rain.js), the paint is darker and the day behind cloud.
+    uniforms: { a: { value: color(a, "#dc0000") }, b: { value: color(b, "#ffffff") }, stripes: { value: kerbTex }, wet: { value: 0 }, ...THREE.UniformsLib.fog, ...tunnelUniforms },
     fog: true,
     side: THREE.DoubleSide,
     vertexShader: `varying vec2 vUv; varying vec3 vTunnelPos;
@@ -369,11 +370,11 @@ function kerbMaterial(a, b) {
       void main(){ vUv = uv; vTunnelPos = (modelMatrix * vec4(position, 1.0)).xyz; vec4 mvPosition = modelViewMatrix * vec4(position,1.0); gl_Position = projectionMatrix * mvPosition;
       #include <fog_vertex>
       }`,
-    fragmentShader: `uniform vec3 a; uniform vec3 b; uniform sampler2D stripes; varying vec2 vUv; varying vec3 vTunnelPos;
+    fragmentShader: `uniform vec3 a; uniform vec3 b; uniform sampler2D stripes; uniform float wet; varying vec2 vUv; varying vec3 vTunnelPos;
       ${TUNNEL_GLSL}
       #include <fog_pars_fragment>
       void main(){ float s = texture2D(stripes, vec2(0.5, vUv.y)).r; float lit = tunnelOpen(vTunnelPos);
-        gl_FragColor = vec4(mix(b, a, 1.0 - s) * 0.85 * (lit + (1.0 - lit) * tLamp), 1.0);
+        gl_FragColor = vec4(mix(b, a, 1.0 - s) * 0.85 * (1.0 - 0.35 * wet) * (lit + (1.0 - lit) * tLamp), 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
       #include <fog_fragment>
