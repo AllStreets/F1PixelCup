@@ -21,6 +21,8 @@ import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/
 import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
+import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
+import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
@@ -357,6 +359,7 @@ function auditVenue(track) {
   return {
     corners: (track.corners || []).map((c) => c.board),
     boards,
+    marshals: { wanted: (track.marshalPosts || []).length, placed: world.marshals ? world.marshals.children.length : 0 },
     tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
     bridges,
   };
@@ -371,7 +374,14 @@ function inspect() {
   // Which painted helmet each car on track wears, by driver.
   const helmets = {};
   if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
-  return { flaps, helmets, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  const posts = current && current.marshals ? current.marshals.children.map((g) => ({ index: g.userData.post.index, flag: g.userData.post.state, x: Math.round(g.position.x), z: Math.round(g.position.z) })) : [];
+  const life = current ? {
+    posts,
+    helicopter: helicopter.visible ? { x: helicopter.position.x, y: helicopter.position.y, z: helicopter.position.z, height: helicopter.position.y - current.course.heightAt(0) } : null,
+    fireworks: current.life.fireworks || 0,
+    starterWaving: Boolean(current.life.starter),
+  } : null;
+  return { flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -475,7 +485,33 @@ function buildGround(course, venue, bg) {
   return ground;
 }
 
+// The TV helicopter and the fireworks belong to no one circuit.
+const helicopter = buildHelicopter();
+const fireworks = buildFireworks();
+scene.add(helicopter, fireworks);
+
 let tunnelPatchTick = 0;
+
+let lastWallMs = 0;
+function updateTrackside(world, track, life, now, dt) {
+  const wall = performance.now();
+  const wallDt = lastWallMs ? Math.min(100, wall - lastWallMs) : 0;
+  lastWallMs = wall;
+  const t = wall / 1000;
+  // The show after the flag runs on real time (the race is fast-forwarded
+  // then), held while paused: show.ms since the flag fell.
+  const show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
+  const flag = life && life.flagOutAt ? life.flagOutAt : 0;
+  if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
+  else if (flag && !life.paused) show.ms += wallDt;
+  crowdUniforms.uTime.value = t;
+  // At the flag the crowd's wave runs along the stands.
+  crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
+  updateMarshalPosts(world.marshals, life && life.flags, t);
+  updateHelicopter(helicopter, world, life && life.helicopter, dt);
+  world.life.fireworks = updateFireworks(fireworks, world.course, life && { ...life, stands: track.crowdStands }, flag ? show.ms : 0, currentTier());
+  world.life.starter = updateStarter(world.starter, flag, show.ms, t);
+}
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
 // does: dark going in, bright coming out.
@@ -534,6 +570,12 @@ function buildWorld(track) {
   group.add(decor);
   const landmarks = buildLandmarks(course, venue);
   group.add(landmarks);
+  // Trackside life: the marshal posts (after everything else has claimed its
+  // ground) and the starter by the line.
+  const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
+  group.add(marshals);
+  const starter = buildStarter(course);
+  group.add(starter);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -543,7 +585,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 } };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {} };
 }
 
 function disposeWorld(world) {
@@ -840,6 +882,7 @@ function render(frame) {
   // and the camera's exposure adapts (in over half a second, as a TV camera
   // does) -- dark going in, bright coming out.
   updateTunnelLight(world, track, dt);
+  updateTrackside(world, track, frame.trackside, now, dt);
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
 
@@ -871,7 +914,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const world = ensureWorld(track);
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks];
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
@@ -907,7 +950,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
 function auditItemBoxes(track) {
   const world = ensureWorld(track);
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks];
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();

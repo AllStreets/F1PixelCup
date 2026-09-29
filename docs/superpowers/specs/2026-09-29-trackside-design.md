@@ -190,19 +190,30 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
 
 ## G3 — Trackside life
 
-- **Crowds.** The grandstand crowd texture gets a shader: per-seat colour and a small, slow bob, phase-offset by seat. When the player takes the chequered flag or overtakes in front of a stand, a Mexican wave runs along it: a sweep of the bob, following the car.
-- **Marshal posts** every 600 units round the lap, outside the barrier (claimed like any scenery): a small orange-clad figure with a flag. A post waves a waved yellow while a car within 300 units ahead of it is spun or stopped (`spinUntil`, or speed < 10 %). Otherwise the flag is furled. The green flag is waved at the post after an incident, for 2 s.
-- **The TV helicopter** flies at 260 above the ground, trailing the race leader by 400 units along the lap and offset to the outside. Its rotor turns, with a faint thump only when it is within 600 of the camera. It is never lower than 200, so it is never near anything on the track.
-- **Fireworks at the finish.** When the chequered flag falls (`flagOutAt`), bursts go off above the grandstands by the line for 6 s:
-  - 8 shells on High, 5 on Medium, 3 on Low;
-  - team colours of the winner.
-- **Flags on the gantry.** The start gantry's banner is joined by a chequered flag waved by the starter at the finish.
+- **Marshal posts** (`marshals.js`, pure).
+  - **Placement.** There is a post every 600 round the lap (`Marshals.posts`). Each stands on the outside of the bend, 14 past the barrier, on a raised platform so it sees (and is seen) over the barrier. It claims its footprint like any scenery (`r3d/trackside.js`) and moves up to 90 along where the spot is taken; at least 80 % of posts must be placed.
+  - **Flags.** A post waves yellow while a car in the 300 ahead of it is spun (`spinUntil`) or crawling (under 10 % of its top speed). It waves green for 2 s after the car clears; otherwise the flag is furled. There are no flags in the first 5 s after the lights, when every car is slow. The flags wave (the pole swings and the cloth ripples).
+- **The TV helicopter.** It flies 260 up and 220 aside, keeping station 400 behind the race leader (`game.js tracksideFrame`), easing after them. It jumps there on a new circuit. Its rotor turns, and its beat (low noise pulsed at 11 Hz) is heard faintly when it is within about 700 of the player.
+- **Fireworks** start when the chequered flag falls (`flagOutAt`):
+  - 8 shells on High, 5 on Medium, 3 on Low, over 6 s, in the winner's team colour, gold and white;
+  - they burst over the grandstands near the line (or over the line if it has none);
+  - they run on real time, held while paused, because the race itself fast-forwards after the flag.
+  - Ruling: the first version ran on race time, and the 7× fast-forward after the flag burned the whole show out in under a second. It was found in the check.
+- **The crowd.** The spectators bob in their seats (a UV shift per seat in the crowd's shader), and at the flag a wave runs along the stands.
+- **The starter** stands by the line, past the barrier on the side away from the pit wall, and waves the chequered flag for 20 s of the show.
+- All of it is scenery for the audit: the marshal posts and the starter are in `auditScenery`'s targets, and it stays at 0 on every circuit.
 
 ### Tests (G3)
 
-Browser (`trackside-check.js`):
-- the marshal nearest a car forced to spin shows a waved yellow within 0.5 s, and furls after the car moves off;
-- the helicopter's lap distance tracks the leader's (−400 ± 60), and its height is ≥ 200;
-- fireworks start at `flagOutAt`, and none before;
-- `auditScenery` is 0 with the marshal posts in place;
-- there are no errors on any circuit.
+- **Node** (`tests/marshals.test.js`):
+  - the posts are evenly spaced;
+  - yellow for a spun or stopped car ahead, and not for one behind, beyond the stretch, or finished;
+  - green for 2 s, then furled;
+  - nothing before the start;
+  - posts watch round the line.
+- **Browser** (`trackside-check.js`):
+  - `marshalsPosted`: at least 80 % of posts placed on every circuit;
+  - `marshalYellow`: a car spun just past a post brings that post's yellow, and green once it is away, with no other post flagging;
+  - `helicopterFollows`: 280 to 560 behind the leader (station 400, easing), at least 200 up;
+  - `helicopterHeard`: its rotor is heard near it, and silent far from it;
+  - `fireworksAtTheFlag`: none before the flag, fireworks and the starter's flag after it, still going 3.4 s in.

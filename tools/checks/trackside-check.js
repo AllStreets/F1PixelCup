@@ -1,6 +1,6 @@
 // Browser check: trackside life (docs/superpowers/specs/2026-09-29-trackside-design.md).
 // G1: pit lanes, garages, the Safety Car's way into the pits. G2: the venue
-// moments, seen and heard. Run with the
+// moments, seen and heard. G3: marshals, the helicopter, fireworks. Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/trackside-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].
@@ -242,6 +242,89 @@ async (page) => {
   await step(() => { Render3D.setPhotoCamera(null); state.paused = false; document.getElementById("screens").style.visibility = ""; document.getElementById("game").style.visibility = ""; });
   const numbers = [approachRoad, within, insideRoad].every((v) => typeof v === "number");
   results.tunnelDark = (numbers && within < approachRoad * 0.5 && insideRoad < approachRoad * 0.6) || JSON.stringify({ approachRoad, within, insideRoad });
+
+  // G3 -- trackside life. Marshal posts all round every circuit (a few may
+  // have had to give way to other scenery).
+  results.marshalsPosted = await step(() => {
+    const bad = [];
+    CIRCUITS.forEach((c) => {
+      const m = Render3D.auditVenue(TRACKS.find((t) => t.id === c.id)).marshals;
+      if (m.placed < m.wanted * 0.8) bad.push(`${c.id}: ${m.placed} of ${m.wanted}`);
+    });
+    return bad.length === 0 || JSON.stringify(bad);
+  });
+  // In a race: a car spun just past a post brings out its waved yellow; once
+  // the car is away, green; the posts elsewhere stay furled.
+  await step(async () => {
+    Game.backToPitLane();
+    Game.selectCup(0); Game.startCup();
+    for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    // Past the lights and the first seconds (no flags off the line).
+    const until = performance.now() + 20000;
+    while (performance.now() < until && !(state.phase === "race" && state.raceStart && renderClock() - state.raceStart > 5500)) await new Promise((r) => setTimeout(r, 100));
+  });
+  results.marshalYellow = await step(async () => {
+    const frames = (n) => new Promise((r) => { let k = n; const f = () => (--k <= 0 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+    state.paused = true; state.pausedAt = performance.now();
+    const posts = state.track.marshalPosts;
+    const k = 3;
+    const victim = state.racers.find((r) => !r.isPlayer);
+    const L = state.track.totalLength;
+    state.racers.forEach((r) => { r.speed = r.physics.maxSpeed * 0.8; r.spinUntil = 0; });
+    victim.trackDistance = (posts[k].d + 120) % L;
+    victim.spinUntil = renderClock() + 5000;
+    await frames(3);
+    const during = Render3D.inspect().life.posts;
+    victim.spinUntil = 0; victim.trackDistance = (posts[k].d + 1500) % L;
+    await frames(3);
+    const after = Render3D.inspect().life.posts;
+    const others = during.filter((q) => q.index !== k && q.flag === "yellow").length;
+    state.paused = false;
+    const mine = (list) => (list.find((q) => q.index === k) || {}).flag;
+    return (mine(during) === "yellow" && mine(after) === "green" && others === 0) || JSON.stringify({ during: mine(during), after: mine(after), others });
+  });
+  // The helicopter trails the leader by 400, high over the circuit.
+  results.helicopterFollows = await step(async () => {
+    state.paused = false;
+    await new Promise((r) => setTimeout(r, 4000));
+    const life = Render3D.inspect().life;
+    const leader = firstUnfinished();
+    const L = state.track.totalLength;
+    const route = PowerUps.makeRoute(state.track.points, state.track.roadWidth);
+    // The lap distance the helicopter is beside: the nearest point of the lap.
+    let best = { gap: Infinity, d: 0 };
+    for (let d = 0; d < L; d += 5) { const q = route.sample(d); const gap = Math.hypot(q.x - life.helicopter.x, q.y - life.helicopter.z); if (gap < best.gap) best = { gap, d }; }
+    const behind = ((leader.trackDistance - best.d) % L + L) % L;
+    return (life.helicopter.height >= 200 && behind > 280 && behind < 560) || JSON.stringify({ height: life.helicopter.height, behind });
+  });
+  // Its rotor is heard near it, and not far from it.
+  results.helicopterHeard = await step(() => {
+    const pl = getPlayer();
+    const leader = firstUnfinished();
+    const L = state.track.totalLength;
+    const keep = pl.trackDistance;
+    pl.trackDistance = ((leader.trackDistance - 400) % L + L) % L;
+    const near = venueSound(pl, true).helicopter;
+    pl.trackDistance = ((leader.trackDistance + L / 2) % L + L) % L;
+    const far = venueSound(pl, true).helicopter;
+    pl.trackDistance = keep;
+    return (near > 0.3 && far === 0) || JSON.stringify({ near, far });
+  });
+  // No fireworks and no chequered flag before the leader finishes; then both.
+  results.fireworksAtTheFlag = await step(async () => {
+    const frames = (n) => new Promise((r) => { let k = n; const f = () => (--k <= 0 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
+    const before = Render3D.inspect().life;
+    state.flagOutAt = renderClock();
+    // Real time: the race itself runs fast-forward after the flag.
+    await new Promise((r) => setTimeout(r, 900));
+    const after = Render3D.inspect().life;
+    await new Promise((r) => setTimeout(r, 2500));
+    const later = Render3D.inspect().life;
+    state.flagOutAt = 0;
+    await frames(2);
+    const show = (x) => ({ fireworks: x.fireworks, starter: x.starterWaving });
+    return (before.fireworks === 0 && !before.starterWaving && after.fireworks > 0 && after.starterWaving && later.fireworks > 0) || JSON.stringify({ before: show(before), after: show(after), later: show(later) });
+  });
 
   await context.close();
   return { results, errors };

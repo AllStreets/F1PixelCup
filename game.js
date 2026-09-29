@@ -245,6 +245,8 @@ function trackDefinition(definition) {
     reverbZones: window.Venue ? Venue.reverbZones(shape.tunnel, (shape.bridges || []).map((b) => ({ d: cumulativeStarts[b.under % cumulativeStarts.length] })), totalLength) : [],
     // (Each stand's lap distance is the track data's, from where it was
     // placed: the nearest road to a stand can be another stretch.)
+    // Marshal posts round the lap (marshals.js).
+    marshalPosts: window.Marshals ? Marshals.posts(totalLength) : [],
     crowdStands: (shape.decor || []).filter((item) => item.type === "grandstand")
       .map((item) => ({ d: item.d ?? getRouteDistanceForPoint(item, segments, cumulativeStarts), x: item.x, y: item.y })),
     // Each box knows its distance round the lap, so at Suzuka's crossover a box
@@ -1418,6 +1420,33 @@ function wrapLap(d) {
 
 function racerById(id) {
   return state.racers.find((racer) => racer.id === id);
+}
+
+// Trackside life for the renderer (docs/superpowers/specs/
+// 2026-09-29-trackside-design.md, G3): each marshal post's flag, from the
+// race as it is; where the TV helicopter is (trailing the race leader by
+// 400); and whether the chequered flag is out, with the winner's colour for
+// the fireworks.
+const MARSHAL_GRACE_MS = 5000;
+function tracksideFrame(now) {
+  const track = state.track;
+  if (!track || !window.Marshals) return null;
+  if (!state.marshalMemory || state.marshalMemory.track !== track.id) state.marshalMemory = { track: track.id, posts: {} };
+  // Off the line every car is slow: no flags for the first seconds.
+  const racing = state.phase === "race" && !state.preparing && now - (state.raceStart || now) > MARSHAL_GRACE_MS;
+  const flags = Marshals.flags(track.marshalPosts, state.racers, now, track.totalLength, state.marshalMemory.posts, racing);
+  const leader = firstUnfinished() || getSortedRacers()[0];
+  const winner = state.flagOutAt ? getSortedRacers().find((r) => r.finished) : null;
+  return {
+    posts: track.marshalPosts,
+    flags,
+    helicopter: leader ? { d: wrapLap((leader.trackDistance || 0) - 400) } : null,
+    flagOutAt: state.flagOutAt || 0,
+    winnerColour: winner && winner.kart ? winner.kart.body : null,
+    // (The race runs fast-forward after the flag; the show runs on real
+    // time, held while paused.)
+    paused: Boolean(state.paused),
+  };
 }
 
 function firstUnfinished() {
@@ -3399,6 +3428,7 @@ function drawDriverView(track) {
       // countdown, qualifying, a pause, the loading panel, or the
       // fast-forward after the flag.
       racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
+      trackside: tracksideFrame(now),
     }));
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
@@ -3615,7 +3645,30 @@ function initAudio() {
     osc.start();
   });
   humGain.connect(audio.master);
-  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, convolver, engineGain, feeding: false };
+  // The TV helicopter's rotor: low noise pulsed at the blades' beat.
+  const rotorSource = ctxA.createBufferSource();
+  rotorSource.buffer = makeNoiseBuffer(ctxA, 3);
+  rotorSource.loop = true;
+  const rotorFilter = ctxA.createBiquadFilter();
+  rotorFilter.type = "lowpass";
+  rotorFilter.frequency.value = 140;
+  const rotorPulse = ctxA.createGain();
+  rotorPulse.gain.value = 0.5;
+  const beat = ctxA.createOscillator();
+  beat.frequency.value = 11;
+  const beatDepth = ctxA.createGain();
+  beatDepth.gain.value = 0.5;
+  beat.connect(beatDepth);
+  beatDepth.connect(rotorPulse.gain);
+  const rotorGain = ctxA.createGain();
+  rotorGain.gain.value = 0;
+  rotorSource.connect(rotorFilter);
+  rotorFilter.connect(rotorPulse);
+  rotorPulse.connect(rotorGain);
+  rotorGain.connect(audio.master);
+  rotorSource.start();
+  beat.start();
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, convolver, engineGain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -3740,8 +3793,16 @@ const sfx = {
 // and the crowd's. Kept in state.venueSound (the checks read it).
 function venueSound(player, racing) {
   const track = state.track;
-  const out = { reverb: 0, crowd: 0, hum: 0 };
+  const out = { reverb: 0, crowd: 0, hum: 0, helicopter: 0 };
   if (track && player && racing && window.Venue) {
+    // The helicopter flies 400 behind the leader, 260 up and 220 aside:
+    // heard faintly when it is near.
+    const leader = firstUnfinished();
+    if (leader) {
+      const along = Venue.delta(player.trackDistance || 0, wrapLap((leader.trackDistance || 0) - 400), track.totalLength);
+      const distance = Math.hypot(along, 220, 260);
+      out.helicopter = Math.max(0, 1 - distance / 700);
+    }
     out.reverb = Venue.reverbAt(player.trackDistance || 0, track.reverbZones, track.totalLength);
     out.crowd = Venue.crowdAt(player.trackDistance || 0, track.crowdStands, track.totalLength);
     out.hum = Venue.FLOODLIT.includes(track.id) ? 1 : 0;
@@ -3780,6 +3841,7 @@ function updateEngineAudio(player) {
     audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9, now, 0.08);
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
+    audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05, now, 0.3);
   }
 
   if (audio.screech) {
