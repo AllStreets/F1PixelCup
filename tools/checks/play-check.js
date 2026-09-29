@@ -82,6 +82,15 @@ async (page) => {
   await p.evaluate(() => {
     const player = getPlayer();
     player.isPlayer = false;
+    // On autopilot the player may be the last car home, and the results are
+    // recorded in the very step they cross the line: hand the car back to them
+    // right then, as a real player would have it (as career-check does).
+    const record = window.recordPlayerRace;
+    window.recordPlayerRace = (finishers, fastest) => {
+      player.isPlayer = true;
+      window.recordPlayerRace = record;
+      return record(finishers, fastest);
+    };
     let now = performance.now();
     for (let t = 0; t < 900 && !state.resultsQueued; t += 1 / 60) {
       now += 1000 / 60;
