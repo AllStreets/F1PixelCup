@@ -12,7 +12,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { itemModel, swapBody } from "./items.js";
 import {
   color, seeded, hashString, photo, canvasTexture, makeKerbTexture, makeCheckerTexture,
-  makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture,
+  makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture, buildingMaterial, luminance,
 } from "./textures.js";
 
 export const SAMPLE_STEP = 6;
@@ -467,14 +467,18 @@ export function buildCircuit(course, venue) {
     m.userData.advertSide = side;
   });
   if (pitLane) group.add(buildPitLane(course, pitLane, occluders));
+  // The tunnel (Monaco's, from the track data): through it the tunnel's own
+  // walls stand where a catch fence would.
+  const inTunnel = (p) => Boolean(track.tunnel) && inTunnelAt(track.tunnel, track.totalLength, p.d);
   if (course.street) {
     const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
     fenceTex.repeat.set(1, 3);
     [[(p) => -p.outerL - 1, -1], [(p) => p.outerR + 1, 1]].forEach(([off, sign]) => {
       const onPitSide = pitLane && pitLane.side === sign;
-      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, onPitSide ? (p) => !atGarages(p) : undefined), fence);
+      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, (p) => !inTunnel(p) && !(onPitSide && atGarages(p))), fence);
     });
   }
+  if (track.tunnel) group.add(buildTunnel(course, track.tunnel, occluders));
 
   // Bridge: embankment walls under the raised stretch (except where the lower
   // road passes through), piers under the deck, and a parapet.
@@ -658,6 +662,61 @@ function buildPitLane(course, lane, occluders) {
     standsMesh.name = "pitStands";
     roofsMesh.name = "pitStandRoofs";
   }
+  return group;
+}
+
+// The tunnel: from track.tunnel.from to .to (lap distances, racing order).
+export const TUNNEL_ROOF = 36;
+export function inTunnelAt(tunnel, total, d) {
+  const length = ((tunnel.to - tunnel.from) % total + total) % total;
+  const into = ((d - tunnel.from) % total + total) % total;
+  return into <= length;
+}
+
+// Built as part of the circuit, like a bridge: walls just outside the
+// barriers up to a roof 36 above the road (clear of every car), a slab with
+// the hotel's floor on top that keeps the sun off the road inside, and two
+// rows of lamps along the ceiling.
+function buildTunnel(course, tunnel, occluders) {
+  const group = new THREE.Group();
+  group.name = "tunnel";
+  const { samples, width } = course;
+  const total = course.track.totalLength;
+  const inside = (p) => inTunnelAt(tunnel, total, p.d);
+  const add = (geo, mat, cast = true) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = cast;
+    m.receiveShadow = true;
+    group.add(m);
+    return m;
+  };
+  const concrete = new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 0.9, side: THREE.DoubleSide });
+  const ceiling = new THREE.MeshStandardMaterial({ color: 0x2e2d2b, roughness: 0.95, side: THREE.DoubleSide });
+  const L = (p) => -p.outerL - 2;
+  const R = (p) => p.outerR + 2;
+  [L, R].forEach((off) => occluders.push(add(wall(samples, off, () => 0, () => TUNNEL_ROOF, 60, inside), concrete)));
+  occluders.push(add(ribbon(samples, L, R, TUNNEL_ROOF, 80, inside), ceiling));
+  occluders.push(add(ribbon(samples, L, R, TUNNEL_ROOF + 8, 80, inside), concrete));
+  // The slab's sides.
+  [L, R].forEach((off) => add(wall(samples, off, () => TUNNEL_ROOF, () => TUNNEL_ROOF + 8, 60, inside), concrete));
+  // The hotel the tunnel runs under (Monaco's Fairmont): its floors rise
+  // from the slab over the middle of the tunnel, windows and all.
+  const length = ((tunnel.to - tunnel.from) % total + total) % total;
+  const underHotel = (p) => {
+    const into = ((p.d - tunnel.from) % total + total) % total;
+    return into >= length * 0.2 && into <= length * 0.8;
+  };
+  const hotel = buildingMaterial({ night: course.track.bg && luminance(course.track.bg.sky) < 0.12, glass: "#7d8fa0", litShare: 0.35 });
+  const top = TUNNEL_ROOF + 8;
+  const floors = top + 48;
+  [L, R].forEach((off) => add(wall(samples, off, () => top, () => floors, 60, underHotel), hotel));
+  add(ribbon(samples, L, R, floors, 80, underHotel), concrete);
+  // Lamps: two rows of lit panels along the ceiling.
+  const lamp = new THREE.MeshStandardMaterial({ color: 0xfff0d0, emissive: 0xffd08a, emissiveIntensity: 2.2, side: THREE.DoubleSide });
+  [-0.4, 0.4].forEach((f) => {
+    add(ribbon(samples, () => f * width - 1.4, () => f * width + 1.4, TUNNEL_ROOF - 0.4, 20, (p) => inside(p) && Math.floor(p.d / 15) % 2 === 0), lamp, false);
+  });
+  group.userData.roof = TUNNEL_ROOF;
   return group;
 }
 

@@ -136,43 +136,48 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
 
 ### The Monaco tunnel
 
-- **Where.** It is the real one: Boulevard Louis II's tunnel section in OpenStreetMap, located on the true outline and written into the track data as `tunnel: { from, to }` (2019 to 2509 after the line: 490, from the real 356 m). A Node test checks it against the OSM data's length and order.
-- **Built** as part of the circuit:
-  - side walls on the barrier lines;
-  - a roof 36 above the road, with the hotel's mass above it;
-  - rows of lamps along the ceiling, lit;
-  - dark portals, with a short light-to-dark ramp at the entry.
-- **Seen.** Inside, the sun can't reach the road: the roof casts the shadow. The camera's exposure adapts over about half a second, darker going in and brighter coming out, so the lamps read as they do on TV.
-- **Heard.** A `ConvolverNode` reverb (a generated 1.1 s impulse) on the engine bus. Its wet level rises from 0 to full over the first 40 units inside the tunnel and falls the same way at the exit. The zone is tied to the tunnel's real distances. A Node test for the pure helper `Venue.reverbAt(d, zones)` checks that the level is 0 outside, 1 inside, and ramps at both portals.
+- **Where.** It is the real one: Boulevard Louis II's tunnel section in OpenStreetMap, found on the true outline (by its two ends, which join the track). The track data holds it as `tunnel: { from, to }`: 2019 to 2521 after the line, 502 units against the real 356 m × 1.3 = 463. `tests/track-features.test.js` checks it against the OSM length (within 20 %) and racing order, and that only Monaco has one.
+- **Built** as part of the circuit (`buildTunnel`, `r3d/track.js`), like a bridge:
+  - walls 1 outside the barrier lines, up to a roof 36 above the road (`TUNNEL_ROOF`, clear of every car);
+  - the roof's dark underside, and a slab 8 thick on top;
+  - the hotel's floors (the Fairmont) rising 48 over the middle 60 %, windows and all;
+  - two rows of lit lamp panels along the ceiling.
+
+  The walls, roof and slab are sun occluders for the flare. The street catch fence stops at the portals.
+- **Seen.** Inside, the sky and the sun are shut out: hemisphere ×0.15, sun ×0.1, environment ×0.2. The roof also casts its shadow, and a warm light stands in for the lamps. The exposure adapts toward ×1.6 with a 0.5 s time constant (`updateTunnelLight`, `render3d.js`): dark going in, bright coming out, as a TV camera does. The venue's own light is kept per world, so each frame starts from it; this also fixes the showroom's exposure lingering.
+- **Heard.** The engine also feeds a `ConvolverNode`: a generated impulse of stereo noise decaying over 1.1 s, with its wet level at 0.9 × `Venue.reverbAt(d, zones)`. The level is 0 outside, 1 inside, and eases over the first and last 40 (`RAMP`).
 
 ### The other circuits
 
-Each gets a moment built from the same pieces: corner name boards, a reverb or crowd zone, and lighting.
+- **Corner name boards** at the real signature corners, their positions from OpenStreetMap's named raceway ways (`corners` in the track data):
+  - Eau Rouge and Raidillon (Spa);
+  - Curva Alboreto, with "Parabolica" beneath (Monza);
+  - 130R (Suzuka);
+  - S do Senna (Interlagos).
 
-| Circuit | Moment | Seen | Heard |
-|---|---|---|---|
-| Spa | Eau Rouge / Raidillon | Named boards, the packed bank of stands at the top | The crowd swells as you climb through it |
-| Monza | Parabolica | Named boards, a long grandstand on its outside | The crowd swells along it |
-| Suzuka | 130R and the crossover bridge | Named board at 130R | Reverb under the bridge (its real span, from `bridges`) |
-| Singapore | Night lights | The lit skyline and floodlights (already there) | A low floodlight hum near the light towers |
-| Bahrain | Floodlights at dusk | The floodlight towers switch on, in pools of light | — |
-| Interlagos | Senna S | Named boards, the stands above the S | The crowd swells through it |
-
-Corner names are real place names, so there are no marks and nothing to license. The crowd swell is band-passed noise whose level follows the distance to the nearest grandstand, mixed low under the engine.
+  Each stands on the outside of its corner, past the barrier, facing the track, and claims its footprint like any scenery. Where the spot is taken it moves along the corner, then to the inside (130R's is on the inside).
+- **Suzuka's crossover.** Under the bridge the engine rings: a reverb zone of ±70 (`UNDER_BRIDGE`) round where the lower road passes beneath, from `bridges`.
+- **The crowd** swells past every grandstand: band-passed noise (650 Hz) whose level follows `Venue.crowdAt`, full level with a stand and gone by 420 (`CROWD_REACH`).
+- **Floodlights** (Singapore at night, Bahrain at dusk):
+  - each tower casts a soft warm pool of light across the near half of the road, stronger at night;
+  - the pools lie on the ground (tagged as such), so they aren't scenery over the track;
+  - a faint 100 Hz mains hum plays while racing at the floodlit circuits (`Venue.FLOODLIT`, tested against `VENUES`).
+- Ruling: the spec's table named a "crowd at Eau Rouge / Parabolica / Senna S". The crowd follows every grandstand the circuit really has; the name boards mark the corners. Cost if wrong: no extra crowd where a corner has no stand.
 
 ### Tests (G2)
 
-- **Node:**
-  - `reverbAt` and `crowdAt` level curves;
-  - the Monaco tunnel lies between Portier and the Nouvelle chicane;
-  - the Suzuka reverb zone matches its bridge's span.
+- **Node** (`tests/venue.test.js`, `tests/track-features.test.js`):
+  - the reverb and crowd level curves, including round the line;
+  - the reverb zones (the tunnel, and under a bridge);
+  - the floodlit list against `VENUES`;
+  - the tunnel against OpenStreetMap.
 - **Browser** (`trackside-check.js`):
-  - in a Monaco race, moving the player through the tunnel's distances switches the reverb's wet gain in and out at the right distances;
-  - the tunnel is dark inside, measured on the road's pixels against the approach;
-  - `auditScenery` is 0, with the tunnel exempt because it is circuit, not scenery, and the roof is ≥ 30 above the road.
-- **Screenshots:** each moment.
-
----
+  - `venueBuilt`: every corner has its board, past the barrier, within 130 of its corner; the tunnel's roof is at least 30 up;
+  - `tunnelRings`: through the real audio graph, the reverb is 0 before the tunnel, partial at the portal, full inside and 0 after;
+  - `bridgeRings`: full under Suzuka's bridge, 0 away from it;
+  - `crowdSwells`: the crowd is loudest at a grandstand;
+  - `tunnelDark`: on Monaco, the road's pixels inside the tunnel are under 0.6 of the sunlit approach's;
+  - `auditScenery` stays at 0 everywhere, with the boards and pools included.
 
 ## G3 — Trackside life
 
