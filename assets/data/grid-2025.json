@@ -1,0 +1,812 @@
+{
+  "source": {
+    "name": "F1DB",
+    "url": "https://github.com/f1db/f1db",
+    "release": "v2026.15.1",
+    "license": "CC BY 4.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/4.0/",
+    "attribution": "Race data from F1DB (v2026.15.1), licensed CC BY 4.0."
+  },
+  "drivers": [
+    {
+      "id": "verstappen",
+      "f1dbId": "max-verstappen",
+      "name": "Max Verstappen",
+      "number": 1,
+      "code": "VER",
+      "nationality": "Dutch",
+      "dateOfBirth": "1997-09-30",
+      "melbourneTeamId": "redBull",
+      "season": {
+        "position": 2,
+        "points": 421,
+        "champion": false,
+        "wins": 8,
+        "podiums": 15,
+        "poles": 8,
+        "teams": [
+          {
+            "teamId": "redBull",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 248,
+        "wins": 71,
+        "podiums": 134,
+        "poles": 48,
+        "titles": 4
+      }
+    },
+    {
+      "id": "lawson",
+      "f1dbId": "liam-lawson",
+      "name": "Liam Lawson",
+      "number": 30,
+      "code": "LAW",
+      "nationality": "New Zealander",
+      "dateOfBirth": "2002-02-11",
+      "melbourneTeamId": "redBull",
+      "season": {
+        "position": 14,
+        "points": 38,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "redBull",
+            "rounds": "1-2"
+          },
+          {
+            "teamId": "racingBulls",
+            "rounds": "3-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 50,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "leclerc",
+      "f1dbId": "charles-leclerc",
+      "name": "Charles Leclerc",
+      "number": 16,
+      "code": "LEC",
+      "nationality": "Monégasque",
+      "dateOfBirth": "1997-10-16",
+      "melbourneTeamId": "ferrari",
+      "season": {
+        "position": 5,
+        "points": 242,
+        "champion": false,
+        "wins": 0,
+        "podiums": 7,
+        "poles": 1,
+        "teams": [
+          {
+            "teamId": "ferrari",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 186,
+        "wins": 9,
+        "podiums": 54,
+        "poles": 27,
+        "titles": 0
+      }
+    },
+    {
+      "id": "hamilton",
+      "f1dbId": "lewis-hamilton",
+      "name": "Lewis Hamilton",
+      "number": 44,
+      "code": "HAM",
+      "nationality": "British",
+      "dateOfBirth": "1985-01-07",
+      "melbourneTeamId": "ferrari",
+      "season": {
+        "position": 6,
+        "points": 156,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "ferrari",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 395,
+        "wins": 106,
+        "podiums": 207,
+        "poles": 104,
+        "titles": 7
+      }
+    },
+    {
+      "id": "norris",
+      "f1dbId": "lando-norris",
+      "name": "Lando Norris",
+      "number": 4,
+      "code": "NOR",
+      "nationality": "British",
+      "dateOfBirth": "1999-11-13",
+      "melbourneTeamId": "mclaren",
+      "season": {
+        "position": 1,
+        "points": 423,
+        "champion": true,
+        "wins": 7,
+        "podiums": 18,
+        "poles": 7,
+        "teams": [
+          {
+            "teamId": "mclaren",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 166,
+        "wins": 13,
+        "podiums": 49,
+        "poles": 19,
+        "titles": 1
+      }
+    },
+    {
+      "id": "piastri",
+      "f1dbId": "oscar-piastri",
+      "name": "Oscar Piastri",
+      "number": 81,
+      "code": "PIA",
+      "nationality": "Australian",
+      "dateOfBirth": "2001-04-06",
+      "melbourneTeamId": "mclaren",
+      "season": {
+        "position": 3,
+        "points": 410,
+        "champion": false,
+        "wins": 7,
+        "podiums": 16,
+        "poles": 6,
+        "teams": [
+          {
+            "teamId": "mclaren",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 83,
+        "wins": 9,
+        "podiums": 28,
+        "poles": 6,
+        "titles": 0
+      }
+    },
+    {
+      "id": "russell",
+      "f1dbId": "george-russell",
+      "name": "George Russell",
+      "number": 63,
+      "code": "RUS",
+      "nationality": "British",
+      "dateOfBirth": "1998-02-15",
+      "melbourneTeamId": "mercedes",
+      "season": {
+        "position": 4,
+        "points": 319,
+        "champion": false,
+        "wins": 2,
+        "podiums": 9,
+        "poles": 2,
+        "teams": [
+          {
+            "teamId": "mercedes",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 167,
+        "wins": 8,
+        "podiums": 32,
+        "poles": 12,
+        "titles": 0
+      }
+    },
+    {
+      "id": "antonelli",
+      "f1dbId": "kimi-antonelli",
+      "name": "Kimi Antonelli",
+      "number": 12,
+      "code": "ANT",
+      "nationality": "Italian",
+      "dateOfBirth": "2006-08-25",
+      "melbourneTeamId": "mercedes",
+      "season": {
+        "position": 7,
+        "points": 150,
+        "champion": false,
+        "wins": 0,
+        "podiums": 3,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "mercedes",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 39,
+        "wins": 8,
+        "podiums": 15,
+        "poles": 6,
+        "titles": 0
+      }
+    },
+    {
+      "id": "alonso",
+      "f1dbId": "fernando-alonso",
+      "name": "Fernando Alonso",
+      "number": 14,
+      "code": "ALO",
+      "nationality": "Spanish",
+      "dateOfBirth": "1981-07-29",
+      "melbourneTeamId": "astonMartin",
+      "season": {
+        "position": 10,
+        "points": 56,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "astonMartin",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 441,
+        "wins": 32,
+        "podiums": 106,
+        "poles": 22,
+        "titles": 2
+      }
+    },
+    {
+      "id": "stroll",
+      "f1dbId": "lance-stroll",
+      "name": "Lance Stroll",
+      "number": 18,
+      "code": "STR",
+      "nationality": "Canadian",
+      "dateOfBirth": "1998-10-29",
+      "melbourneTeamId": "astonMartin",
+      "season": {
+        "position": 16,
+        "points": 33,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "astonMartin",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 204,
+        "wins": 0,
+        "podiums": 3,
+        "poles": 1,
+        "titles": 0
+      }
+    },
+    {
+      "id": "gasly",
+      "f1dbId": "pierre-gasly",
+      "name": "Pierre Gasly",
+      "number": 10,
+      "code": "GAS",
+      "nationality": "French",
+      "dateOfBirth": "1996-02-07",
+      "melbourneTeamId": "alpine",
+      "season": {
+        "position": 18,
+        "points": 22,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "alpine",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 192,
+        "wins": 1,
+        "podiums": 5,
+        "poles": 1,
+        "titles": 0
+      }
+    },
+    {
+      "id": "doohan",
+      "f1dbId": "jack-doohan",
+      "name": "Jack Doohan",
+      "number": 7,
+      "code": "DOO",
+      "nationality": "Australian",
+      "dateOfBirth": "2003-01-20",
+      "melbourneTeamId": "alpine",
+      "season": {
+        "position": 21,
+        "points": 0,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "alpine",
+            "rounds": "1-6"
+          }
+        ]
+      },
+      "career": {
+        "starts": 7,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "albon",
+      "f1dbId": "alexander-albon",
+      "name": "Alexander Albon",
+      "number": 23,
+      "code": "ALB",
+      "nationality": "Thai",
+      "dateOfBirth": "1996-03-23",
+      "melbourneTeamId": "williams",
+      "season": {
+        "position": 8,
+        "points": 73,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "williams",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 142,
+        "wins": 0,
+        "podiums": 2,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "sainz",
+      "f1dbId": "carlos-sainz-jr",
+      "name": "Carlos Sainz Jr.",
+      "number": 55,
+      "code": "SAI",
+      "nationality": "Spanish",
+      "dateOfBirth": "1994-09-01",
+      "melbourneTeamId": "williams",
+      "season": {
+        "position": 9,
+        "points": 64,
+        "champion": false,
+        "wins": 0,
+        "podiums": 2,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "williams",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 244,
+        "wins": 4,
+        "podiums": 29,
+        "poles": 6,
+        "titles": 0
+      }
+    },
+    {
+      "id": "bearman",
+      "f1dbId": "oliver-bearman",
+      "name": "Oliver Bearman",
+      "number": 87,
+      "code": "BEA",
+      "nationality": "British",
+      "dateOfBirth": "2005-05-08",
+      "melbourneTeamId": "haas",
+      "season": {
+        "position": 13,
+        "points": 41,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "haas",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 42,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "ocon",
+      "f1dbId": "esteban-ocon",
+      "name": "Esteban Ocon",
+      "number": 31,
+      "code": "OCO",
+      "nationality": "French",
+      "dateOfBirth": "1996-09-17",
+      "melbourneTeamId": "haas",
+      "season": {
+        "position": 15,
+        "points": 38,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "haas",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 195,
+        "wins": 1,
+        "podiums": 4,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "tsunoda",
+      "f1dbId": "yuki-tsunoda",
+      "name": "Yuki Tsunoda",
+      "number": 22,
+      "code": "TSU",
+      "nationality": "Japanese",
+      "dateOfBirth": "2000-05-11",
+      "melbourneTeamId": "racingBulls",
+      "season": {
+        "position": 17,
+        "points": 33,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "racingBulls",
+            "rounds": "1-2"
+          },
+          {
+            "teamId": "redBull",
+            "rounds": "3-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 114,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "hadjar",
+      "f1dbId": "isack-hadjar",
+      "name": "Isack Hadjar",
+      "number": 6,
+      "code": "HAD",
+      "nationality": "French",
+      "dateOfBirth": "2004-09-28",
+      "melbourneTeamId": "racingBulls",
+      "season": {
+        "position": 12,
+        "points": 51,
+        "champion": false,
+        "wins": 0,
+        "podiums": 1,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "racingBulls",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 36,
+        "wins": 0,
+        "podiums": 3,
+        "poles": 0,
+        "titles": 0
+      }
+    },
+    {
+      "id": "hulkenberg",
+      "f1dbId": "nico-hulkenberg",
+      "name": "Nico Hülkenberg",
+      "number": 27,
+      "code": "HUL",
+      "nationality": "German",
+      "dateOfBirth": "1987-08-19",
+      "melbourneTeamId": "sauber",
+      "season": {
+        "position": 11,
+        "points": 51,
+        "champion": false,
+        "wins": 0,
+        "podiums": 1,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "sauber",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 264,
+        "wins": 0,
+        "podiums": 1,
+        "poles": 1,
+        "titles": 0
+      }
+    },
+    {
+      "id": "bortoleto",
+      "f1dbId": "gabriel-bortoleto",
+      "name": "Gabriel Bortoleto",
+      "number": 5,
+      "code": "BOR",
+      "nationality": "Brazilian",
+      "dateOfBirth": "2004-10-14",
+      "melbourneTeamId": "sauber",
+      "season": {
+        "position": 19,
+        "points": 19,
+        "champion": false,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "teams": [
+          {
+            "teamId": "sauber",
+            "rounds": "1-24"
+          }
+        ]
+      },
+      "career": {
+        "starts": 38,
+        "wins": 0,
+        "podiums": 0,
+        "poles": 0,
+        "titles": 0
+      }
+    }
+  ],
+  "teams": [
+    {
+      "id": "redBull",
+      "f1dbId": "red-bull",
+      "name": "Red Bull",
+      "fullName": "Red Bull Racing",
+      "country": "Austria",
+      "season": {
+        "position": 3,
+        "points": 451,
+        "champion": false,
+        "wins": 8
+      },
+      "career": {
+        "titles": 6,
+        "wins": 130
+      }
+    },
+    {
+      "id": "ferrari",
+      "f1dbId": "ferrari",
+      "name": "Ferrari",
+      "fullName": "Scuderia Ferrari",
+      "country": "Italy",
+      "season": {
+        "position": 4,
+        "points": 398,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 16,
+        "wins": 250
+      }
+    },
+    {
+      "id": "mclaren",
+      "f1dbId": "mclaren",
+      "name": "McLaren",
+      "fullName": "McLaren Racing",
+      "country": "United Kingdom",
+      "season": {
+        "position": 1,
+        "points": 833,
+        "champion": true,
+        "wins": 14
+      },
+      "career": {
+        "titles": 10,
+        "wins": 205
+      }
+    },
+    {
+      "id": "mercedes",
+      "f1dbId": "mercedes",
+      "name": "Mercedes",
+      "fullName": "Mercedes AMG F1",
+      "country": "Germany",
+      "season": {
+        "position": 2,
+        "points": 469,
+        "champion": false,
+        "wins": 2
+      },
+      "career": {
+        "titles": 8,
+        "wins": 142
+      }
+    },
+    {
+      "id": "astonMartin",
+      "f1dbId": "aston-martin",
+      "name": "Aston Martin",
+      "fullName": "Aston Martin",
+      "country": "United Kingdom",
+      "season": {
+        "position": 7,
+        "points": 89,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 0,
+        "wins": 0
+      }
+    },
+    {
+      "id": "alpine",
+      "f1dbId": "alpine",
+      "name": "Alpine",
+      "fullName": "Alpine F1 Team",
+      "country": "France",
+      "season": {
+        "position": 10,
+        "points": 22,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 0,
+        "wins": 1
+      }
+    },
+    {
+      "id": "williams",
+      "f1dbId": "williams",
+      "name": "Williams",
+      "fullName": "Williams Grand Prix Engineering",
+      "country": "United Kingdom",
+      "season": {
+        "position": 5,
+        "points": 137,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 9,
+        "wins": 114
+      }
+    },
+    {
+      "id": "haas",
+      "f1dbId": "haas",
+      "name": "Haas",
+      "fullName": "Haas F1 Team",
+      "country": "United States of America",
+      "season": {
+        "position": 8,
+        "points": 79,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 0,
+        "wins": 0
+      }
+    },
+    {
+      "id": "racingBulls",
+      "f1dbId": "racing-bulls",
+      "name": "Racing Bulls",
+      "fullName": "Racing Bulls",
+      "country": "Italy",
+      "season": {
+        "position": 6,
+        "points": 92,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 0,
+        "wins": 0
+      }
+    },
+    {
+      "id": "sauber",
+      "f1dbId": "kick-sauber",
+      "name": "Kick Sauber",
+      "fullName": "Kick Sauber F1 Team",
+      "country": "Switzerland",
+      "season": {
+        "position": 9,
+        "points": 70,
+        "champion": false,
+        "wins": 0
+      },
+      "career": {
+        "titles": 0,
+        "wins": 0
+      }
+    }
+  ]
+}
