@@ -272,7 +272,7 @@ async (page) => {
     state.raceStart = state.lastTick = performance.now();
     completeRemainingFinishers(raceNow());
     finalizeRace();
-    const profile = Career.getProfile();
+    const profile = Career.getDriver(player.driver.id);
     const last = profile.history[profile.history.length - 1];
     const award = Career.qualifyingAward({ position: qPos, difficulty: getDifficulty().id });
     const strip = document.getElementById("results-career").textContent;
@@ -327,13 +327,14 @@ async (page) => {
   results.fromBackRecordsNoQualifying = await step(() => {
     Game.backToPitLane();
     Game.selectGridMode("back");
-    const before = Career.getProfile().history.length;
+    const me = DRIVERS[state.selectedDriver].id;
+    const before = Career.getDriver(me).history.length;
     Game.startCup();
     state.phase = "race";
     state.raceStart = state.lastTick = performance.now();
     completeRemainingFinishers(raceNow());
     finalizeRace();
-    const h = Career.getProfile().history;
+    const h = Career.getDriver(me).history;
     return h.length === before + 1 && h[h.length - 1].qualifying === null;
   });
 

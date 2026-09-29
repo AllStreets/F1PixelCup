@@ -3,7 +3,7 @@
 // browser_run_code_unsafe, filename: tools/checks/career-check.js, dev server
 // on http://localhost:8765. Expected: races 4, cupsCompleted 1, the bonus
 // counted once (careerAfterSecondPodium === careerAfterCup), quitRecorded 0,
-// no errors.
+// every perDriver value true, no errors.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -42,18 +42,19 @@ async (page) => {
       strips.push(document.getElementById("results-career").innerText);
       nextRace();
     }
-    const afterCup = Career.getProfile();
+    const me = getPlayer().driver.id;
+    const afterCup = Career.getDriver(me);
     showPodium();
-    const afterSecondPodium = Career.getProfile();
+    const afterSecondPodium = Career.getDriver(me);
     const podiumStrip = document.getElementById("podium-career").innerText;
     resetToGarage();
     // A race quit before the flag records nothing.
     startCup();
-    const before = Career.getProfile().totals.races;
+    const before = Career.getDriver(me).totals.races;
     state.phase = "race";
     for (let i = 0; i < 120; i += 1) updateRace(1 / 60, 200000 + i * 16);
     resetToGarage();
-    const afterQuit = Career.getProfile().totals.races;
+    const afterQuit = Career.getDriver(me).totals.races;
     return {
       strips,
       podiumStrip,
@@ -67,6 +68,49 @@ async (page) => {
       panel: document.getElementById("career-chip").innerText,
     };
   });
+  // One career per driver: a race as Hamilton builds Hamilton's career and
+  // leaves Leclerc's alone; the chip follows the selected driver; the career
+  // screen lists every driver raced, and choosing one selects them.
+  const perDriver = await p.evaluate(async () => {
+    resetToGarage();
+    const leclercBefore = Career.getDriver("leclerc");
+    const ham = DRIVERS.findIndex((d) => d.id === "hamilton");
+    Game.selectDriver(ham);
+    const chipNew = document.getElementById("career-chip").textContent;
+    startCup();
+    const player = getPlayer();
+    player.isPlayer = false; // autopilot for the drive
+    state.phase = "race";
+    let now = 500000;
+    state.raceStart = now;
+    state.lastTick = now;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    for (let t = 0; t < 900 && !state.resultsQueued; t += 1 / 60) {
+      now += 1000 / 60;
+      if (player.finished) player.isPlayer = true; // the player's again once over the line
+      updateRace(1 / 60, now);
+    }
+    const lewis = Career.getDriver("hamilton");
+    const leclercAfter = Career.getDriver("leclerc");
+    resetToGarage();
+    Game.selectDriver(ham);
+    const chipLewis = document.getElementById("career-chip").textContent;
+    document.getElementById("career-chip").click();
+    const rows = [...document.querySelectorAll("#career-screen .career-drivers tbody tr")];
+    const listed = rows.map((r) => r.textContent);
+    const leclercRow = document.querySelector('#career-screen .career-drivers [data-driver="' + DRIVERS.findIndex((d) => d.id === "leclerc") + '"]');
+    if (leclercRow) leclercRow.click();
+    const nowSelected = DRIVERS[state.selectedDriver].id;
+    const overlayClosed = !(window.Screens && Screens.isOverlayOpen());
+    return {
+      lewisRaced: lewis.totals.races === 1,
+      leclercUntouched: leclercAfter.totals.races === leclercBefore.totals.races && leclercAfter.careerPoints === leclercBefore.careerPoints,
+      chipNew: /Hamilton · New career/.test(chipNew),
+      chipFollowsDriver: chipLewis.startsWith("Hamilton · ") && !/New career/.test(chipLewis),
+      driversListed: listed.some((t) => t.includes("Lewis Hamilton")) && listed.some((t) => t.includes("Charles Leclerc")),
+      pickFromList: nowSelected === "leclerc" && overlayClosed,
+    };
+  });
   await context.close();
-  return { ...result, errors };
+  return { ...result, perDriver, errors };
 }

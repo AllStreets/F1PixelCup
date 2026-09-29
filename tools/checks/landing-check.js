@@ -1,7 +1,8 @@
 // Browser check for index.html (landing page). Run with the Playwright MCP
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
-// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true.
+// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
+// yourDrivers true.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -62,6 +63,19 @@ async (page) => {
   out.returning = summary.includes("1309") && summary.includes("0:36.280") && /Poles\s*2/i.test(summary);
   out.xss = await p.evaluate(() => window.__xss === undefined);
   out.careerLink = await p.locator("#career a[href*='play.html#career']").count();
+
+  // One career per driver: the latest driver leads, the others follow.
+  await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 2, profileId: "p", lastDriverId: "leclerc",
+    drivers: {
+      leclerc: { driverId: "leclerc", careerPoints: 184, rating: 1352, ratedRaces: 6, totals: { races: 6, wins: 2, podiums: 4, cupsCompleted: 1, cupsWon: 1, poles: 3 },
+        bestLaps: { monaco: { ms: 18950.4 } }, history: [{ type: "race", at: "2026-09-28T10:00:00.000Z" }] },
+      hamilton: { driverId: "hamilton", careerPoints: 40, rating: 1244, ratedRaces: 2, totals: { races: 2, wins: 0, podiums: 1, cupsCompleted: 0, cupsWon: 0, poles: 0 }, bestLaps: {}, history: [] },
+    } })));
+  await p.reload();
+  await p.waitForTimeout(1000);
+  const drivers = await p.locator("#career-summary").innerText();
+  out.yourDrivers = /Latest · Charles Leclerc/i.test(drivers) && drivers.includes("1352") && drivers.includes("0:18.950")
+    && /Lewis Hamilton/i.test(drivers) && drivers.includes("1244");
 
   for (const [w, h] of [[1000, 700], [1900, 760], [560, 800]]) {
     await size(w, h);

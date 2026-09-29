@@ -688,7 +688,7 @@ function getPitLaneState() {
   return {
     drivers: DRIVERS.map((d, index) => ({ index, code: d.code, number: d.number, name: d.name, teamColor: getTeamForDriver(d).body })),
     selectedDriver: state.selectedDriver,
-    driver: { name: driver.name, number: driver.number, title: driver.title },
+    driver: { id: driver.id, name: driver.name, number: driver.number, title: driver.title },
     team: { name: team.name, car: team.car, body: team.body, trim: team.trim },
     stats: { speed: stats.speed, handling: stats.handling, acceleration: stats.acceleration, traction: stats.traction },
     cups: CUPS.map((cup, index) => ({ index, name: cup.name, circuits: cup.tracks.map((track) => track.name) })),
@@ -2328,6 +2328,10 @@ function playerQualifying(player) {
   return { position: q.order.indexOf(player.driver.id) + 1, timeMs: q.playerTimeMs };
 }
 
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+}
+
 function careerDifficultyName(id) {
   return (window.Career && window.Career.DIFFICULTY_NAMES[id]) || id;
 }
@@ -2337,8 +2341,11 @@ function careerForRace(summary) {
   const difficulty = careerDifficultyName(getDifficulty().id);
   const { before, after, delta } = summary.rating;
   const trend = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "=";
+  // Every driver has their own career: the strip names whose it is.
+  const driver = DRIVERS.find((d) => d.id === summary.driverId);
+  const whose = driver ? `${driver.name}: ` : "";
   const lines = [
-    `<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier})`,
+    `${escapeHtml(whose)}<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier}) · total ${summary.careerTotal.toLocaleString()}`,
     `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
   ];
   if (summary.qualifying) {
@@ -2356,6 +2363,8 @@ function careerForCup(cup, playerPlace) {
   const lines = cup.bonus > 0
     ? [`<strong>Cup ${formatOrdinal(playerPlace)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
     : [`Cup ${formatOrdinal(playerPlace)}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${cup.careerTotal.toLocaleString()}`];
+  const driver = state.cupEntries.find((entry) => entry.isPlayer);
+  if (driver && lines.length) lines[0] = `${escapeHtml(driver.driver.name)}: ${lines[0]}`;
   return { lines, saved: cup.saved };
 }
 
@@ -2370,6 +2379,7 @@ function recordPlayerCup() {
     state.lastCupCareer = playerEntry ? window.Career.recordCup({
       cupId: getActiveCup().id,
       cupRunId: state.cupRunId,
+      driverId: playerEntry.driver.id,
       difficulty: getDifficulty().id,
       position: state.cupEntries.indexOf(playerEntry) + 1,
       cupPoints: playerEntry.points,

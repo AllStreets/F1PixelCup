@@ -22,8 +22,10 @@ async (page) => {
   await p.waitForTimeout(1500);
 
   // A race at Monza, 40 s in (past every limit), everyone on the grid.
-  const setup = (circuit = 0) => p.evaluate((ti) => {
+  const setup = (circuit = 0) => p.evaluate(async (ti) => {
     Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(ti);
+    // A circuit's first appearance is built before anything moves: wait for it.
+    for (let i = 0; i < 100 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     state.phase = "race";
     const now = performance.now();
     state.raceStart = now - 40000;
@@ -421,8 +423,10 @@ async (page) => {
   // While paused the picture freezes too: a hidden box does not grow back on the pause screen.
   await setup();
   results.pauseFreezesPicture = await run(async () => {
-    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? raceNow() + 600 : 0));
-    await new Promise((r) => setTimeout(r, 150));
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? raceNow() + 1500 : 0));
+    // Let the box finish shrinking first (a first appearance of a circuit spends
+    // a moment building it); a paused frame then holds it exactly as it was.
+    for (let i = 0; i < 40 && Render3D.inspect().boxScales[0] > 0.05; i += 1) await new Promise((r) => setTimeout(r, 50));
     togglePause();
     // Stay paused past the box's deadline in wall-clock time.
     await new Promise((r) => setTimeout(r, 1100));
