@@ -81,7 +81,7 @@
       d: ((garageFrom + BAY * (i + 0.5)) % total + total) % total,
     }));
     return {
-      side, entry, exit, length: exit - entry, flatFrom, flatTo,
+      side, entry, exit, length: exit - entry, flatFrom, flatTo, halfWidth: W,
       rel, inZone, blend, latAt, wallAt, outerAt,
       garages: { from: garageFrom, to: garageFrom + BAY * BAYS, inner: W + WORK_OUT, outer: W + GARAGE_OUT, bays },
       laneHalf: LANE_HALF,
@@ -89,5 +89,27 @@
     };
   }
 
-  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, EDGE_IN, MOUTH, BAY, BAYS, lane };
+  // Where the Safety Car drives on its way in (game.js): along the road's edge
+  // on the pit side until the entry, then down the lane, easing into the
+  // working lane over the last 40 before its bay, where it parks. `entered`
+  // is whether it has already turned in; a car inside the zone that never
+  // took the entry (it was called out past it) goes round again.
+  // Returns { lat, inLane, park }.
+  const TURN_IN = 20;
+  const EASE = 40;
+  function wayIn(lane, d, entered) {
+    const W = lane.halfWidth;
+    const side = lane.side;
+    const r = lane.rel(d);
+    const takingEntry = r >= lane.entry && r <= lane.entry + TURN_IN;
+    if (!entered && !takingEntry) return { lat: side * (W - EDGE_IN), inLane: false, park: false };
+    const park = side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2);
+    const bay = lane.rel(lane.garages.bays[BAYS - 1].d);
+    if (r >= bay) return { lat: park, inLane: true, park: true };
+    const lat = lane.latAt(d);
+    const t = Math.max(0, Math.min(1, (r - (bay - EASE)) / EASE));
+    return { lat: lat + (park - lat) * smooth(t), inLane: true, park: false };
+  }
+
+  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, EDGE_IN, MOUTH, BAY, BAYS, lane, wayIn };
 }));

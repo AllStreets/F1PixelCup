@@ -162,6 +162,7 @@ function trackDefinition(definition) {
     itemBoxes: shape.itemBoxes,
     bridges: shape.bridges,
     world: shape.world,
+    pit: shape.pit,
     // Shortcuts are switched off (shouldUseShortcutRoute), but the route code
     // still expects one; give it a short stub that lies along the circuit.
     shortcut: {
@@ -235,6 +236,8 @@ function trackDefinition(definition) {
     totalLength,
     shortcutCumulativeStarts,
     shortcutTotalLength,
+    // The pit lane (pitlane.js): where it leaves the road, runs and rejoins.
+    pitLane: window.Pit ? Pit.lane(shape.pit, totalLength, roadWidth) : null,
     // Each box knows its distance round the lap, so at Suzuka's crossover a box
     // on one level can't be taken by a car on the other.
     // None may sit on the grid or the qualifying roll-in (grid.js).
@@ -1608,41 +1611,69 @@ function deploySafetyCar(racer, now) {
   const leader = firstUnfinished() || racer;
   const field = state.racers.filter((r) => !r.finished);
   const meanMax = field.reduce((s, r) => s + r.physics.maxSpeed, 0) / Math.max(1, field.length);
+  // A new call brings it back out, from wherever it was (parked in the pits,
+  // or still on its way in).
   state.safetyCar = {
     ownerId: racer.id,
     d: wrapLap((leader.trackDistance || 0) + 90),
     lat: 0,
     speed: meanMax * PowerUps.FACTORS.safetyCar,
+    fieldSpeed: meanMax,
     until: now + PowerUps.TIMINGS.safetyCarMs,
     leaveUntil: 0,
+    inLane: false,
+    parked: false,
   };
   state.lastSafetyCarAt = raceSeconds(now);
   addFeed("Safety Car deployed.");
 }
 
-// While out, it drives the racing line at safety-car pace. Then it pulls off
-// to the edge of the track (there is no pit lane in the circuit geometry yet)
-// and is gone two seconds later.
+// While out, it drives the racing line at safety-car pace. Then it lights
+// down, picks up speed and heads for the pits along the road's edge on the
+// pit side; at the pit entry it turns into the lane, slows to the pit limit
+// and parks at its own bay (pitlane.js), where it stays until called again.
+const SC_LEAVING_PACE = 0.85;
+const SC_PIT_LIMIT = 0.35;
 function updateSafetyCar(dt, now) {
   const sc = state.safetyCar;
-  if (!sc) return;
+  if (!sc || sc.parked) return;
   const route = getItemRoute(state.track);
+  const lane = state.track.pitLane;
   if (now >= sc.until) {
-    if (!sc.leaveUntil) {
-      sc.leaveUntil = now + PowerUps.TIMINGS.safetyCarLeaveMs;
+    if (!sc.leaving) {
+      sc.leaving = true;
       addFeed("Safety Car in this lap. Racing resumes.");
     }
-    // To the edge of the road and no further: never into a barrier.
-    sc.lat = Math.min(route.halfWidthAt(sc.d) - 6, sc.lat + 40 * dt);
-    sc.speed *= Math.pow(0.4, dt);
-    if (now >= sc.leaveUntil) state.safetyCar = null;
+    if (!lane) {
+      // No pit lane to go to: off to the edge of the road, and gone.
+      if (!sc.leaveUntil) sc.leaveUntil = now + PowerUps.TIMINGS.safetyCarLeaveMs;
+      sc.lat = Math.min(route.halfWidthAt(sc.d) - 6, sc.lat + 40 * dt);
+      sc.speed *= Math.pow(0.4, dt);
+      if (now >= sc.leaveUntil) state.safetyCar = null;
+    } else {
+      const way = Pit.wayIn(lane, sc.d, sc.inLane);
+      sc.inLane = way.inLane;
+      if (way.park) {
+        sc.parked = true;
+        sc.lat = way.lat;
+        sc.d = lane.garages.bays[Pit.BAYS - 1].d;
+        sc.speed = 0;
+        sc.pace = 0;
+        return;
+      }
+      // On the road it eases across to the edge; in the lane it follows it.
+      sc.lat = sc.inLane ? way.lat : sc.lat + clamp(way.lat - sc.lat, -40 * dt, 40 * dt);
+      const target = (sc.inLane ? SC_PIT_LIMIT : SC_LEAVING_PACE) * (sc.fieldSpeed || sc.speed);
+      sc.speed += clamp(target - sc.speed, -120 * dt, 60 * dt);
+    }
   } else {
     sc.lat += clamp(0 - sc.lat, -40 * dt, 40 * dt);
   }
   if (!state.safetyCar) return;
-  // It has a body: it slows behind a car in its lane rather than driving through it.
+  // It has a body on the road: it slows behind a car in its lane rather than
+  // driving through it. In the pit lane there is nobody to hold it up.
   const me = { id: "safetyCar", d: sc.d, lat: sc.lat };
-  sc.pace = Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength));
+  sc.pace = sc.inLane ? sc.speed : Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength));
   sc.d = wrapLap(sc.d + sc.pace * dt);
 }
 
@@ -1919,7 +1950,7 @@ function updateRacer(racer, dt, now) {
   // Behind the safety car nobody passes: rivals hold station behind the car
   // ahead. The safety car itself is solid for everyone, the car that called it
   // included -- that car is free to go round it, not through it.
-  if (sc) {
+  if (sc && !sc.inLane && !sc.parked) {
     const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
     const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.pace ?? sc.speed };
     const held = safetyCarActive(now) && racer.id !== sc.ownerId;
@@ -2114,7 +2145,7 @@ function powerUpFrame(now) {
     hazards: state.hazards.map((hazard) => ({ type: hazard.type, ...place(hazard.d, hazard.lat) })),
     trails: state.racers.filter((r) => r.trailingOil && !r.finished)
       .map((r) => ({ ownerId: r.id, ...place(wrapLap((r.trackDistance || 0) - PowerUps.TRAIL_GAP), r.lat) })),
-    safetyCar: state.safetyCar ? { ...place(state.safetyCar.d, state.safetyCar.lat), leaving: now >= state.safetyCar.until } : null,
+    safetyCar: state.safetyCar ? { ...place(state.safetyCar.d, state.safetyCar.lat), leaving: Boolean(state.safetyCar.leaving), parked: Boolean(state.safetyCar.parked) } : null,
     boxHidden: state.track.itemBoxes.map((_, i) => (state.boxHiddenUntil[i] || 0) > now),
     flashes: state.fxFlashes.map((flash) => ({ ...flash, t: (now - flash.at) / (flash.until - flash.at) })),
   };

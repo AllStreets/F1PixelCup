@@ -113,8 +113,12 @@ export function makeSmokeTexture() {
   }, { repeat: false });
 }
 
+// Textures carrying words are marked as print (render3d.js auditPrint: no
+// double-sided print may read backwards).
+const asPrint = (tex) => { tex.userData.print = true; return tex; };
+
 export function makeAdvertTexture(colours, words) {
-  return canvasTexture(512, 64, (g, w, h) => {
+  return asPrint(canvasTexture(512, 64, (g, w, h) => {
     const n = colours.length;
     for (let i = 0; i < n; i += 1) {
       g.fillStyle = colours[i];
@@ -126,13 +130,13 @@ export function makeAdvertTexture(colours, words) {
       g.textBaseline = "middle";
       g.fillText(words[i % words.length], (i + 0.5) * w / n, h / 2 + 2);
     }
-  });
+  }));
 }
 
 export function makeBillboardTexture(accent, seed) {
   const rand = seeded(seed);
   const words = ["F1", "PIXEL", "CUP", "SPEED", "GRID", "APEX", "DRS", "POLE"];
-  return canvasTexture(512, 128, (g, w, h) => {
+  return asPrint(canvasTexture(512, 128, (g, w, h) => {
     g.fillStyle = accent;
     g.fillRect(0, 0, w, h);
     g.fillStyle = "rgba(0,0,0,0.78)";
@@ -140,7 +144,7 @@ export function makeBillboardTexture(accent, seed) {
     g.textAlign = "center";
     g.textBaseline = "middle";
     g.fillText(`${words[Math.floor(rand() * words.length)]} ${words[Math.floor(rand() * words.length)]}`, w / 2, h / 2 + 4);
-  }, { repeat: false });
+  }, { repeat: false }));
 }
 
 export function makeCrowdTexture(seed) {

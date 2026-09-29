@@ -28,17 +28,28 @@ It ships in three parts, each reviewed and merged on its own:
 
 ### The data (`tools/tracks/build_tracks.py`)
 
-`place_pit_lane(pts, bridges)` writes `pit: { side, entry, exit }` for each circuit:
+`place_pit_lane(pts, bridges, report)` writes `pit: { side, entry, exit }` for each circuit:
 - `side` is +1 or −1, along the normal `n = (−ty, tx)`, the convention of `r3d/track.js` and `powerups.js`;
-- `entry` is the lap distance where the lane leaves the road, before the line;
-- `exit` is where it rejoins, after the line.
+- `entry` and `exit` are where the lane leaves and rejoins the road, as signed distances from the line.
 
-It tries both sides and a ladder of lengths, starting at entry −560 / exit +320 and shortening to −300 / +160. It keeps the longest lane that passes on either side, preferring the side with more room. Every point from the pit wall out to the back of the garages must be:
+**Where it fits.** At every point of the start/finish stretch, from 900 before the line to 440 after it (just short of the first item boxes at 450), and on each side, it works out whether the lane and working lane fit (out to W + 59) and whether the garages fit as well (out to W + 95). A point fits when it is:
 - at least 40 units clear of the road edge of any other stretch of the lap (more than 300 units away round the lap);
-- never on the inside of a bend tighter than the garages' outer offset + 30, so the lane never folds;
-- clear of any bridge (the same 7-point rule as the item boxes).
+- not on the inside of a bend tighter than its reach + 30, so the lane never folds;
+- more than 7 points plus a mouth's length from a bridge.
 
-`place_scenery` skips anything on the pit complex's footprint, so the grandstands on that side move clear. The constants live in `pitlane.js` and in `build_tracks.py`, and `tests/pitlane.test.js` checks they agree (as with `START_ZONE_BEFORE`).
+**Which lane wins.** The lane must be at least two mouths plus eleven bays long (650), and at most 1100. Among the lanes that fit:
+1. one that spans the line wins, as real ones do;
+2. then the longest;
+3. then the one best centred on the line.
+
+- Ruling: Monaco's stretch bends hard right after the line (radius 76 to 136 on the pit side, where the pit complex reaches out 108). Its lane therefore runs from 900 to 210 before the line: Anthony Noghes onto the start straight. Every other circuit's lane spans the line. Cost if wrong: Monaco's pits sit a little up the road from the line.
+
+**Keeping clear of the lane.**
+- `place_scenery` skips anything on the pit complex's footprint, which moved two of Monza's eleven grandstands.
+- `place_item_boxes` keeps its rows out of the zone.
+- The circuit points themselves are unchanged.
+
+The constants live in `pitlane.js` and in `build_tracks.py`, and `tests/pitlane.test.js` checks they agree (as with `START_ZONE_BEFORE`).
 
 ### The shape (`pitlane.js`, UMD like `quality.js`)
 
@@ -68,12 +79,17 @@ Lateral offsets from the centreline, where the road's half-width is W = 49.5:
 - **The garages** replace today's `pitBuilding`, in `landmarks.js`:
   - one bay per team (10), in team colours, opening onto the working lane;
   - a hospitality floor above, and the circuit's name (Silverstone keeps the Wing roof);
-  - the Safety Car's own bay by the exit.
+  - the Safety Car's own bay by the exit;
+  - each bay is a straight box on a lane that may curve, so its front stands 4 back from the working lane and no corner reaches over it;
+  - the roofs stop at the garages' front, and are light grey rather than white, because the sun on white blooms to a glare.
+- **Print reads forward from both sides.** Double-sided print (the advert barriers, billboards and the gantry banner) flips its texture on back faces (`readsBothWays` in `r3d/track.js`). A billboard seen from behind across a corner no longer reads "ᗡƎƎqS".
 - `auditScenery` gains the lane: its rays already span `−outerL … outerR`, which now includes the lane.
 
 ### The safety car (`game.js`)
 
-- **Leaving.** When its time is up, the safety car turns off its lights, speeds up to 0.85 of the field's mean top speed and moves to the pit side of the road (`lat → side × (W − 6)`). At the pit entry it follows `latAt(d)` down the lane, slowing to the pit limit (0.35 of the mean top speed). It stops at its bay and stays parked there, lights off, until it is next called out.
+- **Leaving.** When its time is up, the safety car turns off its lights, speeds up to 0.85 of the field's mean top speed and moves to the pit side of the road (`lat → side × (W − 6)`). At the pit entry it turns in and follows the lane, slowing to the pit limit (0.35 of the mean top speed). Over the last 40 before its bay it eases into the working lane, then stops in front of its garage. It stays parked there, lights off, until it is next called out.
+  - The route is `Pit.wayIn(lane, d, entered)`, a pure helper in `pitlane.js` (the spec's `PowerUps.safetyCarLeaveLat`, which belongs with the lane).
+  - If the safety car is already inside the zone when called in, having never taken the entry, it goes round again.
 - **The feed** says "Safety Car in this lap. Racing resumes." as it does today.
 - **Its body.** While it is on the road it is solid, as now (`holdStationSpeed` by lane). Once in the lane it is past the road's edge, so no car is held by it.
 - **A new call** while it is still on its way in, or parked, sends it back out at the leader (as a call does today).
@@ -86,10 +102,19 @@ Lateral offsets from the centreline, where the road's half-width is W = 49.5:
   - at every point of the lane, independently recomputed from the points, the pit wall and garages are clear of every other stretch;
   - `latAt` is continuous, starts and ends at the road's edge, and is flat through the middle;
   - no item box lies in the zone's mouths.
-- **Node** (safety-car path, a pure helper `PowerUps.safetyCarLeaveLat(d, pit, halfWidth)`): before the entry it holds the road's edge on the pit side; in the zone it follows `latAt`.
+- **Node** (the safety car's path, `Pit.wayIn`):
+  - before the entry it holds the road's edge on the pit side;
+  - inside the zone without having taken the entry, it stays on the road;
+  - at the entry it turns in and follows `latAt`;
+  - past its bay it parks in the working lane;
+  - both sides are covered.
 - **Browser:**
-  - `powerups-check`: `safetyCarStaysOnRoad` becomes `safetyCarGoesIntoPitLane`. The safety car enters the lane at the entry (its lateral position passes the pit wall only inside the zone), parks at its bay, and never crosses a barrier;
-  - `minors-check` or the new `trackside-check.js`: `auditScenery` is 0 on all 8 circuits, and the pit lane is visible from the chase camera on the main straight.
+  - `powerups-check`, `safetyCarGoesIntoPitLane`, on all 8 circuits: the safety car stays on the road until the entry, turns in there, is off the road only inside the zone, never passes through the pit wall or past the boundary, and parks at its bay. `safetyCarLeaves` has it park with the whole race running.
+  - `trackside-check.js`:
+    - `pitsOnEveryCircuit` (`Render3D.auditPits`): eleven bays with the Safety Car's last, garages clear of every road beyond the working lane, and ten stands at least 5 beyond the road's edge;
+    - `sceneryClearWithPits`: `auditScenery` 0, and the advert barriers loop-free and reading forward;
+    - `noPrintReadsBackwards` (`Render3D.auditPrint`): it failed with the billboards unwrapped;
+    - `safetyCarParksAtItsGarage`: drawn with its lights flashing while out, lights off in the lane, then parked within 3 of its bay.
 - **Screenshots:** each circuit's pit lane from the main straight.
 
 ---

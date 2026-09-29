@@ -134,3 +134,26 @@ test("no item box sits in the pit lane's mouths", () => {
     });
   });
 });
+
+test("the Safety Car's way in: the road's edge on the pit side, then the lane, then its bay", () => {
+  const lane = Pit.lane({ side: 1, entry: -600, exit: 400 }, 6000, W);
+  const bay = lane.garages.bays.find((b) => b.safetyCar);
+  const edge = W - Pit.EDGE_IN;
+  // Not yet in the lane: the road's edge on the pit side, wherever it is.
+  assert.deepEqual(Pit.wayIn(lane, 3000, false), { lat: edge, inLane: false, park: false });
+  // Inside the zone but it never took the entry (it was called out past it):
+  // it stays on the road and goes round again.
+  assert.deepEqual(Pit.wayIn(lane, 0, false), { lat: edge, inLane: false, park: false });
+  // At the entry it turns in, and follows the lane from there.
+  const turn = Pit.wayIn(lane, 6000 - 600 + 5, false);
+  assert.equal(turn.inLane, true);
+  assert.ok(Math.abs(turn.lat - lane.latAt(6000 - 595)) < 1e-9);
+  assert.ok(Math.abs(Pit.wayIn(lane, 0, true).lat - lane.latAt(0)) < 1e-9);
+  // Past its bay it stops there, in the working lane in front of its garage.
+  const parked = Pit.wayIn(lane, bay.d + 1, true);
+  assert.equal(parked.park, true);
+  assert.equal(parked.lat, W + (Pit.LANE_CENTRE + Pit.LANE_HALF + Pit.WORK_OUT) / 2);
+  // On the left, the same, mirrored.
+  const left = Pit.lane({ side: -1, entry: -600, exit: 400 }, 6000, W);
+  assert.equal(Pit.wayIn(left, 3000, false).lat, -edge);
+});

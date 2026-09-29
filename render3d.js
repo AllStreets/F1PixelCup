@@ -137,7 +137,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -212,6 +212,62 @@ function auditAdverts(track) {
     out.push({ side: m.userData.advertSide, readsBothWays: Boolean(m.material.userData.readsBothWays), quads: index.count / 6, backwards, onRoad, loops });
   });
   return out;
+}
+
+// The pit complex, for the checks: the garages (eleven bays, the Safety
+// Car's nearest the exit) stand beyond the working lane, and nothing of the
+// pit wall's stands reaches over any road. Distances are from the nearest
+// point of any stretch of the lap, so a garage can't sit on another road.
+function auditPits(track) {
+  const world = ensureWorld(track);
+  const { course } = world;
+  const lane = course.pitLane;
+  world.group.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  // The closest any vertex of an object comes to a road's centreline.
+  const closest = (obj) => {
+    let best = Infinity;
+    obj.traverse((m) => {
+      if (!m.isMesh) return;
+      const pos = m.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i += 1) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+        const p = course.nearestSample(v.x, v.z);
+        if (p && Math.abs(v.y - p.h) < 30) best = Math.min(best, Math.hypot(p.x - v.x, p.y - v.z));
+      }
+    });
+    return best;
+  };
+  const bays = [];
+  world.landmarks.traverse((o) => { if (o.userData.bay) bays.push(o); });
+  bays.sort((a, b) => a.userData.bay.index - b.userData.bay.index);
+  const pitGroup = world.circuit.getObjectByName("pitLane");
+  const stands = pitGroup ? pitGroup.children.filter((c) => c.isGroup) : [];
+  return {
+    lane: lane ? { side: lane.side, entry: lane.entry, exit: lane.exit } : null,
+    bays: bays.length,
+    safetyCarBayLast: bays.length > 0 && bays[bays.length - 1].userData.bay.safetyCar && bays.filter((b) => b.userData.bay.safetyCar).length === 1,
+    garagesFromRoad: Math.round(Math.min(...bays.map(closest))),
+    garagesNeed: Math.round(course.width + Pit.WORK_OUT),
+    stands: stands.length,
+    standsFromRoad: Math.round(Math.min(...stands.map(closest))),
+    roadEdge: course.width,
+  };
+}
+
+// Print (textures with words, marked by r3d/textures.js and the signs) must
+// never read backwards: anything double-sided showing it flips it on its
+// back faces (r3d/track.js readsBothWays). Lists what doesn't.
+function auditPrint(track) {
+  const world = ensureWorld(track);
+  const found = { print: 0, backwards: [] };
+  world.group.traverse((m) => {
+    const mat = m.material;
+    if (!m.isMesh || !mat || !mat.map || !mat.map.userData.print) return;
+    found.print += 1;
+    if (mat.side === THREE.DoubleSide && !mat.userData.readsBothWays) found.backwards.push(m.name || m.parent?.name || m.geometry.type);
+  });
+  return found;
 }
 
 // What is on screen right now, for the browser checks.

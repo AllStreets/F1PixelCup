@@ -150,6 +150,20 @@ export function buildCourse(track) {
     p.outerL = Math.max(width + 10, Math.min(runoffBase, left - 3));
   });
 
+  // The pit complex is part of the circuit: through its zone the pit side
+  // reaches out to the working lane, in front of the garages. So the run-off,
+  // the barrier line, clearance() -- and with it every piece of scenery and
+  // the scenery audit -- take it in. The track data made sure there is room.
+  const pitLane = track.pitLane || null;
+  if (pitLane) {
+    samples.forEach((p) => {
+      const reach = pitLane.outerAt(p.d);
+      if (reach === null) return;
+      if (pitLane.side > 0) p.outerR = Math.max(p.outerR, reach);
+      else p.outerL = Math.max(p.outerL, reach);
+    });
+  }
+
   // Kerbs where the track bends, grown a little so they start before turn-in.
   const corner = samples.map((p) => Math.abs(p.curve) > 0.0022);
   const kerbOn = samples.map((_, i) => {
@@ -197,7 +211,7 @@ export function buildCourse(track) {
   });
 
   return {
-    track, width, street, runoffBase, samples, kerbOn, heightAt, heightAtPoint, sampleAt,
+    track, width, street, runoffBase, samples, kerbOn, heightAt, heightAtPoint, sampleAt, pitLane,
     clearance, nearestSample,
     bounds: { minX, maxX, minZ, maxZ, cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2 },
     occupied: new Occupancy(),
@@ -359,20 +373,28 @@ function kerbMaterial(a, b) {
   });
 }
 
-// A barrier printed with adverts on both faces. Every wall's front faces
-// point along +n (the lap runs along its length, the wall stands up), and the
-// print runs with the lap, so it reads forward from the front; on the back it
-// would read backwards, so there the print is flipped. Whichever side a
-// barrier is seen from -- the track, or another stretch across it -- its
-// words run forward.
-function advertBarrierMaterial(map) {
-  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.6, side: THREE.DoubleSide });
+// Print that reads forward from both sides of a double-sided surface: on its
+// back faces the texture is flipped left to right (and its glow with it), so
+// a banner or barrier seen from behind doesn't read backwards.
+export function readsBothWays(mat) {
+  const flip = (chunk, uv) => chunk.replace(`( map, ${uv} )`, `( map, gl_FrontFacing ? ${uv} : vec2( 1.0 - ${uv}.x, ${uv}.y ) )`)
+    .replace(`( emissiveMap, ${uv} )`, `( emissiveMap, gl_FrontFacing ? ${uv} : vec2( 1.0 - ${uv}.x, ${uv}.y ) )`);
   mat.userData.readsBothWays = true;
   mat.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>",
-      THREE.ShaderChunk.map_fragment.replace("texture2D( map, vMapUv )", "texture2D( map, gl_FrontFacing ? vMapUv : vec2( -vMapUv.x, vMapUv.y ) )"));
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <map_fragment>", flip(THREE.ShaderChunk.map_fragment, "vMapUv"))
+      .replace("#include <emissivemap_fragment>", flip(THREE.ShaderChunk.emissivemap_fragment, "vEmissiveMapUv"));
   };
   return mat;
+}
+
+// A barrier printed with adverts on both faces. Every wall's front faces
+// point along +n (the lap runs along its length, the wall stands up), and the
+// print runs with the lap, so it reads forward from the front; from the back
+// it is flipped. Whichever side a barrier is seen from -- the track, or
+// another stretch across it -- its words run forward.
+function advertBarrierMaterial(map) {
+  return readsBothWays(new THREE.MeshStandardMaterial({ map, roughness: 0.6, side: THREE.DoubleSide }));
 }
 
 // ---------------------------------------------------------------------------
@@ -433,10 +455,19 @@ export function buildCircuit(course, venue) {
   const advertTex = makeAdvertTexture([bg.curbA || "#dc0000", "#f4f4f4", bg.accent || "#ffe08a", "#1b1b24"], ["F1", "PIXEL", "CUP", "2025"]);
   const barrierH = course.street ? 8 : 7;
   const barrierMat = advertBarrierMaterial(advertTex);
-  [["left", (p) => -p.outerL - 1], ["right", (p) => p.outerR + 1]].forEach(([side, off]) => {
-    const m = mesh(wall(samples, off, c(0), c(barrierH), 150), barrierMat, { cast: true });
+  const pitLane = course.pitLane;
+  // Along the garages' frontage the garages are the boundary: no barrier.
+  const atGarages = (p) => {
+    if (!pitLane) return false;
+    const r = pitLane.rel(p.d);
+    return r >= pitLane.garages.from - 4 && r <= pitLane.garages.to + 4;
+  };
+  [["left", (p) => -p.outerL - 1, -1], ["right", (p) => p.outerR + 1, 1]].forEach(([side, off, sign]) => {
+    const onPitSide = pitLane && pitLane.side === sign;
+    const m = mesh(wall(samples, off, c(0), c(barrierH), 150, onPitSide ? (p) => !atGarages(p) : undefined), barrierMat, { cast: true });
     m.userData.advertSide = side;
   });
+  if (pitLane) group.add(buildPitLane(course, pitLane, occluders));
   if (course.street) {
     const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
     fenceTex.repeat.set(1, 3);
@@ -514,6 +545,76 @@ export function buildCircuit(course, venue) {
   return group;
 }
 
+// The pit lane (pitlane.js has the shape): its tarmac and lines, the pit wall
+// with the teams' stands on it. The garages are in r3d/landmarks.js.
+function buildPitLane(course, lane, occluders) {
+  const group = new THREE.Group();
+  group.name = "pitLane";
+  const { samples, width } = course;
+  const side = lane.side;
+  const inZone = (p) => lane.inZone(p.d);
+  const add = (geo, mat, opts = {}) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.receiveShadow = opts.receive !== false;
+    m.castShadow = Boolean(opts.cast);
+    group.add(m);
+    return m;
+  };
+  // Tarmac: from the lane's inner edge out to the front of the garages. In
+  // the mouths it runs under the road (which sits higher), so it meets the
+  // road without a seam.
+  const tarmac = new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color("#6a6a70"), roughness: 0.9, side: THREE.DoubleSide });
+  add(ribbon(samples, (p) => side * (Math.abs(lane.latAt(p.d)) - lane.laneHalf), (p) => side * lane.outerAt(p.d), 0.1, 60, inZone), tarmac);
+  // Lines: the lane's inner edge where it has left the road, and the dashed
+  // line between the fast lane and the working lane along the flat part.
+  const paint = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide });
+  const edge = (p) => Math.abs(lane.latAt(p.d)) - lane.laneHalf;
+  add(ribbon(samples, (p) => side * edge(p), (p) => side * (edge(p) + 1.6), 0.16, 50, (p) => inZone(p) && edge(p) > width + 1), paint);
+  const fast = width + Pit.LANE_CENTRE + Pit.LANE_HALF;
+  const flat = (p) => {
+    const r = lane.rel(p.d);
+    return r >= lane.flatFrom && r <= lane.flatTo;
+  };
+  add(ribbon(samples, () => side * (fast - 0.8), () => side * (fast + 0.8), 0.16, 50, (p) => flat(p) && Math.floor(p.d / 12) % 2 === 0), paint);
+  // The pit wall: concrete, where the lane has cleared it; a catch fence on
+  // top. Its two faces and a cap.
+  const concrete = new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide });
+  const hasWall = (p) => lane.wallAt(p.d) !== null;
+  const wallIn = width + Pit.WALL_IN;
+  const wallOut = width + Pit.WALL_OUT;
+  const wallH = 6;
+  [wallIn, wallOut].forEach((o) => occluders.push(add(wall(samples, () => side * o, () => 0, () => wallH, 40, hasWall), concrete, { cast: true })));
+  add(ribbon(samples, () => side * wallIn, () => side * wallOut, wallH, 40, hasWall), concrete);
+  const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
+  add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, hasWall), fence);
+  // The teams' stands on the wall, one opposite each garage: a desk under a
+  // roof that sits over the wall and the lane's edge, never the road.
+  const standMat = new THREE.MeshStandardMaterial({ color: 0x2a2d34, roughness: 0.5, metalness: 0.3 });
+  // Light, short of white: the sun on white would bloom to a glare.
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0xcfd0d4, roughness: 0.6 });
+  lane.garages.bays.forEach((bay) => {
+    if (bay.safetyCar) return;
+    const p = course.sampleAt(bay.d);
+    const stand = new THREE.Group();
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(14, 3, 4), standMat);
+    desk.position.set(0, wallH + 1.5, side * 2);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(18, 0.8, 7), roofMat);
+    roof.position.set(0, wallH + 9, side * 3.5);
+    [-7, 7].forEach((u) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 9, 0.6), standMat);
+      post.position.set(u, wallH + 4.5, side * 6);
+      stand.add(post);
+    });
+    stand.add(desk, roof);
+    stand.children.forEach((m) => { m.castShadow = true; });
+    // Local x along the lap, local z across it (toward the pit side).
+    stand.position.set(p.x + p.nx * side * wallIn, p.h, p.y + p.ny * side * wallIn);
+    stand.rotation.y = -Math.atan2(p.ty, p.tx);
+    group.add(stand);
+  });
+  return group;
+}
+
 function buildGantry(start, halfSpan, angle) {
   const g = new THREE.Group();
   const steel = new THREE.MeshStandardMaterial({ color: 0x2a2a32, metalness: 0.6, roughness: 0.4 });
@@ -547,7 +648,8 @@ function buildGantry(start, halfSpan, angle) {
     cx.textBaseline = "middle";
     cx.fillText("F1 PIXEL CUP", w / 2, h / 2 + 2);
   }, { repeat: false });
-  const banner = new THREE.Mesh(new THREE.PlaneGeometry(span * 0.7, 6), new THREE.MeshStandardMaterial({ map: bannerTex, side: THREE.DoubleSide }));
+  bannerTex.userData.print = true;
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(span * 0.7, 6), readsBothWays(new THREE.MeshStandardMaterial({ map: bannerTex, side: THREE.DoubleSide })));
   banner.position.set(-2.6, 51, 0);
   banner.rotation.y = -Math.PI / 2;
   g.add(banner);
@@ -646,10 +748,10 @@ function buildDecorPiece(d, bg, venue, i) {
     add(new THREE.BoxGeometry(2, 30, 2), std(0x3a3a40), -20, 15, 0);
     add(new THREE.BoxGeometry(2, 30, 2), std(0x3a3a40), 20, 15, 0);
     const tex = makeBillboardTexture(bg.accent || "#ffe08a", i + 7);
-    const board = new THREE.Mesh(new THREE.PlaneGeometry(60, 16), new THREE.MeshStandardMaterial({
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(60, 16), readsBothWays(new THREE.MeshStandardMaterial({
       map: tex, side: THREE.DoubleSide,
       emissive: venue.night ? 0xffffff : 0x000000, emissiveIntensity: venue.night ? 0.35 : 0, emissiveMap: venue.night ? tex : null,
-    }));
+    })));
     board.position.set(0, 34, -1.2);
     board.rotation.y = Math.PI;
     board.castShadow = true;

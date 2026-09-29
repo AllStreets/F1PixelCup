@@ -99,59 +99,58 @@ function pushClear(course, x, z, radius, margin = 40) {
   return null;
 }
 
-// Place a long building beside the lap. Tries each side of a stretch of the
-// lap and shorter lengths until the whole footprint is clear.
-function placeAlongside(course, centreDistance, lengths, depth, gap) {
-  for (const len of lengths) {
-    for (const side of [1, -1]) {
-      const p = course.sampleAt(centreDistance);
-      const outer = side > 0 ? p.outerR : p.outerL;
-      const off = side * (outer + gap + depth / 2);
-      const x = p.x + p.nx * off;
-      const z = p.y + p.ny * off;
-      const angle = Math.atan2(p.ty, p.tx);
-      if (!footprintClear(course, x, z, angle, len / 2, depth / 2, 4)) continue;
-      if (course.occupied.blocked(x, z, depth / 2)) continue;
-      // Claim the footprint as a row of circles.
-      for (let u = -len / 2; u <= len / 2; u += depth) {
-        course.occupied.add(x + Math.cos(angle) * u, z + Math.sin(angle) * u, depth / 2 + 4);
-      }
-      // Local -Z must face the track: face = direction from building to track.
-      const face = Math.atan2(p.y - z, p.x - x);
-      return { x, z, len, rotation: -face - Math.PI / 2 };
-    }
-  }
-  return null;
-}
-
 const TEAM_COLOURS = ["#1e41b2", "#dc0000", "#ff8000", "#00d2be", "#006f62", "#0090ff", "#005aff", "#e8002d", "#6692ff", "#39ff14"];
 
-function pitBuilding(course, group, venue) {
-  const spot = placeAlongside(course, course.track.totalLength - 170, [340, 260, 180], 40, 26);
-  if (!spot) return;
-  const g = new THREE.Group();
-  const len = spot.len;
+// The garages, behind the pit lane's working lane (pitlane.js): one bay per
+// team and the Safety Car's by the exit, following the lane round, with the
+// hospitality floor above and the circuit's name on the front.
+function garages(course, group, venue) {
+  const lane = course.pitLane;
+  if (!lane) return;
+  const { garages: g } = lane;
+  const side = lane.side;
+  // Each bay is a straight box on a lane that may curve: its front stands 4
+  // back from the working lane, so its corners never reach over it.
+  const front = g.inner + 4;
+  const depth = g.outer - front;
+  const mid = (front + g.outer) / 2;
   const wing = venue.pit === "wing";
-  addMesh(g, new THREE.BoxGeometry(len, 12, 40), std(0xd9d9dd), 0, 6, 0);
-  // Garage doors in team colours, then a glazed hospitality floor.
-  const bays = Math.floor(len / 30);
-  for (let b = 0; b < bays; b += 1) {
-    const x = -len / 2 + 15 + b * 30;
-    addMesh(g, new THREE.BoxGeometry(24, 9, 1), std(color(TEAM_COLOURS[b % TEAM_COLOURS.length]), { roughness: 0.4 }), x, 5, -20.2, { cast: false });
-  }
-  addMesh(g, new THREE.BoxGeometry(len, 10, 38), std(0x5f7f9f, { metalness: 0.6, roughness: 0.15, emissive: venue.night ? 0x886644 : 0x000000, emissiveIntensity: 0.5 }), 0, 17, 1);
-  if (wing) {
-    // Silverstone's Wing: a flowing roof like an aerofoil.
-    const roofMat = std(0xf2f2f2, { roughness: 0.4 });
-    for (let s = 0; s < 24; s += 1) {
-      const x = -len / 2 + (s + 0.5) * (len / 24);
-      const lift = Math.sin((s / 23) * Math.PI) * 10;
-      const r = addMesh(g, new THREE.BoxGeometry(len / 24 + 0.6, 2, 56), roofMat, x, 25 + lift, -2);
+  const shell = std(0xd9d9dd);
+  const glass = std(0x5f7f9f, { metalness: 0.6, roughness: 0.15, emissive: venue.night ? 0x886644 : 0x000000, emissiveIntensity: 0.5 });
+  const inside = std(0x1c1d22, { roughness: 0.9 });
+  // Light roofs, short of white: the sun on white would bloom to a glare.
+  const roofMat = std(wing ? 0xdadade : 0xcfd0d4, { roughness: 0.55 });
+  g.bays.forEach((bay, i) => {
+    const p = course.sampleAt(bay.d);
+    const b = new THREE.Group();
+    const colour = bay.safetyCar ? "#c9ced6" : TEAM_COLOURS[i % TEAM_COLOURS.length];
+    // Local x along the lap, local z out from the lane (away from the road).
+    addMesh(b, new THREE.BoxGeometry(30.4, 12, depth), shell, 0, 6, 0);
+    // The open door: a dark bay framed in the team's colour, lit inside.
+    addMesh(b, new THREE.BoxGeometry(24, 9, 0.6), inside, 0, 4.5, -depth / 2 - 0.2, { cast: false });
+    const frame = std(color(colour), { roughness: 0.4, emissive: color(colour), emissiveIntensity: venue.night ? 0.35 : 0.08 });
+    addMesh(b, new THREE.BoxGeometry(26, 1.4, 0.8), frame, 0, 9.7, -depth / 2 - 0.3, { cast: false });
+    [-12.6, 12.6].forEach((x) => addMesh(b, new THREE.BoxGeometry(1.2, 9, 0.8), frame, x, 4.5, -depth / 2 - 0.3, { cast: false }));
+    addMesh(b, new THREE.BoxGeometry(30.4, 10, depth - 2), glass, 0, 17, 1);
+    // The roofs stop at the garages' front: nothing hangs over the lane.
+    if (wing) {
+      // Silverstone's Wing: the roof rises and falls like an aerofoil, its
+      // sweep reaching back, away from the lane.
+      const lift = Math.sin(((i + 0.5) / g.bays.length) * Math.PI) * 10;
+      const r = addMesh(b, new THREE.BoxGeometry(31, 2, depth + 10), roofMat, 0, 25 + lift, 5.5);
       r.rotation.x = -0.12;
+    } else {
+      addMesh(b, new THREE.BoxGeometry(31, 2, depth), roofMat, 0, 23, 0);
     }
-  } else {
-    addMesh(g, new THREE.BoxGeometry(len + 6, 2, 46), std(0xeeeeee), 0, 23, -1);
-  }
+    b.position.set(p.x + p.nx * side * mid, p.h, p.y + p.ny * side * mid);
+    // Local +z points away from the road: along +n on the right, -n on the left.
+    b.rotation.y = -Math.atan2(p.ty, p.tx) + (side > 0 ? 0 : Math.PI);
+    b.userData.bay = { index: i, safetyCar: bay.safetyCar, d: bay.d };
+    group.add(b);
+    course.occupied.add(b.position.x, b.position.z, Math.hypot(15, depth / 2) + 2);
+  });
+  // The circuit's name across the middle of the front.
+  const centre = course.sampleAt(g.bays[Math.floor(g.bays.length / 2)].d);
   const signTex = canvasTexture(1024, 96, (cx, w, h) => {
     cx.fillStyle = "#111";
     cx.fillRect(0, 0, w, h);
@@ -161,13 +160,13 @@ function pitBuilding(course, group, venue) {
     cx.textBaseline = "middle";
     cx.fillText(wing ? "THE WING" : course.track.name.toUpperCase(), w / 2, h / 2 + 2);
   }, { repeat: false });
-  const sign = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(len * 0.6, 200), 8), new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveIntensity: venue.night ? 0.6 : 0.1, emissiveMap: signTex }));
-  sign.position.set(0, 17, -20.3);
-  sign.rotation.y = Math.PI;
-  g.add(sign);
-  g.position.set(spot.x, 0, spot.z);
-  g.rotation.y = spot.rotation;
-  group.add(g);
+  signTex.userData.print = true;
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(150, 7), new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveIntensity: venue.night ? 0.6 : 0.1, emissiveMap: signTex }));
+  const face = front - 0.4;
+  sign.position.set(centre.x + centre.nx * side * face, centre.h + 17, centre.y + centre.ny * side * face);
+  // Facing the lane: toward the road.
+  sign.rotation.y = -Math.atan2(centre.ty, centre.tx) + (side > 0 ? Math.PI : 0);
+  group.add(sign);
 }
 
 function hills(course, group, { tint, count, height, flat }, rand) {
@@ -574,7 +573,7 @@ export function buildLandmarks(course, venue) {
   const group = new THREE.Group();
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
   const animated = [];
-  pitBuilding(course, group, venue);
+  garages(course, group, venue);
   (venue.extras || []).forEach((name) => {
     const made = EXTRAS[name]?.(course, group, venue, rand);
     if (made?.userData?.animate) animated.push(made);

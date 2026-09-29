@@ -295,7 +295,7 @@ export function createPowerUpLayer(scene) {
   safetyCar.visible = false;
   group.add(safetyCar);
   let quality = "high";
-  const shown = { shots: 0, hazards: 0, trails: 0, safetyCar: false, flashes: 0, visibleFromGlb: 0 };
+  const shown = { shots: 0, hazards: 0, trails: 0, safetyCar: false, safetyCarAt: null, flashes: 0, visibleFromGlb: 0 };
 
   // The models landed: everything already made swaps its stand-in.
   whenItemsReady(() => {
@@ -416,7 +416,9 @@ export function createPowerUpLayer(scene) {
     safetyCar.visible = Boolean(sc);
     if (sc) {
       place(safetyCar, sc, course, 0);
-      const blink = Math.floor(now / 180) % 2;
+      // Its lights flash while it leads the field, and go out once it is
+      // called in.
+      const blink = sc.leaving ? -1 : Math.floor(now / 180) % 2;
       safetyCar.userData.lamps.forEach((lamp, i) => { lamp.material.emissiveIntensity = i === blink ? 3 : 0.2; });
     }
 
@@ -454,6 +456,8 @@ export function createPowerUpLayer(scene) {
     shown.hazards = oil.filter((m) => m.visible).length;
     shown.trails = trails.filter((m) => m.visible).length;
     shown.safetyCar = safetyCar.visible;
+    // Where it is drawn, and whether its lights flash, for the checks.
+    shown.safetyCarAt = sc ? { x: safetyCar.position.x, z: safetyCar.position.z, flashing: !sc.leaving } : null;
     shown.flashes = flashes.filter((m) => m.visible).length;
     const fromGlb = (m) => m.visible && m.userData.body && m.userData.body.userData.fromGlb;
     shown.visibleFromGlb = [...Object.values(shots).flat(), ...oil, ...trails, safetyCar].filter(fromGlb).length;
