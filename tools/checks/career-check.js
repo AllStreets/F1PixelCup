@@ -5,6 +5,12 @@
 // counted once (careerAfterSecondPodium === careerAfterCup), quitRecorded 0,
 // no errors.
 async (page) => {
+  // Keep the test tool's own empty tab (about:blank) out of the way.
+  try {
+    const own = await page.context().newCDPSession(page);
+    const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
+    await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
+  } catch (e) { /* not fatal */ }
   const errors = [];
   const context = await page.context().browser().newContext({ viewport: null });
   const p = await context.newPage();

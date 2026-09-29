@@ -37,7 +37,27 @@ function fitViewToElement() {
 const ui = {
   canvasShell: document.getElementById("canvas-shell"),
   countdownBanner: document.getElementById("countdown-banner"),
+  viewLoading: document.getElementById("view-loading"),
 };
+
+// Which view draws the world. "loading" until the 3D renderer is ready (only a
+// loading state shows, never the old 2D car), "2d" only if 3D reports that it
+// failed or never answers at all.
+const BOOT_AT = performance.now();
+const VIEW_TIMEOUT_MS = 10000;
+function worldView() {
+  const renderer = window.Render3D;
+  if (renderer && renderer.ready) return "3d";
+  if ((renderer && renderer.failed) || performance.now() - BOOT_AT > VIEW_TIMEOUT_MS) return "2d";
+  return "loading";
+}
+
+function showViewLoading(where) {
+  if (!ui.viewLoading) return;
+  const loading = where !== null;
+  if (ui.viewLoading.hidden === loading) ui.viewLoading.hidden = !loading;
+  if (loading && ui.viewLoading.dataset.where !== where) ui.viewLoading.dataset.where = where;
+}
 
 const TAU = Math.PI * 2;
 
@@ -143,6 +163,12 @@ function trackDefinition(definition) {
     totalLength,
     shortcutCumulativeStarts,
     shortcutTotalLength,
+    // Each box knows its distance round the lap, so at Suzuka's crossover a box
+    // on one level can't be taken by a car on the other.
+    itemBoxes: options.itemBoxes.map((box) => ({
+      ...box,
+      d: box.d ?? getRouteDistanceForPoint(box, segments, cumulativeStarts),
+    })),
   };
 }
 
@@ -200,6 +226,8 @@ const state = {
   lastSafetyCarAt: null,
   boxHiddenUntil: [],
   fxFlashes: [],
+  simOffset: 0,
+  fallbackFrames: 0,
   particles: [],
   countdownStart: 0,
   raceStart: 0,
@@ -226,6 +254,7 @@ const state = {
 };
 
 const input = {
+  space: false,
   throttle: false,
   brake: false,
   left: false,
@@ -737,6 +766,7 @@ function startRace(index) {
   state.lastSafetyCarAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
+  state.simOffset = 0;
   state.particles = [];
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
@@ -839,7 +869,16 @@ function getRaceProgress(racer) {
 // glows, flaps and flashes hold still on the pause screen instead of running
 // out behind it (their deadlines are shifted when the race resumes).
 function renderClock() {
-  return state.paused && state.pausedAt ? state.pausedAt : performance.now();
+  return raceNow();
+}
+
+// The race clock: wall time, frozen while paused, plus how far the
+// fast-forward after the chequered flag has run the field ahead of it. Every
+// deadline in the race (spins, boosts, shots, oil, the safety car, lap and
+// finish times) is on this clock, so fast-forwarded cars are timed truly.
+function raceNow(wall = performance.now()) {
+  const base = state.paused && state.pausedAt ? state.pausedAt : wall;
+  return base + (state.simOffset || 0);
 }
 
 function raceSeconds(now) {
@@ -868,10 +907,11 @@ function isProtected(racer, now) {
   return racer.protectedUntil > now || racer.formationUntil > now;
 }
 
-// Hooks for the later post-processing pass. Nothing listens yet.
-function emitFx(type, racer) {
+// Race events for the post-processing pass (boosts, hits) and anything else
+// that wants to follow the race: itemUsed carries the item id.
+function emitFx(type, racer, extra = {}) {
   if (typeof window === "undefined" || typeof CustomEvent !== "function") return;
-  window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type, racerId: racer.id } }));
+  window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type, racerId: racer.id, ...extra } }));
 }
 
 function addFlash(d, lat, color, size, now, ms = 400) {
@@ -947,13 +987,11 @@ function useItem(racer, now, { trail = false } = {}) {
   if (item === "oilSlick" && trail) {
     racer.trailingOil = true;
     racer.trailSince = now;
-  // Every use is recorded for the browser check that proves each item fires.
-  (window.__usedItems = window.__usedItems || []).includes("oilSlick") || window.__usedItems.push("oilSlick");
+    emitFx("itemUsed", racer, { item: "oilSlick" });
     return;
   }
   racer.currentItem = "none";
-  // Every use is recorded for the browser check that proves each item fires.
-  (window.__usedItems = window.__usedItems || []).includes(item) || window.__usedItems.push(item);
+  emitFx("itemUsed", racer, { item });
   racer.trailingOil = false;
   racer.oilHoldStart = 0;
   if (racer.isPlayer) sfx.itemUse();
@@ -1031,10 +1069,11 @@ function fireShot(racer, type, now) {
     expiresAt: now + T.lifeMs[type],
     age: 0,
   });
+  if (type === "undercut" && !target) becomeDebris(state.shots[state.shots.length - 1], now);
   if (type === "stewardPenalty" && target) addFeed(`Steward Penalty on ${target.driver.code}.`);
 }
 
-function spinRacer(racer, duration = 900, now = performance.now()) {
+function spinRacer(racer, duration = 900, now = raceNow()) {
   if (!racer || isProtected(racer, now)) return false;
   // Brief grace period after recovering, so overlapping hits cannot pin a car.
   if (now < (racer.spinImmuneUntil || 0)) return false;
@@ -1124,7 +1163,7 @@ function alignRacerToSurface(racer, surface, turnBlend = 0.32) {
   racer.heading = lerpAngle(racer.heading, chosenAngle, turnBlend);
 }
 
-function updateLapProgress(racer, now) {
+function updateLapProgress(racer, now, dt = 0) {
   const previousDistance = racer.trackDistance || 0;
   const currentDistance = getCourseDistanceForRacer(racer, state.track);
   const lapLength = state.track.totalLength;
@@ -1149,10 +1188,15 @@ function updateLapProgress(racer, now) {
   const wrapped = previousDistance > lapLength * 0.75 && currentDistance < lapLength * 0.25;
   if (!wrapped || delta <= 0) return;
 
+  // The moment the car actually crossed the line, between this step and the
+  // last: lap and race times are to the millisecond, not to the frame.
+  const pastLine = clamp(currentDistance / delta, 0, 1);
+  const crossedAt = now - dt * 1000 * pastLine;
+
   if (!racer.startedRaceLap) {
     racer.startedRaceLap = true;
     racer.lapAccum = 0;
-    racer.lapStartAt = now;
+    racer.lapStartAt = crossedAt;
     return;
   }
 
@@ -1165,21 +1209,18 @@ function updateLapProgress(racer, now) {
     sfx.lap();
     if (racer.lap + 1 === state.track.laps - 1) sfx.finalLap();
   }
-  // Cars being fast-forwarded after the flag cover a lap in a fraction of the
-  // wall clock, so timing those laps would post impossible times and steal the
-  // fastest-lap point. Only laps run at normal speed are timed.
-  const fastForwarded = state.flagOutAt && !racer.isPlayer;
-  if (racer.lapStartAt && !fastForwarded) {
-    racer.lastLapTime = now - racer.lapStartAt;
+  // Fast-forwarded laps are timed on the race clock, so they are true times.
+  if (racer.lapStartAt) {
+    racer.lastLapTime = crossedAt - racer.lapStartAt;
     if (!racer.bestLapTime || racer.lastLapTime < racer.bestLapTime) {
       racer.bestLapTime = racer.lastLapTime;
     }
   }
-  racer.lapStartAt = now;
+  racer.lapStartAt = crossedAt;
 
   racer.lap += 1;
   if (racer.lap >= state.track.laps) {
-    finishRacer(racer, now);
+    finishRacer(racer, crossedAt);
   }
 }
 
@@ -1371,7 +1412,7 @@ function updateRacer(racer, dt, now) {
   barrierSurface = getActiveSurfaceInfo(racer, state.track, now);
   const surfaceBlend = racer.isPlayer && racer.speed < -8 ? 0.04 : 0.22;
   alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
-  updateLapProgress(racer, now);
+  updateLapProgress(racer, now, dt);
   // Side offset from the centreline, for shots and oil (track coordinates).
   const along = getItemRoute(state.track).sample(racer.trackDistance || 0);
   racer.lat = (racer.x - along.x) * along.nx + (racer.y - along.y) * along.ny;
@@ -1405,7 +1446,8 @@ function updateRacer(racer, dt, now) {
   // slot is empty), then it is gone for three seconds.
   state.track.itemBoxes.forEach((box, index) => {
     if ((state.boxHiddenUntil[index] || 0) > now) return;
-    if (distance(racer, box) < 18) {
+    const sameLevel = Math.abs(PowerUps.wrapDelta(racer.trackDistance || 0, box.d, state.track.totalLength)) < 40;
+    if (sameLevel && distance(racer, box) < 18) {
       state.boxHiddenUntil[index] = now + PowerUps.TIMINGS.boxHiddenMs;
       startRoulette(racer, now);
     }
@@ -1443,11 +1485,11 @@ function updateShots(dt, now) {
       shot.targetId = leader.id;
     } else if (shot.type === "undercut" && shot.targetId) {
       const target = racerById(shot.targetId);
-      if (!target || target.finished || PowerUps.wrapDelta(target.trackDistance || 0, shot.d, L) > L / 4) {
-        shot.targetId = "";
-      } else {
-        shot.targetLat = target.lat;
-      }
+      const ahead = target ? PowerUps.wrapDelta(target.trackDistance || 0, shot.d, L) : 0;
+      // Lost its target (finished, too far ahead, or slipped past it): from
+      // here on it is Debris, exactly as the Debris card describes.
+      if (!target || target.finished || ahead > L / 4 || ahead < -PowerUps.CAR_LENGTH) becomeDebris(shot, now);
+      else shot.targetLat = target.lat;
     }
     PowerUps.advanceShot(shot, dt, route);
     if (shot.bouncedAt === shot.age) addFlash(shot.d, shot.lat, "#ffb347", 5, now, 250);
@@ -1481,6 +1523,14 @@ function updateShots(dt, now) {
     addFlash(shot.d, shot.lat, shot.type === "undercut" ? "#ff3b30" : "#00d2be", 12, now);
     return false;
   });
+}
+
+function becomeDebris(shot, now) {
+  const drift = (shot.targetLat ?? shot.lat) >= shot.lat ? 1 : -1;
+  shot.type = "debris";
+  shot.targetId = "";
+  shot.latVel = drift * shot.speed * 0.25;
+  shot.expiresAt = Math.min(shot.expiresAt, now + PowerUps.TIMINGS.lifeMs.debris);
 }
 
 function updateHazards(now) {
@@ -1518,6 +1568,9 @@ function handleRacerContacts(now) {
       const a = state.racers[i];
       const b = state.racers[j];
       if (a.finished || b.finished) continue;
+      // Close on the map but far apart round the lap: different levels of
+      // Suzuka's crossover. They never touch.
+      if (Math.abs(PowerUps.wrapDelta(a.trackDistance || 0, b.trackDistance || 0, state.track.totalLength)) > 80) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dist = Math.hypot(dx, dy) || 0.001;
@@ -1596,21 +1649,27 @@ function handleRacerContacts(now) {
 const FLAG_FAST_FORWARD = 7;
 
 function updateRace(dt, now) {
-  state.racers.forEach((racer) => {
-    if (racer.finished) return;
-    // Sub-stepping rather than a speed multiplier, so the cars still obey the
-    // same physics, corners and barriers -- they simply cover the remaining
-    // distance faster in real time.
-    const steps = state.flagOutAt && !racer.isPlayer ? FLAG_FAST_FORWARD : 1;
-    for (let step = 0; step < steps; step += 1) updateRacer(racer, dt, now);
-  });
-  updateShots(dt, now);
-  updateSafetyCar(dt, now);
-  updateHazards(now);
+  // After the player takes the flag the rest of the field is sub-stepped, and
+  // everything on track -- shots, oil, the safety car, contacts -- steps with
+  // it, each sub-step on its own tick of the race clock. Cars obey the same
+  // physics, corners and barriers; they just cover the distance faster.
+  const steps = state.flagOutAt ? FLAG_FAST_FORWARD : 1;
+  for (let step = 0; step < steps; step += 1) {
+    const tick = now + (state.simOffset || 0) + step * dt * 1000;
+    state.racers.forEach((racer) => {
+      if (racer.finished || (step > 0 && racer.isPlayer)) return;
+      updateRacer(racer, dt, tick);
+    });
+    updateShots(dt, tick);
+    updateSafetyCar(dt, tick);
+    updateHazards(tick);
+    handleRacerContacts(tick);
+    handleRacerContacts(tick);
+    handleRacerContacts(tick);
+  }
+  state.simOffset = (state.simOffset || 0) + (steps - 1) * dt * 1000;
+  const raceTime = now + state.simOffset;
   updateParticles(dt);
-  handleRacerContacts(now);
-  handleRacerContacts(now);
-  handleRacerContacts(now);
   updateStandingsUI();
   updatePlayerUI();
 
@@ -1626,7 +1685,7 @@ function updateRace(dt, now) {
 
   if (!state.resultsQueued && (everyoneFinished || (state.resultTimeoutAt && now >= state.resultTimeoutAt))) {
     state.resultsQueued = true;
-    completeRemainingFinishers(now);
+    completeRemainingFinishers(raceTime);
     finalizeRace();
   }
 }
@@ -1747,17 +1806,35 @@ function finalizeRace() {
   showResults(finishers);
 }
 
+// Safety valve only (a car wedged for a minute after the flag). Cars placed
+// here never crossed the line, so their times are estimates from their own
+// pace, and marked as such on the results.
 function completeRemainingFinishers(now) {
   const currentPlace = state.racers.filter((racer) => racer.finished).length;
   const unfinished = [...state.racers]
     .filter((racer) => !racer.finished)
     .sort((a, b) => getRaceProgress(b) - getRaceProgress(a));
-
+  const elapsed = Math.max(1, now - state.raceStart);
+  const distance = state.track.totalLength * state.track.laps;
+  const timed = state.racers.filter((racer) => racer.finished && racer.finishTime > 0);
+  const referencePace = timed.length
+    ? distance / Math.max(...timed.map((racer) => racer.finishTime))
+    : (racerMeanMaxSpeed() * 0.8) / 1000;
+  let previous = Math.max(0, ...timed.map((racer) => racer.finishTime));
   unfinished.forEach((racer, index) => {
+    const covered = Math.max(0, getRaceProgress(racer));
+    const pace = Math.max(covered / elapsed, referencePace * 0.5);
+    const estimate = elapsed + Math.max(0, distance - covered) / pace;
     racer.finished = true;
     racer.finishPosition = currentPlace + index + 1;
-    racer.finishTime = now - state.raceStart + (index + 1) * 120;
+    racer.finishTime = Math.max(estimate, previous + 1);
+    racer.timeEstimated = true;
+    previous = racer.finishTime;
   });
+}
+
+function racerMeanMaxSpeed() {
+  return state.racers.reduce((sum, racer) => sum + racer.physics.maxSpeed, 0) / Math.max(1, state.racers.length);
 }
 
 function showResults(finishers) {
@@ -1779,6 +1856,8 @@ function showResults(finishers) {
         name: racer.driver.name,
         code: racer.driver.code,
         teamColor: racer.kart.body,
+        time: `${racer.timeEstimated ? "~" : ""}${formatRaceTime(racer.finishTime)}`,
+        gap: index === 0 ? "—" : `${racer.timeEstimated ? "~" : ""}+${formatGapTime(racer.finishTime - finishers[0].finishTime)}`,
         bestLap: formatLapTime(racer.bestLapTime),
         fastest: Boolean(fastest && racer.id === fastest.id),
         racePoints,
@@ -1842,6 +1921,7 @@ function resetToGarage() {
   state.lastSafetyCarAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
+  state.simOffset = 0;
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
@@ -2555,8 +2635,15 @@ function drawDriverView(track) {
   let cameraHeading = updateCameraRig(player, track);
 
   // The 3D renderer (render3d.js) draws the world when it has loaded; this
-  // canvas then only carries the HUD on top. Without it, fall back to 2D.
-  if (window.Render3D && window.Render3D.ready) {
+  // canvas then only carries the HUD on top. While it loads only the loading
+  // state shows; the 2D view is only for when 3D is unavailable.
+  const mode = worldView();
+  showViewLoading(mode === "loading" ? "race" : null);
+  if (mode === "loading") {
+    ctx.clearRect(0, 0, view.width, view.height);
+    return;
+  }
+  if (mode === "3d") {
     const now = renderClock();
     ctx.clearRect(0, 0, view.width, view.height);
     const surface = window.Render3D.render({
@@ -2581,6 +2668,7 @@ function drawDriverView(track) {
     return;
   }
 
+  state.fallbackFrames += 1;
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
   const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
     && sample.y < view.height + 500
@@ -3275,11 +3363,27 @@ function hudPanel(x, y, w, h, accent) {
 }
 
 function formatLapTime(ms) {
-  if (!ms || ms <= 0) return "--:--.--";
+  if (!ms || ms <= 0) return "-:--.---";
   const total = ms / 1000;
   const minutes = Math.floor(total / 60);
   const seconds = total - minutes * 60;
-  return `${minutes}:${seconds.toFixed(2).padStart(5, "0")}`;
+  return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
+}
+
+// A whole race: 3:12.456.
+function formatRaceTime(ms) {
+  if (!ms || ms <= 0) return "-:--.---";
+  const total = Math.round(ms) / 1000;
+  const minutes = Math.floor(total / 60);
+  const seconds = total - minutes * 60;
+  return `${minutes}:${seconds.toFixed(3).padStart(6, "0")}`;
+}
+
+// Behind the winner: 4.321, or 1:04.321 past a minute.
+function formatGapTime(ms) {
+  const total = Math.max(0, Math.round(ms)) / 1000;
+  if (total < 60) return total.toFixed(3);
+  return formatRaceTime(ms);
 }
 
 function formatGap(seconds) {
@@ -3293,7 +3397,7 @@ function drawDriverHud(track, player) {
   const place = sorted.findIndex((racer) => racer.id === player.id) + 1;
   const total = sorted.length;
   const placeStyle = getPlaceStyle(place);
-  const now = performance.now();
+  const now = raceNow();
 
   // Flash the position panel whenever a place changes hands.
   if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "racing") {
@@ -3760,12 +3864,23 @@ function shiftRaceClocks(delta) {
   });
 }
 
+// Space came up (or focus went): a trailed slick is dropped, and a press too
+// short to start trailing was a tap, which drops it too.
+function letGoOfOil() {
+  const player = getPlayer();
+  if (!player || player.finished || player.currentItem !== "oilSlick") return;
+  if (player.trailingOil) releaseTrail(player, raceNow());
+  else if (player.oilHoldStart) useItem(player, raceNow());
+}
+
 function togglePause() {
   if (state.phase !== "race" && state.phase !== "countdown") return;
   if (state.paused) {
     shiftRaceClocks(performance.now() - state.pausedAt);
     state.paused = false;
     state.pausedAt = 0;
+    // Space let go of during the pause: act on it now the race is running.
+    if (!input.space) letGoOfOil();
   } else {
     state.paused = true;
     state.pausedAt = performance.now();
@@ -3812,6 +3927,8 @@ function update(now) {
 
   if (!state.paused) {
     if (state.phase === "countdown") {
+      // The lights don't start until the cars can be seen.
+      if (worldView() === "loading") state.countdownStart = now;
       updateCountdown(now);
     } else if (state.phase === "race") {
       updateRace(dt, now);
@@ -3834,9 +3951,13 @@ function drawGarageScene() {
   ctx.clearRect(0, 0, view.width, view.height);
   const driver = DRIVERS[state.selectedDriver];
   const team = getTeamForDriver(driver);
+  const mode = worldView();
+  showViewLoading(mode === "loading" ? "garage" : null);
+  if (mode === "loading") return;
   // In 3D the car turns on the showroom floor behind this canvas.
-  if (window.Render3D && window.Render3D.ready && window.Render3D.renderGarage(team, driver, performance.now())) return;
-  // Without WebGL: the 2D car on the right, where the showroom car would be.
+  if (mode === "3d" && window.Render3D.renderGarage(team, driver, performance.now())) return;
+  // Only when 3D is unavailable: the 2D car where the showroom car would be.
+  state.fallbackFrames += 1;
   drawKart(ctx, view.width * 0.68, view.height * 0.58, 0, team, driver, 5.5);
 }
 
@@ -3889,13 +4010,14 @@ function bindEvents() {
     }
     if (event.code === "Space") {
       event.preventDefault();
+      input.space = true;
       const player = getPlayer();
       // A finished car is parked on the line: it has nothing left to fire.
       if (event.repeat || !player || player.finished || state.phase !== "race" || state.paused) return;
       if (player.currentItem === "oilSlick") {
-        if (!player.trailingOil) player.oilHoldStart = performance.now();
+        if (!player.trailingOil) player.oilHoldStart = raceNow();
       } else if (player.currentItem !== "none") {
-        useItem(player, performance.now());
+        useItem(player, raceNow());
       }
     }
   });
@@ -3910,21 +4032,25 @@ function bindEvents() {
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = false;
     if (event.key === "Shift") input.drift = false;
     if (event.code === "Space") {
-      const player = getPlayer();
-      if (player && !player.finished && player.currentItem === "oilSlick" && (player.oilHoldStart || player.trailingOil)) {
-        if (player.trailingOil) releaseTrail(player, performance.now());
-        else useItem(player, performance.now());
-      }
+      input.space = false;
+      // While paused the race is frozen: the slick is let go on resume.
+      if (!state.paused) letGoOfOil();
     }
   });
 
-  // Losing focus loses the key-up; drop a trailed slick rather than keep it forever.
   PowerUps.ITEM_ORDER.forEach(itemIconImage);
 
+  // Losing focus loses the key-up: count Space as released rather than keep a
+  // slick trailing forever (while paused, it drops on resume).
   window.addEventListener("blur", () => {
-    const player = getPlayer();
-    if (player && player.trailingOil) releaseTrail(player, performance.now());
-    if (player) player.oilHoldStart = 0;
+    input.space = false;
+    if (!state.paused) letGoOfOil();
+  });
+
+  // A hidden tab stops drawing, but the race clock would keep running behind
+  // it: pause instead, so nothing runs out while nobody is watching.
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && (state.phase === "race" || state.phase === "countdown") && !state.paused) togglePause();
   });
 }
 

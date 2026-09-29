@@ -9,7 +9,7 @@
     if (!ms || ms <= 0) return "—";
     const total = ms / 1000;
     const minutes = Math.floor(total / 60);
-    return `${minutes}:${(total - minutes * 60).toFixed(2).padStart(5, "0")}`;
+    return `${minutes}:${(total - minutes * 60).toFixed(3).padStart(6, "0")}`;
   }
 
   // A missing shot leaves a styled panel, never a broken-image icon.

@@ -5,6 +5,12 @@
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams and items.
 async (page) => {
+  // Keep the test tool's own empty tab (about:blank) out of the way.
+  try {
+    const own = await page.context().newCDPSession(page);
+    const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
+    await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
+  } catch (e) { /* not fatal */ }
   const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items"];
   // Relative to the Playwright server, which runs from the repo root.
   const OUT = "assets/shots/";

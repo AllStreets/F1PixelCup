@@ -12,14 +12,19 @@ function additive(color, opacity = 0.9) {
   return new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending });
 }
 
+// A reusable set of meshes that starts with a few and grows whenever more are
+// on track, so nothing in the race is ever left undrawn.
 function pool(group, n, make) {
   const list = [];
-  for (let i = 0; i < n; i += 1) {
-    const m = make();
-    m.visible = false;
-    group.add(m);
-    list.push(m);
-  }
+  list.grow = (count) => {
+    while (list.length < count) {
+      const m = make();
+      m.visible = false;
+      group.add(m);
+      list.push(m);
+    }
+  };
+  list.grow(n);
   return list;
 }
 
@@ -263,6 +268,10 @@ export function createPowerUpLayer(scene) {
   function sync({ powerUps, racers, cars, course, now }) {
     const fx = quality !== "low";
     const used = { undercut: 0, stewardPenalty: 0, debris: 0 };
+    Object.entries(shots).forEach(([type, list]) => list.grow(powerUps.shots.filter((s) => s.type === type).length));
+    oil.grow(powerUps.hazards.length);
+    trails.grow(powerUps.trails.length);
+    flashes.grow(powerUps.flashes.length);
     powerUps.shots.forEach((s) => {
       const list = shots[s.type];
       const mesh = list && list[used[s.type]++];

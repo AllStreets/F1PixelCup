@@ -14,9 +14,10 @@ function trackShapes() {
   return context.TRACK_SHAPES;
 }
 const SHAPES = trackShapes();
-// Same half-width the game uses: roadWidth × TRACK_WIDTH_SCALE (1.5).
-const HALF = Data.CIRCUITS[0].roadWidth * 1.5;
-const realRoute = (id) => P.makeRoute(SHAPES[id].points, HALF);
+// Same half-width the game uses: each circuit's roadWidth × TRACK_WIDTH_SCALE (1.5).
+const halfWidthOf = (id) => Data.CIRCUITS.find((c) => c.id === id).roadWidth * 1.5;
+const HALF = halfWidthOf("monza");
+const realRoute = (id) => P.makeRoute(SHAPES[id].points, halfWidthOf(id));
 
 function oval() {
   const pts = [];
@@ -67,7 +68,7 @@ test("shots stay inside the barriers on every real circuit", () => {
         P.advanceShot(s, 1 / 60, route);
         assert.ok(Math.abs(s.lat) <= route.halfWidthAt(s.d) - P.SHOT_EDGE + 1e-9, `${c.id} ${type} lat ${s.lat}`);
         const w = route.toWorld(s.d, s.lat);
-        assert.ok(nearestCentreDistance(route, w.x, w.y, s.d) <= HALF, `${c.id} ${type} off the road`);
+        assert.ok(nearestCentreDistance(route, w.x, w.y, s.d) <= halfWidthOf(c.id), `${c.id} ${type} off the road`);
       }
     });
   });

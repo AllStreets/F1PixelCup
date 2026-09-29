@@ -13,10 +13,10 @@
   let tickerTimer = 0;
 
   function lapTime(ms) {
-    if (!ms || ms <= 0) return "--:--.--";
+    if (!ms || ms <= 0) return "-:--.---";
     const total = ms / 1000;
     const minutes = Math.floor(total / 60);
-    return `${minutes}:${(total - minutes * 60).toFixed(2).padStart(5, "0")}`;
+    return `${minutes}:${(total - minutes * 60).toFixed(3).padStart(6, "0")}`;
   }
 
   function ordinal(n) {
@@ -220,11 +220,12 @@
     $("results-title").textContent = summary.title;
     $("results-next").innerHTML = `<span>${esc(summary.nextLabel)} ›</span>`;
     $("results-table").innerHTML = `
-      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
+      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
       ${summary.rows.map((r) => `
         <div class="result-row ${r.isPlayer ? "is-player" : ""}">
           <b>${esc(ordinal(num(r.place)))}</b><i style="background:${esc(r.teamColor)}"></i>
           <span>${esc(r.name)}</span>
+          <span class="r-time">${esc(r.time)}</span><span class="r-gap">${esc(r.gap)}</span>
           <span class="${r.fastest ? "is-fastest" : ""}">${esc(r.bestLap)}</span>
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
         </div>`).join("")}`;

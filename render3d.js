@@ -60,7 +60,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, render, renderGarage, auditScenery, inspect };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect };
 
 // What is on screen right now, for the browser checks.
 function inspect() {
@@ -71,7 +71,8 @@ function inspect() {
 window.Render3D = api;
 
 loadCar(() => { api.ready = true; }, (error) => {
-  console.warn("3D car model failed to load; staying on the 2D renderer.", error);
+  console.warn("3D car model failed to load; using the 2D view.", error);
+  api.failed = true;
 });
 
 // ---------------------------------------------------------------------------

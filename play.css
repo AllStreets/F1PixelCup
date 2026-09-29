@@ -125,7 +125,7 @@ html, body { height: 100%; overflow: hidden; }
 
 .results-table { display: grid; margin-top: 14px; }
 .result-row, .result-head {
-  display: grid; grid-template-columns: 3rem 4px 1fr 6rem 4.5rem 4.5rem; gap: 10px; align-items: center;
+  display: grid; grid-template-columns: 3rem 4px minmax(0, 1fr) 6.5rem 6rem 5.5rem 3.5rem 3.5rem; gap: 10px; align-items: center;
   padding: 0.42rem 0.6rem; border-bottom: 1px solid var(--line); font-weight: 600;
 }
 .result-head { color: var(--muted); font: 700 0.68rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; }
@@ -162,3 +162,30 @@ html, body { height: 100%; overflow: hidden; }
 .career-section { margin: 22px 0 8px; }
 
 .setting-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-weight: 700; }
+
+/* Shown while the 3D car loads, in place of any stand-in drawing. */
+.view-loading {
+  position: absolute; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  transform: translate(-50%, -50%); pointer-events: none;
+  color: var(--muted); font: italic 700 0.8rem/1 var(--font); letter-spacing: 0.16em; text-transform: uppercase;
+}
+.view-loading[hidden] { display: none; }
+.view-loading[data-where="garage"] { left: 68%; top: 58%; }
+.view-loading[data-where="race"] { left: 50%; top: 50%; }
+.view-loading-bar { position: relative; width: 140px; height: 3px; background: var(--line); overflow: hidden; }
+.view-loading-bar::after {
+  content: ""; position: absolute; inset: 0; width: 40%; background: var(--red);
+  animation: view-loading 1.1s ease-in-out infinite;
+}
+@keyframes view-loading { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@media (prefers-reduced-motion: reduce) { .view-loading-bar::after { animation: none; width: 100%; opacity: 0.6; } }
+
+/* Race times line up digit for digit. */
+.result-row .r-time, .result-row .r-gap { font-variant-numeric: tabular-nums; }
+.result-row .r-gap { color: var(--muted); }
+.result-row > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 760px) {
+  /* Narrow windows keep time, gap and both points columns; the best lap goes. */
+  .result-row, .result-head { grid-template-columns: 2.2rem 4px minmax(0, 1fr) 5.6rem 4.8rem 2.6rem 2.6rem; gap: 8px; }
+  .result-row > span:nth-child(6), .result-head > span:nth-child(6) { display: none; }
+}

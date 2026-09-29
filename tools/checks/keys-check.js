@@ -4,6 +4,12 @@
 // Expected: enterOnPillSelects true, enterOnPillDidNotStart true,
 // nextRaceIgnoredMidRace true, shortWindowStartReachable true, errors [].
 async (page) => {
+  // Keep the test tool's own empty tab (about:blank) out of the way.
+  try {
+    const own = await page.context().newCDPSession(page);
+    const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
+    await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
+  } catch (e) { /* not fatal */ }
   const errors = [];
   const out = {};
   const context = await page.context().browser().newContext({ viewport: null });

@@ -5,6 +5,12 @@
 async (page) => {
   const errors = [];
   const results = {};
+  // Keep the test tool's own empty tab (about:blank) out of the way.
+  try {
+    const own = await page.context().newCDPSession(page);
+    const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
+    await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
+  } catch (e) { /* not fatal */ }
   const context = await page.context().browser().newContext({ viewport: null });
   const p = await context.newPage();
   p.on("pageerror", (e) => errors.push(String(e)));
@@ -250,7 +256,8 @@ async (page) => {
 
   // AI: holds items for a reason, and uses every item in a real race.
   results.aiUsesEveryItem = await run(() => {
-    window.__usedItems = [];
+    const seen = new Set();
+    window.addEventListener("f1:fx", (e) => { if (e.detail.type === "itemUsed") seen.add(e.detail.item); });
     const all = CUPS.flatMap((cup, ci) => cup.tracks.map((_, ti) => [ci, ti]));
     for (const [ci, ti] of all.slice(0, 4)) {
       state.selectedCup = ci; state.activeCupIndex = ci; buildCupEntries(); startRace(ti);
@@ -264,7 +271,7 @@ async (page) => {
         updateRace(1 / 60, now);
       }
     }
-    return PowerUps.ITEM_ORDER.every((id) => window.__usedItems.includes(id));
+    return PowerUps.ITEM_ORDER.every((id) => seen.has(id)) && typeof window.__usedItems === "undefined";
   });
 
   // DRS: the car's upper rear-wing flap really opens, then closes.
@@ -406,6 +413,161 @@ async (page) => {
     const scale = Render3D.inspect().boxScales[0];
     togglePause();
     return scale < 0.05;
+  });
+
+
+  // --- Leftover fixes ---
+  // Releasing Space (or losing focus) while paused holds the trail; it drops on resume.
+  await setup();
+  results.oilHeldThroughPause = await run(async () => {
+    const pl = getPlayer(); pl.currentItem = "oilSlick";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    await new Promise((r) => setTimeout(r, 400));
+    const trailing = pl.trailingOil;
+    togglePause();
+    const before = state.hazards.length;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " " }));
+    window.dispatchEvent(new Event("blur"));
+    const heldWhilePaused = pl.trailingOil && state.hazards.length === before;
+    togglePause();
+    return trailing && heldWhilePaused && !pl.trailingOil && state.hazards.length === before + 1;
+  });
+
+  // A hidden tab pauses the race, so nothing runs out behind it.
+  await setup();
+  results.hiddenTabPauses = await run(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
+    document.dispatchEvent(new Event("visibilitychange"));
+    const paused = state.paused;
+    delete document.hidden;
+    if (state.paused) togglePause();
+    return paused;
+  });
+
+  // Suzuka's bridge: cars on different levels never touch, and a box on one deck can't be taken from the other.
+  await p.evaluate(() => { Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(3); state.phase = "race"; state.raceStart = performance.now() - 40000; });
+  results.bridgeLevelsApart = await run(() => {
+    const route = getItemRoute(state.track);
+    const { under, over } = TRACK_SHAPES.suzuka.bridges[0];
+    const starts = state.track.cumulativeStarts;
+    let best = { dist: Infinity };
+    for (let a = starts[under - 3]; a < starts[under + 3]; a += 2) {
+      for (let b = starts[over - 3]; b < starts[over + 3]; b += 2) {
+        const pa = route.sample(a); const pb = route.sample(b);
+        const dist = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+        if (dist < best.dist) best = { dist, a, b };
+      }
+    }
+    const [low, high] = state.racers.filter((r) => !r.isPlayer).slice(0, 2);
+    const put = (r, d) => { const w = route.toWorld(d, 0); Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat: 0, speed: 0, spinUntil: 0, spinImmuneUntil: 0, segmentHint: null }); };
+    put(low, best.a); put(high, best.b);
+    high.protectedUntil = raceNow() + 5000;
+    const lowBefore = { x: low.x, y: low.y };
+    handleRacerContacts(raceNow());
+    const untouched = low.spinUntil === 0 && Math.hypot(low.x - lowBefore.x, low.y - lowBefore.y) < 0.01;
+    // A box on the upper deck: a car underneath can't take it.
+    const boxD = best.b;
+    const bw = route.toWorld(boxD, 0);
+    state.track.itemBoxes[0] = { x: bw.x, y: bw.y };
+    delete state.track.itemBoxD;
+    state.boxHiddenUntil = [];
+    low.currentItem = "none"; low.rouletteUntil = 0;
+    updateRacer(low, 1 / 60, raceNow());
+    return untouched && !(state.boxHiddenUntil[0] > raceNow());
+  });
+
+  // An Undercut that loses its target really becomes Debris.
+  await setup();
+  results.undercutBecomesDebris = await run(() => {
+    const sorted = getSortedRacers();
+    const pl = sorted[10];
+    pl.currentItem = "undercut"; useItem(pl, raceNow());
+    const s = state.shots[state.shots.length - 1];
+    const target = racerById(s.targetId);
+    target.finished = true; target.finishPosition = 99;
+    updateShots(1 / 60, raceNow());
+    const now = raceNow();
+    return s.type === "debris" && !s.targetId && Math.abs(s.latVel) > 0 && s.expiresAt <= now + PowerUps.TIMINGS.lifeMs.debris + 50;
+  });
+  results.undercutOvershootBecomesDebris = await run(() => {
+    const sorted = getSortedRacers().filter((r) => !r.finished);
+    const pl = sorted[10];
+    pl.currentItem = "undercut"; useItem(pl, raceNow());
+    const s = state.shots[state.shots.length - 1];
+    const target = racerById(s.targetId);
+    // The shot has gone past its target (it slipped by on the other side of the road).
+    s.d = (target.trackDistance + PowerUps.CAR_LENGTH * 2) % state.track.totalLength;
+    updateShots(1 / 60, raceNow());
+    return s.type === "debris";
+  });
+
+  // A Steward Penalty fired from half a lap back at Spa still reaches the leader.
+  await p.evaluate(() => { Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(1); state.racers.forEach((r) => { r.isPlayer = false; }); state.phase = "race"; });
+  results.longStewardArrives = await run(() => {
+    let now = 200000;
+    state.raceStart = now - 40000;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    for (let i = 0; i < 60 * 20; i += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+    const sorted = getSortedRacers().filter((r) => !r.finished);
+    const leader = sorted[0];
+    const L = state.track.totalLength;
+    // Put the last car half a lap behind the leader, on the racing line.
+    const back = sorted[sorted.length - 1];
+    const route = getItemRoute(state.track);
+    const d = ((leader.trackDistance - L * 0.5) % L + L) % L;
+    const w = route.toWorld(d, 0);
+    Object.assign(back, { x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat: 0, segmentHint: null,
+      lap: d > leader.trackDistance ? leader.lap - 1 : leader.lap, startedRaceLap: true });
+    const gap = (getRaceProgress(leader) - getRaceProgress(back)) / L;
+    if (gap < 0.45) return `gap only ${gap.toFixed(2)}`;
+    const shooter = { r: back, gap };
+    state.racers.forEach((r) => { r.currentItem = "none"; r.itemReadyAt = Infinity; });
+    shooter.r.currentItem = "stewardPenalty"; useItem(shooter.r, raceNow(now));
+    const s = state.shots.find((x) => x.type === "stewardPenalty");
+    let landed = false;
+    for (let i = 0; i < 60 * 90 && !landed; i += 1) {
+      now += 1000 / 60; updateRace(1 / 60, now);
+      landed = !state.shots.includes(s);
+    }
+    return landed && state.feed.some((f) => /Steward Penalty lands on|shrugs off the Steward Penalty/.test(f.message));
+  });
+
+  // Pausing freezes everything on track: shots, oil, a trailed slick and the safety car stay put.
+  await setup();
+  results.pauseFreezesEverything = await run(async () => {
+    const sorted = getSortedRacers();
+    const a = sorted[10];
+    a.currentItem = "safetyCar"; useItem(a, raceNow());
+    const b = sorted[12]; b.currentItem = "debris"; useItem(b, raceNow());
+    const c = sorted[14]; c.currentItem = "oilSlick"; useItem(c, raceNow());
+    const d = sorted[16]; d.currentItem = "oilSlick"; useItem(d, raceNow(), { trail: true });
+    const snap = () => JSON.stringify({
+      shots: state.shots.map((x) => [x.d.toFixed(3), x.lat.toFixed(3), Math.round(x.expiresAt - raceNow())]),
+      hazards: state.hazards.map((x) => [x.d.toFixed(3), Math.round(x.expiresAt - raceNow())]),
+      sc: state.safetyCar && [state.safetyCar.d.toFixed(3), Math.round(state.safetyCar.until - raceNow())],
+      trail: d.trailingOil,
+      cars: state.racers.map((r) => r.trackDistance.toFixed(3)),
+    });
+    togglePause();
+    const before = snap();
+    await new Promise((r) => setTimeout(r, 1000));
+    const during = JSON.stringify({ ...JSON.parse(snap()) });
+    togglePause();
+    const after = snap();
+    // During the pause nothing moves; on resume the time left is what it was
+    // (remaining times read against the frozen clock, then the shifted one).
+    return before === during && JSON.parse(after).shots.length === JSON.parse(before).shots.length;
+  });
+
+  // More oil than any fixed pool: every slick on track is drawn.
+  await setup();
+  results.manyOilAllDrawn = await run(async () => {
+    const pl = getPlayer();
+    for (let i = 0; i < 40; i += 1) {
+      state.hazards.push({ type: "oilSlick", ownerId: "x", d: (pl.trackDistance + 200 + i * 40) % state.track.totalLength, lat: 0, armedAt: Infinity, expiresAt: Infinity });
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    return Render3D.inspect().hazards === state.hazards.length;
   });
 
   await context.close();

@@ -3,6 +3,12 @@
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true.
 async (page) => {
+  // Keep the test tool's own empty tab (about:blank) out of the way.
+  try {
+    const own = await page.context().newCDPSession(page);
+    const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
+    await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
+  } catch (e) { /* not fatal */ }
   const errors = [];
   const out = {};
   const context = await page.context().browser().newContext({ viewport: null });
@@ -52,7 +58,7 @@ async (page) => {
   await p.reload();
   await p.waitForTimeout(1000);
   const summary = await p.locator("#career-summary").innerText();
-  out.returning = summary.includes("1309") && summary.includes("0:36.28");
+  out.returning = summary.includes("1309") && summary.includes("0:36.280");
   out.xss = await p.evaluate(() => window.__xss === undefined);
   out.careerLink = await p.locator("#career a[href*='play.html#career']").count();
 
