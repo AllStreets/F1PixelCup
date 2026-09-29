@@ -49,7 +49,10 @@ const need = (value, what) => {
   return value;
 };
 
+const opener = load("races").filter((r) => r.year === YEAR).sort((a, b) => a.round - b.round)[0];
+
 const out = {
+  season: { year: YEAR, firstRace: opener.date },
   source: {
     name: "F1DB",
     url: "https://github.com/f1db/f1db",

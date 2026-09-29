@@ -1,4 +1,8 @@
 {
+  "season": {
+    "year": 2025,
+    "firstRace": "2025-03-16"
+  },
   "source": {
     "name": "F1DB",
     "url": "https://github.com/f1db/f1db",

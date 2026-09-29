@@ -2,7 +2,8 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split, v1LeftAlone, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true; threeLoaded false
+// yourDrivers, latestByRace, v1Split, v1LeftAlone, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
+// driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; errors [].
 // Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
@@ -172,6 +173,58 @@ async (page) => {
   await q.waitForTimeout(300);
   out.phoneNote = await q.evaluate(() => { const n = document.getElementById("phone-play-note"); return Boolean(n) && n.open === true; });
   out.phoneStayed = !q.url().includes("play.html");
+  // The grid pages at phone width: no side scroll.
+  for (const page of ["drivers", "teams"]) {
+    await q.goto(`http://localhost:8765/${page}.html?${Date.now()}`);
+    await q.waitForTimeout(900);
+    out[`${page}PhoneNoSideScroll`] = await q.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  }
   await phone.close();
+
+  // The grid pages: every card, every picture, the numbers from the data, the
+  // footer's notice and credit on every site page, and the way between them.
+  {
+    const ctx = await page.context().browser().newContext({ viewport: null });
+    const g = await ctx.newPage();
+    g.on("pageerror", (e) => errors.push(String(e)));
+    const gcdp = await ctx.newCDPSession(g);
+    const { windowId: gw } = await gcdp.send("Browser.getWindowForTarget");
+    await gcdp.send("Browser.setWindowBounds", { windowId: gw, bounds: { windowState: "normal" } });
+    await gcdp.send("Browser.setWindowBounds", { windowId: gw, bounds: { width: 1440, height: 900 } });
+    const footerOk = () => g.evaluate(() => {
+      const f = document.querySelector("footer.footer");
+      return Boolean(f) && /not affiliated with Formula 1, the FIA or the teams/i.test(f.textContent)
+        && Boolean(f.querySelector('a[href="https://github.com/f1db/f1db"]')) && /CC BY 4\.0/.test(f.textContent);
+    });
+    const imagesOk = () => g.evaluate(async () => {
+      const imgs = [...document.querySelectorAll("main img")];
+      await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));
+      return imgs.length > 0 && imgs.every((i) => i.naturalWidth > 0);
+    });
+    await g.goto(`http://localhost:8765/drivers.html?${Date.now()}`);
+    await g.waitForTimeout(1200);
+    out.driverCards = await g.locator(".driver-card").count();
+    out.driverImages = await imagesOk();
+    out.driverOrder = await g.evaluate(() => [...document.querySelectorAll(".driver-card h3")].slice(0, 2).map((h) => h.textContent).join("|") === "Charles Leclerc|Lewis Hamilton");
+    out.driverFacts = await g.evaluate(async () => {
+      const data = await (await fetch("./assets/data/grid-2025.json")).json();
+      const norris = data.drivers.find((d) => d.id === "norris");
+      const card = document.querySelector('.driver-card[data-id="norris"]');
+      return Boolean(card) && card.textContent.includes(`${norris.season.points}`) && /champion/i.test(card.textContent)
+        && document.querySelector('.driver-card[data-id="tsunoda"]').textContent.includes("Red Bull");
+    });
+    out.driversFooter = await footerOk();
+    await g.goto(`http://localhost:8765/teams.html?${Date.now()}`);
+    await g.waitForTimeout(1200);
+    out.teamCards = await g.locator(".team-card").count();
+    out.teamImages = await imagesOk();
+    out.teamsFooter = await footerOk();
+    out.gridNav = await g.evaluate(() => ["./index.html", "./drivers.html", "./teams.html"].every((href) => document.querySelector(`.topnav a[href^="${href}"], .wordmark[href^="${href}"]`)));
+    await g.goto(`http://localhost:8765/?${Date.now()}`);
+    await g.waitForTimeout(800);
+    out.indexFooter = await footerOk();
+    out.indexLinksToPages = await g.evaluate(() => Boolean(document.querySelector('#grid a[href="./drivers.html"]')) && Boolean(document.querySelector('#grid a[href="./teams.html"]')));
+    await ctx.close();
+  }
   return { results: out, errors };
 }

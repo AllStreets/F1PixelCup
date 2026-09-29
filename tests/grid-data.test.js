@@ -69,3 +69,9 @@ test("a driver's 2025 seats are in the order they drove them", () => {
   const tsunoda = grid().drivers.find((d) => d.id === "tsunoda");
   assert.deepEqual(tsunoda.season.teams, [{ teamId: "racingBulls", rounds: "1-2" }, { teamId: "redBull", rounds: "3-24" }]);
 });
+
+test("the season opener is on record (ages are given as of it)", () => {
+  const { season } = grid();
+  assert.equal(season.year, 2025);
+  assert.equal(season.firstRace, "2025-03-16");
+});
