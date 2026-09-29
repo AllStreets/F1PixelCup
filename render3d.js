@@ -163,33 +163,180 @@ function setPhotoCamera(shot) {
 
 // Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
 // the heavy work happens behind a loading panel instead of mid-countdown.
-// Returns true once the circuit is ready to draw. Its shaders compile in the
-// background where the browser can (compileAsync), so the loading panel keeps
-// moving instead of the page freezing; until then it returns false, and the
-// game asks again next frame.
+// Returns true once the circuit is ready to draw. Its shaders compile a piece
+// of the scene at a time, and the browser finishes them in the background
+// (compileAsync), so the loading panel keeps moving instead of the page
+// freezing; until then it returns false, and the game asks again next frame.
 function prepare(track, racers) {
   const world = ensureWorld(track);
   if (world.compiled) return true;
-  if (!world.compiling) {
+  if (!world.preparedFrom) {
     // The canvas at its size (the render targets are made now, not on the
     // first frame of the countdown), and the race's cars built.
     resize();
     (racers || []).forEach((racer) => ensureCar(world, racer));
-    // Hidden things (the helicopter, the fireworks, rolled-up flags) are
-    // compiled too: shown for the moment the compile gathers them.
-    const hidden = [];
-    scene.traverse((o) => { if (!o.visible && (o.isMesh || o.isPoints || o.isGroup)) { hidden.push(o); o.visible = true; } });
-    const done = () => { world.compiled = true; };
+    // The scene as the race draws it: the garage (and its studio lights) put
+    // away, or every material would compile for lights the race doesn't
+    // have and compile again, all at once, on the first frame.
+    garage.group.visible = false;
+    world.group.visible = true;
+    powerUpLayer.group.visible = particles.visible = true;
+    world.preparedFrom = performance.now();
+    world.uploads = texturesIn();
+    world.sent = new Map();
     if (!renderer.compileAsync) {
       renderer.compile(scene, camera);
-      hidden.forEach((o) => { o.visible = false; });
-      done();
+      world.compiled = true;
       return true;
     }
-    world.compiling = renderer.compileAsync(scene, camera).catch(() => renderer.compile(scene, camera)).then(done);
-    hidden.forEach((o) => { o.visible = false; });
+    // Hidden things (the helicopter, the fireworks, rolled-up flags) compile
+    // too: compile() takes every material under what it's given.
+    world.toCompile = compileUnits(scene);
+    world.lit = litBy(scene);
+    world.compileJobs = compileUnseen(world);
+    // The compile starts next frame: this one has built the circuit.
+    world.steppedAt = performance.now();
+    return false;
   }
-  return false;
+  let start = performance.now();
+  // Once a frame (the game asks, and so does its draw).
+  if (start - (world.steppedAt || 0) < STEP_GAP_MS) return false;
+  world.steppedAt = start;
+  if (world.toCompile.length) {
+    // A few new programs a frame: the browser compiles them in the
+    // background, but a big batch still holds up the frames after it.
+    const programs = renderer.info.programs.length;
+    while (world.toCompile.length && performance.now() - start < COMPILE_BUDGET_MS
+      && renderer.info.programs.length - programs < PROGRAMS_PER_FRAME) {
+      world.compileJobs.push(renderer.compileAsync(world.toCompile.pop(), camera, world.lit));
+    }
+    if (!world.toCompile.length) {
+      const ready = () => { world.shadersReady = true; };
+      Promise.all(world.compileJobs).then(ready, ready);
+    }
+    return false;
+  }
+  // Its textures go to the GPU a few at a time while the shaders finish, not
+  // all at once on the first frame. Images still loading are waited for, a
+  // while (one that never arrives mustn't hold the start).
+  start = performance.now();
+  let left = 0;
+  world.uploads.forEach((tex) => {
+    if (world.sent.get(tex) === tex.version) return;
+    if (tex.version === 0) {
+      const image = tex.image;
+      if (!image || (typeof HTMLImageElement !== "undefined" && image instanceof HTMLImageElement && !image.complete)) left += 1;
+      return;
+    }
+    if (performance.now() - start > UPLOAD_BUDGET_MS) { left += 1; return; }
+    renderer.initTexture(tex);
+    world.sent.set(tex, tex.version);
+  });
+  const waited = start - world.preparedFrom > IMAGE_WAIT_MS;
+  if (world.shadersReady && (left === 0 || waited)) world.compiled = true;
+  return Boolean(world.compiled);
+}
+
+// Per loading frame: the time spent handing shaders to the browser, and how
+// many new programs; and the shortest gap between two steps (one a frame).
+const COMPILE_BUDGET_MS = 12;
+const PROGRAMS_PER_FRAME = 4;
+const STEP_GAP_MS = 8;
+
+// Everything that draws, as pieces to compile one at a time (a piece's
+// children compile with it); not the garage, which the race never shows.
+function compileUnits(root) {
+  const units = [];
+  const walk = (o) => {
+    if (o === garage.group || o.isLight) return;
+    if (o.isMesh || o.isPoints || o.isLine || o.isSprite) { units.push(o); return; }
+    o.children.forEach(walk);
+  };
+  walk(root);
+  return units;
+}
+
+// The scene as compile() needs it for one piece: the race's lights (those
+// lit now) without a walk of the whole scene for every piece; its fog and
+// environment are the scene's own.
+function litBy(root) {
+  const lights = [];
+  root.traverseVisible((o) => { if (o.isLight) lights.push(o); });
+  const stage = Object.create(root);
+  stage.traverseVisible = (visit) => lights.forEach(visit);
+  return stage;
+}
+
+// Every drawable in the race's scene, hidden ones too (not the garage).
+function eachDrawable(visit) {
+  const walk = (o) => {
+    if (o === garage.group) return;
+    if (o.material) visit(o);
+    o.children.forEach(walk);
+  };
+  walk(scene);
+}
+
+// Time spent sending textures to the GPU per loading frame, and the longest
+// the start waits for images still loading.
+const UPLOAD_BUDGET_MS = 8;
+const IMAGE_WAIT_MS = 4000;
+
+// Every texture the scene's materials draw with (their maps and shader
+// uniforms), once each.
+function texturesIn() {
+  const found = new Set();
+  const look = (value) => { if (value && value.isTexture && !value.isRenderTargetTexture && !value.isFramebufferTexture) found.add(value); };
+  eachDrawable((o) => {
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      Object.values(m).forEach(look);
+      if (m.uniforms) Object.values(m.uniforms).forEach((u) => look(u && u.value));
+    });
+  });
+  return [...found];
+}
+
+const FLIP_SIDE = { [THREE.FrontSide]: THREE.BackSide, [THREE.BackSide]: THREE.FrontSide, [THREE.DoubleSide]: THREE.DoubleSide };
+// Shaders three draws with materials of its own, which the scene's compile
+// never sees: the shadow pass's depth material for each kind of caster
+// (three's WebGLShadowMap shapes it from the caster's material), and the
+// effects' passes. Compiled now with the lights and targets they are drawn
+// with, so the first frame links none of them. The stand-in depth materials
+// stay with the world (freeing them would free their programs).
+function compileUnseen(world) {
+  const jobs = [];
+  const target = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType });
+  const before = renderer.getRenderTarget();
+  const casters = new THREE.Group();
+  const kinds = new Set();
+  eachDrawable((o) => {
+    if (!o.isMesh || !o.castShadow) return;
+    (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
+      if (!m || !m.visible) return;
+      if (o.customDepthMaterial) { casters.add(new THREE.Mesh(o.geometry, o.customDepthMaterial)); return; }
+      const side = m.shadowSide ?? FLIP_SIDE[m.side];
+      const alphaTest = m.alphaToCoverage ? 0.5 : m.alphaTest;
+      const kind = [o.isInstancedMesh, Boolean(o.instanceColor), side, Boolean(m.map), Boolean(m.alphaMap), alphaTest > 0,
+        Boolean(m.displacementMap), m.wireframe, Object.keys(o.geometry.attributes).sort().join()].join("|");
+      if (kinds.has(kind)) return;
+      kinds.add(kind);
+      const depth = new THREE.MeshDepthMaterial({ side, map: m.map, alphaMap: m.alphaMap, alphaTest, displacementMap: m.displacementMap, wireframe: m.wireframe });
+      world.warmMaterials.push(depth);
+      const stand = o.isInstancedMesh ? new THREE.InstancedMesh(o.geometry, depth, 1) : new THREE.Mesh(o.geometry, depth);
+      if (o.isInstancedMesh && o.instanceColor) stand.instanceColor = o.instanceColor;
+      casters.add(stand);
+    });
+  });
+  // The shadow pass draws with the scene's lights but none of its fog.
+  const fog = scene.fog;
+  scene.fog = null;
+  renderer.setRenderTarget(target);
+  jobs.push(renderer.compileAsync(casters, sun.shadow.camera, scene));
+  scene.fog = fog;
+  renderer.setRenderTarget(before);
+  target.dispose();
+  jobs.push(postfx.warm());
+  return jobs;
 }
 
 // The advert barriers, for the checks. Each quad's front is to the right of
@@ -435,11 +582,13 @@ function inspect() {
     // the fireworks' sparks.
     ...showOnScreen(current),
   } : null;
-  return { flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // Whether the race's world is being drawn (its shaders compiled), not held
+  // behind the loading panel.
+  const drawing = Boolean(current && current.compiled && !garage.group.visible);
+  return { drawing, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
-// The power-up models load alongside; nothing waits on them.
 // The power-up models load alongside; nothing waits on them. Before they swap
 // in, their shaders (and the game's own oil surface) are compiled, so the swap
 // never stalls a frame mid-race.
@@ -671,7 +820,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {} };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -685,6 +834,7 @@ function disposeWorld(world) {
   world.group.traverse((o) => {
     if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
   });
+  world.warmMaterials.forEach((m) => m.dispose());
 }
 
 function ensureWorld(track) {
@@ -910,12 +1060,6 @@ function render(frame) {
   powerUpLayer.group.visible = particles.visible = true;
 
   syncCars(world, racers, player, now, dt);
-  // Compile every shader in the new scene while the grid is lining up, so
-  // nothing stalls the first time it comes into view mid-race.
-  if (!world.compiled) {
-    renderer.compile(scene, camera);
-    world.compiled = true;
-  }
   if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {

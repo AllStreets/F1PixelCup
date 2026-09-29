@@ -48,33 +48,40 @@ export function canvasTexture(width, height, paint, { repeat = true, srgb = true
   return tex;
 }
 
+// Photos are decoded off the page's thread (an ImageBitmap) where the
+// browser can, so sending one to the GPU is a copy, not a decode that stalls
+// a frame. A bitmap is flipped as it is decoded (texture.flipY doesn't apply
+// to one).
+const bitmapLoader = typeof createImageBitmap === "function"
+  ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: "flipY" })
+  : null;
 const imageLoader = new THREE.ImageLoader();
 const photoCache = new Map();
 
 // A tiling photo texture. Each call returns its own texture (so callers can set
-// their own repeat) sharing one image, which is attached when it arrives.
+// their own repeat) sharing one image -- one source, sent to the GPU once --
+// which is attached when it arrives.
 export function photo(name, repeatX = 1, repeatY = repeatX) {
   let entry = photoCache.get(name);
   if (!entry) {
-    entry = { image: null, waiting: [] };
-    imageLoader.load(`./assets/textures/${name}.jpg`, (image) => {
-      entry.image = image;
-      entry.waiting.forEach((t) => { t.image = image; t.needsUpdate = true; });
+    entry = { source: new THREE.TextureSource(null), loaded: false, waiting: [] };
+    (bitmapLoader || imageLoader).load(`./assets/textures/${name}.jpg`, (image) => {
+      entry.source.data = image;
+      entry.loaded = true;
+      entry.waiting.forEach((t) => { t.needsUpdate = true; });
       entry.waiting.length = 0;
     });
     photoCache.set(name, entry);
   }
   const tex = new THREE.Texture();
+  tex.source = entry.source;
+  if (bitmapLoader) tex.flipY = false;
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = maxAnisotropy;
   tex.repeat.set(repeatX, repeatY);
-  if (entry.image) {
-    tex.image = entry.image;
-    tex.needsUpdate = true;
-  } else {
-    entry.waiting.push(tex);
-  }
+  if (entry.loaded) tex.needsUpdate = true;
+  else entry.waiting.push(tex);
   return tex;
 }
 

@@ -209,12 +209,18 @@ The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenSt
 ### Starting without freezing
 
 G3's regression run showed a race's start freezing the page for 4–6 s when the car arrived. That already happened on main. Profiling found the time was spent waiting on shader compiles, and all of it happened on the first frame. Now:
-- three's shader error checking is off (`?debug` turns it back on), so compiles no longer wait on the driver one by one;
-- `prepare()` sizes the canvas, builds the race's cars, and compiles the circuit, the cars and the hidden things (the helicopter, the fireworks, rolled-up flags) with `compileAsync`, behind the loading panel;
-- until that compile is done, `render()` shows only the sky's colour instead of compiling everything at once;
-- the tunnel-light shader patch is applied only on the circuit that has a tunnel.
+- three's shader error checking is off (`?debug` turns it back on), so compiles no longer wait on the driver one by one.
+- `prepare()` sizes the canvas and builds the race's cars. It then compiles the scene a piece at a time (`compileAsync`, at most 12 ms and 4 new programs a loading frame), including the hidden things (the helicopter, the fireworks, rolled-up flags).
+  - The lights it compiles against are the race's own. The garage and its studio lights are put away first: compiling with them made every material compile a second time on the first frame.
+- It also compiles the shaders three draws with materials of its own:
+  - the shadow pass's depth material for each kind of caster, with the scene's lights but none of its fog, as three's shadow pass draws it;
+  - the effects' passes, with the targets they draw to.
+- It sends the textures to the GPU a few a frame. It waits (up to 4 s) for photos still loading, and those are decoded off the page's thread as ImageBitmaps, one source per photo.
+- Until all of that is done, `render()` shows only the sky's colour instead of compiling everything at once.
+- A new graphics tier's effects compile in the background too, and the frame is drawn without them until they are ready.
+- The tunnel-light shader patch is applied only on the circuit that has a tunnel.
 
-The long freeze became a few blocks of about 1 s; the rest is the first shadow and post-processing passes. `loading-check`'s `lightsWaitForTheCar` now polls for the lights (within 15 s) instead of assuming a fixed start time.
+After this, the first frame links no programs and uploads no textures, and every loading frame but the one that builds the circuit stays under 100 ms. `grid-check`'s `noHitchTimingTheField` holds both. `loading-check`'s `lightsWaitForTheCar` polls for the lights (within 15 s) instead of assuming a fixed start time.
 
 ### Tests (G3)
 

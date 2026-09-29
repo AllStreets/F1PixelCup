@@ -101,21 +101,34 @@ async (page) => {
     Game.startCup();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const panel = document.getElementById("view-loading");
+    // First the circuit is built behind the panel (one frame), and its shaders
+    // compile and textures load in the background while it keeps moving.
+    const sawBuilding = !state.preparing || (!panel.hidden && /Building the circuit/.test(panel.textContent));
+    const building = [];
+    let mark = performance.now();
+    while (state.preparing) {
+      await new Promise((r) => requestAnimationFrame(r));
+      const t = performance.now();
+      building.push(t - mark);
+      mark = t;
+    }
+    // Every loading frame but the one that builds the circuit is smooth.
+    const worstBuilding = building.sort((a, b) => b - a).slice(1)[0] || 0;
     const sawTiming = state.phase === "qualifyingSim" && !panel.hidden && /Timing the field/.test(panel.textContent);
-    // Frames while the field is being timed (the circuit itself is built on
-    // the first frame of the session, behind the panel; that's measured apart).
+    // Then the frames while the field is being timed.
     let last = performance.now();
     let worst = 0;
     let frames = 0;
     while (state.phase === "qualifyingSim") {
       await new Promise((r) => requestAnimationFrame(r));
       const t = performance.now();
-      if (frames > 0) worst = Math.max(worst, t - last);
+      worst = Math.max(worst, t - last);
       last = t;
       frames += 1;
     }
     window.__worstFrame = worst;
-    return (sawTiming && frames > 3 && worst < 100 && state.phase === "qualifying") || JSON.stringify({ sawTiming, frames, worst: Math.round(worst), phase: state.phase });
+    return (sawBuilding && worstBuilding < 100 && sawTiming && frames > 3 && worst < 100 && state.phase === "qualifying")
+      || JSON.stringify({ sawBuilding, worstBuilding: Math.round(worstBuilding), sawTiming, frames, worst: Math.round(worst), phase: state.phase });
   });
 
   // The timed laps leave nothing behind: no particles, the real Math.random,
