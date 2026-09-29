@@ -155,15 +155,18 @@ Stage D shipped with its fresh review fixed: 7 Important and 9 Minor findings, a
 
 ## Stage E — Website: the 2025 grid, properly (roadmap stage 5)
 
-- [ ] Spec and plan for the driver and team pages. The facts come from F1DB (CC BY 4.0) and the user's own writing, reused from the INFOrmula project's prose. Never use its hotlinked images.
-- [ ] Add `tools/site/build_grid_data.js` (or `.py`): it pulls F1DB and writes `assets/data/grid-2025.json` with the drivers, teams, stats and a CC BY attribution. The JSON is committed, so there's no runtime fetch.
-- [ ] Node test: the JSON validates (20 drivers, 10 teams, required fields and attribution present).
-- [ ] The pages: `drivers.html` and `teams.html` (or anchors in `index.html`), plus `landing.js` renderers.
+- [x] Spec and plan for the driver and team pages. The facts come from F1DB (CC BY 4.0) and the user's own writing, reused from the INFOrmula project's prose. Never use its hotlinked images.
+- [x] Add `tools/site/build_grid_data.js` (or `.py`): it pulls F1DB and writes `assets/data/grid-2025.json` with the drivers, teams, stats and a CC BY attribution. The JSON is committed, so there's no runtime fetch.
+- [x] Node test: the JSON validates (20 drivers, 10 teams, required fields and attribution present).
+- [x] The pages: `drivers.html` and `teams.html` (or anchors in `index.html`), plus `landing.js` renderers.
   - They use the game's own renders only, including the new helmets and team car shots.
   - There are no official photos or logos.
-- [ ] Footer on every page: "Fan-made, not affiliated with Formula 1, the FIA or the teams", plus the F1DB CC BY credit.
-- [ ] Extend `landing-check.js`: the new pages render 20 and 10 cards, with no horizontal scroll at phone width, and the footer and attribution are present.
-- [ ] Update `.vercelignore` so `tools/site` stays out of the deploy. Review, merge, push.
+- [x] Footer on every page: "Fan-made, not affiliated with Formula 1, the FIA or the teams", plus the F1DB CC BY credit.
+- [x] Extend `landing-check.js`: the new pages render 20 and 10 cards, with no horizontal scroll at phone width, and the footer and attribution are present.
+- [x] Update `.vercelignore` so `tools/site` stays out of the deploy. Review, merge, push.
+
+
+Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, all fixed except one ruling (the team shots keep the showroom backdrop).
 
 ## Stage F — Cinematic post-processing (roadmap stage 6)
 

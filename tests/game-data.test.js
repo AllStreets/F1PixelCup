@@ -133,3 +133,11 @@ test("every driver has a helmet design: valid colours, a known motif, no two ali
   const ham = Data.DRIVERS.find((d) => d.id === "hamilton").helmet;
   assert.notEqual(lec.base, ham.base);
 });
+
+test("no title sponsors in team names or descriptions", () => {
+  const SPONSORS = /moneygram|visa|cash app|stake|kick|bwt|aramco|oracle|petronas|mastercard|hp\b|atlassian|red bull racing honda/i;
+  Data.TEAMS.forEach((t) => {
+    assert.doesNotMatch(t.name, SPONSORS, t.id);
+    assert.doesNotMatch(t.style, SPONSORS, t.id);
+  });
+});
