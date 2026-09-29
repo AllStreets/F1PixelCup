@@ -313,6 +313,19 @@ function kerbMaterial(a, b) {
   });
 }
 
+// A barrier covered in adverts on its track side, plain on its back.
+function advertBarrierMaterial(map, frontFacesTrack) {
+  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.6, side: THREE.DoubleSide });
+  mat.userData.frontFacesTrack = frontFacesTrack;
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.frontFacesTrack = { value: frontFacesTrack };
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform bool frontFacesTrack;")
+      .replace("#include <map_fragment>", "#include <map_fragment>\nif (gl_FrontFacing != frontFacesTrack) diffuseColor.rgb = vec3(0.16, 0.16, 0.17);");
+  };
+  return mat;
+}
+
 // ---------------------------------------------------------------------------
 // The circuit itself
 // ---------------------------------------------------------------------------
@@ -365,10 +378,21 @@ export function buildCircuit(course, venue) {
 
   // Barriers covered in adverts, plus a catch fence in town.
   const advertTex = makeAdvertTexture([bg.curbA || "#dc0000", "#f4f4f4", bg.accent || "#ffe08a", "#1b1b24"], ["F1", "PIXEL", "CUP", "2025"]);
-  const barrierMat = new THREE.MeshStandardMaterial({ map: advertTex, roughness: 0.6, side: THREE.DoubleSide });
+  // The adverts are printed on the side facing the track; the back of the
+  // barrier is plain. The texture runs with the lap, which reads left to right
+  // on the left-hand barrier seen from the track; on the right-hand one it
+  // would read backwards, so that side wears it mirrored.
   const barrierH = course.street ? 8 : 7;
-  [(p) => -p.outerL - 1, (p) => p.outerR + 1].forEach((off) => {
-    mesh(wall(samples, off, c(0), c(barrierH), 150), barrierMat, { cast: true });
+  const mirroredTex = advertTex.clone();
+  mirroredTex.repeat.set(-1, 1);
+  [["left", (p) => -p.outerL - 1, advertTex], ["right", (p) => p.outerR + 1, mirroredTex]].forEach(([side, off, map]) => {
+    const geo = wall(samples, off, c(0), c(barrierH), 150);
+    // Which way the front faces point: toward the track or away from it.
+    const pos = geo.attributes.position;
+    const nrm = geo.attributes.normal;
+    const toTrack = (samples[0].x - pos.getX(0)) * nrm.getX(0) + (samples[0].y - pos.getZ(0)) * nrm.getZ(0);
+    const m = mesh(geo, advertBarrierMaterial(map, toTrack > 0), { cast: true });
+    m.userData.advertSide = side;
   });
   if (course.street) {
     const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });

@@ -7,12 +7,18 @@
 //
 // Which parts run depends on the graphics tier (quality.js): high has it all,
 // medium bloom + grade + bursts, low none of it (the scene is drawn directly).
+//
+// Every tier draws the scene the same way, straight to the canvas: the sky and
+// the fog are authored in display space, and three.js only tone-maps a draw to
+// the screen, so an HDR render target would tone-map them twice and wash the
+// picture out. The effects tiers then copy the finished frame into a texture
+// and work on it in display space -- High is Low plus the effects, never a
+// different exposure.
 import * as THREE from "three";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
+import { CopyShader } from "three/addons/shaders/CopyShader.js";
 
 // Per-circuit grades, in display space: lift and gain per channel, then
 // contrast and saturation. Night circuits bloom more (the floodlights).
@@ -112,11 +118,17 @@ export function createPostFx(renderer, scene, camera) {
   let composer = null;
   let bloom = null;
   let finish = null;
+  let frameTexture = null;
   const burst = { gold: 0, red: 0, blur: 0 };
   let playerId = null;
   let sunVisible = 0;
   let sunCheck = 0;
   let sunBlocked = false;
+  let sunOnScreen = false;
+  let sunBlocker = "";
+  // The flare eases on real time (it is how the picture looks, paused or not);
+  // the bursts fade on race time (they freeze with a paused race).
+  let lastWall = 0;
   const sunNdc = new THREE.Vector3();
   const ray = new THREE.Raycaster();
 
@@ -129,16 +141,25 @@ export function createPostFx(renderer, scene, camera) {
     else if (d.type === "itemUsed" && d.item === "drs") burst.blur = 1;
   });
 
+  // The frame, copied off the canvas: sized to its drawing buffer.
+  function frameSize() {
+    return renderer.getDrawingBufferSize(new THREE.Vector2());
+  }
+
   function build() {
     const size = renderer.getSize(new THREE.Vector2());
+    const drawn = frameSize();
+    frameTexture = new THREE.FramebufferTexture(drawn.x, drawn.y);
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
     composer = new EffectComposer(renderer, target);
     composer.setPixelRatio(renderer.getPixelRatio());
     composer.setSize(size.x, size.y);
-    composer.addPass(new RenderPass(scene, camera));
+    // The first pass reads the copied frame, not the composer's buffer.
+    const frame = new ShaderPass(CopyShader, "frame");
+    frame.uniforms.tDiffuse.value = frameTexture;
+    composer.addPass(frame);
     bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.25, 0.4, 0.9);
     composer.addPass(bloom);
-    composer.addPass(new OutputPass());
     finish = new ShaderPass(FinishShader);
     composer.addPass(finish);
   }
@@ -155,13 +176,23 @@ export function createPostFx(renderer, scene, camera) {
     if (!composer) return;
     composer.setPixelRatio(dpr);
     composer.setSize(w, h);
+    const drawn = frameSize();
+    if (frameTexture.image.width !== drawn.x || frameTexture.image.height !== drawn.y) {
+      frameTexture.dispose();
+      frameTexture = new THREE.FramebufferTexture(drawn.x, drawn.y);
+      composer.passes[0].uniforms.tDiffuse.value = frameTexture;
+    }
   }
 
   // How much of the sun the camera sees: on screen, in front, and not behind
   // scenery (a ray toward it, every few frames, eased).
   function updateSun(sunPosition, occluders, dt) {
+    // Project with the camera as it is this frame (its matrices are otherwise
+    // only brought up to date when the scene is drawn).
+    camera.updateMatrixWorld();
     sunNdc.copy(sunPosition).project(camera);
     const onScreen = sunNdc.z < 1 && Math.abs(sunNdc.x) < 1.15 && Math.abs(sunNdc.y) < 1.15;
+    sunOnScreen = onScreen;
     let target = 0;
     if (onScreen) {
       sunCheck -= 1;
@@ -170,7 +201,9 @@ export function createPostFx(renderer, scene, camera) {
         const dir = sunPosition.clone().sub(camera.position).normalize();
         ray.set(camera.position, dir);
         ray.far = camera.position.distanceTo(sunPosition);
-        sunBlocked = occluders.length > 0 && ray.intersectObjects(occluders, true).some((h) => !h.object.userData.ground);
+        const hit = occluders.length > 0 ? ray.intersectObjects(occluders, true).find((h) => !h.object.userData.ground) : null;
+        sunBlocked = Boolean(hit);
+        sunBlocker = hit ? (hit.object.name || hit.object.parent?.name || hit.object.type) : "";
       }
       target = sunBlocked ? 0 : 1 - Math.min(1, Math.max(Math.abs(sunNdc.x), Math.abs(sunNdc.y)));
     }
@@ -202,13 +235,22 @@ export function createPostFx(renderer, scene, camera) {
     u.uHaze.value = passes.haze ? grade.haze || 0 : 0;
     u.uFlare.value = passes.flare && !grade.night ? 1 : 0;
     const speed = Math.max(0, Math.min(1, ((frame.speedFraction || 0) - 0.55) / 0.45));
-    u.uBlur.value = passes.speedBlur ? Math.min(1, speed * 0.7 + burst.blur * 0.8 + (frame.boosting ? 0.15 : 0)) : 0;
+    u.uBlur.value = passes.speedBlur ? Math.min(1, speed * 0.4 + burst.blur * 0.7 + (frame.boosting ? 0.12 : 0)) : 0;
     u.uGold.value = burst.gold;
     u.uRed.value = burst.red;
-    bloom.strength = (grade.night ? 0.55 : 0.25) + burst.gold * 0.35;
-    bloom.threshold = grade.night ? 0.75 : 0.9;
-    if (passes.flare && frame.sunPosition) updateSun(frame.sunPosition, frame.occluders || [], dt);
+    // Bloom only on real highlights (the sun, the floodlights, the item
+    // boxes' glow), in display space: the sky and the white kerbs must not
+    // bloom into a veil. Night bloom is only a touch stronger.
+    bloom.strength = (grade.night ? 0.32 : 0.3) + burst.gold * 0.35;
+    bloom.threshold = 0.9;
+    const wall = performance.now();
+    const wallDt = lastWall ? Math.min(0.1, (wall - lastWall) / 1000) : 0;
+    lastWall = wall;
+    if (passes.flare && frame.sunPosition) updateSun(frame.sunPosition, frame.occluders || [], wallDt);
     else u.uSunVisible.value = 0;
+    renderer.setRenderTarget(null);
+    renderer.render(scene, camera);
+    renderer.copyFramebufferToTexture(frameTexture);
     composer.render(dt);
   }
 
@@ -221,6 +263,7 @@ export function createPostFx(renderer, scene, camera) {
       passes: { ...passes, bloom: Boolean(bloom && bloom.enabled && passes.bloom) },
       burst: { ...burst },
       sunVisible,
+      sun: { onScreen: sunOnScreen, blocked: sunBlocked, by: sunBlocker },
     }),
   };
 }

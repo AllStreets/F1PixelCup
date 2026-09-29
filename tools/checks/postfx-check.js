@@ -93,8 +93,10 @@ async (page) => {
     const pl = getPlayer();
     const sun = { x: 0.5, y: -0.6 }; // SUN_DIR's x and z in render3d.js
     const at = (k, h) => ({ x: pl.x + sun.x * k, y: pl.y + sun.y * k, d: pl.trackDistance, h });
-    const settle = () => new Promise((r) => { let n = 40; const t = () => (--n <= 0 ? r() : requestAnimationFrame(t)); requestAnimationFrame(t); });
-    Render3D.setPhotoCamera({ from: at(0, 60), at: at(400, 60 + 400 * 0.42 / Math.hypot(sun.x, sun.y)), fov: 70 });
+    // The flare eases in and out over real time: give it a full second.
+    const settle = () => new Promise((r) => { const end = performance.now() + 1000; const t = () => (performance.now() >= end ? r() : requestAnimationFrame(t)); requestAnimationFrame(t); });
+    // Straight at the sun: SUN_DIR scaled, (0.5, 0.42, -0.6) x 400.
+    Render3D.setPhotoCamera({ from: at(0, 60), at: at(400, 60 + 0.42 * 400), fov: 70 });
     await settle();
     const toward = Render3D.inspect().postfx.sunVisible;
     Render3D.setPhotoCamera({ from: at(0, 60), at: at(-400, 40), fov: 70 });
@@ -103,6 +105,56 @@ async (page) => {
     Render3D.setPhotoCamera(null);
     state.paused = false;
     return (toward > 0.3 && away < 0.05) || JSON.stringify({ toward, away });
+  });
+
+  // Every tier draws the scene the same way: High is Low with the effects on
+  // top, never a different exposure. The sky away from the sun, in the top
+  // middle of the frame (clear of the vignette), stays within a grade's reach.
+  const skyOf = async (tier) => {
+    await step((t) => Render3D.setGraphics(t), tier);
+    await frames(3);
+    const box = await step(() => ({ w: innerWidth, h: innerHeight }));
+    const png = await p.screenshot({ clip: { x: Math.round(box.w * 0.35), y: Math.round(box.h * 0.04), width: Math.round(box.w * 0.3), height: Math.round(box.h * 0.12) } });
+    return step(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      const sum = [0, 0, 0];
+      for (let i = 0; i < d.length; i += 4) { sum[0] += d[i]; sum[1] += d[i + 1]; sum[2] += d[i + 2]; }
+      return sum.map((v) => Math.round(v / (d.length / 4)));
+    }, png.toString("base64"));
+  };
+  await step(() => {
+    state.paused = true; state.pausedAt = performance.now();
+    document.getElementById("screens").style.visibility = "hidden";
+    document.getElementById("game").style.visibility = "hidden";
+    const pl = getPlayer();
+    const at = (k, h) => ({ x: pl.x - 0.5 * k, y: pl.y + 0.6 * k, d: pl.trackDistance, h });
+    Render3D.setPhotoCamera({ from: at(0, 40), at: at(400, 140), fov: 60 });
+  });
+  const lowSky = await skyOf("low");
+  const highSky = await skyOf("high");
+  await step(() => {
+    Render3D.setPhotoCamera(null);
+    document.getElementById("screens").style.visibility = "";
+    document.getElementById("game").style.visibility = "";
+    state.paused = false;
+  });
+  results.highKeepsLowExposure = (Array.isArray(lowSky) && Array.isArray(highSky)
+    && lowSky.every((v, i) => Math.abs(v - highSky[i]) <= 24) && lowSky.some((v) => v > 0)) || JSON.stringify({ lowSky, highSky });
+
+  // The advert barriers read from the track: printed on the side facing it,
+  // the right-hand one mirrored so that its words run forward.
+  results.advertsReadFromTrack = await step(() => {
+    const ads = Render3D.inspect().adverts;
+    const left = ads.find((a) => a.side === "left");
+    const right = ads.find((a) => a.side === "right");
+    return (ads.length === 2 && left.printedTowardTrack && right.printedTowardTrack && !left.mirrored && right.mirrored) || JSON.stringify(ads);
   });
 
   // Frame time per tier, the race running: Low is never slower than High.

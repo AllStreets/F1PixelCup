@@ -165,6 +165,31 @@ function prepare(track) {
   return true;
 }
 
+// The advert barriers: from the middle of the road, halfway round the lap, a
+// ray out to each barrier must meet the side printed with the adverts (the
+// material's own idea of which faces look at the track), and the right-hand
+// one must wear the mirrored print so that it reads forward.
+function advertsInspect(world) {
+  const { samples } = world.course;
+  const p = samples[Math.floor(samples.length / 2)];
+  const ray = new THREE.Raycaster();
+  const out = [];
+  world.group.traverse((m) => {
+    if (!m.userData.advertSide) return;
+    const sign = m.userData.advertSide === "left" ? -1 : 1;
+    const dir = new THREE.Vector3(p.nx * sign, 0, p.ny * sign);
+    ray.set(new THREE.Vector3(p.x, p.h + 3, p.y), dir);
+    const hit = ray.intersectObject(m, false)[0];
+    const frontHit = hit ? hit.face.normal.clone().transformDirection(m.matrixWorld).dot(dir) < 0 : null;
+    out.push({
+      side: m.userData.advertSide,
+      mirrored: m.material.map.repeat.x < 0,
+      printedTowardTrack: hit ? frontHit === m.material.userData.frontFacesTrack : false,
+    });
+  });
+  return out;
+}
+
 // What is on screen right now, for the browser checks.
 function inspect() {
   const flaps = {};
@@ -174,7 +199,7 @@ function inspect() {
   // Which painted helmet each car on track wears, by driver.
   const helmets = {};
   if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
-  return { flaps, helmets, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  return { flaps, helmets, adverts: current ? advertsInspect(current) : [], postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -367,7 +392,12 @@ const particleMat = new THREE.ShaderMaterial({
   depthWrite: false,
   uniforms: { map: { value: makeSmokeTexture() }, scale: { value: 400 } },
   vertexShader: `attribute float size; attribute float alpha; attribute vec3 color; varying vec3 vColor; varying float vAlpha; uniform float scale;
-    void main(){ vColor = color; vAlpha = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+    void main(){ vColor = color; vAlpha = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv;
+      // A sprite is one flat square at one depth: the road under it would cut
+      // it off in a hard line. Its depth is brought forward by about its own
+      // radius (where it lands on screen doesn't change).
+      vec4 front = projectionMatrix * vec4(mv.xy, mv.z + min(size, -mv.z * 0.5), 1.0);
+      gl_Position.z = front.z / front.w * gl_Position.w; }`,
   fragmentShader: `uniform sampler2D map; varying vec3 vColor; varying float vAlpha;
     void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vColor, t.a * vAlpha);
     #include <colorspace_fragment>
