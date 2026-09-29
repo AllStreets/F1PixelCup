@@ -254,6 +254,21 @@ async (page) => {
     return PowerUps.ITEM_ORDER.every((id) => window.__usedItems.includes(id));
   });
 
+  // DRS: the car's upper rear-wing flap really opens, then closes.
+  await setup();
+  results.drsFlap = await run(async () => {
+    const pl = getPlayer();
+    const closed = Render3D.inspect().flaps[pl.id];
+    pl.currentItem = "drs"; useItem(pl, performance.now());
+    await new Promise((r) => setTimeout(r, 400));
+    const open = Render3D.inspect().flaps[pl.id];
+    pl.drsUntil = performance.now();
+    await new Promise((r) => setTimeout(r, 500));
+    const shut = Render3D.inspect().flaps[pl.id];
+    const deg = (x) => (x * 180) / Math.PI;
+    return typeof closed === "number" && Math.abs(deg(closed)) < 0.5 && Math.abs(Math.abs(deg(open)) - 12) < 0.5 && Math.abs(deg(shut)) < 0.5;
+  });
+
   await context.close();
   return { results, errors };
 }

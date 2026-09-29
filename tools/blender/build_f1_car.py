@@ -7,8 +7,8 @@ smooth shell rather than a stack of boxes.
 Axes: X forward, Y left, Z up, metres. The origin sits on the ground under
 the middle of the car. Materials are named by role (livery_body, livery_trim,
 helmet, ...) so the game can recolour one model into all ten liveries. The
-four wheels are separate objects with their origin on the axle, so the game
-can spin and steer them.
+four wheels and the DRS flap (`drs_flap`, origin on its leading edge) are
+separate objects, so the game can spin and steer the wheels and open the flap.
 """
 import bpy
 import bmesh
@@ -273,6 +273,19 @@ for side, sgn in (("L", 1), ("R", -1)):
 # --- Rear wing --------------------------------------------------------------
 wing("rw_main", -2.38, 0.86, 1.02, 0.34, 0.05, "carbon", pitch=0.12)
 wing("rw_drs", -2.52, 0.97, 1.00, 0.22, 0.03, "livery_trim", pitch=0.45)
+# The DRS flap is its own object, pivoting on its leading edge, so the game
+# can open it. The profile runs from x + chord/2 (leading edge) and is pitched
+# about (x, z); this is that leading edge after the pitch.
+_drs_x, _drs_z, _drs_chord, _drs_pitch = -2.52, 0.97, 0.22, 0.45
+_lead = (_drs_x + (_drs_chord / 2) * math.cos(_drs_pitch), 0.0, _drs_z + (_drs_chord / 2) * math.sin(_drs_pitch))
+_flap = bpy.data.objects["rw_drs"]
+_flap.name = "drs_flap"
+bpy.context.scene.cursor.location = _lead
+bpy.ops.object.select_all(action="DESELECT")
+_flap.select_set(True)
+bpy.context.view_layer.objects.active = _flap
+bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
+bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
 wing("rw_beam", -2.35, 0.42, 0.80, 0.22, 0.025, "carbon", pitch=0.1)
 for side, sgn in (("L", 1), ("R", -1)):
     plate(f"rw_endplate_{side}", -2.42, sgn * 0.52, 0.70, 0.52, 0.025, 0.62, "livery_body")
@@ -391,7 +404,7 @@ bpy.ops.object.convert(target="MESH")
 bpy.ops.object.select_all(action="DESELECT")
 body = None
 for o in bpy.data.objects:
-    if o.type == "MESH" and not o.name.startswith("wheel_"):
+    if o.type == "MESH" and not o.name.startswith("wheel_") and o.name != "drs_flap":
         o.select_set(True)
         body = body or o
 bpy.context.view_layer.objects.active = bpy.data.objects["chassis"]

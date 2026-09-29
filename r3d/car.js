@@ -190,6 +190,7 @@ export function buildCar(kart, driver) {
   const model = template.clone(true);
   const mats = materialsFor(kart, driver);
   const wheels = {};
+  let flap = null;
   model.traverse((node) => {
     if (node.isMesh) {
       node.material = Array.isArray(node.material)
@@ -197,6 +198,7 @@ export function buildCar(kart, driver) {
         : mats.get(node.material.name) || node.material;
     }
     if (/^wheel_(FL|FR|RL|RR)$/.test(node.name)) wheels[node.name.slice(6)] = node;
+    if (node.name === "drs_flap") flap = node;
   });
   ["FL", "FR"].forEach((id) => {
     const wheel = wheels[id];
@@ -234,5 +236,5 @@ export function buildCar(kart, driver) {
   glow.visible = false;
   root.add(glow);
 
-  return { root, model, wheels, glow, spin: 0 };
+  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0 };
 }

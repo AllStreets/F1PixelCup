@@ -24,6 +24,7 @@ import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 
 const MAX_PARTICLES = 256;
 const BASE_FOV = 62;
+const DRS_OPEN = (12 * Math.PI) / 180;
 
 const canvas2d = document.getElementById("game");
 const shell = document.getElementById("canvas-shell");
@@ -58,7 +59,14 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, render, renderGarage, auditScenery };
+const api = { ready: false, render, renderGarage, auditScenery, inspect };
+
+// What is on screen right now, for the browser checks.
+function inspect() {
+  const flaps = {};
+  if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
+  return { flaps };
+}
 window.Render3D = api;
 
 loadCar(() => { api.ready = true; }, (error) => {
@@ -282,6 +290,14 @@ function syncCars(world, racers, player, now, dt) {
     const steer = Math.max(-0.45, Math.min(0.45, (racer.steer || 0) * 0.45));
     if (car.wheels.FLpivot) car.wheels.FLpivot.rotation.y = -steer;
     if (car.wheels.FRpivot) car.wheels.FRpivot.rotation.y = -steer;
+    // DRS: the upper flap tilts open on its leading edge while DRS is active
+    // (trailing edge up is a negative turn about the car's Z in three.js).
+    if (car.flap) {
+      const target = racer.drsUntil > now ? 1 : 0;
+      const step = dt / 0.15;
+      car.flapOpen += Math.max(-step, Math.min(step, target - car.flapOpen));
+      car.flap.rotation.z = -car.flapOpen * DRS_OPEN;
+    }
     const boosting = racer.formationUntil > now || racer.boostUntil > now;
     car.model.rotation.x = Math.max(-0.05, Math.min(0.05, -(racer.steer || 0) * 0.03 * Math.min(1, Math.abs(racer.speed) / 200)));
     car.glow.visible = boosting;
