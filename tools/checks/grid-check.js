@@ -23,7 +23,7 @@ async (page) => {
   // One failing step reports its error instead of stopping the whole check.
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
-  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); });
+  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); localStorage.removeItem("f1pixelcup.profile.v2"); localStorage.removeItem("f1pixelcup.driver"); });
   await p.reload();
   await p.waitForTimeout(1800);
   await step(() => {

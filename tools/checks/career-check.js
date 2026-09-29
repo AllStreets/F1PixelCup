@@ -3,7 +3,7 @@
 // browser_run_code_unsafe, filename: tools/checks/career-check.js, dev server
 // on http://localhost:8765. Expected: races 4, cupsCompleted 1, the bonus
 // counted once (careerAfterSecondPodium === careerAfterCup), quitRecorded 0,
-// every perDriver value true, no errors.
+// every perDriver and remembered value true, no errors.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -20,7 +20,17 @@ async (page) => {
   if (!response || !response.ok()) await p.goto(`http://localhost:8765/?${Date.now()}`);
   await p.waitForTimeout(1000);
   const result = await p.evaluate(() => {
-    localStorage.removeItem("f1pixelcup.profile");
+    Object.keys(localStorage).filter((k) => k.startsWith("f1pixelcup.profile") || k === "f1pixelcup.driver")
+      .forEach((k) => localStorage.removeItem(k));
+    // The player drives on autopilot (isPlayer off). If they are the last car
+    // home, the results are recorded in the very step they cross the line:
+    // hand the car back to them right then, as a real player would have it.
+    const record = window.recordPlayerRace;
+    window.recordPlayerRace = (finishers, fastest) => {
+      const me = state.racers.find((r) => r.id === state.playerId);
+      if (me) me.isPlayer = true;
+      return record(finishers, fastest);
+    };
     const runRace = () => {
       state.racers.forEach((r) => { r.isPlayer = r.id === state.playerId ? true : false; });
       const player = getPlayer();
@@ -66,6 +76,8 @@ async (page) => {
       bestLaps: Object.keys(afterCup.bestLaps),
       quitRecorded: afterQuit - before,
       panel: document.getElementById("career-chip").innerText,
+      // Every results strip names whose career it was (Leclerc, the default).
+      stripsNameDriver: strips.every((s) => s.startsWith("Leclerc: ")),
     };
   });
   // One career per driver: a race as Hamilton builds Hamilton's career and
@@ -92,17 +104,28 @@ async (page) => {
     }
     const lewis = Career.getDriver("hamilton");
     const leclercAfter = Career.getDriver("leclerc");
+    const lewisStrip = document.getElementById("results-career").innerText;
     resetToGarage();
     Game.selectDriver(ham);
     const chipLewis = document.getElementById("career-chip").textContent;
     document.getElementById("career-chip").click();
+    // The career screen is the selected driver's.
+    const card = document.getElementById("career-card").innerText;
+    const racesStat = [...document.querySelectorAll("#career-card .career-stat")].find((n) => /Races/i.test(n.textContent));
+    const showsLewis = /Lewis Hamilton · career/i.test(card) && racesStat && racesStat.querySelector("strong").textContent === "1";
     const rows = [...document.querySelectorAll("#career-screen .career-drivers tbody tr")];
     const listed = rows.map((r) => r.textContent);
     const leclercRow = document.querySelector('#career-screen .career-drivers [data-driver="' + DRIVERS.findIndex((d) => d.id === "leclerc") + '"]');
     if (leclercRow) leclercRow.click();
     const nowSelected = DRIVERS[state.selectedDriver].id;
     const overlayClosed = !(window.Screens && Screens.isOverlayOpen());
+    const chip = document.getElementById("career-chip");
+    const chipAfterPick = chip.textContent.startsWith("Leclerc · ") && document.activeElement === chip
+      && /^Career: Leclerc/.test(chip.getAttribute("aria-label"));
     return {
+      lewisStrip: lewisStrip.startsWith("Hamilton: "),
+      showsLewis,
+      chipAfterPick,
       lewisRaced: lewis.totals.races === 1,
       leclercUntouched: leclercAfter.totals.races === leclercBefore.totals.races && leclercAfter.careerPoints === leclercBefore.careerPoints,
       chipNew: /Hamilton · New career/.test(chipNew),
@@ -111,6 +134,40 @@ async (page) => {
       pickFromList: nowSelected === "leclerc" && overlayClosed,
     };
   });
+  // The game comes back to the driver you were racing.
+  const remembered = {};
+  await p.evaluate(() => Game.selectDriver(DRIVERS.findIndex((d) => d.id === "hamilton")));
+  await p.reload();
+  await p.waitForTimeout(1000);
+  remembered.afterReload = await p.evaluate(() => DRIVERS[state.selectedDriver].id === "hamilton"
+    && document.getElementById("career-chip").textContent.startsWith("Hamilton · "));
+  // With nothing picked, the last driver raced.
+  await p.evaluate(() => localStorage.removeItem("f1pixelcup.driver"));
+  await p.reload();
+  await p.waitForTimeout(1000);
+  remembered.lastRaced = await p.evaluate(() => DRIVERS[state.selectedDriver].id === Career.lastDriverId());
+  // The site's "Open career" link: that driver, the career open, and its rows
+  // pickable -- by keyboard too. The link's driver doesn't stay in the address.
+  await p.goto(`http://localhost:8765/play.html?driver=norris#career`);
+  await p.waitForTimeout(1200);
+  remembered.linkOpensDriver = await p.evaluate(() => DRIVERS[state.selectedDriver].id === "norris"
+    && Screens.isOverlayOpen() && /Lando Norris · career/i.test(document.getElementById("career-card").innerText)
+    && !location.search.includes("driver=") && location.hash === "#career");
+  const leclercIndex = await p.evaluate(() => DRIVERS.findIndex((d) => d.id === "leclerc"));
+  const rowButton = p.locator(`#career-screen .career-drivers button[data-driver="${leclercIndex}"]`);
+  remembered.rowsPickableFromLink = (await rowButton.count()) === 1
+    && (await rowButton.getAttribute("aria-label")) === "Race as Charles Leclerc";
+  await rowButton.focus();
+  await p.keyboard.press("Enter");
+  await p.waitForTimeout(200);
+  remembered.keyboardPick = await p.evaluate(() => DRIVERS[state.selectedDriver].id === "leclerc" && !Screens.isOverlayOpen()
+    && state.phase === "garage");
+  remembered.currentRowMarked = await p.evaluate(() => {
+    Screens.showCareer();
+    const row = document.querySelector("#career-screen .career-drivers tr[aria-current='true']");
+    Screens.closeOverlay();
+    return Boolean(row) && row.textContent.includes("Charles Leclerc");
+  });
   await context.close();
-  return { ...result, perDriver, errors };
+  return { ...result, perDriver, remembered, errors };
 }

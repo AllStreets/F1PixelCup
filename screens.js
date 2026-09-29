@@ -126,7 +126,12 @@
     if (!target || !window.Game) return;
     if (target.dataset.driver !== undefined) {
       Game.selectDriver(Number(target.dataset.driver));
-      if (target.dataset.actionClose) closeOverlay();
+      if (target.dataset.actionClose) {
+        closeOverlay();
+        // The button that had focus is gone with the overlay: land on the chip
+        // that now shows the chosen driver's career.
+        $("career-chip").focus();
+      }
     }
     else if (target.dataset.cup !== undefined) Game.selectCup(Number(target.dataset.cup));
     else if (target.dataset.difficulty !== undefined) Game.selectDifficulty(Number(target.dataset.difficulty));
@@ -206,10 +211,14 @@
     const rating = profile ? num(profile.rating) : 1200;
     const tier = window.Career ? Career.tierFor(rating) : "F4";
     const name = window.Game ? Game.getPitLaneState().driver.name : "";
-    const started = profile && (num(profile.totals && profile.totals.races) > 0 || num(profile.careerPoints) > 0);
-    $("career-chip").textContent = started
+    // Started: anything on record, even a rating or best lap carried over from an old save.
+    const started = profile && (num(profile.totals && profile.totals.races) > 0 || num(profile.careerPoints) > 0
+      || rating !== 1200 || Object.keys(profile.bestLaps || {}).length > 0);
+    const text = started
       ? `${surname(name)} · ${tier} ${rating} · ${num(profile.careerPoints).toLocaleString()} pts`
       : `${surname(name)} · New career · ${tier} ${rating}`;
+    $("career-chip").textContent = text;
+    $("career-chip").setAttribute("aria-label", `Career: ${text}`);
   }
 
   // ---- Race ----
@@ -332,9 +341,16 @@
       ["Cups won", `${num(totals.cupsWon)} / ${num(totals.cupsCompleted)}`],
     ];
     const name = window.Game ? Game.getPitLaneState().driver.name : "";
-    const drivers = window.Career ? Career.listDrivers() : [];
+    let drivers = [];
+    try {
+      drivers = window.Career ? Career.listDrivers() : [];
+    } catch (error) {
+      drivers = [];
+    }
     const driverName = (id) => ((typeof DRIVERS !== "undefined" ? DRIVERS : []).find((d) => d.id === id) || { name: id }).name;
-    const choosable = window.Game && Game.getPitLaneState && document.getElementById("pitlane") && !$("pitlane").classList.contains("hidden");
+    // Between cups, a row picks that driver (opened from the site's link too,
+    // before the pit lane has been drawn).
+    const choosable = Boolean(window.Game && Game.getPitLaneState().canChooseDriver);
     $("career-card").innerHTML = `
       <p class="kicker">${esc(name)} · career</p>
       <div class="career-head"><span class="career-tier">${esc(tier)}</span><span class="muted">Rating ${rating} · ${num(profile && profile.careerPoints).toLocaleString()} career points</span></div>
@@ -359,10 +375,11 @@
       ${drivers.length ? `<table class="career-history career-drivers"><thead><tr><th>Driver</th><th>Tier</th><th>Rating</th><th>Points</th><th>Races</th><th>Wins</th></tr></thead><tbody>
         ${drivers.map((d) => {
           const index = (typeof DRIVERS !== "undefined" ? DRIVERS : []).findIndex((x) => x.id === d.driverId);
+          const current = d.driverId === selectedDriverId();
           const label = choosable && index >= 0
-            ? `<button class="link-btn" data-driver="${index}" data-action-close="1" type="button">${esc(driverName(d.driverId))}</button>`
+            ? `<button class="link-btn" data-driver="${index}" data-action-close="1" type="button" aria-label="Race as ${esc(driverName(d.driverId))}">${esc(driverName(d.driverId))}</button>`
             : esc(driverName(d.driverId));
-          return `<tr class="${d.driverId === selectedDriverId() ? "is-current" : ""}"><td>${label}</td><td>${esc(d.tier)}</td><td>${num(d.rating)}</td>
+          return `<tr class="${current ? "is-current" : ""}"${current ? ' aria-current="true"' : ""}><td>${label}</td><td>${esc(d.tier)}</td><td>${num(d.rating)}</td>
             <td>${num(d.careerPoints).toLocaleString()}</td><td>${num(d.races)}</td><td>${num(d.wins)}</td></tr>`;
         }).join("")}</tbody></table>` : `<p class="muted">No careers yet — pick any driver and race to start theirs.</p>`}
       <div class="overlay-actions"><button class="ghost-btn" data-action="close" type="button">Back (Esc)</button></div>`;

@@ -48,23 +48,24 @@
   // recently leads (Leclerc before any racing); the others follow in a row each.
   function renderCareer() {
     let list = [];
-    let profile = null;
+    let lastId = null;
     try {
-      profile = window.Career ? Career.getProfile() : null;
       list = window.Career ? Career.listDrivers() : [];
+      lastId = window.Career ? Career.lastDriverId() : null;
     } catch (error) {
-      profile = null;
       list = [];
     }
     const nameOf = (id) => (DRIVERS.find((d) => d.id === id) || { name: id }).name;
-    if (!profile || list.length === 0) {
+    if (list.length === 0) {
       $("career-summary").innerHTML = `
         <div><span class="career-tier">F4</span></div>
         <p>Every driver has their own career, and each one starts at <strong>1200 · F4</strong>. Race as Leclerc and it's Leclerc's career that climbs — his points, rating, poles and best lap on every circuit — while Hamilton's waits for you. Saved in this browser.</p>
         <p><a class="go-btn" href="./play.html"><span>Start your first career ›</span></a></p>`;
       return;
     }
-    const leadId = list.some((d) => d.driverId === profile.lastDriverId) ? profile.lastDriverId : list[0].driverId;
+    // The driver raced most recently: as recorded, or else by their latest race.
+    const byLatestRace = [...list].sort((a, b) => String(b.lastRaceAt || "").localeCompare(String(a.lastRaceAt || "")))[0];
+    const leadId = list.some((d) => d.driverId === lastId) ? lastId : byLatestRace.driverId;
     const lead = Career.getDriver(leadId);
     const totals = lead.totals || {};
     const rating = num(lead.rating);
@@ -87,8 +88,8 @@
         return `<div class="summary-best"><span>${esc(c.name)}</span><strong>${esc(lapTime(best ? num(best.ms) : 0))}</strong></div>`;
       }).join("")}</div>
       ${others.length ? `<p class="kicker">Your other drivers</p>
-      <ul class="summary-drivers">${others.map((d) => `<li><strong>${esc(nameOf(d.driverId))}</strong><span>${esc(d.tier)} · ${num(d.rating)}</span><span>${num(d.careerPoints).toLocaleString()} pts · ${num(d.races)} races</span></li>`).join("")}</ul>` : ""}
-      <p><a class="ghost-btn" href="./play.html#career">Open career</a></p>`;
+      <ul class="summary-drivers">${others.map((d) => `<li><strong>${esc(nameOf(d.driverId))}</strong><span>${esc(d.tier)} · ${num(d.rating)}</span><span>${num(d.careerPoints).toLocaleString()} pts · ${num(d.races)} ${num(d.races) === 1 ? "race" : "races"}</span></li>`).join("")}</ul>` : ""}
+      <p><a class="ghost-btn" href="./play.html?driver=${encodeURIComponent(leadId)}#career">Open ${esc(nameOf(leadId).split(" ").pop())}'s career</a></p>`;
   }
 
 

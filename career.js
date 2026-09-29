@@ -79,14 +79,17 @@
   // The saved profile: one career per driver. One JSON document under one key,
   // read fresh before every record (so a second tab's progress is never
   // overwritten) and written whole in one setItem (so a crash cannot leave half
-  // a profile). Version 1 was a single shared career; it is split by driver the
-  // first time it is read (see migrateV1).
+  // a profile). Version 1 was a single shared career under the old key; it is
+  // split by driver the first time it is read (see migrateV1) and left where
+  // it is, untouched: it is the backup, and a tab still running the old game
+  // writes there without touching v2.
   // ---------------------------------------------------------------------------
 
-  const STORAGE_KEY = "f1pixelcup.profile";
+  const STORAGE_KEY = "f1pixelcup.profile.v2";
+  const LEGACY_KEY = "f1pixelcup.profile";
   const BACKUP_PREFIX = "f1pixelcup.profile.backup.";
   const PROFILE_VERSION = 2;
-  // Per driver.
+  // In total, across every driver: the oldest entries go first.
   const HISTORY_LIMIT = 5000;
   // Who a career with no driver on record belongs to: the game's default driver.
   const DEFAULT_DRIVER = "leclerc";
@@ -118,11 +121,9 @@
   const isObject = (value) => Boolean(value) && typeof value === "object" && !Array.isArray(value);
   const numberOr = (value, fallback) => (isNumber(value) && value >= 0 ? value : fallback);
   const stringOr = (value, fallback) => (typeof value === "string" && value ? value : fallback);
-
-  // A save this version of the game understands (v1 is migrated, v2 is current).
-  function recognised(raw) {
-    return isObject(raw) && isNumber(raw.version) && raw.version >= 1 && raw.version <= PROFILE_VERSION;
-  }
+  // A driver id the profile can key by: a plain name, never one of the names
+  // every object already has (constructor, toString, __proto__, ...).
+  const validId = (id) => typeof id === "string" && /^[a-z][a-z0-9_-]{0,39}$/i.test(id) && !(id in Object.prototype);
 
   // A save written by a newer version of the game. It is not ours to touch.
   function fromNewerVersion(raw) {
@@ -166,7 +167,7 @@
     const drivers = {};
     if (isObject(raw.drivers)) {
       Object.keys(raw.drivers).forEach((driverId) => {
-        if (isObject(raw.drivers[driverId])) drivers[driverId] = cleanDriver(driverId, raw.drivers[driverId]);
+        if (validId(driverId) && isObject(raw.drivers[driverId])) drivers[driverId] = cleanDriver(driverId, raw.drivers[driverId]);
       });
     }
     return {
@@ -174,7 +175,7 @@
       profileId: stringOr(raw.profileId, base.profileId),
       createdAt: stringOr(raw.createdAt, base.createdAt),
       updatedAt: stringOr(raw.updatedAt, base.updatedAt),
-      lastDriverId: stringOr(raw.lastDriverId, null),
+      lastDriverId: validId(raw.lastDriverId) ? raw.lastDriverId : null,
       drivers,
     };
   }
@@ -182,26 +183,48 @@
   // One shared career (v1) becomes one per driver (v2), with nothing lost:
   // the history is replayed in order -- each race to the driver who drove it,
   // each cup to the driver of its races -- and each driver's rating is worked
-  // out again from 1200 on their own races. Whatever the history can't account
+  // out again on their own races (from 1200, or from where a trimmed history
+  // starts). Entries with no driver of their own (a cup whose races are gone,
+  // anything that isn't a race or a cup) go to the driver of the race before
+  // them, or else of the race after them. Whatever the history can't account
   // for goes to the most-raced driver (or Leclerc, with no history at all).
   function migrateV1(raw, at, uuid) {
     const base = freshProfile(at, uuid);
     const history = Array.isArray(raw.history) ? raw.history.filter(isObject) : [];
     const drivers = {};
     const driver = (id) => (drivers[id] = drivers[id] || freshDriver(id));
-    const cupDriver = {};
+    const cupDriver = new Map();
     history.forEach((entry) => {
-      if (entry.type === "race" && typeof entry.driverId === "string" && entry.cupRunId) cupDriver[entry.cupRunId] = entry.driverId;
+      if (entry.type === "race" && validId(entry.driverId) && entry.cupRunId) cupDriver.set(entry.cupRunId, entry.driverId);
     });
     let lastDriver = null;
     let replayedPoints = 0;
     const replayedTotals = Object.fromEntries(TOTAL_KEYS.map((key) => [key, 0]));
     let ratedInHistory = 0;
+    // Entries waiting for a driver: nothing before them said whose they were.
+    let waiting = [];
+
+    function file(entry, id) {
+      const d = driver(id);
+      if (entry.type === "cup") {
+        const points = numberOr(entry.careerPointsEarned, 0);
+        d.careerPoints += points;
+        replayedPoints += points;
+        d.totals.cupsCompleted += 1;
+        replayedTotals.cupsCompleted += 1;
+        if (entry.position === 1) { d.totals.cupsWon += 1; replayedTotals.cupsWon += 1; }
+        d.history.push({ ...entry, driverId: id });
+      } else {
+        d.history.push({ ...entry });
+      }
+    }
 
     history.forEach((entry) => {
       if (entry.type === "race") {
-        const id = stringOr(entry.driverId, lastDriver || DEFAULT_DRIVER);
+        const id = validId(entry.driverId) ? entry.driverId : (lastDriver || DEFAULT_DRIVER);
         lastDriver = id;
+        waiting.forEach((w) => file(w, id));
+        waiting = [];
         const d = driver(id);
         const quali = isObject(entry.qualifying) ? entry.qualifying : null;
         const points = numberOr(entry.careerPointsEarned, 0) + (quali ? numberOr(quali.careerPoints, 0) : 0);
@@ -210,8 +233,11 @@
         const position = entry.position;
         const rated = isNumber(position) && position >= 1 && isNumber(entry.fieldSize)
           && Object.prototype.hasOwnProperty.call(MULTIPLIER, entry.difficulty);
-        const replayed = { ...entry };
+        const replayed = { ...entry, driverId: id };
         if (rated) {
+          // A trimmed history starts part-way through the career: start the
+          // replay from the rating it had then.
+          if (ratedInHistory === 0 && isNumber(entry.ratingBefore) && entry.ratingBefore > 0) d.rating = entry.ratingBefore;
           const r = rateRace({ rating: d.rating, ratedRaces: d.ratedRaces, position, fieldSize: entry.fieldSize, difficulty: entry.difficulty });
           d.rating = r.after;
           d.ratedRaces += 1;
@@ -231,37 +257,31 @@
           }
         }
         d.history.push(replayed);
-      } else if (entry.type === "cup") {
-        const id = cupDriver[entry.cupRunId] || lastDriver || DEFAULT_DRIVER;
-        const d = driver(id);
-        const points = numberOr(entry.careerPointsEarned, 0);
-        d.careerPoints += points;
-        replayedPoints += points;
-        d.totals.cupsCompleted += 1;
-        replayedTotals.cupsCompleted += 1;
-        if (entry.position === 1) { d.totals.cupsWon += 1; replayedTotals.cupsWon += 1; }
-        d.history.push({ ...entry });
       } else {
-        driver(lastDriver || DEFAULT_DRIVER).history.push({ ...entry });
+        const owner = (entry.type === "cup" && cupDriver.get(entry.cupRunId)) || lastDriver;
+        if (owner) file(entry, owner);
+        else waiting.push(entry);
       }
     });
 
     // What the history can't account for (trimmed history, a hand-made save).
+    // Only what is missing is added: when the history adds up to more than the
+    // v1 totals (a hand edit), the history stands and nothing is taken away.
     const mostRaced = Object.values(drivers).sort((a, b) => b.totals.races - a.totals.races)[0];
     const heir = () => (mostRaced || driver(DEFAULT_DRIVER));
+    waiting.forEach((w) => file(w, heir().driverId));
     const extraPoints = numberOr(raw.careerPoints, 0) - replayedPoints;
     const totals = cleanTotals(raw.totals);
     const extraTotals = TOTAL_KEYS.filter((key) => totals[key] > replayedTotals[key]);
     const legacyRating = ratedInHistory === 0 && numberOr(raw.rating, START_RATING) !== START_RATING;
+    const extraRated = numberOr(raw.ratedRaces, 0) - ratedInHistory;
     if (extraPoints > 0) heir().careerPoints += extraPoints;
     extraTotals.forEach((key) => { heir().totals[key] += totals[key] - replayedTotals[key]; });
-    if (legacyRating) {
-      heir().rating = numberOr(raw.rating, START_RATING);
-      heir().ratedRaces = numberOr(raw.ratedRaces, 0);
-    }
+    if (legacyRating) heir().rating = numberOr(raw.rating, START_RATING);
+    if (extraRated > 0) heir().ratedRaces += extraRated;
     // Best laps the history no longer shows.
     Object.entries(cleanBestLaps(raw.bestLaps)).forEach(([trackId, lap]) => {
-      const d = driver(stringOr(lap.driverId, heir().driverId));
+      const d = validId(lap.driverId) ? driver(lap.driverId) : heir();
       if (!d.bestLaps[trackId] || lap.ms < d.bestLaps[trackId].ms) {
         d.bestLaps[trackId] = { ms: lap.ms, at: stringOr(lap.at, at), difficulty: lap.difficulty, teamId: lap.teamId };
       }
@@ -270,18 +290,40 @@
     Object.keys(drivers).forEach((id) => {
       const d = drivers[id];
       const empty = d.careerPoints === 0 && d.history.length === 0 && TOTAL_KEYS.every((key) => d.totals[key] === 0)
-        && Object.keys(d.bestLaps).length === 0 && d.rating === START_RATING;
+        && Object.keys(d.bestLaps).length === 0 && d.rating === START_RATING && d.ratedRaces === 0;
       if (empty) delete drivers[id];
     });
+    const remaining = Object.keys(drivers);
+    const lastDriverId = (lastDriver && drivers[lastDriver] && lastDriver)
+      || (mostRaced && drivers[mostRaced.driverId] && mostRaced.driverId)
+      || (remaining.length === 1 ? remaining[0] : null)
+      || (drivers[DEFAULT_DRIVER] ? DEFAULT_DRIVER : remaining[0])
+      || DEFAULT_DRIVER;
     return {
       version: PROFILE_VERSION,
       profileId: stringOr(raw.profileId, base.profileId),
       createdAt: stringOr(raw.createdAt, base.createdAt),
       updatedAt: stringOr(raw.updatedAt, base.updatedAt),
-      lastDriverId: lastDriver || (Object.keys(drivers).length ? heir().driverId : null),
+      lastDriverId,
       drivers,
     };
   }
+
+  // Keep the newest `limit` history entries across every driver.
+  function trimHistory(profile, limit) {
+    const all = [];
+    Object.values(profile.drivers).forEach((d) => d.history.forEach((entry) => {
+      all.push({ entry, at: typeof entry.at === "string" ? entry.at : "" });
+    }));
+    if (all.length <= limit) return;
+    // A stable sort: entries of the same moment keep their order.
+    all.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    const drop = new Set(all.slice(0, all.length - limit).map((x) => x.entry));
+    Object.values(profile.drivers).forEach((d) => { d.history = d.history.filter((entry) => !drop.has(entry)); });
+  }
+
+  const historySize = (profile) => Object.values(profile.drivers).reduce((n, d) => n + d.history.length, 0);
+  const isQuotaError = (error) => /quota/i.test(`${error && error.name} ${error && error.message}`);
 
   const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -297,13 +339,14 @@
     // session then plays from memory and nothing is written.
     let locked = false;
 
+    // True when saved; false, or "quota" when storage is full.
     function write(profile) {
       if (!storage || locked) return false;
       try {
         storage.setItem(STORAGE_KEY, JSON.stringify(profile));
         return true;
       } catch (error) {
-        return false;
+        return isQuotaError(error) ? "quota" : false;
       }
     }
 
@@ -328,7 +371,7 @@
         return memory;
       }
       if (raw === null || raw === undefined) {
-        memory = freshProfile(at, uuid);
+        memory = fromLegacy(at);
         return memory;
       }
       let parsed = null;
@@ -342,7 +385,7 @@
         memory = freshProfile(at, uuid);
         return memory;
       }
-      if (!recognised(parsed)) {
+      if (!isObject(parsed) || parsed.version !== PROFILE_VERSION) {
         // Never throw a save away: keep it under a backup key, then start over.
         // If the backup cannot be written, leave the save exactly where it is.
         if (!backUp(`${BACKUP_PREFIX}${Date.parse(at)}`, raw)) {
@@ -354,34 +397,46 @@
         write(memory);
         return memory;
       }
-      if (parsed.version === 1) {
-        // Split the shared career by driver, keeping the v1 save as a backup.
-        // Without a backup the v1 save stays as it is and the session plays
-        // from memory.
-        memory = migrateV1(parsed, at, uuid);
-        if (!backUp(`${BACKUP_PREFIX}v1-${Date.parse(at)}`, raw)) {
-          locked = true;
-          return memory;
-        }
-        write(memory);
-        return memory;
-      }
       memory = cleanV2(parsed, at, uuid);
       return memory;
     }
 
+    // No v2 profile yet: split a v1 save if there is one (leaving it where it
+    // is), otherwise start fresh. Anything else under the old key -- damaged,
+    // or from some other version -- is left alone too.
+    function fromLegacy(at) {
+      let legacy = null;
+      try {
+        const text = storage ? storage.getItem(LEGACY_KEY) : null;
+        legacy = text === null || text === undefined ? null : JSON.parse(text);
+      } catch (error) {
+        legacy = null;
+      }
+      if (!isObject(legacy) || legacy.version !== 1) return freshProfile(at, uuid);
+      const migrated = migrateV1(legacy, at, uuid);
+      // If it can't be saved, play from memory rather than split it again on every read.
+      unsaved = save(migrated) !== true;
+      return migrated;
+    }
+
+    // Write, and when storage is full make room from the oldest history once.
+    function save(profile) {
+      const result = write(profile);
+      if (result !== "quota" || historySize(profile) < 100) return result;
+      trimHistory(profile, Math.floor(historySize(profile) / 2));
+      return write(profile);
+    }
+
     function commit(profile) {
       profile.updatedAt = now().toISOString();
-      Object.values(profile.drivers).forEach((d) => {
-        if (d.history.length > HISTORY_LIMIT) d.history = d.history.slice(-HISTORY_LIMIT);
-      });
+      trimHistory(profile, HISTORY_LIMIT);
       memory = profile;
-      unsaved = !write(profile);
+      unsaved = save(profile) !== true;
       return !unsaved;
     }
 
     function requireDriver(result, what) {
-      if (!result || typeof result.driverId !== "string" || !result.driverId) {
+      if (!result || !validId(result.driverId)) {
         throw new Error(`Career: ${what} needs a driverId`);
       }
       return result.driverId;
@@ -468,21 +523,20 @@
       const profile = read();
       const award = cupAward(result);
       // Once per cup attempt, whichever driver it was first recorded for.
-      const existing = result.cupRunId && Object.values(profile.drivers).some((d) => (
-        d.history.some((entry) => entry.type === "cup" && entry.cupRunId === result.cupRunId)));
-      const d = profile.drivers[driverId] || (profile.drivers[driverId] = freshDriver(driverId));
-      if (existing) {
-        const recorded = Object.values(profile.drivers).flatMap((x) => x.history)
-          .find((entry) => entry.type === "cup" && entry.cupRunId === result.cupRunId);
+      const owner = result.cupRunId ? Object.values(profile.drivers).find((x) => (
+        x.history.some((entry) => entry.type === "cup" && entry.cupRunId === result.cupRunId))) : null;
+      if (owner) {
+        const recorded = owner.history.find((entry) => entry.type === "cup" && entry.cupRunId === result.cupRunId);
         return {
           bonus: award.bonus,
           multiplier: award.multiplier,
           careerPoints: recorded.careerPointsEarned,
-          careerTotal: d.careerPoints,
+          careerTotal: owner.careerPoints,
           alreadyRecorded: true,
           saved: true,
         };
       }
+      const d = profile.drivers[driverId] || (profile.drivers[driverId] = freshDriver(driverId));
       d.careerPoints += award.careerPoints;
       d.totals.cupsCompleted += 1;
       if (result.position === 1) d.totals.cupsWon += 1;
@@ -512,7 +566,7 @@
 
     function getDriver(driverId) {
       const profile = read();
-      return clone(profile.drivers[driverId] || freshDriver(driverId));
+      return clone((validId(driverId) && profile.drivers[driverId]) || freshDriver(driverId));
     }
 
     function listDrivers() {
@@ -536,6 +590,7 @@
       getProfile: () => clone(read()),
       getDriver,
       listDrivers,
+      lastDriverId: () => read().lastDriverId,
       startCupRun: () => uuid(),
     };
   }
@@ -552,6 +607,7 @@
     START_RATING,
     DIFFICULTY_NAMES,
     STORAGE_KEY,
+    LEGACY_KEY,
     BACKUP_PREFIX,
     PROFILE_VERSION,
     HISTORY_LIMIT,
