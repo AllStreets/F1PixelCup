@@ -23,6 +23,7 @@ import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox } f
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
+import { createPostFx } from "./r3d/postfx.js";
 
 const MAX_PARTICLES = 256;
 
@@ -53,6 +54,78 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 2, 9000);
 
+// ---------------------------------------------------------------------------
+// Graphics quality and post-processing (quality.js, r3d/postfx.js). The tier
+// starts from a guess about the device, steps down once if the first seconds
+// of racing run slow, and the player's choice in Settings overrides it.
+// ---------------------------------------------------------------------------
+
+const postfx = createPostFx(renderer, scene, camera);
+const GRAPHICS_KEY = "f1pixelcup.graphics";
+const Quality = window.Quality;
+
+function storedGraphics() {
+  try {
+    return Quality.parseChoice(window.localStorage.getItem(GRAPHICS_KEY));
+  } catch (error) {
+    return "auto";
+  }
+}
+
+function deviceInfo() {
+  let gpu = "";
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch (error) {
+    gpu = "";
+  }
+  const touchOnly = Boolean(window.Device && window.Device.isTouchOnly(window.matchMedia && window.matchMedia.bind(window)));
+  return { cores: navigator.hardwareConcurrency || 0, memoryGb: navigator.deviceMemory || 0, touchOnly, gpu };
+}
+
+let graphicsChoice = storedGraphics();
+let autoTier = Quality.initialTier(deviceInfo());
+let autoSettled = false;
+const frameSamples = [];
+let lastFrameAt = 0;
+const currentTier = () => Quality.effectiveTier(graphicsChoice, autoTier);
+postfx.setTier(currentTier());
+
+// The first 90 frames of racing (not paused) decide whether auto steps down.
+function sampleFrame(racing) {
+  if (autoSettled || graphicsChoice !== "auto") return;
+  const t = performance.now();
+  if (!racing) { lastFrameAt = 0; return; }
+  if (lastFrameAt) frameSamples.push(t - lastFrameAt);
+  lastFrameAt = t;
+  if (frameSamples.length >= 90) {
+    autoSettled = true;
+    // The first frames of a race carry one-off work: judge the rest.
+    const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
+    if (next !== autoTier) {
+      autoTier = next;
+      postfx.setTier(currentTier());
+    }
+  }
+}
+
+function setGraphics(choice) {
+  graphicsChoice = Quality.parseChoice(choice);
+  try {
+    window.localStorage.setItem(GRAPHICS_KEY, graphicsChoice);
+  } catch (error) {
+    // The choice holds for this visit only.
+  }
+  postfx.setTier(currentTier());
+  return graphics();
+}
+
+function graphics() {
+  return { choice: graphicsChoice, autoTier, tier: currentTier(), sampled: frameSamples.length, settled: autoSettled };
+}
+
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -64,7 +137,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -92,15 +165,65 @@ function prepare(track) {
   return true;
 }
 
+// The advert barriers, for the checks. Each quad's front is to the right of
+// its run from its first edge to its second (the winding), and the print must
+// run forward the same way; the back faces flip it (r3d/track.js,
+// advertBarrierMaterial). Then the words read forward from either side,
+// wherever the wall turns. And no quad may stand on a road at its own height.
+function auditAdverts(track) {
+  const world = ensureWorld(track);
+  const { course } = world;
+  const out = [];
+  world.circuit.traverse((m) => {
+    if (!m.userData.advertSide) return;
+    const geo = m.geometry;
+    const pos = geo.attributes.position;
+    const uv = geo.attributes.uv;
+    const index = geo.index;
+    const backwards = [];
+    const onRoad = [];
+    // The wall's foot, quad by quad: it must never cross itself (a loop on
+    // the inside of a tight bend).
+    const foot = [];
+    const a = new THREE.Vector3();
+    const b = new THREE.Vector3();
+    // Two triangles per quad, six indices: (first bottom, second bottom, first top) first.
+    for (let t = 0; t < index.count; t += 6) {
+      const ia = index.getX(t);
+      const ib = index.getX(t + 1);
+      a.fromBufferAttribute(pos, ia);
+      b.fromBufferAttribute(pos, ib);
+      if (a.distanceTo(b) < 0.01) continue;
+      if (uv.getX(ib) <= uv.getX(ia)) backwards.push(Math.round(a.x) + "," + Math.round(a.z));
+      foot.push([a.x, a.z, b.x, b.z]);
+      const x = (a.x + b.x) / 2;
+      const z = (a.z + b.z) / 2;
+      const road = course.nearestSample(x, z);
+      if (road && Math.hypot(road.x - x, road.y - z) < course.width && Math.abs(a.y - road.h) < 10) onRoad.push(Math.round(road.d));
+    }
+    let loops = 0;
+    const crosses = ([ax, az, bx, bz], [cx, cz, dx, dz]) => {
+      const side = (px, pz, qx, qz, rx, rz) => Math.sign((qx - px) * (rz - pz) - (qz - pz) * (rx - px));
+      return side(ax, az, bx, bz, cx, cz) * side(ax, az, bx, bz, dx, dz) < 0 && side(cx, cz, dx, dz, ax, az) * side(cx, cz, dx, dz, bx, bz) < 0;
+    };
+    foot.forEach((seg, k) => {
+      for (let j = Math.max(0, k - 60); j < k - 1; j += 1) if (crosses(foot[j], seg)) loops += 1;
+    });
+    out.push({ side: m.userData.advertSide, readsBothWays: Boolean(m.material.userData.readsBothWays), quads: index.count / 6, backwards, onRoad, loops });
+  });
+  return out;
+}
+
 // What is on screen right now, for the browser checks.
 function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
   const layer = powerUpLayer.inspect();
+  const fx = postfx.inspect();
   // Which painted helmet each car on track wears, by driver.
   const helmets = {};
   if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
-  return { flaps, helmets, ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  return { flaps, helmets, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -233,7 +356,8 @@ function buildWorld(track) {
   const fogColor = applyLighting(bg, venue, venue.night);
   group.add(buildSky(bg, venue.night, fogColor));
   group.add(buildGround(course, venue, bg));
-  group.add(buildCircuit(course, venue));
+  const circuit = buildCircuit(course, venue);
+  group.add(circuit);
   // Decor from the track data first (it was laid out with the circuit), then
   // landmarks and trees fill round it. Everything claims its footprint.
   const decor = buildDecor(course, venue);
@@ -249,7 +373,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, decor, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0 };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0 };
 }
 
 function disposeWorld(world) {
@@ -284,18 +408,35 @@ const pPos = new Float32Array(MAX_PARTICLES * 3);
 const pCol = new Float32Array(MAX_PARTICLES * 3);
 const pSize = new Float32Array(MAX_PARTICLES);
 const pAlpha = new Float32Array(MAX_PARTICLES);
+const pLift = new Float32Array(MAX_PARTICLES);
 particleGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
 particleGeo.setAttribute("color", new THREE.BufferAttribute(pCol, 3));
 particleGeo.setAttribute("size", new THREE.BufferAttribute(pSize, 1));
 particleGeo.setAttribute("alpha", new THREE.BufferAttribute(pAlpha, 1));
+particleGeo.setAttribute("lift", new THREE.BufferAttribute(pLift, 1));
+// A sprite is one flat square at one depth, so the road would cut its lower
+// half off in a hard line. Instead each pixel fades out as its own height
+// above the road (the puff's lift, less how far down the sprite it is) nears
+// zero: the puff settles onto the road, and anything really in front of it --
+// a car, a barrier -- still hides it.
 const particleMat = new THREE.ShaderMaterial({
   transparent: true,
   depthWrite: false,
   uniforms: { map: { value: makeSmokeTexture() }, scale: { value: 400 } },
-  vertexShader: `attribute float size; attribute float alpha; attribute vec3 color; varying vec3 vColor; varying float vAlpha; uniform float scale;
-    void main(){ vColor = color; vAlpha = alpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = size * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
-  fragmentShader: `uniform sampler2D map; varying vec3 vColor; varying float vAlpha;
-    void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vColor, t.a * vAlpha);
+  vertexShader: `attribute float size; attribute float alpha; attribute float lift; attribute vec3 color;
+    varying vec3 vColor; varying float vAlpha; varying float vLift; varying float vRadius; uniform float scale;
+    void main(){ vColor = color; vAlpha = alpha; vLift = lift;
+      vec4 mv = modelViewMatrix * vec4(position,1.0);
+      gl_PointSize = size * scale / -mv.z;
+      // The sprite's radius in world units: scale is 0.9 x the drawing
+      // buffer's height, so this is independent of distance and screen size.
+      vRadius = 0.9 * size / projectionMatrix[1][1];
+      gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `uniform sampler2D map; varying vec3 vColor; varying float vAlpha; varying float vLift; varying float vRadius;
+    void main(){ vec4 t = texture2D(map, gl_PointCoord);
+      float height = vLift + (0.5 - gl_PointCoord.y) * 2.0 * vRadius;
+      float ground = smoothstep(0.08 * vRadius, 0.45 * vRadius, height);
+      gl_FragColor = vec4(vColor, t.a * vAlpha * ground);
     #include <colorspace_fragment>
     }`,
 });
@@ -310,7 +451,8 @@ function syncParticles(list, course) {
     const p = list[i];
     const life = Math.max(0, Math.min(1, p.life / p.maxLife));
     pPos[i * 3] = p.x;
-    pPos[i * 3 + 1] = course.heightAtPoint(p.x, p.y) + (p.height || 3) + (1 - life) * 6;
+    pLift[i] = (p.height || 3) + (1 - life) * 6;
+    pPos[i * 3 + 1] = course.heightAtPoint(p.x, p.y) + pLift[i];
     pPos[i * 3 + 2] = p.y;
     tmpColor.set(p.color || "#ffffff");
     pCol[i * 3] = tmpColor.r;
@@ -320,7 +462,7 @@ function syncParticles(list, course) {
     pAlpha[i] = life * 0.7;
   }
   particleGeo.setDrawRange(0, n);
-  ["position", "color", "size", "alpha"].forEach((k) => { particleGeo.attributes[k].needsUpdate = true; });
+  ["position", "color", "size", "alpha", "lift"].forEach((k) => { particleGeo.attributes[k].needsUpdate = true; });
 }
 
 // ---------------------------------------------------------------------------
@@ -405,12 +547,15 @@ function resize() {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  if (renderer.getPixelRatio() !== dpr || canvas3d.width !== Math.round(w * dpr) || canvas3d.height !== Math.round(h * dpr)) {
+  // three sizes the canvas with Math.floor: compare the same way, or a
+  // fractional pixel ratio would resize on every frame.
+  if (renderer.getPixelRatio() !== dpr || canvas3d.width !== Math.floor(w * dpr) || canvas3d.height !== Math.floor(h * dpr)) {
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     particleMat.uniforms.scale.value = h * dpr * 0.9;
+    postfx.setSize(w, h, dpr);
   }
 }
 
@@ -523,7 +668,13 @@ function render(frame) {
     if (o.userData.followCamera) o.position.copy(camera.position);
   });
 
-  renderer.render(scene, camera);
+  // The frame, through the post-processing of the current tier.
+  sampleFrame(Boolean(frame.racing));
+  postfx.render({
+    dt, now, trackId: track.id, speedFraction: sf, boosting, playerId: player.id,
+    sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
+    occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
+  });
   return surface;
 }
 

@@ -107,8 +107,12 @@
         <div class="overlay-card narrow">
           <p class="kicker">Pit lane</p>
           <h2 class="it-title overlay-title">Settings</h2>
-          <div class="setting-row"><span>Sound</span><button id="sound-toggle" class="pill" data-action="sound" type="button"></button></div>
-          <div class="setting-row"><span>Full screen</span><button id="fullscreen-toggle" class="pill" data-action="fullscreen" type="button"></button></div>
+          <div class="setting-row"><span id="sound-label">Sound</span><button id="sound-toggle" class="pill" data-action="sound" type="button" aria-labelledby="sound-label sound-toggle"></button></div>
+          <div class="setting-row"><span id="fullscreen-label">Full screen</span><button id="fullscreen-toggle" class="pill" data-action="fullscreen" type="button" aria-labelledby="fullscreen-label fullscreen-toggle"></button></div>
+          <div id="graphics-setting">
+            <div class="setting-row"><span id="graphics-label">Graphics</span><button id="graphics-toggle" class="pill" data-action="graphics" type="button" aria-labelledby="graphics-label graphics-toggle" aria-describedby="graphics-note"></button></div>
+            <p id="graphics-note" class="choice-hint"></p>
+          </div>
           <div class="overlay-actions"><button class="ghost-btn" data-action="close" type="button">Close (Esc)</button></div>
         </div>
       </section>
@@ -153,6 +157,7 @@
       else if (action === "close") closeOverlay();
       else if (action === "sound") { Game.setSound(!Game.isSoundOn()); refreshSettings(); }
       else if (action === "fullscreen") { Game.toggleFullscreen(); setTimeout(refreshSettings, 200); }
+      else if (action === "graphics") { cycleGraphics(); refreshSettings(); }
     }
   }
 
@@ -448,6 +453,30 @@
     $("sound-toggle").classList.toggle("is-on", sound);
     $("fullscreen-toggle").textContent = full ? "On" : "Off";
     $("fullscreen-toggle").classList.toggle("is-on", full);
+    // Graphics: the player's choice, and with Auto, what it picked.
+    const r3d = window.Render3D;
+    const g = r3d && r3d.graphics ? r3d.graphics() : null;
+    // Without the 3D renderer there is nothing to choose: the row and its
+    // note go together.
+    $("graphics-setting").hidden = !g;
+    if (g) {
+      const name = (t) => t.charAt(0).toUpperCase() + t.slice(1);
+      $("graphics-toggle").textContent = g.choice === "auto" ? `Auto (${name(g.tier)})` : name(g.choice);
+      $("graphics-note").textContent = {
+        high: "The full broadcast look: grade, bloom, vignette, speed blur, a sun flare by day, heat haze at Bahrain, and bursts on your big moments.",
+        medium: "Grade, bloom, vignette and bursts on your big moments.",
+        low: "No post-processing: the lightest on your machine.",
+      }[g.tier];
+    }
+  }
+
+  // Auto, High, Medium, Low, then round again.
+  function cycleGraphics() {
+    const r3d = window.Render3D;
+    if (!r3d || !r3d.setGraphics) return;
+    const order = ["auto", "high", "medium", "low"];
+    const now = r3d.graphics().choice;
+    r3d.setGraphics(order[(order.indexOf(now) + 1) % order.length]);
   }
 
   function showPhoneNote() {

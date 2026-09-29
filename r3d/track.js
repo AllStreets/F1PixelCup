@@ -261,26 +261,72 @@ export function ribbon(samples, inner, outer, lift, vScale, filter) {
   return geo;
 }
 
+// An offset line along the lap, without loops. On the inside of a bend
+// tighter than the offset, the offset line runs backwards and loops over
+// itself: whenever a new segment crosses one of the last few, everything since
+// the crossing is dropped and the line goes on from the crossing point.
+// Points are { x, z, i, v }: position, sample index, texture coordinate.
+function untangle(points) {
+  const out = [];
+  const cross = (a, b, c, d) => {
+    const r = { x: b.x - a.x, z: b.z - a.z };
+    const q = { x: d.x - c.x, z: d.z - c.z };
+    const den = r.x * q.z - r.z * q.x;
+    if (Math.abs(den) < 1e-9) return null;
+    const t = ((c.x - a.x) * q.z - (c.z - a.z) * q.x) / den;
+    const u = ((c.x - a.x) * r.z - (c.z - a.z) * r.x) / den;
+    return t > 0 && t < 1 && u > 0 && u < 1 ? t : null;
+  };
+  points.forEach((pt) => {
+    // Cut back to the earliest crossing, then look again from the cut: the
+    // new segment may cross an older loop too.
+    for (let cut = true; cut && out.length >= 3;) {
+      cut = false;
+      const last = out[out.length - 1];
+      for (let k = Math.max(0, out.length - 60); k <= out.length - 3; k += 1) {
+        const t = cross(out[k], out[k + 1], last, pt);
+        if (t === null) continue;
+        const a = out[k];
+        const b = out[k + 1];
+        const at = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, i: a.i, v: a.v + (b.v - a.v) * t };
+        out.length = k + 1;
+        out.push(at);
+        cut = true;
+        break;
+      }
+    }
+    out.push(pt);
+  });
+  return out;
+}
+
 // A wall along an offset line, from `bottom` to `top` above the sample height.
 function wall(samples, offset, bottom, top, vScale, filter) {
   const pos = [];
   const uv = [];
   const idx = [];
   const n = samples.length;
-  let prev = -1;
+  // Runs of consecutive samples that pass the filter, each made into a strip.
+  const runs = [];
+  let run = null;
   for (let i = 0; i <= n; i += 1) {
     const p = samples[i % n];
-    if (filter && !filter(p, i % n)) { prev = -1; continue; }
+    if (filter && !filter(p, i % n)) { run = null; continue; }
+    if (!run) { run = []; runs.push(run); }
     const o = offset(p);
-    const x = p.x + p.nx * o;
-    const z = p.y + p.ny * o;
-    const base = pos.length / 3;
-    pos.push(x, p.h + bottom(p), z, x, p.h + top(p), z);
-    const v = (i === n ? samples[n - 1].d + SAMPLE_STEP : p.d) / vScale;
-    uv.push(v, 0, v, 1);
-    if (prev >= 0) idx.push(prev, base, prev + 1, prev + 1, base, base + 1);
-    prev = base;
+    run.push({ x: p.x + p.nx * o, z: p.y + p.ny * o, i: i % n, v: (i === n ? samples[n - 1].d + SAMPLE_STEP : p.d) / vScale });
   }
+  runs.forEach((points) => {
+    let prev = -1;
+    untangle(points).forEach((pt) => {
+      const p = samples[pt.i];
+      const base = pos.length / 3;
+      pos.push(pt.x, p.h + bottom(p), pt.z, pt.x, p.h + top(p), pt.z);
+      uv.push(pt.v, 0, pt.v, 1);
+      if (prev >= 0) idx.push(prev, base, prev + 1, prev + 1, base, base + 1);
+      prev = base;
+    });
+  });
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
@@ -313,6 +359,22 @@ function kerbMaterial(a, b) {
   });
 }
 
+// A barrier printed with adverts on both faces. Every wall's front faces
+// point along +n (the lap runs along its length, the wall stands up), and the
+// print runs with the lap, so it reads forward from the front; on the back it
+// would read backwards, so there the print is flipped. Whichever side a
+// barrier is seen from -- the track, or another stretch across it -- its
+// words run forward.
+function advertBarrierMaterial(map) {
+  const mat = new THREE.MeshStandardMaterial({ map, roughness: 0.6, side: THREE.DoubleSide });
+  mat.userData.readsBothWays = true;
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace("#include <map_fragment>",
+      THREE.ShaderChunk.map_fragment.replace("texture2D( map, vMapUv )", "texture2D( map, gl_FrontFacing ? vMapUv : vec2( -vMapUv.x, vMapUv.y ) )"));
+  };
+  return mat;
+}
+
 // ---------------------------------------------------------------------------
 // The circuit itself
 // ---------------------------------------------------------------------------
@@ -332,6 +394,10 @@ export function buildCircuit(course, venue) {
   const L = (p) => -p.outerL;
   const R = (p) => p.outerR;
   const c = (v) => () => v;
+  // What of the circuit can hide the sun (the flare's raycast): the bridges
+  // and the start gantry, not the flat road and run-off.
+  const occluders = [];
+  group.userData.occluders = occluders;
 
   // Run-off: concrete pavement in town, paved run-off elsewhere.
   const runoffMat = course.street
@@ -365,10 +431,11 @@ export function buildCircuit(course, venue) {
 
   // Barriers covered in adverts, plus a catch fence in town.
   const advertTex = makeAdvertTexture([bg.curbA || "#dc0000", "#f4f4f4", bg.accent || "#ffe08a", "#1b1b24"], ["F1", "PIXEL", "CUP", "2025"]);
-  const barrierMat = new THREE.MeshStandardMaterial({ map: advertTex, roughness: 0.6, side: THREE.DoubleSide });
   const barrierH = course.street ? 8 : 7;
-  [(p) => -p.outerL - 1, (p) => p.outerR + 1].forEach((off) => {
-    mesh(wall(samples, off, c(0), c(barrierH), 150), barrierMat, { cast: true });
+  const barrierMat = advertBarrierMaterial(advertTex);
+  [["left", (p) => -p.outerL - 1], ["right", (p) => p.outerR + 1]].forEach(([side, off]) => {
+    const m = mesh(wall(samples, off, c(0), c(barrierH), 150), barrierMat, { cast: true });
+    m.userData.advertSide = side;
   });
   if (course.street) {
     const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
@@ -392,11 +459,11 @@ export function buildCircuit(course, venue) {
     const flags = samples.map((p) => raised(p) && clearOfLower(p));
     const earth = new THREE.MeshStandardMaterial({ color: 0x8a8478, roughness: 0.9, side: THREE.DoubleSide });
     [(p) => -p.outerL - 1, (p) => p.outerR + 1].forEach((off) => {
-      mesh(wall(samples, off, (p) => -p.h, c(0), 40, (p, i) => flags[i]), earth, { cast: true });
+      occluders.push(mesh(wall(samples, off, (p) => -p.h, c(0), 40, (p, i) => flags[i]), earth, { cast: true }));
     });
     const concrete = new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.8 });
     // Deck underside and piers where the bridge spans the lower road.
-    mesh(ribbon(samples, L, R, -2.5, 60, (p, i) => raised(p) && !flags[i] && p.h > BRIDGE_HEIGHT * 0.6), concrete);
+    occluders.push(mesh(ribbon(samples, L, R, -2.5, 60, (p, i) => raised(p) && !flags[i] && p.h > BRIDGE_HEIGHT * 0.6), concrete));
     samples.forEach((p, i) => {
       if (!raised(p) || flags[i] || i % 6 || p.h < BRIDGE_HEIGHT * 0.6) return;
       [-1, 1].forEach((side) => {
@@ -410,11 +477,12 @@ export function buildCircuit(course, venue) {
         pier.position.set(x, p.h / 2, z);
         pier.castShadow = true;
         group.add(pier);
+        occluders.push(pier);
       });
     });
     const parapet = new THREE.MeshStandardMaterial({ color: 0xdedbd2, roughness: 0.7, side: THREE.DoubleSide });
     [(p) => -p.outerL - 1, (p) => p.outerR + 1].forEach((off) => {
-      mesh(wall(samples, off, c(barrierH), c(barrierH + 3), 40, (p) => p.h > BRIDGE_HEIGHT * 0.6), parapet);
+      occluders.push(mesh(wall(samples, off, c(barrierH), c(barrierH + 3), 40, (p) => p.h > BRIDGE_HEIGHT * 0.6), parapet));
     });
   }
 
@@ -426,7 +494,9 @@ export function buildCircuit(course, venue) {
   band.position.set(start.x, start.h + 0.24, start.y);
   band.receiveShadow = true;
   group.add(band);
-  group.add(buildGantry(start, Math.max(start.outerL, start.outerR), startAngle));
+  const gantry = buildGantry(start, Math.max(start.outerL, start.outerR), startAngle);
+  group.add(gantry);
+  occluders.push(gantry);
   const gridMat = new THREE.MeshBasicMaterial({ color: 0xf2f2ee });
   // Same layout as layoutGrid in game.js: rows of two, 36 apart.
   const laneSpacing = Math.min(28, width * 0.38);
