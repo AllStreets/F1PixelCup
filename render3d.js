@@ -64,7 +64,16 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect, prepare };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect, prepare, setPhotoCamera };
+
+// Photo mode, for the site's promo shots (tools/capture-shots.js): a camera
+// placed by hand instead of the chase camera. Each point is { x, y, d, h }:
+// world x/y as the game has them, d a lap distance for the road height there,
+// h the height above the road. null goes back to the chase camera.
+let photoCamera = null;
+function setPhotoCamera(shot) {
+  photoCamera = shot || null;
+}
 
 // Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
 // the heavy work happens behind a loading panel instead of mid-countdown.
@@ -447,6 +456,14 @@ function render(frame) {
   camera.up.set(0, 1, 0);
   camera.lookAt(lookTarget);
   camera.rotateZ(-(roll || 0) * 0.8 + jitter(t, 13) * r * 0.012);
+  if (photoCamera) {
+    const { from, at } = photoCamera;
+    camera.position.set(from.x, course.heightAt(from.d) + from.h, from.y);
+    lookTarget.set(at.x, course.heightAt(at.d) + at.h, at.y);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(lookTarget);
+    if (photoCamera.fov) setFov(photoCamera.fov);
+  }
 
   // Shadows follow the player.
   sun.position.set(player.x + SUN_DIR.x * 700, ground + SUN_DIR.y * 700 + 150, player.y + SUN_DIR.z * 700);

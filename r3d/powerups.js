@@ -366,6 +366,10 @@ export function createPowerUpLayer(scene) {
       const rolling = s.type === "undercut" && modelled;
       place(mesh, s, course, flying ? 16 : rolling ? 3.2 : 2.4);
       if (rolling) mesh.userData.body.rotation.z = -(s.d || 0) / 3.2;
+      // Behind the modelled tyre the trail is a slim, faint streak (the
+      // stand-in puck's broad cone swamped it).
+      // (The cone runs along its own Y; X and Z are its radius.)
+      if (mesh.userData.trail) mesh.userData.trail.scale.set(rolling ? 0.4 : 1, rolling ? 0.8 : 1, rolling ? 0.4 : 1);
       if (s.type === "debris") mesh.rotation.set(now / 90, now / 70, now / 110);
       if (mesh.userData.trail) mesh.userData.trail.visible = fx;
       if (mesh.userData.ring) mesh.userData.ring.rotation.z = now / 120;

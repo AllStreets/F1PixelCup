@@ -123,6 +123,21 @@ const POWER_UPS = [
     controls: "Space to deploy it." },
 ];
 
+// Who drives in each promo shot on the site (tools/capture-shots.js takes the
+// pictures; landing.js names them in the alt text): Leclerc first and Hamilton
+// second, in the order the site shows them, then the rest of the grid.
+const SHOT_DRIVERS = {
+  hero: "leclerc",
+  items: {
+    oilSlick: "leclerc", debris: "hamilton", drs: "norris", undercut: "verstappen",
+    overtakeMode: "piastri", stewardPenalty: "russell", formationLap: "alonso", safetyCar: "albon",
+  },
+  circuits: {
+    monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
+    monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
+  },
+};
+
 if (typeof module === "object" && module.exports) {
-  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, POWER_UPS, getTeamForDriver };
+  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, POWER_UPS, SHOT_DRIVERS, getTeamForDriver };
 }

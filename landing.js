@@ -32,7 +32,7 @@
       const start = map.start ? `<circle class="start" cx="${map.start.x}" cy="${map.start.y}" r="4"></circle>` : "";
       return `
         <article class="circuit-card">
-          <div class="circuit-shot"><img src="./assets/shots/circuit-${esc(c.id)}.jpg" alt="Racing at ${esc(c.name)}" loading="lazy"></div>
+          <div class="circuit-shot"><img src="./assets/shots/circuit-${esc(c.id)}.jpg" alt="${esc(shotCar(SHOT_DRIVERS.circuits[c.id]))} at ${esc(c.name)}" loading="lazy"></div>
           <div class="circuit-body">
             <div>
               <h3>${esc(c.name)}</h3>
@@ -42,6 +42,14 @@
           </div>
         </article>`;
     }).join("");
+  }
+
+  // "Lando Norris's McLaren": who is in a promo shot (SHOT_DRIVERS, game-data.js).
+  function shotCar(driverId) {
+    const driver = DRIVERS.find((d) => d.id === driverId);
+    if (!driver) return "A car";
+    const team = TEAMS.find((t) => t.id === driver.teamId);
+    return `${driver.name}'s ${team ? team.name : "car"}`;
   }
 
   // Your drivers: every driver has their own career. The one raced most
@@ -117,7 +125,7 @@
       const p = byId[id];
       const rarity = PowerUps.rarityFor(shares[id]);
       return `<article class="pu-card" data-id="${esc(id)}">
-        <div class="pu-shot"><img src="assets/shots/items/${esc(id)}.jpg" alt="${esc(p.name)} in the game" loading="lazy"></div>
+        <div class="pu-shot"><img src="assets/shots/items/${esc(id)}.jpg" alt="${esc(shotCar(SHOT_DRIVERS.items[id]))} with ${esc(p.name)}, in the game" loading="lazy"></div>
         <div class="pu-body">
           <div class="pu-head"><span class="pu-icon" aria-hidden="true">${ITEM_ICONS[id]}</span>
             <div><h3 class="pu-name">${esc(p.name)}</h3><p class="pu-counterpart">Mario Kart: ${esc(p.counterpart)}</p></div>
