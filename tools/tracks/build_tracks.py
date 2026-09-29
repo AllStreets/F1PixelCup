@@ -296,8 +296,10 @@ def place_scenery(pts, report):
     return decor
 
 
-# Keep boxes out of the start zone (grid.js START_ZONE_BEFORE): the 20-car grid
-# and the qualifying roll-in, with margin, all lie within this of the line.
+# Keep boxes out of the start zone: the 20-car grid, with margin, lies within
+# this of the line. It must equal grid.js START_ZONE_BEFORE, which the game
+# uses to drop any box that lands there; tests/track-boxes.test.js checks the
+# two agree.
 START_ZONE_BEFORE = 640
 
 
@@ -316,11 +318,13 @@ def place_item_boxes(pts, bridges=()):
         dist.append(run)
         run += math.dist(pts[i], pts[(i + 1) % n])
     end = max(i for i in range(n) if dist[i] <= run - START_ZONE_BEFORE - WAYPOINT_STEP) + 1
+
+    def near_bridge(i):
+        return any(min(abs(i - k), n - abs(i - k)) <= 7 for b in bridges for k in (b["under"], b["over"]))
+
     for r in range(rows):
         lo = skip + (end - skip) * r // rows
         hi = skip + (end - skip) * (r + 1) // rows
-        near_bridge = lambda i: any(min(abs(i - k), n - abs(i - k)) <= 7
-                                    for b in bridges for k in (b["under"], b["over"]))
         candidates = [i for i in range(lo, hi) if not near_bridge(i)]
         assert candidates, "a box row has nowhere to go"
         best = min(candidates, key=lambda i: sum(abs(curv[(i + d) % n]) for d in range(-2, 3)))

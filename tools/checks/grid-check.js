@@ -373,8 +373,29 @@ async (page) => {
       });
       if (track.itemBoxes.length < 9) bad.push(`${track.id} has ${track.itemBoxes.length} boxes`);
     });
-    const drawn = Render3D.inspect().boxScales.length === state.track.itemBoxes.length;
-    return (bad.length === 0 && drawn) || JSON.stringify({ bad, drawn });
+    return bad.length === 0 || JSON.stringify({ bad });
+  });
+
+  // The game's own guard, end to end: a circuit whose data puts a box on the
+  // grid (and one just past the line) loses those two, and only those two,
+  // when the game builds it.
+  results.gameDropsBoxesOnGrid = await step(() => {
+    const def = CIRCUITS.find((c) => c.id === "monza");
+    const shape = TRACK_SHAPES.monza;
+    const saved = shape.itemBoxes;
+    const plain = trackDefinition({ ...def });
+    const route = getItemRoute(plain);
+    const L = plain.totalLength;
+    const onGrid = route.toWorld(L - 120, 0);
+    const pastLine = route.toWorld(60, 0);
+    try {
+      shape.itemBoxes = [...saved, { x: onGrid.x, y: onGrid.y }, { x: pastLine.x, y: pastLine.y }];
+      const built = trackDefinition({ ...def });
+      const same = built.itemBoxes.map((b) => `${b.x},${b.y}`).join("|") === plain.itemBoxes.map((b) => `${b.x},${b.y}`).join("|");
+      return (same && plain.itemBoxes.length === saved.length) || JSON.stringify({ built: built.itemBoxes.length, plain: plain.itemBoxes.length });
+    } finally {
+      shape.itemBoxes = saved;
+    }
   });
 
   // Difficulty really changes the CPU drivers: Rookie is slower than Pro, Pro

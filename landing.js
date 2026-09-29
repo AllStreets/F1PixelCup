@@ -156,9 +156,17 @@
     });
   }
 
-  // Another tab raced: the career section follows.
+  // Another tab raced: the career section follows (only for the profile
+  // itself -- a backup key changes nothing here), keeping focus where it was.
   window.addEventListener("storage", (event) => {
-    if (event.key === null || String(event.key).startsWith("f1pixelcup.profile")) renderCareer();
+    if (!window.Career || ![null, Career.STORAGE_KEY, Career.LEGACY_KEY].includes(event.key)) return;
+    const f = document.activeElement;
+    const href = f && $("career-summary").contains(f) ? f.getAttribute("href") : null;
+    renderCareer();
+    // The same link, or (if the lead driver changed) the section's first link.
+    const again = href && ([...$("career-summary").querySelectorAll("a")].find((a) => a.getAttribute("href") === href)
+      || $("career-summary").querySelector("a"));
+    if (again) again.focus({ preventScroll: true });
   });
 
   renderCircuits();

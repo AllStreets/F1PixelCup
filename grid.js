@@ -53,9 +53,11 @@
   }
 
   // The start zone: the grid (20 cars, 36 apart in pairs, the first row 12
-  // behind the line) and the qualifying roll-in (260 + 320 before the line),
-  // with margin, plus the launch just after the line. No item box may sit in
-  // it: the field would start on top of them.
+  // behind the line, so the last row 336 back), with a wide margin, plus the
+  // launch just after the line. No item box may sit in it: the field would
+  // start on top of them. (Boxes are hidden in qualifying, so the qualifying
+  // roll-in from 580 back never meets one; the margin covers it anyway, so
+  // the run-up looks clear too.)
   const START_ZONE_BEFORE = 640;
   const START_ZONE_AFTER = 160;
 
