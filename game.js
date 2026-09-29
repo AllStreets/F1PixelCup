@@ -3247,10 +3247,6 @@ function drawKartRear(targetCtx, x, y, scale, kart, driver, yaw, opts = {}) {
   // Airbox, halo and helmet.
   targetCtx.fillStyle = shadeColor(body, 14);
   targetCtx.fillRect(-4, -26, 8, 6);
-  targetCtx.fillStyle = driver.color;
-  targetCtx.fillRect(-3, -25, 6, 5);
-  targetCtx.fillStyle = "#101018";
-  targetCtx.fillRect(-5, -27, 10, 1.6);
 
   // Rear wing.
   targetCtx.fillStyle = "#12121a";
@@ -3260,6 +3256,17 @@ function drawKartRear(targetCtx, x, y, scale, kart, driver, yaw, opts = {}) {
   targetCtx.fillStyle = shadeColor(body, -30);
   targetCtx.fillRect(-15, -26, 3, 8);
   targetCtx.fillRect(12, -26, 3, 8);
+
+  // The helmet, seen over the rear wing, in the driver's own design
+  // (driver.helmet): the base with the crown on top -- at this size two blocks
+  // read, a thin stripe doesn't. The halo crosses in front of it.
+  const helmet = driver.helmet || { base: driver.color, crown: driver.color };
+  targetCtx.fillStyle = helmet.base;
+  targetCtx.fillRect(-3, -31, 6, 5);
+  targetCtx.fillStyle = helmet.crown;
+  targetCtx.fillRect(-3, -31, 6, 2.4);
+  targetCtx.fillStyle = "#101018";
+  targetCtx.fillRect(-5, -27.2, 10, 1.4);
 
   // Rain light.
   targetCtx.fillStyle = "#ff3b30";
@@ -4524,49 +4531,6 @@ function drawStartLine(track) {
     }
   }
   ctx.restore();
-}
-
-function drawKart(targetCtx, x, y, heading, kart, driver, scale = 1) {
-  targetCtx.save();
-  targetCtx.translate(x, y);
-  targetCtx.rotate(heading);
-  targetCtx.scale(scale, scale);
-  // Rear wing
-  targetCtx.fillStyle = kart.trim;
-  targetCtx.fillRect(-22, -14, 7, 28);
-  // Wheels
-  targetCtx.fillStyle = "#111118";
-  targetCtx.fillRect(7, -13, 7, 6);
-  targetCtx.fillRect(7, 7, 7, 6);
-  targetCtx.fillRect(-18, -13, 7, 6);
-  targetCtx.fillRect(-18, 7, 7, 6);
-  // Main body / sidepods
-  targetCtx.fillStyle = kart.body;
-  targetCtx.fillRect(-14, -7, 30, 14);
-  // Sidepod detail
-  targetCtx.fillStyle = kart.trim;
-  targetCtx.fillRect(-10, -11, 20, 4);
-  targetCtx.fillRect(-10, 7, 20, 4);
-  // Nose
-  targetCtx.fillStyle = kart.body;
-  targetCtx.fillRect(16, -4, 8, 8);
-  // Front wing
-  targetCtx.fillStyle = kart.trim;
-  targetCtx.fillRect(18, -13, 6, 26);
-  // Cockpit opening
-  targetCtx.fillStyle = "#0a0a18";
-  targetCtx.fillRect(-2, -4, 11, 8);
-  // Halo
-  targetCtx.fillStyle = kart.body;
-  targetCtx.fillRect(-1, -5, 2, 10);
-  targetCtx.fillRect(7, -5, 2, 10);
-  // Helmet
-  targetCtx.fillStyle = driver.color;
-  targetCtx.fillRect(0, -3, 8, 6);
-  // Visor
-  targetCtx.fillStyle = driver.accent;
-  targetCtx.fillRect(1, -2, 5, 4);
-  targetCtx.restore();
 }
 
 // Pausing. The race clock simply doesn't advance while paused, so race

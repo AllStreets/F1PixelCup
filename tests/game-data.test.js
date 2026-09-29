@@ -109,3 +109,27 @@ test("every team has a short name for captions", () => {
     alpine: "Alpine", williams: "Williams", haas: "Haas", racingBulls: "Racing Bulls", sauber: "Sauber" };
   Data.TEAMS.forEach((t) => assert.equal(t.short, want[t.id], t.id));
 });
+
+test("every driver has a helmet design: valid colours, a known motif, no two alike", () => {
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const MOTIFS = ["band", "crown", "split", "flash", "tricolore"];
+  const seen = new Set();
+  Data.DRIVERS.forEach((d) => {
+    const h = d.helmet;
+    assert.ok(h, `${d.id} has a helmet`);
+    ["base", "crown", "stripe", "visor"].forEach((k) => assert.match(h[k], HEX, `${d.id}.${k}`));
+    assert.ok(MOTIFS.includes(h.motif), `${d.id} motif ${h.motif}`);
+    seen.add(d.id);
+  });
+  // Told apart on track: no two drivers close in both base and crown colour.
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const dist = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+  Data.DRIVERS.forEach((a, i) => Data.DRIVERS.slice(i + 1).forEach((b) => {
+    const apart = dist(a.helmet.base, b.helmet.base) + dist(a.helmet.crown, b.helmet.crown);
+    assert.ok(apart > 120, `${a.id} and ${b.id} helmets are too alike (${Math.round(apart)})`);
+  }));
+  // The two favourites are told apart at a glance.
+  const lec = Data.DRIVERS.find((d) => d.id === "leclerc").helmet;
+  const ham = Data.DRIVERS.find((d) => d.id === "hamilton").helmet;
+  assert.notEqual(lec.base, ham.base);
+});
