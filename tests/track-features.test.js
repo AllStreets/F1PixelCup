@@ -33,11 +33,17 @@ test("the Monaco tunnel is the real one: in racing order, its real length", () =
   Object.entries(SHAPES).forEach(([id, shape]) => { if (id !== "monaco") assert.equal(shape.tunnel, undefined, id); });
 });
 
-test("where the source's first vertex isn't the real line, the line is beside the real pit lane", () => {
+test("where the source's first vertex isn't the real line, the line is level with the middle of the real pit lane", () => {
   OSM.lineAtPitMiddle.forEach((id) => {
-    // The line sits between the real pit lane's two ends, which build_tracks
-    // reports; here: the chosen pit zone reaches the line.
-    const pit = SHAPES[id].pit;
-    assert.ok(pit.entry < 0 && pit.exit >= 0, id);
+    const real = SHAPES[id].pit.real;
+    assert.ok(real, `${id}: the real pit lane's stretch is recorded`);
+    // Its two ends either side of the line, the line halfway between them.
+    assert.ok(real.from < 0 && real.to > 0, `${id}: ${real.from}..${real.to}`);
+    assert.ok(Math.abs(real.from + real.to) <= 0.1 * (real.to - real.from), `${id}: not centred, ${real.from}..${real.to}`);
+  });
+  // The others keep the source's line: their real pit lanes still sit round it.
+  ["spa", "singapore", "bahrain", "interlagos"].forEach((id) => {
+    const real = SHAPES[id].pit.real;
+    assert.ok(real.from < 0 && real.to > 0, `${id}: ${real.from}..${real.to}`);
   });
 });

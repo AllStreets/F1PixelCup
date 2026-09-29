@@ -40,9 +40,7 @@ test("every circuit has a pit lane long enough for ten garages and the Safety Ca
     const pit = shape.pit;
     assert.ok(pit, `${id}: no pit lane`);
     assert.ok(pit.side === 1 || pit.side === -1, `${id}: side ${pit.side}`);
-    // Along the start/finish stretch: from before the line to short of the
-    // first item boxes (450 after it). Spanning the line where the stretch
-    // allows (all but Monaco, whose stretch bends hard after the line).
+    // Along the stretch either side of the line, reaching it.
     assert.ok(pit.entry >= -900 && pit.exit <= 900 && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit}`);
     assert.ok(pit.entry < 0 && pit.exit >= 0, `${id}: the lane should reach the line`);
     const { total } = lapOf(shape.points);

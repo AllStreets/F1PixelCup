@@ -32,13 +32,14 @@ It ships in three parts, each reviewed and merged on its own:
 
 Real features are located on the **true** outline (before the relaxation moves anything):
 - A pit lane is found by its two ends, which join the track. Its side comes from its middle points, judged against that stretch only: Monaco's pit lane is nearer the swimming-pool section than its own straight.
-- The positions are carried to the relaxed outline as the nearest point within 10 points of the same fraction of the way round.
+- The positions are carried to the relaxed outline as the nearest point within 25 points of the same fraction of the way round that runs the same way as the true outline there. The build fails if the match lands on the window's edge or more than 160 away.
+- The real pit lane's stretch is recorded in the data as `pit.real` (side, from, to).
 
 **Start lines.** The source's first vertex is the real line on every circuit but two:
 - Monaco's is at the Casino;
 - Silverstone's is on the old National straight.
 
-Theirs now go halfway between the ends of the real pit lane. This moves both circuits' grids, boxes and scenery; the circuit points themselves only rotate.
+Theirs now go halfway between the ends of the real pit lane. This moves both circuits' grids, boxes and scenery, and the lap is resampled from the new start, so its points and length shift slightly.
 
 ### The data (`tools/tracks/build_tracks.py`)
 
@@ -53,7 +54,7 @@ Theirs now go halfway between the ends of the real pit lane. This moves both cir
 - not on the inside of a bend it would fold round: radius < reach + 10 for the lane's tarmac, + 30 for the garages' boxes, which would crowd each other at the back;
 - clear of bridges, by 7 points plus a mouth.
 
-**Lanes.** A lane is 650–1100 long: two 160 mouths and at least eleven 30 bays. The bays go on the flat part's 30-long slots that have room, nearest its middle. That is one run where it can be, and split round a tight spot where it can't (Monaco). Scoring, in order:
+**Lanes.** A lane is 650–1100 long: two 160 mouths and at least eleven 30 bays. The bays go on the flat part's 30-long slots that have room, nearest its middle. That is one run where it can be, and split round a tight spot where it can't (Spa). Scoring, in order:
 1. on the real side;
 2. full-depth garages;
 3. bays in one run;
@@ -93,7 +94,8 @@ Lateral offsets from the centreline, where W = 49.5 is the road's half-width:
   - "PIT" painted on the lane just past the entry.
 - **The pit wall** has two faces, a cap and end caps. A catch fence on top stops at the teams' stands. There are ten stands, one opposite each team's garage, with roofs over the wall and the lane's edge, never the road. The stands are merged into one mesh per material.
 - **Along the garage frontage** there is no barrier, and no catch fence on the street circuits.
-- **The start gantry.** Each post stands just outside its own side's barrier. On the pit side, the post stands on the pit wall (or past the whole complex in a mouth), never in the lane or a garage.
+- **The start gantry.** Each post stands just outside its own side's barrier, which through a pit zone is past the whole complex. On the pit side, where there is a pit wall at the line, the post stands on the wall, and the team stand that would be there is left out. It is never in the lane, a garage or a stand.
+  - Review found the post passing through Interlagos's stand at the line, and, in a mouth, standing inside the run-off at Spa and Bahrain.
 - **The garages** replace the old `pitBuilding`: eleven bays (team colours, and the Safety Car's by the exit), hospitality glass and roof, all within their depth. They are merged into one mesh per material, with a frame per team colour. Silverstone keeps the Wing roof. The roofs are light grey, not white, because white glares.
 - **Print reads forward from both sides.** This applies to barriers, billboards and the gantry banner (`readsBothWays`).
 - **`sampleAt(d)`** rounds to the true sample spacing (`total / n`), where it used to floor to 6, which was up to 12 out near the end of the lap.
@@ -106,6 +108,8 @@ Lateral offsets from the centreline, where W = 49.5 is the road's half-width:
   - Down the lane it slows to the pit limit (0.35) and, over the last 80 before its bay, eases into the working lane. It parks in front of its garage, lights off, until called again, when it comes out at the leader as before.
 - **Its body.** It holds racers up only while it is on the road (`|lat| − half a car < W`), just after the entry included.
 - **The minimap** flashes it while it leads the field, shows it steady on its way in, and leaves it off once it is parked. The 2D view, which has no pit lane, doesn't draw it parked.
+
+The game's Settings carry the circuit credits (bacinger/f1-circuits, MIT; OpenStreetMap, ODbL), and so do the `tracks-data.js` header, the site's footers, the README and `THIRD-PARTY-NOTICES`.
 
 ### Tests (G1)
 

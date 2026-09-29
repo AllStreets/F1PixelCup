@@ -31,7 +31,7 @@ async (page) => {
     const bad = [];
     CIRCUITS.forEach((c) => {
       const a = Render3D.auditPits(TRACKS.find((t) => t.id === c.id));
-      if (!a.lane || a.bays !== 11 || !a.safetyCarBayLast || a.garagesFromOwnRoad < a.garagesOwnNeed || a.garagesFromOtherRoads < a.garagesOtherNeed || a.stands !== 10 || a.standsFromRoad < a.roadEdge + 5 || !a.gantryPostClear) bad.push({ id: c.id, ...a });
+      if (!a.lane || a.bays !== 11 || !a.safetyCarBayLast || a.garagesFromOwnRoad < a.garagesOwnNeed || a.garagesFromOtherRoads < a.garagesOtherNeed || a.stands !== a.standsExpected || a.standsExpected < 9 || a.standsFromRoad < a.roadEdge + 5 || !a.gantryPostClear) bad.push({ id: c.id, ...a });
     });
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   });

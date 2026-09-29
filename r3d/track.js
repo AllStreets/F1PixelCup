@@ -525,14 +525,13 @@ export function buildCircuit(course, venue) {
   band.position.set(start.x, start.h + 0.24, start.y);
   band.receiveShadow = true;
   group.add(band);
-  // Each post stands just outside its own side's barrier -- on the pit side,
-  // on the pit wall where there is one (the garages are behind it), or past
-  // the whole pit complex in a mouth.
+  // Each post stands just outside its own side's barrier -- which through a
+  // pit zone is past the whole pit complex (buildCourse widened it) -- except
+  // where there is a pit wall at the line: then on the wall, in front of the
+  // garages.
   const postAt = (sign) => {
     const lane = course.pitLane;
-    if (lane && lane.side === sign && lane.inZone(start.d)) {
-      return lane.wallAt(start.d) !== null ? width + (Pit.WALL_IN + Pit.WALL_OUT) / 2 : lane.outerAt(start.d) + 4;
-    }
+    if (lane && lane.side === sign && lane.wallAt(start.d) !== null) return width + (Pit.WALL_IN + Pit.WALL_OUT) / 2;
     return (sign > 0 ? start.outerR : start.outerL) + 4;
   };
   const gantry = buildGantry(start, postAt(1), postAt(-1), startAngle);
@@ -623,7 +622,8 @@ function buildPitLane(course, lane, occluders) {
     cap.position.set(end.x + end.nx * side * (wallIn + wallOut) / 2, end.h + wallH / 2, end.y + end.ny * side * (wallIn + wallOut) / 2);
     cap.rotation.y = -Math.atan2(end.ty, end.tx);
   });
-  const stands = lane.garages.bays.filter((bay) => !bay.safetyCar);
+  // No stand where the start gantry's post stands on the wall (at the line).
+  const stands = lane.garages.bays.filter((bay) => !bay.safetyCar && Math.abs(bay.rel) > 9 + 2);
   const atStand = (p) => stands.some((bay) => Math.abs(lane.rel(p.d) - bay.rel) <= 10);
   const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
   add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, (p) => hasWall(p) && !atStand(p)), fence);
@@ -639,8 +639,14 @@ function buildPitLane(course, lane, occluders) {
     m.setPosition(p.x + p.nx * side * wallIn, p.h, p.y + p.ny * side * wallIn);
     return geo.translate(x, y, z).applyMatrix4(m);
   };
+  group.userData.standBoxes = [];
   stands.forEach((bay) => {
     const p = course.sampleAt(bay.d);
+    // Each stand's extent, for the checks (the meshes are merged).
+    const box = new THREE.Box3();
+    const at = new THREE.Matrix4().makeRotationY(-Math.atan2(p.ty, p.tx)).setPosition(p.x + p.nx * side * wallIn, p.h, p.y + p.ny * side * wallIn);
+    [-9, 9].forEach((x) => [0, wallH + 9.4].forEach((y) => [0, 7].forEach((z) => box.expandByPoint(new THREE.Vector3(x, y, side * z).applyMatrix4(at)))));
+    group.userData.standBoxes.push(box);
     // Local x along the lap, local z across it (toward the pit side).
     parts.stand.push(place(new THREE.BoxGeometry(14, 3, 4), 0, wallH + 1.5, side * 2, p));
     [-7, 7].forEach((u) => parts.stand.push(place(new THREE.BoxGeometry(0.6, 9, 0.6), u, wallH + 4.5, side * 6, p)));

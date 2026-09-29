@@ -254,6 +254,8 @@ function auditPits(track) {
   // The gantry's post on the pit side: its offset across the road.
   const gantry = world.circuit.getObjectByName("gantry");
   let gantryPost = null;
+  const postBoxes = [];
+  if (gantry) gantry.children.filter((m) => m.userData.post).forEach((post) => postBoxes.push(new THREE.Box3().setFromObject(post)));
   if (gantry && lane) {
     const start = course.samples[0];
     gantry.children.filter((m) => m.userData.post).forEach((post) => {
@@ -282,13 +284,17 @@ function auditPits(track) {
     garagesFromOtherRoads: g ? Math.round(g.other) : 0,
     garagesOtherNeed: Math.round(course.width + (course.street ? Pit.CLEAR_STREET : Pit.CLEAR) - 1),
     stands: stands.length ? pitGroup.getObjectByName("pitStands").geometry.attributes.position.count / (3 * 24) : 0,
+    // One opposite each team's garage, but none where the gantry stands on the wall.
+    standsExpected: lane ? lane.garages.bays.filter((b) => !b.safetyCar && Math.abs(b.rel) > 11).length : 0,
     standsFromRoad: st.length ? Math.round(Math.min(...st.map((b) => Math.min(b.own, b.other)))) : 0,
     roadEdge: course.width,
     gantryPost: gantryPost === null ? null : Math.round(gantryPost * 10) / 10,
     // On the pit wall, or past the whole complex (in a mouth).
     // (Past it means past the garages' back where the line is at a garage.)
-    gantryPostClear: gantryPost === null || Math.abs(gantryPost - wallMid) < 0.5
-      || gantryPost > (!lane.inZone(0) ? 0 : lane.atGarage(0, 4) ? lane.garages.outer : lane.outerAt(0)) + 2,
+    // And not through a team's stand on the wall.
+    gantryPostClear: gantryPost === null || ((Math.abs(gantryPost - wallMid) < 0.5
+      || gantryPost > (!lane.inZone(0) ? 0 : lane.atGarage(0, 4) ? lane.garages.outer : lane.outerAt(0)) + 2)
+      && !postBoxes.some((post) => (pitGroup?.userData.standBoxes || []).some((stand) => stand.intersectsBox(post)))),
     safetyCarDoor: scDoor,
   };
 }
