@@ -188,6 +188,62 @@ function garages(course, group, venue) {
   group.add(sign);
 }
 
+// The signature corners' name boards (their positions from OpenStreetMap,
+// in the track data): on the outside of the corner, past the barrier, facing
+// the track. Where the spot is taken it moves along the corner, and then to
+// its inside.
+function cornerBoards(course, group, venue) {
+  const corners = course.track.corners || [];
+  corners.forEach((c) => {
+    const total = course.track.totalLength;
+    // The outside of the bend first (curve > 0 turns toward +n, so the
+    // outside is -n), then the inside, along the corner.
+    const tries = [];
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift])));
+    for (const [which, shift] of tries) {
+      const p = course.sampleAt(((c.d + shift) % total + total) % total);
+      const bend = course.sampleAt(c.d);
+      const side = (bend.curve > 0 ? -1 : 1) * which;
+      const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
+      const x = p.x + p.nx * off;
+      const z = p.y + p.ny * off;
+      const angle = Math.atan2(p.ty, p.tx);
+      if (!footprintClear(course, x, z, angle, 38, 4, 6) || course.occupied.blocked(x, z, 38)) continue;
+      course.occupied.add(x, z, 38);
+      const g = new THREE.Group();
+      g.name = `corner:${c.board}`;
+      const tex = canvasTexture(1024, 256, (cx, w, h) => {
+        cx.fillStyle = "#101418";
+        cx.fillRect(0, 0, w, h);
+        cx.fillStyle = "#e10600";
+        cx.fillRect(0, h - 22, w, 22);
+        cx.fillStyle = "#ffffff";
+        cx.textAlign = "center";
+        cx.textBaseline = "middle";
+        cx.font = `900 italic ${c.aka ? 104 : 124}px Trebuchet MS, sans-serif`;
+        cx.fillText(c.board, w / 2, c.aka ? 96 : 118);
+        if (c.aka) {
+          cx.font = "700 58px Trebuchet MS, sans-serif";
+          cx.fillStyle = "#c9ced6";
+          cx.fillText(c.aka, w / 2, 190);
+        }
+      }, { repeat: false });
+      tex.userData.print = true;
+      const face = new THREE.Mesh(new THREE.PlaneGeometry(72, 18), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.5, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: venue.night ? 0.5 : 0.05 }));
+      face.position.set(0, 20, 0.6);
+      g.add(face);
+      addMesh(g, new THREE.BoxGeometry(74, 20, 1), std(0x2a2d34), 0, 20, 0);
+      [-30, 30].forEach((u) => addMesh(g, new THREE.BoxGeometry(2, 12, 2), std(0x2a2d34), u, 5, 0));
+      g.position.set(x, p.h, z);
+      // The board's face (+z) toward the road.
+      g.rotation.y = Math.atan2(p.x - x, p.y - z);
+      g.userData.corner = { board: c.board, d: c.d };
+      group.add(g);
+      return;
+    }
+  });
+}
+
 function hills(course, group, { tint, count, height, flat }, rand) {
   const b = course.bounds;
   const cx = b.cx;
@@ -330,9 +386,28 @@ function skyline(course, group, rand, { night, count = 90, arc = [0, Math.PI * 2
   group.add(mesh);
 }
 
-function floodlights(course, group) {
+// A floodlight's pool of light on the road: soft, warm, added to what is
+// there. Lying on the ground, it is not scenery over the track.
+let poolTexture = null;
+function lightPoolTexture() {
+  if (!poolTexture) {
+    poolTexture = canvasTexture(128, 128, (g, w, h) => {
+      const grad = g.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      grad.addColorStop(0, "rgba(255,244,214,1)");
+      grad.addColorStop(0.55, "rgba(255,236,196,0.45)");
+      grad.addColorStop(1, "rgba(255,230,190,0)");
+      g.fillStyle = grad;
+      g.fillRect(0, 0, w, h);
+    }, { repeat: false });
+  }
+  return poolTexture;
+}
+
+function floodlights(course, group, venue) {
   const poleMat = std(0x33333a);
   const headMat = std(0xffffff, { emissive: 0xfff4d0, emissiveIntensity: 3 });
+  // Brighter pools at night than at dusk.
+  const poolMat = new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: venue.night ? 0.32 : 0.14, toneMapped: false });
   const every = 26;
   const { samples } = course;
   for (let i = 0; i < samples.length; i += every) {
@@ -350,6 +425,14 @@ function floodlights(course, group) {
     head.position.set(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3);
     head.rotation.y = -Math.atan2(p.ty, p.tx);
     group.add(head);
+    // Its light falls across the near half of the road.
+    const pool = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), poolMat);
+    const reach = side * course.width * 0.35;
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(p.x + p.nx * reach, p.h + 0.3, p.y + p.ny * reach);
+    pool.userData.ground = true;
+    pool.renderOrder = 1;
+    group.add(pool);
   }
 }
 
@@ -524,8 +607,8 @@ const EXTRAS = {
     skyline(course, group, rand, { night: Boolean(venue.night), count: venue.night ? 120 : 70, arc: venue.night ? [0, Math.PI * 2] : [Math.PI * 1.1, Math.PI * 1.9] });
   },
 
-  floodlights(course, group) {
-    floodlights(course, group);
+  floodlights(course, group, venue) {
+    floodlights(course, group, venue);
   },
 
   sakhirTower(course, group) {
@@ -593,6 +676,7 @@ export function buildLandmarks(course, venue) {
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
   const animated = [];
   garages(course, group, venue);
+  cornerBoards(course, group, venue);
   (venue.extras || []).forEach((name) => {
     const made = EXTRAS[name]?.(course, group, venue, rand);
     if (made?.userData?.animate) animated.push(made);

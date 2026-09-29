@@ -163,6 +163,8 @@ function trackDefinition(definition) {
     bridges: shape.bridges,
     world: shape.world,
     pit: shape.pit,
+    tunnel: shape.tunnel || null,
+    corners: shape.corners || [],
     // Shortcuts are switched off (shouldUseShortcutRoute), but the route code
     // still expects one; give it a short stub that lies along the circuit.
     shortcut: {
@@ -238,6 +240,13 @@ function trackDefinition(definition) {
     shortcutTotalLength,
     // The pit lane (pitlane.js): where it leaves the road, runs and rejoins.
     pitLane: window.Pit ? Pit.lane(shape.pit, totalLength, roadWidth) : null,
+    // Where the engine rings (the tunnel, under a bridge) and where the
+    // grandstands are, round the lap (venue.js).
+    reverbZones: window.Venue ? Venue.reverbZones(shape.tunnel, (shape.bridges || []).map((b) => ({ d: cumulativeStarts[b.under % cumulativeStarts.length] })), totalLength) : [],
+    // (Each stand's lap distance is the track data's, from where it was
+    // placed: the nearest road to a stand can be another stretch.)
+    crowdStands: (shape.decor || []).filter((item) => item.type === "grandstand")
+      .map((item) => ({ d: item.d ?? getRouteDistanceForPoint(item, segments, cumulativeStarts), x: item.x, y: item.y })),
     // Each box knows its distance round the lap, so at Suzuka's crossover a box
     // on one level can't be taken by a car on the other.
     // None may sit on the grid or the qualifying roll-in (grid.js).
@@ -3467,6 +3476,8 @@ const audio = {
   master: null,
   engine: null,
   screech: null,
+  // The venue: reverb (tunnel, under a bridge) and the crowd (venue.js).
+  venue: null,
   noiseBuffer: null,
   ready: false,
   enabled: true,
@@ -3490,8 +3501,20 @@ function saveAudioPreference() {
   }
 }
 
-function makeNoiseBuffer(ctx) {
-  const length = Math.floor(ctx.sampleRate * 1.4);
+// A reverb's impulse: stereo noise decaying over `seconds`, a little
+// different in each ear.
+function makeReverbImpulse(ctxA, seconds) {
+  const length = Math.floor(ctxA.sampleRate * seconds);
+  const buffer = ctxA.createBuffer(2, length, ctxA.sampleRate);
+  for (let c = 0; c < 2; c += 1) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, 2.6);
+  }
+  return buffer;
+}
+
+function makeNoiseBuffer(ctx, seconds = 1.4) {
+  const length = Math.floor(ctx.sampleRate * seconds);
   const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buffer.getChannelData(0);
   for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
@@ -3552,6 +3575,47 @@ function initAudio() {
   screechGain.connect(audio.master);
   screechSource.start();
   audio.screech = { gain: screechGain, filter: screechFilter };
+
+  // The venue. The engine also feeds a reverb -- a room made of decaying
+  // noise, a second long -- whose level rises in a tunnel or under a bridge.
+  // And a crowd: noise shaped to a roar, swelling past the grandstands.
+  const convolver = ctxA.createConvolver();
+  convolver.buffer = makeReverbImpulse(ctxA, 1.1);
+  const reverbGain = ctxA.createGain();
+  reverbGain.gain.value = 0;
+  // (The engine feeds it only on circuits with somewhere to ring: see
+  // venueSound's caller.)
+  convolver.connect(reverbGain);
+  reverbGain.connect(audio.master);
+  const crowdSource = ctxA.createBufferSource();
+  // Its own, longer noise: a short loop sustained past a grandstand would be
+  // heard repeating.
+  crowdSource.buffer = makeNoiseBuffer(ctxA, 6);
+  crowdSource.loop = true;
+  const crowdFilter = ctxA.createBiquadFilter();
+  crowdFilter.type = "bandpass";
+  crowdFilter.frequency.value = 650;
+  crowdFilter.Q.value = 0.7;
+  const crowdGain = ctxA.createGain();
+  crowdGain.gain.value = 0;
+  crowdSource.connect(crowdFilter);
+  crowdFilter.connect(crowdGain);
+  crowdGain.connect(audio.master);
+  crowdSource.start();
+  // The floodlights' mains hum: 100 Hz and its first harmonic, very quiet.
+  const humGain = ctxA.createGain();
+  humGain.gain.value = 0;
+  [100, 200].forEach((f, i) => {
+    const osc = ctxA.createOscillator();
+    osc.frequency.value = f;
+    const g = ctxA.createGain();
+    g.gain.value = i ? 0.35 : 1;
+    osc.connect(g);
+    g.connect(humGain);
+    osc.start();
+  });
+  humGain.connect(audio.master);
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, convolver, engineGain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -3672,6 +3736,20 @@ const sfx = {
 };
 
 // Continuous engine and tyre noise, driven from the player's car each frame.
+// How much of the venue the player hears where they are: the reverb level
+// and the crowd's. Kept in state.venueSound (the checks read it).
+function venueSound(player, racing) {
+  const track = state.track;
+  const out = { reverb: 0, crowd: 0, hum: 0 };
+  if (track && player && racing && window.Venue) {
+    out.reverb = Venue.reverbAt(player.trackDistance || 0, track.reverbZones, track.totalLength);
+    out.crowd = Venue.crowdAt(player.trackDistance || 0, track.crowdStands, track.totalLength);
+    out.hum = Venue.FLOODLIT.includes(track.id) ? 1 : 0;
+  }
+  state.venueSound = out;
+  return out;
+}
+
 function updateEngineAudio(player) {
   if (!audio.ready || !audio.engine) return;
   const ctxA = audio.ctx;
@@ -3689,6 +3767,20 @@ function updateEngineAudio(player) {
   const idle = racing ? 0.055 : 0;
   const level = player && player.finished ? 0 : idle + ratio * 0.1;
   audio.engine.gain.gain.setTargetAtTime(level, now, 0.09);
+
+  if (audio.venue) {
+    // The convolver only runs where the circuit has a tunnel or a bridge.
+    const rings = Boolean(state.track && state.track.reverbZones && state.track.reverbZones.length);
+    if (rings !== audio.venue.feeding) {
+      if (rings) audio.venue.engineGain.connect(audio.venue.convolver);
+      else audio.venue.engineGain.disconnect(audio.venue.convolver);
+      audio.venue.feeding = rings;
+    }
+    const venue = venueSound(player, racing);
+    audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9, now, 0.08);
+    audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
+    audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
+  }
 
   if (audio.screech) {
     const sliding = player && !player.finished

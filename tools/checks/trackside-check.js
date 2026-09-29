@@ -1,5 +1,6 @@
 // Browser check: trackside life (docs/superpowers/specs/2026-09-29-trackside-design.md).
-// G1: pit lanes, garages, the Safety Car's way into the pits. Run with the
+// G1: pit lanes, garages, the Safety Car's way into the pits. G2: the venue
+// moments, seen and heard. Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/trackside-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].
@@ -97,6 +98,150 @@ async (page) => {
     const ok = out && out.flashing && lane && !lane.flashing && parked && !parked.flashing && toDoor <= 13;
     return ok || JSON.stringify({ out, lane, parked, door, toDoor });
   });
+
+  // G2 -- the venue moments. Every signature corner has its name board,
+  // beside the track (past the barrier) at its corner; Monaco's tunnel is
+  // circuit, its roof (as built) well clear of every car; Suzuka's
+  // under-bridge reverb is on the lower road with the deck crossing above.
+  results.venueBuilt = await step(() => {
+    const bad = [];
+    CIRCUITS.forEach((c) => {
+      const track = TRACKS.find((t) => t.id === c.id);
+      const v = Render3D.auditVenue(track);
+      const L = track.totalLength;
+      v.corners.forEach((name) => {
+        const b = v.boards.find((x) => x.board === name);
+        if (!b) bad.push(`${c.id}: no ${name} board`);
+        else if (b.clear < 6 || Math.abs(((b.at - b.wanted) % L + L * 1.5) % L - L / 2) > 90) bad.push(`${c.id}: ${name} at ${b.at} (${b.clear} clear)`);
+      });
+      if (c.id === "monaco" && (!v.tunnel || !(v.tunnel.roof >= 30))) bad.push(`monaco: tunnel ${JSON.stringify(v.tunnel)}`);
+      v.bridges.forEach((z) => { if (z.height > 0.5 || z.deckAbove > 60) bad.push(`${c.id}: bridge zone ${JSON.stringify(z)}`); });
+      if (c.id === "suzuka" && v.bridges.length !== 1) bad.push("suzuka: no bridge zone");
+    });
+    return bad.length === 0 || JSON.stringify(bad);
+  });
+
+  // Heard, through the real audio graph: the reverb's gain node follows the
+  // player into Monaco's tunnel and out again. (A click gives the page its
+  // audio, as a player's first key or click does.)
+  await p.mouse.click(5, 5);
+  const load = (id) => step(async (id) => {
+    Game.backToPitLane();
+    const cup = CUPS.findIndex((c) => c.tracks.some((t) => t.id === id));
+    Game.selectCup(cup); Game.startCup();
+    const ti = CUPS[cup].tracks.findIndex((t) => t.id === id);
+    if (ti > 0) { state.raceIndex = ti; startRace(ti); }
+    for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    state.phase = "race";
+    initAudio();
+    await audio.ctx.resume();
+    return audio.ctx.state;
+  }, id);
+  const gainAt = (d) => step(async (d) => {
+    // The race held (the game would move the player on), the sound playing.
+    state.paused = true;
+    const pl = getPlayer();
+    const L = state.track.totalLength;
+    // Hold the player there for 0.8 s of audio time (the gains glide).
+    const until = audio.ctx.currentTime + 0.8;
+    while (audio.ctx.currentTime < until) {
+      pl.trackDistance = ((d % L) + L) % L;
+      updateEngineAudio(pl);
+      await new Promise((r) => setTimeout(r, 30));
+    }
+    return { reverb: audio.venue.reverb.gain.value, crowd: audio.venue.crowd.gain.value, feeding: audio.venue.feeding };
+  }, d);
+  const ctxState = await load("monaco");
+  const t = await step(() => state.track.tunnel);
+  const before = await gainAt(t.from - 150);
+  const inside = await gainAt((t.from + t.to) / 2);
+  const after = await gainAt(t.to + 150);
+  results.tunnelRings = (ctxState === "running" && inside.feeding && before.reverb < 0.05 && inside.reverb > 0.8 && after.reverb < 0.05) || JSON.stringify({ ctxState, before, inside, after });
+  // A circuit with nowhere to ring doesn't run the reverb at all.
+  await load("monza");
+  const monza = await gainAt(1000);
+  results.reverbOnlyWhereItRings = (monza.feeding === false && monza.reverb < 0.05) || JSON.stringify(monza);
+  // The crowd: each grandstand is heard at its own stretch of the lap (the
+  // point at its lap distance is beside it), loudest there; somewhere far
+  // from every stand it is silent.
+  results.crowdSwells = await step(() => {
+    const bad = [];
+    CIRCUITS.forEach((c) => {
+      const track = TRACKS.find((x) => x.id === c.id);
+      const route = PowerUps.makeRoute(track.points, track.roadWidth);
+      const L = track.totalLength;
+      const stands = track.crowdStands;
+      stands.forEach((st) => {
+        const at = route.sample(st.d);
+        if (Math.hypot(at.x - st.x, at.y - st.y) > 300) bad.push(`${c.id}: stand at ${st.d} is heard away from it`);
+        if (Venue.crowdAt(st.d, stands, L) !== 1) bad.push(`${c.id}: not loudest at its stand`);
+      });
+      const quiet = Array.from({ length: 200 }, (_, i) => (i / 200) * L).find((d) => stands.every((st) => Math.abs(Venue.delta(st.d, d, L)) > Venue.CROWD_REACH));
+      if (quiet !== undefined && Venue.crowdAt(quiet, stands, L) !== 0) bad.push(`${c.id}: crowd heard far from every stand`);
+    });
+    return bad.length === 0 || JSON.stringify(bad);
+  });
+
+  // Seen: the tunnel is dark by its own light, not by where the camera is.
+  // From outside, on the sunlit approach, the road just inside the mouth is
+  // dark against the road just before it -- in the same picture, so not the
+  // camera's doing; and from inside, the road is dark against the sunlit road
+  // outside.
+  await load("monaco");
+  const lumaAt = async (fromOff, atOff, h, marks) => {
+    const spots = await step(async ([fromOff, atOff, h, marks]) => {
+      const t = state.track.tunnel; const L = state.track.totalLength;
+      const route = PowerUps.makeRoute(state.track.points, state.track.roadWidth);
+      const at = (off) => { const d = ((t.from + off) % L + L) % L; return { d, ...route.sample(d) }; };
+      const a = at(fromOff); const b = at(atOff);
+      document.getElementById("screens").style.visibility = "hidden";
+      document.getElementById("game").style.visibility = "hidden";
+      const fov = 50;
+      Render3D.setPhotoCamera({ from: { x: a.x, y: a.y, d: a.d, h }, at: { x: b.x, y: b.y, d: b.d, h: h - 3 }, fov });
+      state.paused = false;
+      const end = performance.now() + 1200;
+      await new Promise((r) => { const f = () => (performance.now() > end ? r() : requestAnimationFrame(f)); f(); });
+      state.paused = true; state.pausedAt = performance.now();
+      // Where each marked point of the road (on the centreline, just above
+      // it) lands on screen, by the same perspective as the photo camera
+      // (Monaco is flat: road height 0).
+      const C = [a.x, h, a.y]; const T = [b.x, h - 3, b.y];
+      const sub = (u, v) => u.map((x, i) => x - v[i]);
+      const dot = (u, v) => u.reduce((s, x, i) => s + x * v[i], 0);
+      const norm = (u) => { const l = Math.hypot(...u); return u.map((x) => x / l); };
+      const cross = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const f = norm(sub(T, C)); const r = norm(cross(f, [0, 1, 0])); const u = cross(r, f);
+      const k = Math.tan((fov * Math.PI) / 360);
+      return marks.map((off) => {
+        const p = at(off); const v = sub([p.x, 1, p.y], C);
+        const z = dot(v, f);
+        return { x: (dot(v, r) / (z * k * innerWidth / innerHeight) + 1) / 2 * innerWidth, y: (1 - dot(v, u) / (z * k)) / 2 * innerHeight };
+      });
+    }, [fromOff, atOff, h, marks]);
+    const out = [];
+    for (const spot of spots) {
+      const box = await step(() => ({ w: innerWidth, h: innerHeight }));
+      if (!(spot.x > 8 && spot.x < box.w - 8 && spot.y > 4 && spot.y < box.h - 4)) { out.push(`off screen ${Math.round(spot.x)},${Math.round(spot.y)}`); continue; }
+      const png = await p.screenshot({ clip: { x: Math.round(spot.x - 8), y: Math.round(spot.y - 4), width: 16, height: 8 } });
+      out.push(await step(async (b64) => {
+        const img = new Image(); img.src = `data:image/png;base64,${b64}`; await img.decode();
+        const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;
+        const g = c.getContext("2d"); g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        let sum = 0; for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        return Math.round(sum / (d.length / 4));
+      }, png.toString("base64")));
+    }
+    return out;
+  };
+  // From 120 before the portal: the road 40 before it, and 70 inside it.
+  const [approachRoad, within] = await lumaAt(-120, 80, 12, [-40, 70]);
+  // From inside, looking along: the road ahead in the middle of the tunnel
+  // (past the row of item boxes, whose glow would light it).
+  const [insideRoad] = await lumaAt(330, 430, 12, [370]);
+  await step(() => { Render3D.setPhotoCamera(null); state.paused = false; document.getElementById("screens").style.visibility = ""; document.getElementById("game").style.visibility = ""; });
+  const numbers = [approachRoad, within, insideRoad].every((v) => typeof v === "number");
+  results.tunnelDark = (numbers && within < approachRoad * 0.5 && insideRoad < approachRoad * 0.6) || JSON.stringify({ approachRoad, within, insideRoad });
 
   await context.close();
   return { results, errors };

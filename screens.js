@@ -113,7 +113,7 @@
             <div class="setting-row"><span id="graphics-label">Graphics</span><button id="graphics-toggle" class="pill" data-action="graphics" type="button" aria-labelledby="graphics-label graphics-toggle" aria-describedby="graphics-note"></button></div>
             <p id="graphics-note" class="choice-hint"></p>
           </div>
-          <p class="choice-hint settings-credits">Circuits: <a href="https://github.com/bacinger/f1-circuits" target="_blank" rel="noopener">bacinger/f1-circuits</a> (MIT). Pit lanes, start lines and the Monaco tunnel: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL).</p>
+          <p class="choice-hint settings-credits">Circuits: <a href="https://github.com/bacinger/f1-circuits" target="_blank" rel="noopener">bacinger/f1-circuits</a> (MIT). Pit lanes, start lines, the Monaco tunnel and the signature corners: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a> (ODbL).</p>
           <div class="overlay-actions"><button class="ghost-btn" data-action="close" type="button">Close (Esc)</button></div>
         </div>
       </section>
