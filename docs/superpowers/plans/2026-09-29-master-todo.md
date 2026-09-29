@@ -75,25 +75,25 @@ The full regression set, run before every merge:
 
 ### B1. MIT license
 
-- [ ] Add `LICENSE` at the repo root: the standard MIT text, `Copyright (c) 2026 AllStreets`. This is the public GitHub identity that owns the repo; the user's real name isn't published without asking.
-- [ ] Make the README "License" section link to `LICENSE`.
-- [ ] Mention it in the landing footer (`index.html`).
-- [ ] Check `.vercelignore` doesn't matter here (LICENSE may deploy; harmless). Merge and push.
+- [x] Add `LICENSE` at the repo root: the standard MIT text, `Copyright (c) 2026 AllStreets`. This is the public GitHub identity that owns the repo; the user's real name isn't published without asking.
+- [x] Make the README "License" section link to `LICENSE`.
+- [x] Mention it in the landing footer (`index.html`).
+- [x] Check `.vercelignore` doesn't matter here (LICENSE may deploy; harmless). Merge and push.
 
 ### B2. No item boxes on the starting grid (the user has seen them twice)
 
-- [ ] Root-cause it.
+- [x] Root-cause it.
   - `tools/tracks/build_tracks.py` `place_item_boxes` puts its last row anywhere up to index `n-1`, just before the line, which is where `layoutGrid` (`game.js`) lines up 20 cars behind the line.
   - Confirm on every circuit which boxes fall inside the grid's length.
-- [ ] Write the Node test first, `tests/track-boxes.test.js`:
+- [x] Write the Node test first, `tests/track-boxes.test.js`:
   - For every circuit in `tracks-data.js`, no box's along-track distance lies within the grid zone (the 20 slots plus a margin behind the line) or the qualifying run-up (`QUALI_RUN_UP` = 320 before the line).
   - It must fail on the current data.
-- [ ] Fix the generator: exclude the grid and run-up window, plus a margin after the line, from box placement. Regenerate `tracks-data.js`.
-- [ ] Add a runtime guard in `game.js`: drop any box inside the grid zone, as a belt-and-braces fix that also protects future circuits.
-- [ ] Browser check, added to `grid-check.js` as `noBoxesOnGrid`:
+- [x] Fix the generator: exclude the grid and run-up window, plus a margin after the line, from box placement. Regenerate `tracks-data.js`.
+- [x] Add a runtime guard in `game.js`: drop any box inside the grid zone, as a belt-and-braces fix that also protects future circuits.
+- [x] Browser check, added to `grid-check.js` as `noBoxesOnGrid`:
   - At lights-out on all 8 circuits, no visible box mesh (`render3d.js` `world.boxes`) is within the grid zone.
   - In qualifying, the run-up shows no boxes.
-- [ ] Take a real screenshot of the grid at the start on Monza and Monaco. Review, merge, push.
+- [x] Take a real screenshot of the grid at the start on Monza and Monaco. Review, merge, push. This shipped in `a3ed2b7`: the boxes sat inside the grid on Monza, Spa, Suzuka, Singapore and Interlagos, and are now clear on all 8 circuits. A row that moved had also landed on Suzuka's crossover, and it is now kept away from it.
 
 ### B3. Earlier deferred minors (professional standard: nothing left parked)
 
