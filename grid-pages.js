@@ -53,8 +53,8 @@
             <p class="kicker">#${num(r.number)} · ${esc(team ? team.short : "")}${s.champion ? ` · <span class="champion">2025 World Champion</span>` : ""}</p>
             <h3>${esc(r.name)}</h3>
             <p class="muted driver-line">${esc(game ? game.title : "")} · ${esc(r.nationality)} · ${ageAt(r.dateOfBirth, data.season.firstRace)} at the season opener</p>
+            <p class="standing"><span>2025</span> ${esc(ordinal(s.position))} · ${num(s.points)} pts</p>
             <dl class="record">
-              <div><dt>2025</dt><dd>${esc(ordinal(s.position))} · ${num(s.points)} pts</dd></div>
               <div><dt>Wins</dt><dd>${num(s.wins)}</dd></div>
               <div><dt>Podiums</dt><dd>${num(s.podiums)}</dd></div>
               <div><dt>Poles</dt><dd>${num(s.poles)}</dd></div>
@@ -81,9 +81,8 @@
             <p class="kicker">${esc(r.country)}${r.season.champion ? ` · <span class="champion">2025 Constructors' Champions</span>` : ""}</p>
             <h3>${esc(r.fullName)}</h3>
             <p class="team-car">${esc(team.car)}</p>
+            <p class="standing"><span>2025</span> ${esc(ordinal(r.season.position))} · ${num(r.season.points)} pts · ${plural(r.season.wins, "win")}</p>
             <dl class="record">
-              <div><dt>2025</dt><dd>${esc(ordinal(r.season.position))} · ${num(r.season.points)} pts</dd></div>
-              <div><dt>Wins</dt><dd>${num(r.season.wins)}</dd></div>
               <div><dt>Titles</dt><dd>${num(r.career.titles)}</dd></div>
               <div><dt>All-time wins</dt><dd>${num(r.career.wins)}</dd></div>
             </dl>
