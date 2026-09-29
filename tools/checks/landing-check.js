@@ -1,7 +1,7 @@
 // Browser check for index.html (landing page). Run with the Playwright MCP
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
-// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true.
+// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -51,6 +51,7 @@ async (page) => {
   out.puOddsRows = await p.locator("#power-ups table.pu-odds tbody tr").count();
   out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "9%");
   out.navLink = await p.locator('nav a[href="#power-ups"]').count();
+  out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 1, careerPoints: 276, rating: 1309, ratedRaces: 4,
     totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1 },

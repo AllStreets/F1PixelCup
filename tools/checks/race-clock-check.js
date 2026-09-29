@@ -187,7 +187,9 @@ async (page) => {
   const smooth = await raceWinner(1000 / 60);
   const choppy = await raceWinner(50);
   // A wall-time clock would read about 50% slower at 20 fps (50 ms frames, 33 ms of physics).
-  results.slowMachineTimesReal = Math.abs(choppy.median / smooth.median - 1) < 0.04 && Math.abs(choppy.best / smooth.best - 1) < 0.04;
+  // The coarser physics step itself costs a few percent through the corners (measured
+  // 1.5-2.7% on the median, up to 5.5% on the best lap), which is real driving, not the clock.
+  results.slowMachineTimesReal = Math.abs(choppy.median / smooth.median - 1) < 0.06 && Math.abs(choppy.best / smooth.best - 1) < 0.08;
 
   // The timing tower shows real time gaps: never negative, even right after
   // the lead changes hands, and each gap agrees with the distance between the

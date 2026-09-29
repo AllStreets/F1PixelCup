@@ -196,3 +196,12 @@ html, body { height: 100%; overflow: hidden; }
   .result-row > span:nth-child(5), .result-head > span:nth-child(5),
   .result-row > span:nth-child(7), .result-head > span:nth-child(7) { display: none; }
 }
+
+/* Qualifying classification: the starting grid. */
+.quali-lede { margin: 4px 0 0; }
+.quali-table .result-row, .quali-table .result-head { grid-template-columns: 3rem 4px minmax(0, 1fr) 7rem 6rem; }
+.quali-row.is-pole b { color: #c77dff; }
+.quali-row.is-pole .r-time { color: #c77dff; }
+@media (max-width: 520px) {
+  .quali-table .result-row, .quali-table .result-head { grid-template-columns: 2rem 4px minmax(4.5rem, 1fr) 5.6rem 4.6rem; gap: 6px; }
+}

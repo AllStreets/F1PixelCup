@@ -64,9 +64,13 @@ const DIFFICULTIES = [
   {
     // The only setting where rivals are quicker than you rather than just
     // better drivers: a 4% pace edge on top of a near-perfect racing line.
+    // Tuned by simulated laps (tools/checks/grid-check.js): later braking and a
+    // longer look ahead than Pro made Legend run wide and lose time, so it
+    // keeps Pro's line and wins on pace and precision -- about 5% quicker than
+    // Pro, which is about 10% quicker than Rookie.
     id: "legend", name: "Legend",
-    aiPace: 1.04, brakeBias: 0.82, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
-    lookBase: 108, lookSpeed: 0.74,
+    aiPace: 1.04, brakeBias: 0.62, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
+    lookBase: 76, lookSpeed: 0.52,
   },
 ];
 

@@ -14,6 +14,9 @@
   const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
   const CUP_BONUS = [50, 30, 20];
   const MULTIPLIER = { rookie: 1, pro: 2, legend: 3 };
+  // Qualifying positions P1..P10, before the difficulty multiplier (grid.js
+  // uses the same table; a test keeps them equal).
+  const QUALI_POINTS = [10, 6, 4, 2, 2, 2, 2, 2, 2, 2];
   const FIELD_STRENGTH = { rookie: 1000, pro: 1400, legend: 1800 };
   const DIFFICULTY_NAMES = { rookie: "Rookie", pro: "Pro", legend: "Legend" };
   const START_RATING = 1200;
@@ -43,6 +46,12 @@
     const bonus = fastestLap && position >= 1 && position <= 10 ? 1 : 0;
     const racePoints = base + bonus;
     return { racePoints, multiplier, careerPoints: racePoints * multiplier };
+  }
+
+  function qualifyingAward({ position, difficulty }) {
+    const multiplier = multiplierFor(difficulty);
+    const points = QUALI_POINTS[position - 1] || 0;
+    return { points, multiplier, careerPoints: points * multiplier };
   }
 
   function cupAward({ position, difficulty }) {
@@ -93,7 +102,7 @@
       careerPoints: 0,
       rating: START_RATING,
       ratedRaces: 0,
-      totals: { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0 },
+      totals: { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0, poles: 0 },
       bestLaps: {},
       history: [],
     };
@@ -233,8 +242,15 @@
         difficulty: result.difficulty,
       });
       const lap = isNumber(result.bestLapMs) && result.bestLapMs > 0 ? result.bestLapMs : null;
+      // Qualifying, when the cup had it: points for the grid position, and poles.
+      const quali = isObject(result.qualifying) && isNumber(result.qualifying.position) ? (() => {
+        const q = qualifyingAward({ position: result.qualifying.position, difficulty: result.difficulty });
+        const timeMs = isNumber(result.qualifying.timeMs) && result.qualifying.timeMs > 0 ? result.qualifying.timeMs : null;
+        return { position: result.qualifying.position, timeMs, ...q };
+      })() : null;
 
-      profile.careerPoints += award.careerPoints;
+      profile.careerPoints += award.careerPoints + (quali ? quali.careerPoints : 0);
+      if (quali && quali.position === 1) profile.totals.poles += 1;
       profile.rating = rating.after;
       profile.ratedRaces += 1;
       profile.totals.races += 1;
@@ -269,12 +285,14 @@
         fastestLap: Boolean(result.fastestLap),
         racePoints: award.racePoints,
         careerPointsEarned: award.careerPoints,
+        qualifying: quali ? { position: quali.position, timeMs: quali.timeMs, points: quali.points, careerPoints: quali.careerPoints } : null,
         ratingBefore: rating.before,
         ratingAfter: rating.after,
       });
 
       const saved = commit(profile);
       return {
+        qualifying: quali,
         racePoints: award.racePoints,
         multiplier: award.multiplier,
         careerPoints: award.careerPoints,
@@ -351,6 +369,8 @@
     HISTORY_LIMIT,
     multiplierFor,
     raceAward,
+    qualifyingAward,
+    QUALI_POINTS,
     cupAward,
     rateRace,
     tierFor,

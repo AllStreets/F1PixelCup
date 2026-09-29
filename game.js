@@ -271,6 +271,11 @@ const state = {
   fxFlashes: [],
   simOffset: 0,
   lastTick: null,
+  // Starting grid: "back" (Mario Kart style, the default) or "qualifying".
+  gridMode: "back",
+  cupGridMode: "back",
+  gridOrder: [],
+  qualifying: null,
   finishQueue: [],
   fallbackFrames: 0,
   particles: [],
@@ -649,7 +654,35 @@ function getPitLaneState() {
     selectedCup: state.selectedCup,
     difficulties: DIFFICULTIES.map((d, index) => ({ index, name: d.name })),
     selectedDifficulty: state.difficulty,
+    gridModes: GRID_MODES,
+    gridMode: state.gridMode,
   };
+}
+
+const GRID_MODES = [
+  { id: "back", name: "From the back" },
+  { id: "qualifying", name: "Qualifying" },
+];
+
+// Chosen in the pit lane, fixed for the whole cup once it starts.
+function selectGridMode(mode) {
+  if (state.phase !== "garage" || !GRID_MODES.some((m) => m.id === mode)) return;
+  state.gridMode = mode;
+  try {
+    window.localStorage.setItem("f1pixelcup.grid", mode);
+  } catch (err) {
+    // Preference just will not persist.
+  }
+  renderGarage();
+}
+
+function loadGridPreference() {
+  try {
+    const stored = window.localStorage.getItem("f1pixelcup.grid");
+    if (GRID_MODES.some((m) => m.id === stored)) state.gridMode = stored;
+  } catch (err) {
+    // Keep the default.
+  }
 }
 
 function selectDriver(index) {
@@ -685,6 +718,7 @@ function getActiveCup() {
 }
 
 function loadDifficultyPreference() {
+  loadGridPreference();
   try {
     const stored = window.localStorage.getItem("f1pixelcup.difficulty");
     if (stored !== null) state.difficulty = clamp(Number(stored) || 0, 0, DIFFICULTIES.length - 1);
@@ -707,6 +741,230 @@ function buildCupEntries() {
     })),
   ];
   state.cupEntries = cupEntries;
+}
+
+// ---------------------------------------------------------------------------
+// Qualifying. A one-lap shootout from a rolling start. CPU laps are simulated
+// with the same physics and AI that race them -- alone on the circuit, at the
+// chosen difficulty, mistakes and all -- so every time is a real lap.
+// ---------------------------------------------------------------------------
+
+// The rolling start: this far before the line, at this share of top speed.
+const QUALI_RUN_UP = 320;
+const QUALI_ROLL_SPEED = 0.7;
+const QUALI_TIME_LIMIT_MS = 180000;
+
+function placeForQualifying(racer, track) {
+  const route = getItemRoute(track);
+  const d = track.totalLength - QUALI_RUN_UP;
+  const w = route.toWorld(d, 0);
+  // Tell the road lookup which stretch the car is on: the circuit runs past
+  // itself in places, and the nearest bit of road may be another part of the lap.
+  let segment = 0;
+  while (segment < track.cumulativeStarts.length - 1 && track.cumulativeStarts[segment + 1] <= d) segment += 1;
+  Object.assign(racer, {
+    x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat: 0, segmentHint: segment,
+    speed: racer.physics.maxSpeed * QUALI_ROLL_SPEED,
+    lap: 0, startedRaceLap: false, lapAccum: 0, lapStartAt: 0, lastLapTime: 0, bestLapTime: 0,
+    splits: [], lastSplit: -1, finished: false,
+  });
+}
+
+// The same lap with its own random numbers, so any CPU lap can be run again
+// and checked: its mistakes and line come from `seed`, nothing else.
+function simulateQualifyingLapSeeded(entry, track, seed) {
+  const realRandom = Math.random;
+  let s32 = seed >>> 0;
+  Math.random = () => {
+    s32 = (s32 + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s32 ^ (s32 >>> 15), 1 | s32);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  try {
+    return simulateQualifyingLap(entry, track);
+  } finally {
+    Math.random = realRandom;
+  }
+}
+
+function startQualifying(index) {
+  const cup = getActiveCup();
+  state.raceIndex = index;
+  state.track = cup.tracks[index];
+  Object.assign(WORLD, state.track.world);
+  Object.assign(state, {
+    shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
+    simOffset: 0, lastTick: null, flagOutAt: 0, resultsQueued: false, resultTimeoutAt: 0, finalLapAt: 0,
+    paused: false, pausedAt: 0, camPos: null, camRoll: 0, hudLastPlace: 0, hudPlaceFlashUntil: 0,
+  });
+  // Every CPU driver's lap, simulated now with the physics and AI that race them.
+  const runSeed = hashSeed(`${state.cupRunId || "run"}:${index}`);
+  const times = state.cupEntries.filter((entry) => !entry.isPlayer).map((entry, i) => {
+    const seed = (runSeed + (i + 1) * 7919) >>> 0;
+    const lap = simulateQualifyingLapSeeded(entry, state.track, seed);
+    return { id: entry.driver.id, timeMs: lap.timeMs, splits: lap.splits, seed };
+  });
+  const poleLap = times.filter((t) => t.timeMs).sort((a, b) => a.timeMs - b.timeMs)[0];
+  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const player = createRacer(playerEntry.driver, playerEntry.kart, true, 0);
+  placeForQualifying(player, state.track);
+  state.racers = [player];
+  state.playerId = player.id;
+  state.gridOrder = [];
+  // Qualifying has no power-ups.
+  state.boxHiddenUntil = state.track.itemBoxes.map(() => Infinity);
+  state.cameraHeading = player.heading;
+  state.camLastHeading = player.heading;
+  state.qualifying = {
+    raceIndex: index,
+    times,
+    poleSplits: poleLap ? poleLap.splits : [],
+    poleTimeMs: poleLap ? poleLap.timeMs : null,
+    playerTimeMs: null,
+    order: null,
+    readyFrom: null,
+  };
+  state.phase = "qualifying";
+  if (window.Screens) window.Screens.showRace();
+  addFeed(`${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
+  updateQualifyingTower();
+}
+
+function hashSeed(text) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+// A moment to settle before the rolling lap begins.
+const QUALI_READY_MS = 1800;
+
+function updateQualifying(dt, now) {
+  const q = state.qualifying;
+  const player = getPlayer();
+  if (!q || !player) return;
+  if (q.readyFrom === null) q.readyFrom = now;
+  if (now - q.readyFrom < QUALI_READY_MS) return;
+  const step = dt * 1000;
+  const tick = (state.lastTick !== null ? state.lastTick : now - step) + step;
+  updateRacer(player, dt, tick);
+  state.lastTick = tick;
+  updateQualifyingTower();
+  if (player.lastLapTime > 0) finishQualifying();
+  else if (player.lapStartAt && tick - player.lapStartAt > QUALI_TIME_LIMIT_MS) finishQualifying();
+}
+
+// How far behind (+) or ahead (-) of the provisional pole the player was at
+// the last timing point passed, in ms; null before the first one.
+function qualifyingDeltaNow() {
+  const q = state.qualifying;
+  const player = getPlayer();
+  if (!q || !player || !player.startedRaceLap || !player.splits) return null;
+  const rel = player.splits.map((t) => t - player.lapStartAt);
+  return Grid.qualifyingDelta(rel, q.poleSplits, player.lastSplit);
+}
+
+function qualifyingClassification() {
+  const q = state.qualifying;
+  const player = state.cupEntries.find((entry) => entry.isPlayer);
+  const all = [...q.times.map((t) => ({ id: t.id, timeMs: t.timeMs })), { id: player.driver.id, timeMs: q.playerTimeMs }];
+  const order = Grid.gridFromQualifying(all);
+  const byId = Object.fromEntries(all.map((t) => [t.id, t.timeMs]));
+  return order.map((id) => ({ id, timeMs: byId[id] }));
+}
+
+function finishQualifying() {
+  const q = state.qualifying;
+  const player = getPlayer();
+  q.playerTimeMs = player.lastLapTime > 0 ? player.lastLapTime : null;
+  const rows = qualifyingClassification();
+  q.order = rows.map((row) => row.id);
+  state.phase = "qualifyingResults";
+  const pole = rows[0];
+  const place = q.order.indexOf(player.driver.id) + 1;
+  addFeed(place === 1 ? `Pole position! ${formatLapTime(q.playerTimeMs)}.` : `Qualified ${formatOrdinal(place)}.`);
+  if (!window.Screens) return;
+  const cup = getActiveCup();
+  window.Screens.showQualifying({
+    kicker: `Qualifying · Race ${state.raceIndex + 1} of ${cup.tracks.length} · ${cup.name}`,
+    title: state.track.name,
+    rows: rows.map((row, i) => {
+      const entry = state.cupEntries.find((e) => e.driver.id === row.id);
+      return {
+        position: i + 1,
+        id: row.id,
+        name: entry.driver.name,
+        code: entry.driver.code,
+        teamColor: entry.kart.body,
+        time: row.timeMs ? formatLapTime(row.timeMs) : "No time",
+        gap: i === 0 || !row.timeMs || !pole.timeMs ? "" : `+${formatGapTime(row.timeMs - pole.timeMs)}`,
+        isPlayer: entry.isPlayer,
+      };
+    }),
+  });
+}
+
+function startRaceFromQualifying() {
+  if (state.phase !== "qualifyingResults") return;
+  enterFullscreenMode();
+  startRace(state.raceIndex);
+}
+
+// The timing tower during qualifying: the provisional classification.
+function updateQualifyingTower() {
+  if (!window.Screens) return;
+  const now = performance.now();
+  if (now - (state.towerUpdatedAt || 0) < 250) return;
+  state.towerUpdatedAt = now;
+  const q = state.qualifying;
+  const player = state.cupEntries.find((entry) => entry.isPlayer);
+  const done = q.times.filter((t) => t.timeMs).sort((a, b) => a.timeMs - b.timeMs);
+  const rows = done.map((t, i) => {
+    const entry = state.cupEntries.find((e) => e.driver.id === t.id);
+    return { position: i + 1, code: entry.driver.code, teamColor: entry.kart.body, isPlayer: false,
+      gap: i === 0 ? formatLapTime(t.timeMs) : `+${formatGapTime(t.timeMs - done[0].timeMs)}` };
+  });
+  rows.push({ position: "—", code: player.driver.code, teamColor: player.kart.body, isPlayer: true, gap: "ON LAP" });
+  window.Screens.updateTower(rows);
+}
+
+// One CPU driver's flying lap, simulated on an empty track.
+function simulateQualifyingLap(entry, track) {
+  const saved = {
+    racers: state.racers, shots: state.shots, hazards: state.hazards, safetyCar: state.safetyCar,
+    boxHiddenUntil: state.boxHiddenUntil, flagOutAt: state.flagOutAt, feed: state.feed, track: state.track,
+    finishQueue: state.finishQueue,
+  };
+  const savedWorld = { ...WORLD };
+  const racer = createRacer(entry.driver, entry.kart, false, 99);
+  state.track = track;
+  // Cars are kept inside the world box, which is sized to each circuit.
+  Object.assign(WORLD, track.world);
+  placeForQualifying(racer, track);
+  Object.assign(state, {
+    racers: [racer], shots: [], hazards: [], safetyCar: null, flagOutAt: 0, feed: [...state.feed], finishQueue: [],
+    boxHiddenUntil: track.itemBoxes.map(() => Infinity),
+  });
+  const dt = 1 / 60;
+  let now = 0;
+  while (!racer.lastLapTime && now < QUALI_TIME_LIMIT_MS) {
+    now += dt * 1000;
+    updateRacer(racer, dt, now);
+  }
+  // The flying lap began at the first crossing; once it ends, lapStartAt has
+  // moved on to the next lap, so the start is the one before it.
+  const lapStart = racer.lastLapTime > 0 ? racer.previousLapStartAt : racer.lapStartAt;
+  Object.assign(state, saved);
+  Object.assign(WORLD, savedWorld);
+  return {
+    timeMs: racer.lastLapTime > 0 ? racer.lastLapTime : null,
+    // Timing points relative to the start of the flying lap.
+    splits: (racer.splits || []).slice(0, TIMING_POINTS_PER_LAP).map((t) => t - lapStart),
+  };
 }
 
 function layoutGrid(track, count) {
@@ -800,9 +1058,19 @@ function startCup() {
   state.cupRecordedFor = null;
   state.cupDifficulty = state.difficulty;
   state.feed = [];
-  addFeed(`Lights out soon. ${getActiveCup().name} grid is forming.`);
+  state.cupGridMode = state.gridMode;
+  state.qualifying = null;
+  addFeed(state.cupGridMode === "qualifying"
+    ? `${getActiveCup().name}: qualifying sets every grid.`
+    : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
   enterFullscreenMode();
-  startRace(0);
+  startRaceWeekend(0);
+}
+
+// Each race of the cup: straight to the grid, or qualifying first.
+function startRaceWeekend(index) {
+  if (state.cupGridMode === "qualifying") startQualifying(index);
+  else startRace(index);
 }
 
 function startRace(index) {
@@ -835,8 +1103,17 @@ function startRace(index) {
   state.paused = false;
   state.pausedAt = 0;
 
-  const grid = layoutGrid(state.track, state.cupEntries.length);
-  state.racers = state.cupEntries.map((entry, slot) => {
+  // The starting order: the qualifying classification, or from the back.
+  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const qualified = state.qualifying && state.qualifying.raceIndex === index && state.qualifying.order;
+  state.gridOrder = qualified ? [...state.qualifying.order] : Grid.gridFromBack({
+    playerId: playerEntry.driver.id,
+    aiIds: state.cupEntries.filter((entry) => !entry.isPlayer).map((entry) => entry.driver.id),
+    standings: Object.fromEntries(state.cupEntries.map((entry) => [entry.driver.id, entry.points])),
+  });
+  const lineUp = state.gridOrder.map((id) => state.cupEntries.find((entry) => entry.driver.id === id));
+  const grid = layoutGrid(state.track, lineUp.length);
+  state.racers = lineUp.map((entry, slot) => {
     const racer = createRacer(entry.driver, entry.kart, entry.isPlayer, slot);
     racer.x = grid[slot].x;
     racer.y = grid[slot].y;
@@ -1881,11 +2158,19 @@ function recordPlayerRace(finishers, fastest) {
       fieldSize: finishers.length,
       bestLapMs: player.bestLapTime || 0,
       fastestLap: Boolean(fastest && fastest.id === player.id),
+      qualifying: playerQualifying(player),
     });
   } catch (error) {
     console.warn("Career: race not recorded", error);
     return null;
   }
+}
+
+// The player's qualifying result for this race, if the cup had qualifying.
+function playerQualifying(player) {
+  const q = state.qualifying;
+  if (state.cupGridMode !== "qualifying" || !q || q.raceIndex !== state.raceIndex || !q.order) return undefined;
+  return { position: q.order.indexOf(player.driver.id) + 1, timeMs: q.playerTimeMs };
 }
 
 function careerDifficultyName(id) {
@@ -1901,6 +2186,12 @@ function careerForRace(summary) {
     `<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier})`,
     `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
   ];
+  if (summary.qualifying) {
+    const q = summary.qualifying;
+    lines.push(q.careerPoints > 0
+      ? `Qualifying P${q.position}: <strong>+${q.careerPoints}</strong> (${q.points} × ${difficulty} ×${q.multiplier})${q.position === 1 ? " · Pole position" : ""}`
+      : `Qualifying P${q.position}: no points (top ten score)`);
+  }
   if (summary.newBestLap) lines.push(`New best at ${state.track.name}: <strong>${formatLapTime(summary.newBestLap.ms)}</strong>`);
   return { lines, saved: summary.saved };
 }
@@ -2049,7 +2340,7 @@ function nextRace() {
   }
   state.raceIndex += 1;
   enterFullscreenMode();
-  startRace(state.raceIndex);
+  startRaceWeekend(state.raceIndex);
 }
 
 function resetToGarage() {
@@ -2073,6 +2364,8 @@ function resetToGarage() {
   state.simOffset = 0;
   state.lastTick = null;
   state.finishQueue = [];
+  state.qualifying = null;
+  state.gridOrder = [];
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
@@ -3548,7 +3841,41 @@ function formatGap(seconds) {
   return seconds.toFixed(1);
 }
 
+// Qualifying: one panel -- the lap against the provisional pole -- and no
+// position or interval (there is no one else on track).
+function drawQualifyingHud(track, player) {
+  const q = state.qualifying;
+  const now = raceNow();
+  const onLap = player.startedRaceLap;
+  hudPanel(20, 16, 300, 134, "#c77dff");
+  ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
+  ctx.font = "bold 11px Trebuchet MS";
+  ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING`, 34, 34);
+  ctx.fillStyle = "#fff0c9";
+  ctx.font = "bold 22px Georgia";
+  const ready = q && q.readyFrom !== null && now - q.readyFrom >= QUALI_READY_MS;
+  ctx.fillText(!ready ? "Get ready…" : onLap ? "Flying lap" : "Out lap", 34, 62);
+  const liveLap = onLap && player.lapStartAt ? now - player.lapStartAt : 0;
+  const row = (label, text, y, color) => {
+    ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
+    ctx.font = "bold 11px Trebuchet MS";
+    ctx.fillText(label, 34, y);
+    ctx.fillStyle = color;
+    ctx.font = "bold 16px Georgia";
+    ctx.fillText(text, 306 - ctx.measureText(text).width, y);
+  };
+  row("LAP TIME", onLap ? formatLapTime(liveLap) : "-:--.---", 92, "#fff0c9");
+  row("PROVISIONAL POLE", q && q.poleTimeMs ? formatLapTime(q.poleTimeMs) : "-:--.---", 114, "#c77dff");
+  const delta = qualifyingDeltaNow();
+  row("DELTA", delta === null ? "—" : `${delta <= 0 ? "−" : "+"}${formatGapTime(Math.abs(delta))}`, 136,
+    delta === null ? "rgba(255, 240, 201, 0.5)" : delta <= 0 ? "#39d98a" : "#ff5f57");
+}
+
 function drawDriverHud(track, player) {
+  if (state.phase === "qualifying") {
+    drawQualifyingHud(track, player);
+    return;
+  }
   const sorted = getSortedRacers();
   const place = sorted.findIndex((racer) => racer.id === player.id) + 1;
   const total = sorted.length;
@@ -4004,7 +4331,7 @@ function letGoOfOil() {
 }
 
 function togglePause() {
-  if (state.phase !== "race" && state.phase !== "countdown") return;
+  if (state.phase !== "race" && state.phase !== "countdown" && state.phase !== "qualifying") return;
   if (state.paused) {
     shiftRaceClocks(performance.now() - state.pausedAt);
     state.paused = false;
@@ -4026,11 +4353,11 @@ function handleEscapeKey() {
   // An open overlay (career, settings, phone note) closes first.
   if (window.Screens && window.Screens.closeOverlay()) return;
   // After a race or a cup there is nothing to pause, so Esc is the way home.
-  if (state.phase === "results" || state.phase === "podium") {
+  if (state.phase === "results" || state.phase === "podium" || state.phase === "qualifyingResults") {
     resetToGarage();
     return;
   }
-  if (state.phase === "race" || state.phase === "countdown") togglePause();
+  if (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying") togglePause();
 }
 
 function drawPauseOverlay() {
@@ -4062,6 +4389,8 @@ function update(now) {
       updateCountdown(now);
     } else if (state.phase === "race") {
       updateRace(dt, now);
+    } else if (state.phase === "qualifying") {
+      updateQualifying(dt, now);
     }
   }
 
@@ -4221,7 +4550,7 @@ function bindEvents() {
   // A hidden tab stops drawing, but the race clock would keep running behind
   // it: pause instead, so nothing runs out while nobody is watching.
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && (state.phase === "race" || state.phase === "countdown") && !state.paused) togglePause();
+    if (document.hidden && (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying") && !state.paused) togglePause();
   });
 }
 
@@ -4231,7 +4560,9 @@ window.Game = {
   selectDriver,
   selectCup,
   selectDifficulty,
+  selectGridMode,
   startCup,
+  startRaceFromQualifying,
   nextRace,
   backToPitLane: resetToGarage,
   setSound(on) {

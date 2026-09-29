@@ -245,7 +245,8 @@ async (page) => {
   results.oilHold = await run(async () => {
     const pl = getPlayer(); pl.currentItem = "oilSlick";
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
-    await new Promise((r) => setTimeout(r, 400));
+    // Holding is measured on the race clock: wait until enough race time has passed.
+    for (let i = 0; i < 100 && !pl.trailingOil; i += 1) await new Promise((r) => setTimeout(r, 50));
     const trailing = pl.trailingOil && pl.currentItem === "oilSlick";
     // Cars are racing meanwhile and can drive over earlier slicks, so count
     // only what this release drops.
@@ -256,7 +257,8 @@ async (page) => {
   results.oilBlurDrops = await run(async () => {
     const pl = getPlayer(); pl.currentItem = "oilSlick";
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
-    await new Promise((r) => setTimeout(r, 400));
+    // Holding is measured on the race clock: wait until enough race time has passed.
+    for (let i = 0; i < 100 && !pl.trailingOil; i += 1) await new Promise((r) => setTimeout(r, 50));
     const before = state.hazards.length;
     window.dispatchEvent(new Event("blur"));
     return !pl.trailingOil && pl.currentItem === "none" && state.hazards.length === before + 1;
@@ -307,9 +309,12 @@ async (page) => {
     state.racers.forEach((r) => { if (!r.isPlayer) r.speed = 0; });
     give("undercut"); give("debris"); give("stewardPenalty"); give("oilSlick"); give("safetyCar");
     const rival = state.racers.find((r) => !r.isPlayer); rival.currentItem = "oilSlick"; useItem(rival, performance.now(), { trail: true });
+    // Freeze the race so nothing lands before the renderer is inspected; paused frames still draw.
+    togglePause();
     await new Promise((r) => setTimeout(r, 300));
     const seen = Render3D.inspect();
-    const f = powerUpFrame(performance.now());
+    const f = powerUpFrame(renderClock());
+    togglePause();
     return seen.shots === f.shots.length && seen.hazards === f.hazards.length && seen.trails === f.trails.length
       && seen.safetyCar === true && f.shots.length >= 2;
   });
@@ -432,7 +437,8 @@ async (page) => {
   results.oilHeldThroughPause = await run(async () => {
     const pl = getPlayer(); pl.currentItem = "oilSlick";
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
-    await new Promise((r) => setTimeout(r, 400));
+    // Holding is measured on the race clock: wait until enough race time has passed.
+    for (let i = 0; i < 100 && !pl.trailingOil; i += 1) await new Promise((r) => setTimeout(r, 50));
     const trailing = pl.trailingOil;
     togglePause();
     const before = state.hazards.length;

@@ -14,6 +14,8 @@ An F1 racing game in the browser — Three.js for the world, HTML5 Canvas for th
 - **Power-ups: Mario Kart chaos, F1 rules** — eight items, each an F1 idea with a Mario Kart counterpart (see *Power-ups* below)
 - **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1, plus the bonus point for fastest lap (top ten finishers only)
 - **Real race times** — every driver's total race time and gap to the winner, timed to the millisecond at the line, including cars fast-forwarded home after you finish. The race clock is simulated time: it advances exactly as far as the physics does, so times stay true on a slow machine and stop while paused
+- **Starting grid, your choice per cup** — *From the back* (the default): you start last, Mario Kart style, with the CPU cars in championship order. *Qualifying*: before each race, one flying lap from a rolling start sets the grid; every CPU lap is simulated with the same physics and AI (alone on track, at the chosen difficulty), and qualifying pays career points (pole 10, P2 6, P3 4, P4–P10 2, × difficulty) and counts poles
+- **Difficulty that really changes the field** — measured by simulation: Legend CPUs lap about 5% quicker than Pro, Pro about 10% quicker than Rookie (`tools/checks/grid-check.js` reports the margins)
 - **Real timing gaps** — the tower and the interval panel measure gaps at 24 timing points a lap, as real timing loops do, not from distance
 - **Pixel-art F1 cars** — team livery colours, front wing, rear wing, halo, helmet
 - **Driver-locked constructor cars** — pick a driver, race their team car
@@ -201,6 +203,7 @@ F1_Pixel_Cup/
 ├── game.js           # Racing, AI, items, audio, camera and the canvas HUD
 ├── game-data.js      # Teams, drivers, difficulties, circuits, cups, power-ups
 ├── career.js         # Career points, rating, best laps and the saved profile
+├── grid.js           # Starting grids and qualifying rules
 ├── powerups.js       # Power-up odds, limits and track-following shots
 ├── item-icons.js     # Power-up icons, shared by the HUD and the site
 ├── trackmap.js       # Circuit outline -> SVG map
@@ -302,7 +305,8 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 - Browser checks in `tools/checks/` run through the Playwright MCP tool
   (`browser_run_code_unsafe` with the file) against a local server on port
   8765: `play-check.js`, `keys-check.js`, `landing-check.js`, `career-check.js`, `race-sim.js`,
-  `powerups-check.js` (every item, in the real game), `race-clock-check.js` (fast-forward after
+  `powerups-check.js` (every item, in the real game), `grid-check.js` (grids, qualifying, the
+  measured difficulty ladder), `race-clock-check.js` (fast-forward after
   the flag, real race times on the results) and `loading-check.js` (no stand-in car while the
   3D car loads; 2D only when 3D fails). Expected for each: every result true, errors [].
   Every check minimises the test tool's own blank tab so only the window under test shows.

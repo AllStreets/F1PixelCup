@@ -36,6 +36,7 @@
         <div class="pitlane-choices">
           <div class="choice-row"><span class="choice-label">Cup</span><span id="cup-pills"></span></div>
           <div class="choice-row"><span class="choice-label">Difficulty</span><span id="difficulty-pills"></span></div>
+          <div class="choice-row"><span class="choice-label">Grid</span><span id="grid-pills"></span></div>
           <ol id="cup-circuits" class="cup-circuits"></ol>
         </div>
         <div class="pitlane-driver">
@@ -61,6 +62,19 @@
           <div class="overlay-actions">
             <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
             <button id="results-next" class="go-btn" data-action="next" type="button"><span>Next race ›</span></button>
+          </div>
+        </div>
+      </section>
+
+      <section id="qualifying-screen" class="screen overlay hidden" aria-live="polite">
+        <div class="overlay-card wide">
+          <p id="qualifying-kicker" class="kicker"></p>
+          <h2 id="qualifying-title" class="it-title overlay-title"></h2>
+          <p class="muted quali-lede">Qualifying classification — this is the starting grid.</p>
+          <div id="qualifying-table" class="results-table quali-table"></div>
+          <div class="overlay-actions">
+            <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
+            <button class="go-btn" data-action="race" type="button"><span>Start the race ›</span></button>
           </div>
         </div>
       </section>
@@ -106,15 +120,17 @@
   }
 
   function onClick(event) {
-    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty]");
+    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid]");
     if (!target || !window.Game) return;
     if (target.dataset.driver !== undefined) Game.selectDriver(Number(target.dataset.driver));
     else if (target.dataset.cup !== undefined) Game.selectCup(Number(target.dataset.cup));
     else if (target.dataset.difficulty !== undefined) Game.selectDifficulty(Number(target.dataset.difficulty));
+    else if (target.dataset.grid !== undefined) Game.selectGridMode(target.dataset.grid);
     else {
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
       else if (action === "next") Game.nextRace();
+      else if (action === "race") Game.startRaceFromQualifying();
       else if (action === "pitlane") Game.backToPitLane();
       else if (action === "career") showCareer();
       else if (action === "settings") showSettings();
@@ -126,7 +142,7 @@
 
   function show(id) { $(id).classList.remove("hidden"); }
   function hide(id) { $(id).classList.add("hidden"); }
-  function hideMain() { ["pitlane", "tower", "ticker", "results-screen", "podium-screen"].forEach(hide); }
+  function hideMain() { ["pitlane", "tower", "ticker", "results-screen", "qualifying-screen", "podium-screen"].forEach(hide); }
 
   // ---- Pit lane ----
   function showPitLane() {
@@ -149,6 +165,8 @@
       <button class="pill ${cup.index === s.selectedCup ? "is-on" : ""}" data-cup="${cup.index}" type="button">${esc(cup.name)}</button>`).join("");
     $("difficulty-pills").innerHTML = s.difficulties.map((d) => `
       <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button">${esc(d.name)}</button>`).join("");
+    $("grid-pills").innerHTML = s.gridModes.map((m) => `
+      <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button">${esc(m.name)}</button>`).join("");
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
@@ -183,8 +201,10 @@
     if (!rows || !rows.length) return;
     const top = rows.slice(0, 10);
     const player = rows.find((row) => row.isPlayer);
-    const extra = player && player.position > 10 ? [player] : [];
-    const row = (r) => `<div class="tower-row ${r.isPlayer ? "is-player" : ""}"><b>${num(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
+    const extra = player && !top.includes(player) ? [player] : [];
+    // A position can be a number, or a dash for a car still on its qualifying lap.
+    const place = (p) => (typeof p === "number" ? num(p) : esc(p));
+    const row = (r) => `<div class="tower-row ${r.isPlayer ? "is-player" : ""}"><b>${place(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
     $("tower").innerHTML = top.map(row).join("") + (extra.length ? `<div class="tower-gap"></div>${extra.map(row).join("")}` : "");
   }
 
@@ -231,6 +251,21 @@
         </div>`).join("")}`;
     renderStrip($("results-career"), summary.career);
     show("results-screen");
+  }
+
+  function showQualifying(summary) {
+    hideMain();
+    $("qualifying-kicker").textContent = summary.kicker;
+    $("qualifying-title").textContent = summary.title;
+    $("qualifying-table").innerHTML = `
+      <div class="result-head quali-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span></div>
+      ${summary.rows.map((r) => `
+        <div class="result-row quali-row ${r.isPlayer ? "is-player" : ""} ${r.position === 1 ? "is-pole" : ""}" data-driver="${esc(r.id)}">
+          <b>${esc(ordinal(num(r.position)))}</b><i style="background:${esc(r.teamColor)}"></i>
+          <span>${esc(r.name)}</span>
+          <span class="r-time">${esc(r.time)}</span><span class="r-gap">${esc(r.gap)}</span>
+        </div>`).join("")}`;
+    show("qualifying-screen");
   }
 
   function showPodium(summary) {
@@ -330,7 +365,7 @@
 
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
-    showResults, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings,
+    showResults, showQualifying, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

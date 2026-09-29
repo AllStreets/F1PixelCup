@@ -36,7 +36,7 @@ test("a new player starts at 1200 with nothing recorded", () => {
   assert.equal(profile.version, 1);
   assert.equal(profile.rating, 1200);
   assert.equal(profile.careerPoints, 0);
-  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0, poles: 0 });
   assert.deepEqual(profile.bestLaps, {});
   assert.deepEqual(profile.history, []);
 });
@@ -57,14 +57,14 @@ test("recordRace awards points, rates, records history and saves", () => {
   assert.equal(stored.careerPoints, 52);
   assert.equal(stored.rating, 1230);
   assert.equal(stored.ratedRaces, 1);
-  assert.deepEqual(stored.totals, { races: 1, wins: 1, podiums: 1, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(stored.totals, { races: 1, wins: 1, podiums: 1, cupsCompleted: 0, cupsWon: 0, poles: 0 });
   assert.deepEqual(stored.bestLaps.monza, { ms: 38214, at: "2026-09-27T12:00:00.000Z", difficulty: "pro", driverId: "verstappen", teamId: "redBull" });
   assert.equal(stored.history.length, 1);
   assert.deepEqual(stored.history[0], {
     id: "id-2", type: "race", at: "2026-09-27T12:00:00.000Z", cupId: "trophyCup", cupRunId: "run-1",
     raceIndex: 0, trackId: "monza", difficulty: "pro", driverId: "verstappen", teamId: "redBull",
     position: 1, fieldSize: 20, bestLapMs: 38214, fastestLap: true, racePoints: 26,
-    careerPointsEarned: 52, ratingBefore: 1200, ratingAfter: 1230,
+    careerPointsEarned: 52, qualifying: null, ratingBefore: 1200, ratingAfter: 1230,
   });
 });
 
@@ -89,7 +89,7 @@ test("podium and win totals follow the position", () => {
   const { career } = make();
   career.recordRace({ ...monzaWin, position: 3 });
   career.recordRace({ ...monzaWin, position: 4 });
-  assert.deepEqual(career.getProfile().totals, { races: 2, wins: 0, podiums: 1, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(career.getProfile().totals, { races: 2, wins: 0, podiums: 1, cupsCompleted: 0, cupsWon: 0, poles: 0 });
 });
 
 test("recordCup adds the bonus and cup totals", () => {
@@ -97,7 +97,7 @@ test("recordCup adds the bonus and cup totals", () => {
   const summary = career.recordCup({ cupId: "trophyCup", cupRunId: "run-1", difficulty: "legend", position: 1, cupPoints: 92 });
   assert.deepEqual(summary, { bonus: 50, multiplier: 3, careerPoints: 150, careerTotal: 150, alreadyRecorded: false, saved: true });
   const profile = career.getProfile();
-  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 1, cupsWon: 1 });
+  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 1, cupsWon: 1, poles: 0 });
   assert.equal(profile.history[0].type, "cup");
   assert.equal(profile.history[0].cupPoints, 92);
 });
@@ -156,7 +156,7 @@ test("a version-1 save with missing fields is filled in and keeps its data", () 
   assert.equal(profile.careerPoints, 40);
   assert.equal(profile.rating, 1260);
   assert.equal(profile.ratedRaces, 0);
-  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(profile.totals, { races: 0, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0, poles: 0 });
   assert.deepEqual(profile.history, []);
 });
 
@@ -258,8 +258,50 @@ test("a version-1 save with bad field types is repaired instead of breaking the 
   assert.equal(profile.careerPoints, 0);
   assert.equal(profile.rating, 1200);
   assert.equal(profile.ratedRaces, 0);
-  assert.deepEqual(profile.totals, { races: 3, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0 });
+  assert.deepEqual(profile.totals, { races: 3, wins: 0, podiums: 0, cupsCompleted: 0, cupsWon: 0, poles: 0 });
   assert.deepEqual(Object.keys(profile.bestLaps), ["spa"]);
   assert.deepEqual(profile.history, [{ id: "keep", type: "race" }]);
   assert.equal(career.recordRace(monzaWin).careerTotal, 52);
+});
+
+test("qualifying earns career points by position and difficulty, and counts poles", () => {
+  const { career } = make();
+  const pole = career.recordRace({ ...monzaWin, qualifying: { position: 1, timeMs: 34998.4 } });
+  assert.deepEqual(pole.qualifying, { position: 1, timeMs: 34998.4, points: 10, multiplier: 2, careerPoints: 20 });
+  const third = career.recordRace({ ...monzaWin, raceIndex: 1, trackId: "spa", position: 5, qualifying: { position: 3, timeMs: 41000 } });
+  assert.equal(third.qualifying.careerPoints, 8);
+  const profile = career.getProfile();
+  assert.equal(profile.totals.poles, 1);
+  // Race points (26, and 10 + 1 for the fastest lap, x2) plus qualifying (20 and 8).
+  assert.equal(profile.careerPoints, (26 + 11) * 2 + 20 + 8);
+  const last = profile.history[profile.history.length - 1];
+  assert.deepEqual(last.qualifying, { position: 3, timeMs: 41000, points: 4, careerPoints: 8 });
+});
+
+test("a race without qualifying records none and earns nothing extra", () => {
+  const { career } = make();
+  const summary = career.recordRace(monzaWin);
+  assert.equal(summary.qualifying, null);
+  const profile = career.getProfile();
+  assert.equal(profile.history[0].qualifying, null);
+  assert.equal(profile.totals.poles, 0);
+  assert.equal(profile.careerPoints, 26 * 2);
+});
+
+test("qualifying outside the points or with a bad time is recorded honestly", () => {
+  const { career } = make();
+  const summary = career.recordRace({ ...monzaWin, qualifying: { position: 14, timeMs: "fast" } });
+  assert.deepEqual(summary.qualifying, { position: 14, timeMs: null, points: 0, multiplier: 2, careerPoints: 0 });
+});
+
+test("an older save gains a poles count of zero", () => {
+  const storage = memoryStorage({ [Career.STORAGE_KEY]: JSON.stringify({ version: 1, rating: 1300, careerPoints: 40,
+    totals: { races: 2, wins: 1, podiums: 2, cupsCompleted: 0, cupsWon: 0 }, bestLaps: {}, history: [] }) });
+  const { career } = make(storage);
+  assert.equal(career.getProfile().totals.poles, 0);
+});
+
+test("career and grid agree on qualifying points", () => {
+  const Grid = require("../grid.js");
+  assert.deepEqual(Career.QUALI_POINTS, Grid.QUALI_POINTS);
 });
