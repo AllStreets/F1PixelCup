@@ -118,7 +118,7 @@
       <tbody>${PowerUps.ITEM_ORDER.map((id) => `<tr data-id="${esc(id)}"><th scope="row">${esc(byId[id].name)}</th>${cols.map((c) =>
         `<td data-col="${esc(c)}" data-label="${esc(COLUMN_LABELS[c])}">${PowerUps.ODDS[c][id] ? `${PowerUps.ODDS[c][id]}%` : "–"}</td>`).join("")}</tr>`).join("")}</tbody>`;
     const L = PowerUps.LIMITS;
-    $("pu-odds-note").textContent = `Chances for each item box. The column is set by your gap to the leader, not your place: close behind the leader you roll like a front-runner. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and only one Steward Penalty on track at a time.`;
+    $("pu-odds-note").textContent = `Chances for each item box. The column is set by your gap to the leader, not your place: close behind the leader you roll like a front-runner. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and no new Steward Penalty comes out of a box while one is on track.`;
   }
 
   function guardPlayOnPhones() {

@@ -835,6 +835,13 @@ function getRaceProgress(racer) {
 // powerups.js; this is where their effects happen.
 // ---------------------------------------------------------------------------
 
+// The clock the picture is drawn at: frozen at the moment of pausing, so boxes,
+// glows, flaps and flashes hold still on the pause screen instead of running
+// out behind it (their deadlines are shifted when the race resumes).
+function renderClock() {
+  return state.paused && state.pausedAt ? state.pausedAt : performance.now();
+}
+
 function raceSeconds(now) {
   return state.raceStart ? Math.max(0, (now - state.raceStart) / 1000) : 0;
 }
@@ -1063,8 +1070,8 @@ function deploySafetyCar(racer, now) {
 }
 
 // While out, it drives the racing line at safety-car pace. Then it pulls off
-// into the run-off at the side of the track (there is no pit lane in the
-// circuit geometry) and is gone two seconds later.
+// to the edge of the track (there is no pit lane in the circuit geometry yet)
+// and is gone two seconds later.
 function updateSafetyCar(dt, now) {
   const sc = state.safetyCar;
   if (!sc) return;
@@ -1074,13 +1081,18 @@ function updateSafetyCar(dt, now) {
       sc.leaveUntil = now + PowerUps.TIMINGS.safetyCarLeaveMs;
       addFeed("Safety Car in this lap. Racing resumes.");
     }
-    sc.lat = Math.min(route.halfWidthAt(sc.d) + 30, sc.lat + 40 * dt);
+    // To the edge of the road and no further: never into a barrier.
+    sc.lat = Math.min(route.halfWidthAt(sc.d) - 6, sc.lat + 40 * dt);
     sc.speed *= Math.pow(0.4, dt);
     if (now >= sc.leaveUntil) state.safetyCar = null;
   } else {
     sc.lat += clamp(0 - sc.lat, -40 * dt, 40 * dt);
   }
-  if (state.safetyCar) sc.d = wrapLap(sc.d + sc.speed * dt);
+  if (!state.safetyCar) return;
+  // It has a body: it slows behind a car in its lane rather than driving through it.
+  const me = { id: "safetyCar", d: sc.d, lat: sc.lat };
+  sc.pace = Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength));
+  sc.d = wrapLap(sc.d + sc.pace * dt);
 }
 
 function applyTrackBarrier(racer, surface) {
@@ -1321,10 +1333,14 @@ function updateRacer(racer, dt, now) {
   // included -- that car is free to go round it, not through it.
   if (sc) {
     const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
-    const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.speed };
+    const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.pace ?? sc.speed };
     const held = safetyCarActive(now) && racer.id !== sc.ownerId;
-    const others = held ? [...itemBodies(), scBody] : [scBody];
-    racer.speed = Math.min(racer.speed, PowerUps.holdStationSpeed(me, others, state.track.totalLength));
+    const L = state.track.totalLength;
+    // Rivals queue single file behind the car ahead, wherever it is across the road.
+    const cap = held
+      ? PowerUps.holdStationSpeed(me, [...itemBodies(), scBody], L, { singleFile: true })
+      : PowerUps.holdStationSpeed(me, [scBody], L);
+    racer.speed = Math.min(racer.speed, cap);
   }
 
   if (drifting) {
@@ -1439,10 +1455,12 @@ function updateShots(dt, now) {
     if (shot.type === "stewardPenalty") {
       const victims = PowerUps.stewardVictims(shot, bodies, L, now);
       if (!victims.length) return true;
-      victims.forEach((id, i) => spinRacer(racerById(id), i === 0 ? PowerUps.SPIN_MS.stewardLeader : PowerUps.SPIN_MS.stewardSplash, now));
       const leader = racerById(victims[0]);
+      const shrugged = isProtected(leader, now);
+      victims.forEach((id, i) => spinRacer(racerById(id), i === 0 ? PowerUps.SPIN_MS.stewardLeader : PowerUps.SPIN_MS.stewardSplash, now));
       addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 26, now, 500);
-      addFeed(`Steward Penalty lands on ${leader.driver.code}.`);
+      addFeed(!shrugged ? `Steward Penalty lands on ${leader.driver.code}.`
+        : `${leader.driver.code}'s Overtake Mode shrugs off the Steward Penalty.`);
       return false;
     }
 
@@ -1453,6 +1471,7 @@ function updateShots(dt, now) {
       const owner = racerById(hit.ownerId);
       owner.trailingOil = false;
       owner.currentItem = "none";
+      owner.oilHoldStart = 0;
       addFeed(`${owner.driver.code}'s oil slick stopped a ${label}.`);
     } else {
       const victim = racerById(hit.id);
@@ -2321,7 +2340,7 @@ function isOnRenderedStretch(point, track, player, cache) {
 
 function drawDriverItemBoxesInScene(track, player, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
-  const now = performance.now();
+  const now = renderClock();
   track.itemBoxes
     .filter((box, index) => !((state.boxHiddenUntil[index] || 0) > now))
     .map((box) => ({ box, ...projectScene(camOrigin, cameraHeading, box, ITEM_BOX_HEIGHT) }))
@@ -2349,7 +2368,7 @@ function drawDriverItemBoxesInScene(track, player, cameraHeading) {
 
 function drawDriverItemsInScene(player, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
-  const frame = powerUpFrame(performance.now());
+  const frame = powerUpFrame(renderClock());
   const colours = { undercut: "#dc0000", stewardPenalty: "#0090ff", debris: "#00d2be", oilSlick: "#111111", safetyCar: "#c9ced6" };
   [...frame.shots, ...frame.hazards, ...frame.trails.map((t) => ({ ...t, type: "oilSlick" })),
     ...(frame.safetyCar ? [{ ...frame.safetyCar, type: "safetyCar" }] : [])]
@@ -2376,7 +2395,7 @@ function drawDriverItemsInScene(player, cameraHeading) {
 // correctly whichever side they happen on.
 function drawDriverRacers(player, track, cameraHeading) {
   const camOrigin = state.camPos || getCameraOrigin(player, cameraHeading);
-  const now = performance.now();
+  const now = renderClock();
   const lapLength = track.totalLength;
   const relativeDistance = (racer) => {
     let delta = ((racer.trackDistance || 0) - (player.trackDistance || 0)) % lapLength;
@@ -2538,7 +2557,7 @@ function drawDriverView(track) {
   // The 3D renderer (render3d.js) draws the world when it has loaded; this
   // canvas then only carries the HUD on top. Without it, fall back to 2D.
   if (window.Render3D && window.Render3D.ready) {
-    const now = performance.now();
+    const now = renderClock();
     ctx.clearRect(0, 0, view.width, view.height);
     const surface = window.Render3D.render({
       track,
@@ -3148,7 +3167,7 @@ function drawMiniMap(track, player, frame) {
   }
   ctx.restore();
 
-  const pu = powerUpFrame(performance.now());
+  const pu = powerUpFrame(renderClock());
   pu.hazards.concat(pu.trails).forEach((h) => {
     const point = toMap(h);
     ctx.fillStyle = "#08080c";
@@ -3470,7 +3489,7 @@ function hudItemState(player, now) {
 }
 
 function drawDriverItemBadge(player) {
-  const now = performance.now();
+  const now = renderClock();
   const slot = hudItemState(player, now);
   if (!slot) return;
   // Wide enough for the longest line (the TRAILING hint is the longest).
@@ -3871,7 +3890,8 @@ function bindEvents() {
     if (event.code === "Space") {
       event.preventDefault();
       const player = getPlayer();
-      if (event.repeat || !player || state.phase !== "race" || state.paused) return;
+      // A finished car is parked on the line: it has nothing left to fire.
+      if (event.repeat || !player || player.finished || state.phase !== "race" || state.paused) return;
       if (player.currentItem === "oilSlick") {
         if (!player.trailingOil) player.oilHoldStart = performance.now();
       } else if (player.currentItem !== "none") {
@@ -3891,7 +3911,7 @@ function bindEvents() {
     if (event.key === "Shift") input.drift = false;
     if (event.code === "Space") {
       const player = getPlayer();
-      if (player && player.currentItem === "oilSlick" && (player.oilHoldStart || player.trailingOil)) {
+      if (player && !player.finished && player.currentItem === "oilSlick" && (player.oilHoldStart || player.trailingOil)) {
         if (player.trailingOil) releaseTrail(player, performance.now());
         else useItem(player, performance.now());
       }

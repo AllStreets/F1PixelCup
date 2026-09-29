@@ -28,13 +28,13 @@ most common and the strongest the rarest.
 | Item | Mario Kart | What it does |
 |---|---|---|
 | Oil Slick | Banana | Tap Space to drop it behind you; hold Space to trail it, where it blocks one Undercut or Debris from behind |
-| Debris | Green shell | Fired straight ahead, bounces off the barriers for six seconds |
+| Debris | Green shell | Fired straight ahead, bounces off the edges of the track for six seconds |
 | DRS | Mushroom | The rear-wing flap opens for a 2 s boost, 3 s on a straight |
 | Undercut | Red shell | Follows the track to the car ahead and spins it |
 | Overtake Mode | Star | Five seconds faster and untouchable; cars you touch spin |
 | Steward Penalty | Blue shell | Flies over the field to the leader: a long spin for them and anyone beside them |
 | Formation Lap | Bullet Bill | Four seconds of autopilot at huge speed, untouchable |
-| Safety Car | Lightning | A safety car leads the field for five seconds; every rival is slowed and can't overtake |
+| Safety Car | Lightning | A safety car comes out ahead of the leader for five seconds; every rival is slowed and queues single file behind it |
 
 Shots, oil and the safety car move in track coordinates (distance round the
 lap and offset from the centreline), so they follow every corner, can't pass

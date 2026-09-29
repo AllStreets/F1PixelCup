@@ -80,3 +80,9 @@ test("every power-up has a painted SVG icon", () => {
 test("difficulties match the career multipliers", () => {
   assert.deepEqual(Data.DIFFICULTIES.map((d) => d.id), ["rookie", "pro", "legend"]);
 });
+
+test("card copy matches the game: debris bounces off the track edges, not barriers", () => {
+  const debris = Data.POWER_UPS.find((p) => p.id === "debris");
+  assert.doesNotMatch(debris.effect, /barrier/i);
+  assert.match(debris.effect, /edges of the track/);
+});

@@ -219,3 +219,15 @@ test("arming only protects the car that fired: a car right in front is hit at on
   assert.equal(P.firstHit(shot("debris", { d: 100, armedAt: 500 }), [me], L, 0), null);
   assert.equal(P.firstHit({ type: "oilSlick", ownerId: "me", d: 100, lat: 0, armedAt: 500 }, [me], L, 0), null);
 });
+
+test("behind the safety car the hold is single file: a car alongside can't slip past", () => {
+  const L = 1000;
+  const me = { id: "me", d: 100, lat: -30 };
+  const ahead = { id: "a", d: 120, lat: 30, speed: 90 };
+  assert.equal(P.holdStationSpeed(me, [ahead], L), Infinity);
+  assert.equal(P.holdStationSpeed(me, [ahead], L, { singleFile: true }), 90);
+});
+
+test("a steward penalty never times out before it reaches the leader", () => {
+  assert.equal(P.TIMINGS.lifeMs.stewardPenalty, Infinity);
+});

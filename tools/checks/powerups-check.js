@@ -329,6 +329,85 @@ async (page) => {
       && drs.label === "DRS" && drs.hint === "Press Space to use" && img.complete && img.naturalWidth > 0;
   });
 
+
+  // --- Final review fixes ---
+  // The safety car pulls off to the edge of the road, never through a barrier (Monaco: tight street barriers).
+  await setup(0);
+  await p.evaluate(() => { state.selectedCup = 1; state.activeCupIndex = 1; buildCupEntries(); startRace(0); state.phase = "race"; state.raceStart = performance.now() - 40000; });
+  results.safetyCarStaysOnRoad = await run(() => {
+    const pl = getSortedRacers()[10];
+    pl.currentItem = "safetyCar"; useItem(pl, performance.now());
+    const sc = state.safetyCar;
+    sc.until = performance.now();
+    const route = getItemRoute(state.track);
+    let t = performance.now(); let maxLat = 0;
+    for (let i = 0; i < 200 && state.safetyCar; i += 1) { t += 16.7; updateSafetyCar(1 / 60, t); if (state.safetyCar) maxLat = Math.max(maxLat, Math.abs(state.safetyCar.lat)); }
+    return state.safetyCar === null && maxLat <= route.halfWidthAt(0);
+  });
+
+  // A trailed slick destroyed by a shot leaves no held Space behind: the next Oil Slick does not trail itself.
+  await setup();
+  results.oilHoldClearedOnBlock = await run(() => {
+    const pl = getPlayer();
+    pl.currentItem = "oilSlick"; pl.oilHoldStart = performance.now() - 500; useItem(pl, performance.now(), { trail: true });
+    const shooter = getSortedRacers().find((r) => r.id !== pl.id);
+    state.shots.push({ type: "debris", ownerId: shooter.id, d: (pl.trackDistance - PowerUps.TRAIL_GAP + state.track.totalLength) % state.track.totalLength, lat: pl.lat, speed: 0, latVel: 0, targetId: "", targetLat: 0, armedAt: 0, expiresAt: Infinity, age: 0 });
+    updateShots(1 / 60, performance.now());
+    pl.currentItem = "oilSlick";
+    updateRacer(pl, 1 / 60, performance.now());
+    return !pl.trailingOil && pl.oilHoldStart === 0;
+  });
+
+  // A finished player can't fire items from the line.
+  await setup();
+  results.finishedPlayerCantFire = await run(() => {
+    const pl = getPlayer();
+    pl.finished = true; pl.currentItem = "safetyCar";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    return pl.currentItem === "safetyCar" && state.safetyCar === null;
+  });
+
+  // Behind the safety car a car alongside can't slip past (single file).
+  await setup();
+  results.safetyCarSingleFile = await run(() => {
+    const pl = getSortedRacers()[10];
+    pl.currentItem = "safetyCar"; useItem(pl, performance.now());
+    const others = state.racers.filter((r) => r.id !== pl.id && !r.finished);
+    const [front, back] = others.slice(0, 2);
+    const route = getItemRoute(state.track);
+    const place = (r, gap, lat) => { const d = (state.safetyCar.d - gap + state.track.totalLength) % state.track.totalLength; const w = route.toWorld(d, lat); Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat }); };
+    place(front, 60, 30); front.speed = 40;
+    place(back, 80, -30); back.speed = back.physics.maxSpeed;
+    updateRacer(back, 1 / 60, performance.now());
+    return back.speed <= 40 + 1e-6;
+  });
+
+  // The feed tells the truth when a protected leader shrugs off a Steward Penalty.
+  await setup();
+  results.stewardFeedHonest = await run(() => {
+    const shooter = getSortedRacers()[10];
+    const leader = firstUnfinished();
+    leader.protectedUntil = performance.now() + 5000;
+    shooter.currentItem = "stewardPenalty"; useItem(shooter, performance.now());
+    const s = state.shots.find((x) => x.type === "stewardPenalty");
+    s.d = leader.trackDistance; s.armedAt = 0;
+    updateShots(1 / 60, performance.now());
+    return state.feed[0].message.includes("Overtake Mode") && !state.feed[0].message.includes("lands");
+  });
+
+  // While paused the picture freezes too: a hidden box does not grow back on the pause screen.
+  await setup();
+  results.pauseFreezesPicture = await run(async () => {
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? performance.now() + 600 : 0));
+    await new Promise((r) => setTimeout(r, 150));
+    togglePause();
+    // Stay paused past the box's deadline in wall-clock time.
+    await new Promise((r) => setTimeout(r, 1100));
+    const scale = Render3D.inspect().boxScales[0];
+    togglePause();
+    return scale < 0.05;
+  });
+
   await context.close();
   return { results, errors };
 }

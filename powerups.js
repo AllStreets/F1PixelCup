@@ -99,7 +99,8 @@
     rouletteMs: 1100, boxHiddenMs: 3000, armMs: 300, oilArmMs: 1000, oilLifeMs: 20000,
     drsMs: 2000, drsStraightMs: 3000, overtakeModeMs: 5000, formationLapMs: 4000,
     safetyCarMs: 5000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
-    lifeMs: { undercut: 12000, debris: 6000, stewardPenalty: 30000 },
+    // A Steward Penalty has no time limit: it ends on the leader, or when nobody is left racing.
+    lifeMs: { undercut: 12000, debris: 6000, stewardPenalty: Infinity },
   };
   const STRAIGHT_SPAN = 120;
   const STRAIGHT_TURN = 0.12;
@@ -227,12 +228,15 @@
     return [target.id, ...splash.map((b) => b.id)];
   }
 
-  function holdStationSpeed(body, others, lapLength) {
+  // singleFile: behind the safety car the queue is single file, so a car
+  // across the road still counts as the car ahead.
+  function holdStationSpeed(body, others, lapLength, { singleFile = false } = {}) {
     let cap = Infinity;
     for (const o of others) {
       if (o.id === body.id) continue;
       const ahead = wrapDelta(o.d, body.d, lapLength);
-      if (ahead > 0 && ahead < CAR_LENGTH * 1.5 && Math.abs((o.lat || 0) - (body.lat || 0)) < CAR_WIDTH * 1.5) {
+      const inLane = singleFile || Math.abs((o.lat || 0) - (body.lat || 0)) < CAR_WIDTH * 1.5;
+      if (ahead > 0 && ahead < CAR_LENGTH * 1.5 && inLane) {
         cap = Math.min(cap, Math.max(0, o.speed || 0));
       }
     }

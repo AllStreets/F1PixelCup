@@ -96,7 +96,7 @@ const POWER_UPS = [
     effect: "Drops a slick behind you that spins whoever drives through it, you included. Trail it behind your car and it blocks one Undercut or Debris from behind.",
     controls: "Tap Space to drop it. Hold Space to trail it; let go to drop it." },
   { id: "debris", name: "Debris", counterpart: "Green shell",
-    effect: "Fired straight ahead. It bounces off the barriers for six seconds and spins anyone it hits, you included.",
+    effect: "Fired straight ahead. It bounces off the edges of the track for six seconds and spins anyone it hits, you included.",
     controls: "Space to fire." },
   { id: "drs", name: "DRS", counterpart: "Mushroom",
     effect: "Opens your rear wing for a two-second boost, or three seconds if you use it on a straight.",
