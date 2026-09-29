@@ -229,10 +229,10 @@ async (page) => {
     await new Promise((r) => setTimeout(r, 1500));
     togglePause();
     const resumedAt = performance.now();
-    // Let the race run two frames after resuming: the clock must have moved on
-    // by no more than the time actually spent running (however slow those
-    // frames were), never by the 1.5 s spent paused.
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // Let the race run a few frames (at least three physics steps' worth) after
+    // resuming: the clock must have moved on, by no more than the time actually
+    // spent running (however slow those frames were), never by the 1.5 s paused.
+    while (performance.now() - resumedAt < 50) await new Promise((r) => requestAnimationFrame(r));
     const running = performance.now() - resumedAt;
     const moved = raceNow() - clockBefore;
     const nowShot = s.expiresAt - raceNow();

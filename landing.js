@@ -146,7 +146,20 @@
       });
     });
     note.querySelector("[data-close]").addEventListener("click", () => note.close());
+    // "Play anyway": the game won't put the same note up again this visit.
+    note.querySelector("a.go-btn").addEventListener("click", () => {
+      try {
+        window.sessionStorage.setItem("f1pixelcup.phoneNote", "seen");
+      } catch (error) {
+        // The game shows its note once more, that's all.
+      }
+    });
   }
+
+  // Another tab raced: the career section follows.
+  window.addEventListener("storage", (event) => {
+    if (event.key === null || String(event.key).startsWith("f1pixelcup.profile")) renderCareer();
+  });
 
   renderCircuits();
   renderCareer();

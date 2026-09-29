@@ -97,7 +97,7 @@ The full regression set, run before every merge:
 
 ### B3. Earlier deferred minors (professional standard: nothing left parked)
 
-- [ ] Re-check each one and fix any still open:
+- [x] Re-check each one and fix any still open:
   - the phone note shows twice or is hidden by `#career`;
   - overlays don't trap focus;
   - focus is lost after picking a pill or tile;
@@ -107,7 +107,7 @@ The full regression set, run before every merge:
   - Q-quit after the flag discards a finished race;
   - a "not saved" warning shows for 4th and below;
   - the panel doesn't refresh on another tab's `storage` event.
-- [ ] Add a check for each fix (in `keys-check.js`, `play-check.js` and `career-check.js`). Review, merge, push.
+- [x] Add a check for each fix. Ruling: they went into one new file, `tools/checks/minors-check.js` (12 checks), so each one shows red on the old code. 7 failed before the fixes; the first ticker line and the "not saved" warning had already been fixed and are now pinned.
 
 ## Stage C — Power-ups beauty pass (roadmap stage 4)
 
