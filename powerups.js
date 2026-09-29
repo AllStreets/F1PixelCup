@@ -90,7 +90,7 @@
   const CAR_WIDTH = 16;
   const SHOT_EDGE = 8;
   const LAT_HOMING = 90;
-  const TRAIL_GAP = 14;
+  const TRAIL_GAP = 28;
   const DROP_GAP = 18;
   const SHOT_SPEEDS = { undercut: 1.35, stewardPenalty: 1.6, debris: 1.2 };
   const FACTORS = { boost: 1.22, overtakeMode: 1.10, formationLap: 1.42, safetyCar: 0.55 };

@@ -190,6 +190,19 @@ async (page) => {
     return state.safetyCar === null;
   });
 
+  // The safety car is solid: even the car that called it can't drive through it.
+  await setup();
+  results.safetyCarSolid = await run(() => {
+    const pl = getSortedRacers()[10];
+    pl.currentItem = "safetyCar"; useItem(pl, performance.now());
+    const sc = state.safetyCar;
+    sc.d = (pl.trackDistance + 20) % state.track.totalLength;
+    sc.lat = pl.lat;
+    pl.speed = pl.physics.maxSpeed;
+    updateRacer(pl, 1 / 60, performance.now());
+    return pl.speed <= sc.speed + 1e-6;
+  });
+
   // Pausing freezes everything in flight.
   await setup();
   results.pauseFreezes = await run(async () => {
@@ -268,6 +281,32 @@ async (page) => {
     const deg = (x) => (x * 180) / Math.PI;
     return typeof closed === "number" && Math.abs(deg(closed)) < 0.5 && Math.abs(Math.abs(deg(open)) - 12) < 0.5 && Math.abs(deg(shut)) < 0.5;
   });
+
+  // 3D: every thing on track is drawn where the game says it is.
+  await setup();
+  results.visibleIn3D = await run(async () => {
+    const pl = getPlayer();
+    const give = (id, opts) => { pl.currentItem = id; useItem(pl, performance.now(), opts); };
+    state.racers.forEach((r) => { if (!r.isPlayer) r.speed = 0; });
+    give("undercut"); give("debris"); give("stewardPenalty"); give("oilSlick"); give("safetyCar");
+    const rival = state.racers.find((r) => !r.isPlayer); rival.currentItem = "oilSlick"; useItem(rival, performance.now(), { trail: true });
+    await new Promise((r) => setTimeout(r, 300));
+    const seen = Render3D.inspect();
+    const f = powerUpFrame(performance.now());
+    return seen.shots === f.shots.length && seen.hazards === f.hazards.length && seen.trails === f.trails.length
+      && seen.safetyCar === true && f.shots.length >= 2;
+  });
+  results.boxesHideIn3D = await run(async () => {
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? performance.now() + 3000 : 0));
+    await new Promise((r) => setTimeout(r, 400));
+    const hiddenScale = Render3D.inspect().boxScales[0];
+    const otherScale = Render3D.inspect().boxScales[1];
+    state.boxHiddenUntil[0] = performance.now() - 1;
+    await new Promise((r) => setTimeout(r, 600));
+    return hiddenScale < 0.05 && otherScale > 0.95 && Render3D.inspect().boxScales[0] > 0.95;
+  });
+  results.auditClean = await run(() => CIRCUITS.map((c) => TRACKS.find((t) => t.id === c.id))
+    .every((track) => Render3D.auditScenery(track).length === 0));
 
   await context.close();
   return { results, errors };

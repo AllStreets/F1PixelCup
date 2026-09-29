@@ -1331,10 +1331,14 @@ function updateRacer(racer, dt, now) {
 
   racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992, dt * 60);
 
-  // Behind the safety car nobody passes: hold station behind the car ahead.
-  if (sc && safetyCarActive(now) && racer.id !== sc.ownerId) {
+  // Behind the safety car nobody passes: rivals hold station behind the car
+  // ahead. The safety car itself is solid for everyone, the car that called it
+  // included -- that car is free to go round it, not through it.
+  if (sc) {
     const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
-    const others = [...itemBodies(), { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.speed }];
+    const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.speed };
+    const held = safetyCarActive(now) && racer.id !== sc.ownerId;
+    const others = held ? [...itemBodies(), scBody] : [scBody];
     racer.speed = Math.min(racer.speed, PowerUps.holdStationSpeed(me, others, state.track.totalLength));
   }
 
@@ -3158,6 +3162,23 @@ function drawMiniMap(track, player, frame) {
     ctx.fillRect(i * cell, -2, cell, 4);
   }
   ctx.restore();
+
+  const pu = powerUpFrame(performance.now());
+  pu.hazards.concat(pu.trails).forEach((h) => {
+    const point = toMap(h);
+    ctx.fillStyle = "#08080c";
+    ctx.strokeStyle = "rgba(179, 107, 255, 0.9)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 2.6, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+  });
+  if (pu.safetyCar) {
+    const point = toMap(pu.safetyCar);
+    ctx.fillStyle = Math.floor(performance.now() / 180) % 2 ? "#ffb000" : "#ffd000";
+    ctx.fillRect(point.x - 3, point.y - 3, 6, 6);
+  }
 
   // Rivals, then the player on top.
   const sorted = getSortedRacers();

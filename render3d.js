@@ -21,6 +21,7 @@ import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/
 import { loadCar, buildCar, CAR_SCALE } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
+import { createPowerUpLayer } from "./r3d/powerups.js";
 
 const MAX_PARTICLES = 256;
 const BASE_FOV = 62;
@@ -65,7 +66,7 @@ const api = { ready: false, render, renderGarage, auditScenery, inspect };
 function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
-  return { flaps };
+  return { flaps, ...powerUpLayer.inspect(), boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [] };
 }
 window.Render3D = api;
 
@@ -182,34 +183,10 @@ function ensureWorld(track) {
 }
 
 // ---------------------------------------------------------------------------
-// Dropped items and particles
+// Power-ups and particles
 // ---------------------------------------------------------------------------
 
-const itemGroup = new THREE.Group();
-scene.add(itemGroup);
-const itemPool = [];
-const itemMats = {
-  undercut: new THREE.MeshStandardMaterial({ color: 0xdc0000, emissive: 0x550000 }),
-  stewardPenalty: new THREE.MeshStandardMaterial({ color: 0x0090ff, emissive: 0x002255 }),
-  other: new THREE.MeshStandardMaterial({ color: 0x00d2be, emissive: 0x004440 }),
-};
-
-function syncItems(items, now, course) {
-  while (itemPool.length < items.length) {
-    const m = new THREE.Mesh(new THREE.OctahedronGeometry(6, 0), itemMats.other);
-    m.castShadow = true;
-    itemGroup.add(m);
-    itemPool.push(m);
-  }
-  itemPool.forEach((m, i) => {
-    const it = items[i];
-    m.visible = Boolean(it);
-    if (!it) return;
-    m.material = itemMats[it.type] || itemMats.other;
-    m.position.set(it.x, course.heightAtPoint(it.x, it.y) + 6 + Math.sin(now / 200 + i) * 1.2, it.y);
-    m.rotation.y = now / 300;
-  });
-}
+const powerUpLayer = createPowerUpLayer(scene);
 
 const particleGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(MAX_PARTICLES * 3);
@@ -366,7 +343,7 @@ const lookTarget = new THREE.Vector3();
 // Called by game.js each frame in place of the 2D road, scenery and cars.
 function render(frame) {
   if (!api.ready) return null;
-  const { track, player, racers, cameraHeading, camPos, roll, shake, items, particles: list, now } = frame;
+  const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
   const dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
   lastNow = now;
   resize();
@@ -374,7 +351,7 @@ function render(frame) {
   const { course } = world;
   garage.group.visible = false;
   world.group.visible = true;
-  itemGroup.visible = particles.visible = true;
+  powerUpLayer.group.visible = particles.visible = true;
 
   syncCars(world, racers, player, now, dt);
   // Compile every shader in the new scene while the grid is lining up, so
@@ -383,11 +360,21 @@ function render(frame) {
     renderer.compile(scene, camera);
     world.compiled = true;
   }
-  syncItems(items || [], now, course);
+  if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
-    b.userData.box.rotation.set(now / 900 + i, now / 700 + i, 0);
-    b.position.y = b.userData.baseY + Math.sin(now / 260 + i) * 1.5;
+    const hidden = powerUps && powerUps.boxHidden[i];
+    const u = b.userData;
+    const target = hidden ? 0 : 1;
+    // Burst away fast when taken, grow back more slowly with a shimmer.
+    const rate = hidden ? dt / 0.15 : dt / 0.3;
+    u.scale = (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
+    b.scale.setScalar(Math.max(0.0001, u.scale));
+    b.visible = u.scale > 0.001;
+    const mat = u.box.material;
+    mat.emissiveIntensity = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+    u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
+    b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
   });
   world.landmarks.userData.animate?.(dt);
 
@@ -506,7 +493,7 @@ function renderGarage(kart, driver, now) {
     disposeWorld(current);
     current = null;
   }
-  itemGroup.visible = particles.visible = false;
+  powerUpLayer.group.visible = particles.visible = false;
   garage.group.visible = true;
   scene.fog = null;
   scene.environmentIntensity = 0.6;
