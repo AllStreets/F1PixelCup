@@ -170,17 +170,17 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 ## Stage F — Cinematic post-processing (roadmap stage 6)
 
-- [ ] Spec: the hybrid look.
+- [x] Spec: the hybrid look.
   - A Broadcast base: bloom, grade, vignette and lens flare.
   - Arcade-punch bursts on real `f1:fx` events: `boostStart`, `overtakeMode` and `hitTaken` from `game.js:1378`.
   - Per-circuit grades, heat haze and speed blur.
-- [ ] Add `r3d/postfx.js`, using the Three.js r186 EffectComposer from `vendor/`, and wire it into `render3d.js`.
-- [ ] Automatic quality detection (High/Medium/Low) from device and frame time (`device.js`), plus a manual override in the pit-lane Settings (`screens.js`, `play.html`), which is persisted.
-- [ ] Node test for the tier-detection rules. Browser check (`tools/checks/postfx-check.js`):
+- [x] Add `r3d/postfx.js`, using the Three.js r186 EffectComposer from `vendor/`, and wire it into `render3d.js`.
+- [x] Automatic quality detection (High/Medium/Low) from device and frame time (`device.js`), plus a manual override in the pit-lane Settings (`screens.js`, `play.html`), which is persisted.
+- [x] Node test for the tier-detection rules. Browser check (`tools/checks/postfx-check.js`):
   - each tier switches the real passes on and off;
   - an `f1:fx` event triggers a burst that decays;
   - the Low tier meets its frame-time budget.
-- [ ] Screenshots per tier on 3 circuits. Review, merge, push.
+- [x] Screenshots per tier on 3 circuits. Review, merge, push.
 
 ## Stage G — Trackside life (roadmap stage 7)
 
