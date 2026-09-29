@@ -16,7 +16,7 @@
   function guardImages() {
     document.querySelectorAll("img").forEach((img) => {
       const fail = () => {
-        const holder = img.closest(".hero, .circuit-shot, .team-shot");
+        const holder = img.closest(".hero, .circuit-shot, .team-shot, .pu-shot");
         if (holder) holder.classList.add("no-shot");
         img.remove();
       };
@@ -94,8 +94,31 @@
     }).join("");
   }
 
+  const COLUMN_LABELS = { lead: "Leading", front: "Close behind", mid: "Midfield", back: "Chasing", tail: "Back of the field" };
+
   function renderPowerUps() {
-    $("power-up-list").innerHTML = POWER_UPS.map((p) => `<li><strong>${esc(p.name)}</strong> — ${esc(p.effect)}</li>`).join("");
+    const shares = PowerUps.overallShares();
+    const byId = Object.fromEntries(POWER_UPS.map((p) => [p.id, p]));
+    $("pu-cards").innerHTML = PowerUps.ITEM_ORDER.map((id) => {
+      const p = byId[id];
+      const rarity = PowerUps.rarityFor(shares[id]);
+      return `<article class="pu-card" data-id="${esc(id)}">
+        <div class="pu-shot"><img src="assets/shots/items/${esc(id)}.jpg" alt="${esc(p.name)} in the game" loading="lazy"></div>
+        <div class="pu-body">
+          <div class="pu-head"><span class="pu-icon" aria-hidden="true">${ITEM_ICONS[id]}</span>
+            <div><h3 class="pu-name">${esc(p.name)}</h3><p class="pu-counterpart">Mario Kart: ${esc(p.counterpart)}</p></div>
+            <span class="pu-rarity pu-rarity-${esc(rarity.toLowerCase().replace(" ", "-"))}">${esc(rarity)}</span></div>
+          <p class="pu-effect">${esc(p.effect)}</p>
+          <p class="pu-controls">${esc(p.controls)}</p>
+        </div>
+      </article>`;
+    }).join("");
+    const cols = PowerUps.COLUMNS;
+    $("pu-odds").innerHTML = `<thead><tr><th scope="col">Item</th>${cols.map((c) => `<th scope="col">${esc(COLUMN_LABELS[c])}</th>`).join("")}</tr></thead>
+      <tbody>${PowerUps.ITEM_ORDER.map((id) => `<tr data-id="${esc(id)}"><th scope="row">${esc(byId[id].name)}</th>${cols.map((c) =>
+        `<td data-col="${esc(c)}" data-label="${esc(COLUMN_LABELS[c])}">${PowerUps.ODDS[c][id] ? `${PowerUps.ODDS[c][id]}%` : "–"}</td>`).join("")}</tr>`).join("")}</tbody>`;
+    const L = PowerUps.LIMITS;
+    $("pu-odds-note").textContent = `Chances for each item box. The column is set by your gap to the leader, not your place: close behind the leader you roll like a front-runner. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and only one Steward Penalty on track at a time.`;
   }
 
   function guardPlayOnPhones() {

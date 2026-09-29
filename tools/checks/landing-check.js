@@ -1,5 +1,7 @@
 // Browser check for index.html (landing page). Run with the Playwright MCP
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
+// Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
+// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true.
 async (page) => {
   const errors = [];
   const out = {};
@@ -29,6 +31,20 @@ async (page) => {
   out.heroImage = await p.evaluate(() => { const i = document.querySelector("#hero img"); return Boolean(i) && i.complete && i.naturalWidth > 0; });
   out.playHref = await p.locator("#hero a.go-btn").getAttribute("href");
   out.noSideScroll1440 = await noSideScroll();
+  out.puCards = await p.locator("#power-ups .pu-card").count();
+  out.puOrder = (await p.locator("#power-ups .pu-card").evaluateAll((els) => els.map((e) => e.dataset.id)).then((ids) => ids.join(","))) === await p.evaluate(() => PowerUps.ITEM_ORDER.join(","));
+  out.puCopyMatches = await p.evaluate(() => [...document.querySelectorAll("#power-ups .pu-card")].every((card) => {
+    const d = POWER_UPS.find((x) => x.id === card.dataset.id);
+    return card.querySelector(".pu-name").textContent === d.name
+      && card.querySelector(".pu-counterpart").textContent.includes(d.counterpart)
+      && card.querySelector(".pu-effect").textContent === d.effect
+      && card.querySelector(".pu-controls").textContent === d.controls
+      && card.querySelector(".pu-icon svg") !== null
+      && card.querySelector(".pu-rarity").textContent === PowerUps.rarityFor(PowerUps.overallShares()[d.id]);
+  }));
+  out.puOddsRows = await p.locator("#power-ups table.pu-odds tbody tr").count();
+  out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "9%");
+  out.navLink = await p.locator('nav a[href="#power-ups"]').count();
 
   await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 1, careerPoints: 276, rating: 1309, ratedRaces: 4,
     totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1 },
@@ -43,6 +59,13 @@ async (page) => {
   for (const [w, h] of [[1000, 700], [1900, 760], [560, 800]]) {
     await size(w, h);
     out[`noSideScroll${w}`] = await noSideScroll();
+    if (w === 560) {
+      out.puPhoneOneColumn = await p.evaluate(() => {
+        const cards = [...document.querySelectorAll("#power-ups .pu-card")];
+        return cards.length === 8 && new Set(cards.map((c) => Math.round(c.getBoundingClientRect().left))).size === 1;
+      });
+      out.puPhoneOddsAsList = await p.evaluate(() => getComputedStyle(document.querySelector("#power-ups table.pu-odds thead")).display === "none");
+    }
   }
 
   // Shots missing: every card must fall back cleanly. The browser logs each

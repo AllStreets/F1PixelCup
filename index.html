@@ -20,6 +20,7 @@
       <a href="#career">Your career</a>
       <a href="#grid">The grid</a>
       <a href="#how-to-play">How to play</a>
+      <a href="#power-ups">Power-ups</a>
     </nav>
     <a class="go-btn play-link" href="./play.html"><span>Play</span></a>
   </header>
@@ -80,10 +81,18 @@
           <h3>Drift boost</h3>
           <p class="muted">Hold Shift through a corner. The tyre smoke turns white, then blue, then orange as the boost charges — let go on orange for the biggest kick.</p>
           <h3>Power-ups</h3>
-          <p class="muted">Drive through the red boxes. The further back you are, the stronger what you get.</p>
-          <ul id="power-up-list" class="power-ups"></ul>
+          <p class="muted">Drive through the red boxes. The further you are behind the leader, the stronger your odds. <a href="#power-ups">See all eight</a>.</p>
         </div>
       </div>
+    </section>
+    <section id="power-ups" class="section">
+      <p class="kicker">Power-ups</p>
+      <h2 class="it-title section-title">Mario Kart chaos, F1 rules</h2>
+      <p class="muted pu-lede">Drive through the red boxes. What you get depends on how far you are behind the leader, like Mario Kart 8 Deluxe: the weakest items are the most common and the strongest are the rarest.</p>
+      <div id="pu-cards" class="pu-cards"></div>
+      <h3 class="pu-odds-title">Who gets what</h3>
+      <p class="muted" id="pu-odds-note"></p>
+      <div class="pu-odds-wrap"><table class="pu-odds" id="pu-odds"></table></div>
     </section>
   </main>
 
@@ -104,6 +113,8 @@
 
   <script src="./tracks-data.js"></script>
   <script src="./game-data.js"></script>
+  <script src="./powerups.js"></script>
+  <script src="./item-icons.js"></script>
   <script src="./trackmap.js"></script>
   <script src="./device.js"></script>
   <script src="./career.js"></script>
