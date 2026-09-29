@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { itemModel, swapBody } from "./items.js";
 import {
   color, seeded, hashString, photo, canvasTexture, makeKerbTexture, makeCheckerTexture,
   makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture,
@@ -666,8 +667,46 @@ export function scatterTrees(course, { count, kind = "broadleaf", tint = "#3a6a3
 // Item boxes
 // ---------------------------------------------------------------------------
 
+// An item box: the hand-built model (red glass, bevelled frame, a "?"
+// inside) once it has loaded, a simple textured cube until then. The part that
+// spins is userData.box; userData.mark (the model's "?") is turned to face the
+// camera; userData.glow lists the materials that pulse.
 export function buildItemBox() {
   const g = new THREE.Group();
+  const body = itemModel("itemBox") || itemBoxStandIn();
+  g.add(body);
+  dressBox(g, body);
+  return g;
+}
+
+function dressBox(g, body) {
+  g.userData.body = body;
+  g.userData.box = (body.userData.fromGlb && body.getObjectByName("item_box")) || body;
+  g.userData.mark = body.userData.fromGlb ? body.getObjectByName("item_box_mark") : null;
+  g.userData.glow = glowMaterials(g.userData.box);
+}
+
+// Once the models are in, a box built before then swaps to the model.
+export function upgradeItemBox(g) {
+  const model = itemModel("itemBox");
+  if (!model || g.userData.body.userData.fromGlb) return false;
+  swapBody(g, model);
+  dressBox(g, model);
+  return true;
+}
+
+function glowMaterials(body) {
+  const mats = [];
+  body.traverse((node) => {
+    if (!node.isMesh) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => {
+      if ("emissiveIntensity" in m && m.name !== "box_mark") mats.push(m);
+    });
+  });
+  return mats;
+}
+
+function itemBoxStandIn() {
   const qTex = canvasTexture(128, 128, (cx, w, h) => {
     const grad = cx.createLinearGradient(0, 0, w, h);
     grad.addColorStop(0, "#ff3b30");
@@ -688,7 +727,5 @@ export function buildItemBox() {
     new THREE.MeshStandardMaterial({ map: qTex, emissive: 0xff2010, emissiveIntensity: 0.35, transparent: true, opacity: 0.92, roughness: 0.3 }),
   );
   box.castShadow = true;
-  g.add(box);
-  g.userData.box = box;
-  return g;
+  return box;
 }

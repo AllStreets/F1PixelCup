@@ -19,9 +19,10 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
 import { loadCar, buildCar, CAR_SCALE } from "./r3d/car.js";
-import { buildCourse, buildCircuit, buildDecor, buildItemBox } from "./r3d/track.js";
+import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer } from "./r3d/powerups.js";
+import { loadItemModels, whenItemsReady, itemsState, itemModel } from "./r3d/items.js";
 
 const MAX_PARTICLES = 256;
 
@@ -80,9 +81,29 @@ function prepare(track) {
 function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
-  return { flaps, ...powerUpLayer.inspect(), boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [] };
+  return { flaps, ...powerUpLayer.inspect(), boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect() };
 }
 window.Render3D = api;
+
+// The power-up models load alongside; nothing waits on them.
+loadItemModels();
+whenItemsReady(() => { if (current) current.boxes.forEach(upgradeItemBox); });
+
+// What the checks see of the item models: whether each is in, and its size.
+const ITEM_KINDS = ["itemBox", "oil", "debris", "undercut", "steward", "safetyCar"];
+function itemsInspect() {
+  const { ready } = itemsState();
+  const models = {};
+  const size = new THREE.Vector3();
+  ITEM_KINDS.forEach((kind) => {
+    const m = itemModel(kind);
+    if (!m) { models[kind] = { fromGlb: false }; return; }
+    new THREE.Box3().setFromObject(m).getSize(size);
+    models[kind] = { fromGlb: Boolean(m.userData.fromGlb), size: [size.x, size.y, size.z] };
+  });
+  const boxesFromGlb = Boolean(current) && current.boxes.length > 0 && current.boxes.every((b) => b.userData.body.userData.fromGlb);
+  return { ready, models, boxesFromGlb, visibleFromGlb: powerUpLayer.inspect().visibleFromGlb };
+}
 
 loadCar(() => { api.ready = true; }, (error) => {
   console.warn("3D car model failed to load; using the 2D view.", error);
@@ -386,9 +407,12 @@ function render(frame) {
     u.scale = (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
     b.scale.setScalar(Math.max(0.0001, u.scale));
     b.visible = u.scale > 0.001;
-    const mat = u.box.material;
-    mat.emissiveIntensity = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+    // It glows brighter while it grows back.
+    const glow = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+    u.glow.forEach((m) => { m.emissiveIntensity = glow; });
     u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
+    // The "?" inside keeps facing the camera (only turning about the vertical).
+    if (u.mark) u.mark.rotation.y = Math.atan2(-(camera.position.z - b.position.z), camera.position.x - b.position.x);
     b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
   });
   world.landmarks.userData.animate?.(dt);

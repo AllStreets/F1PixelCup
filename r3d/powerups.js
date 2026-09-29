@@ -5,6 +5,7 @@
 // so it follows bridges and never floats or sinks.
 import * as THREE from "three";
 import { canvasTexture } from "./textures.js";
+import { itemModel, swapBody, whenItemsReady, itemsState } from "./items.js";
 
 const POOL = 24;
 
@@ -28,12 +29,25 @@ function pool(group, n, make) {
   return list;
 }
 
-function puck(color, emissive) {
+// Every item is a holder whose body -- a simple stand-in at first -- is
+// swapped for the hand-built model once it loads (./items.js).
+function holder(kind, standIn) {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 2.4, 24),
-    new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: 1.2, roughness: 0.25, metalness: 0.3 }));
-  body.castShadow = true;
+  const model = itemModel(kind);
+  const body = model || standIn();
   g.add(body);
+  g.userData.body = body;
+  g.userData.kind = kind;
+  return g;
+}
+
+function puck(color, emissive, kind) {
+  const g = holder(kind, () => {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.5, 2.4, 24),
+      new THREE.MeshStandardMaterial({ color, emissive, emissiveIntensity: 1.2, roughness: 0.25, metalness: 0.3 }));
+    body.castShadow = true;
+    return body;
+  });
   const trail = new THREE.Mesh(new THREE.ConeGeometry(3.4, 22, 12, 1, true), additive(color, 0.45));
   trail.rotation.z = Math.PI / 2;
   trail.position.x = -13;
@@ -44,7 +58,7 @@ function puck(color, emissive) {
 }
 
 function stewardMesh() {
-  const g = puck(0x0090ff, 0x003a80);
+  const g = puck(0x0090ff, 0x003a80, "steward");
   const ring = new THREE.Mesh(new THREE.TorusGeometry(8, 0.8, 8, 32), additive(0x7cc4ff, 0.9));
   ring.rotation.x = Math.PI / 2;
   g.add(ring);
@@ -53,12 +67,14 @@ function stewardMesh() {
 }
 
 function debrisMesh() {
-  // A jagged carbon shard with teal-lit edges so it reads against the tarmac.
-  const m = new THREE.Mesh(new THREE.OctahedronGeometry(5.5, 0),
-    new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.25, metalness: 0.8, emissive: 0x00d2be, emissiveIntensity: 0.3, flatShading: true }));
-  m.scale.set(1.3, 0.55, 0.9);
-  m.castShadow = true;
-  return m;
+  return holder("debris", () => {
+    // Stand-in: a jagged carbon shard with teal-lit edges.
+    const m = new THREE.Mesh(new THREE.OctahedronGeometry(5.5, 0),
+      new THREE.MeshStandardMaterial({ color: 0x2a2f38, roughness: 0.25, metalness: 0.8, emissive: 0x00d2be, emissiveIntensity: 0.3, flatShading: true }));
+    m.scale.set(1.3, 0.55, 0.9);
+    m.castShadow = true;
+    return m;
+  });
 }
 
 // A painted slick: an irregular black pool with thin-film rainbow bands and a
@@ -101,16 +117,60 @@ function makeOilTexture() {
   }, { repeat: false });
 }
 
+// The modelled pool's surface: near-black and glassy, with thin-film bands
+// across it (the same colours as the stand-in's slick).
+let sheenTexture = null;
+let oilSurface = null;
+function oilModelMaterial() {
+  if (!sheenTexture) {
+    sheenTexture = canvasTexture(256, 256, (g, w, h) => {
+      g.fillStyle = "#000000";
+      g.fillRect(0, 0, w, h);
+      // Thin, broken bands off-centre: a slick's sheen, not rings on a target.
+      [["#b36bff", 100], ["#4d6bff", 86], ["#3de0ff", 72], ["#48f09a", 58], ["#ffd84a", 44]].forEach(([c, r], i) => {
+        g.strokeStyle = c;
+        g.globalAlpha = 0.34 - i * 0.04;
+        g.lineWidth = 5;
+        for (let arc = 0; arc < 3; arc += 1) {
+          const from = 0.4 + arc * 2.1 + i * 0.5;
+          g.beginPath();
+          g.ellipse(118 + i * 6, 132 - i * 4, r, r * 0.72, 0.5, from, from + 1.3);
+          g.stroke();
+        }
+      });
+    }, { repeat: false });
+  }
+  if (!oilSurface) {
+    // Dark first. Seen along the road from the chase camera, a glossy coat
+    // mirrors the sky and reads as a grey puddle of water; a slick is a dark
+    // patch with a thin-film sheen, so the sheen carries it.
+    oilSurface = new THREE.MeshStandardMaterial({
+      color: 0x030304, roughness: 0.38, metalness: 0.0, envMapIntensity: 0.1,
+      emissive: 0xffffff, emissiveMap: sheenTexture, emissiveIntensity: 0.75,
+      polygonOffset: true, polygonOffsetFactor: -3,
+    });
+  }
+  return oilSurface;
+}
+
 function oilMesh() {
-  if (!oilTexture) oilTexture = makeOilTexture();
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({
-    map: oilTexture, emissiveMap: oilTexture, emissive: 0xffffff, emissiveIntensity: 0.35,
-    transparent: true, depthWrite: false, roughness: 0.32, metalness: 0.05,
-    polygonOffset: true, polygonOffsetFactor: -3,
-  }));
-  m.rotation.x = -Math.PI / 2;
-  m.receiveShadow = true;
-  return m;
+  const g = holder("oil", () => {
+    if (!oilTexture) oilTexture = makeOilTexture();
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({
+      map: oilTexture, emissiveMap: oilTexture, emissive: 0xffffff, emissiveIntensity: 0.35,
+      transparent: true, depthWrite: false, roughness: 0.32, metalness: 0.05,
+      polygonOffset: true, polygonOffsetFactor: -3,
+    }));
+    m.rotation.x = -Math.PI / 2;
+    m.receiveShadow = true;
+    return m;
+  });
+  dressOil(g.userData.body);
+  return g;
+}
+
+function dressOil(body) {
+  if (body.userData.fromGlb) body.traverse((node) => { if (node.isMesh) node.material = oilModelMaterial(); });
 }
 
 // Soft round glow used for impacts, bounce sparks and the lights.
@@ -143,6 +203,20 @@ function extrude(profile, depth, material, bevel = 0.5) {
 }
 
 function safetyCarMesh() {
+  const car = holder("safetyCar", safetyCarStandIn);
+  car.userData.lamps = lampsOf(car.userData.body);
+  return car;
+}
+
+// The two roof lamps: the model's lamp_L and lamp_R, or the stand-in's.
+function lampsOf(body) {
+  if (body.userData.lamps) return body.userData.lamps;
+  const lamps = [];
+  body.traverse((node) => { if (node.isMesh && /^lamp_/.test(node.name)) lamps.push(node); });
+  return lamps.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function safetyCarStandIn() {
   const g = new THREE.Group();
   const paint = new THREE.MeshPhysicalMaterial({ color: 0xc9ced6, metalness: 0.9, roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.06 });
   const glass = new THREE.MeshPhysicalMaterial({ color: 0x0e141b, metalness: 0.2, roughness: 0.05, clearcoat: 1 });
@@ -205,7 +279,7 @@ export function createPowerUpLayer(scene) {
   const group = new THREE.Group();
   scene.add(group);
   const shots = {
-    undercut: pool(group, POOL, () => puck(0xdc0000, 0x550000)),
+    undercut: pool(group, POOL, () => puck(0xdc0000, 0x550000, "undercut")),
     stewardPenalty: pool(group, 2, stewardMesh),
     debris: pool(group, POOL, debrisMesh),
   };
@@ -216,7 +290,16 @@ export function createPowerUpLayer(scene) {
   safetyCar.visible = false;
   group.add(safetyCar);
   let quality = "high";
-  const shown = { shots: 0, hazards: 0, trails: 0, safetyCar: false, flashes: 0 };
+  const shown = { shots: 0, hazards: 0, trails: 0, safetyCar: false, flashes: 0, visibleFromGlb: 0 };
+
+  // The models landed: everything already made swaps its stand-in.
+  whenItemsReady(() => {
+    shots.undercut.forEach((g) => swapBody(g, itemModel("undercut")));
+    shots.stewardPenalty.forEach((g) => swapBody(g, itemModel("steward")));
+    shots.debris.forEach((g) => swapBody(g, itemModel("debris")));
+    [...oil, ...trails].forEach((g) => { if (swapBody(g, itemModel("oil"))) dressOil(g.userData.body); });
+    if (swapBody(safetyCar, itemModel("safetyCar"))) safetyCar.userData.lamps = lampsOf(safetyCar.userData.body);
+  });
 
   const auraMats = {
     gold: new THREE.MeshBasicMaterial({ color: 0xffc81e, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.BackSide }),
@@ -278,7 +361,11 @@ export function createPowerUpLayer(scene) {
       if (!mesh) return;
       mesh.visible = true;
       const flying = s.type === "stewardPenalty";
-      place(mesh, s, course, flying ? 16 : 2.4);
+      const modelled = mesh.userData.body && mesh.userData.body.userData.fromGlb;
+      // The modelled Undercut is a tyre: it stands on the road and rolls.
+      const rolling = s.type === "undercut" && modelled;
+      place(mesh, s, course, flying ? 16 : rolling ? 3.2 : 2.4);
+      if (rolling) mesh.userData.body.rotation.z = -(s.d || 0) / 3.2;
       if (s.type === "debris") mesh.rotation.set(now / 90, now / 70, now / 110);
       if (mesh.userData.trail) mesh.userData.trail.visible = fx;
       if (mesh.userData.ring) mesh.userData.ring.rotation.z = now / 120;
@@ -288,13 +375,13 @@ export function createPowerUpLayer(scene) {
     oil.forEach((m, i) => {
       const h = powerUps.hazards[i];
       m.visible = Boolean(h);
-      if (h) { m.position.set(h.x, course.heightAt(h.d) + 0.35, h.y); m.rotation.z = -(h.heading || 0); }
+      if (h) { m.position.set(h.x, course.heightAt(h.d) + 0.35, h.y); m.rotation.y = -(h.heading || 0); }
     });
     trails.forEach((m, i) => {
       const t = powerUps.trails[i];
       m.visible = Boolean(t);
       // A trailed slick is the drip behind the car, smaller than a dropped pool.
-      if (t) { m.position.set(t.x, course.heightAt(t.d) + 0.35, t.y); m.rotation.z = -(t.heading || 0); m.scale.setScalar(0.6); }
+      if (t) { m.position.set(t.x, course.heightAt(t.d) + 0.35, t.y); m.rotation.y = -(t.heading || 0); m.scale.setScalar(0.6); }
     });
 
     const sc = powerUps.safetyCar;
@@ -340,12 +427,14 @@ export function createPowerUpLayer(scene) {
     shown.trails = trails.filter((m) => m.visible).length;
     shown.safetyCar = safetyCar.visible;
     shown.flashes = flashes.filter((m) => m.visible).length;
+    const fromGlb = (m) => m.visible && m.userData.body && m.userData.body.userData.fromGlb;
+    shown.visibleFromGlb = [...Object.values(shots).flat(), ...oil, ...trails, safetyCar].filter(fromGlb).length;
   }
 
   return {
     group,
     sync,
     setQuality(tier) { quality = tier; },
-    inspect: () => ({ ...shown }),
+    inspect: () => ({ ...shown, itemsLoaded: itemsState().ready }),
   };
 }

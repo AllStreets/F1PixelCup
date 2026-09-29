@@ -60,9 +60,9 @@ def mat(name, color, metal=0.0, rough=0.4, emit=0.0, alpha=1.0):
 
 reset()
 MATS = {
-    "box_glass": mat("box_glass", (0.85, 0.04, 0.03), 0.0, 0.12, emit=0.25, alpha=0.62),
+    "box_glass": mat("box_glass", (0.85, 0.04, 0.03), 0.0, 0.12, emit=0.25, alpha=0.7),
     "box_frame": mat("box_frame", (1.0, 0.93, 0.78), 0.3, 0.25, emit=0.6),
-    "box_mark": mat("box_mark", (1.0, 0.96, 0.86), 0.0, 0.3, emit=1.4),
+    "box_mark": mat("box_mark", (1.0, 0.97, 0.9), 0.0, 0.3, emit=2.2),
     "oil": mat("oil", (0.02, 0.02, 0.03), 0.1, 0.08),
     "carbon_weave": mat("carbon_weave", (0.05, 0.055, 0.065), 0.5, 0.28),
     "tyre": mat("tyre", (0.025, 0.025, 0.025), 0.0, 0.85),
@@ -207,32 +207,33 @@ bmesh.ops.create_cube(bm, size=11.0)
 cube = link("item_box", bm, "box_glass", C_BOX)
 cube.data.materials.append(MATS["box_frame"])
 bevel(cube, 1.1, segments=4, material_offset=1)
-# The mark: a "?" drawn with the text tool, turned into a mesh, on both faces
-# so it reads through the glass from any side.
-marks = []
-for sgn in (1, -1):
-    bpy.ops.object.text_add(location=(0, 0, 0))
-    t = bpy.context.active_object
-    t.data.body = "?"
-    t.data.align_x = "CENTER"
-    t.data.align_y = "CENTER"
-    t.data.size = 7.2
-    t.data.extrude = 0.35
-    t.data.bevel_depth = 0.12
-    # Few enough polygons for fifteen boxes a circuit.
-    t.data.resolution_u = 3
-    t.data.bevel_resolution = 1
-    t.rotation_euler = (math.pi / 2, 0, math.pi / 2 if sgn > 0 else -math.pi / 2)
-    t.location = (sgn * 1.2, 0, 0.2)
-    bpy.ops.object.convert(target="MESH")
-    t.data.materials.clear()
-    t.data.materials.append(MATS["box_mark"])
-    for c in t.users_collection:
-        c.objects.unlink(t)
-    C_BOX.objects.link(t)
-    t.name = f"item_box_mark_{'a' if sgn > 0 else 'b'}"
-    marks.append(t)
-mark = join(marks[0], marks[1:])
+# The mark: one "?" in the middle, drawn with the text tool and turned into a
+# mesh, facing +X. The game keeps it turned to the camera while the glass
+# spins round it, so it always reads (marks on the faces showed through the
+# glass mirrored). Its origin is the box's centre.
+bpy.ops.object.text_add(location=(0, 0, 0))
+mark = bpy.context.active_object
+mark.data.body = "?"
+mark.data.align_x = "CENTER"
+mark.data.align_y = "CENTER"
+mark.data.size = 8.4
+mark.data.extrude = 0.45
+mark.data.bevel_depth = 0.16
+# Few enough polygons for fifteen boxes a circuit.
+mark.data.resolution_u = 3
+mark.data.bevel_resolution = 1
+mark.rotation_euler = (math.pi / 2, 0, math.pi / 2)
+bpy.ops.object.convert(target="MESH")
+mark.data.materials.clear()
+mark.data.materials.append(MATS["box_mark"])
+# Bake the upright turn into the mesh: the game sets the mark's yaw itself.
+bpy.ops.object.select_all(action="DESELECT")
+mark.select_set(True)
+bpy.context.view_layer.objects.active = mark
+bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+for c in mark.users_collection:
+    c.objects.unlink(mark)
+C_BOX.objects.link(mark)
 mark.name = "item_box_mark"
 
 # --- Oil pool: an irregular puddle, domed a touch, flush with the road --------

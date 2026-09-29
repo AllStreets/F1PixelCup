@@ -654,6 +654,44 @@ async (page) => {
     return shake.x === 0 && shake.y === 0;
   });
 
+  // (These run before the renderer-crash steps below, which switch the game to 2D.)
+  // The hand-built models (assets/items/*.glb): once loaded, every item is
+  // drawn from its model -- the boxes already on the circuit too -- at the
+  // size of the mesh it replaced, and each is really on screen when used.
+  await setup();
+  results.itemModels = await run(async () => {
+    for (let i = 0; i < 200 && !Render3D.inspect().items.ready; i += 1) await new Promise((r) => setTimeout(r, 50));
+    const items = Render3D.inspect().items;
+    // Expected extents (x, y, z in Three's axes), from the meshes they replace.
+    const want = {
+      itemBox: [11, 11, 11], oil: [29, 0.22, 24], debris: [12.5, 5.5, 8.5], undercut: [6.4, 6.4, 2.4],
+      steward: [9, 2.4, 9], safetyCar: [26, 9.5, 10.4],
+    };
+    const bad = [];
+    Object.entries(want).forEach(([kind, size]) => {
+      const m = items.models[kind];
+      if (!m || !m.fromGlb) { bad.push(`${kind}: not from its model`); return; }
+      m.size.forEach((v, i) => { if (Math.abs(v - size[i]) > Math.max(1.2, size[i] * 0.15)) bad.push(`${kind} size ${m.size.map((x) => x.toFixed(1))}`); });
+    });
+    if (!items.boxesFromGlb) bad.push("item boxes on the circuit still procedural");
+    return bad.length === 0 || JSON.stringify(bad);
+  });
+  await setup();
+  results.itemModelsOnScreen = await run(async () => {
+    const pl = getPlayer();
+    // One of everything from the player. (The Undercut may already have hit
+    // the car ahead by the time the frames are drawn, so two shots or more.)
+    ["undercut", "debris", "stewardPenalty", "oilSlick", "safetyCar"].forEach((type) => {
+      pl.currentItem = type; useItem(pl, raceNow());
+    });
+    for (let i = 0; i < 6; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    const shown = Render3D.inspect();
+    const ok = shown.shots >= 2 && shown.hazards >= 1 && shown.safetyCar === true
+      && shown.items.visibleFromGlb === shown.shots + shown.hazards + shown.trails + 1;
+    return ok || JSON.stringify({ shots: shown.shots, hazards: shown.hazards, sc: shown.safetyCar, glb: shown.items.visibleFromGlb });
+  });
+  results.itemModelsKeepSceneryClear = await run(() => TRACKS.every((track) => Render3D.auditScenery(track).length === 0));
+
   // If the 3D renderer ever throws mid-race, the game carries on in 2D rather than freezing.
   await setup();
   results.rendererCrashFallsBack = await (async () => {
