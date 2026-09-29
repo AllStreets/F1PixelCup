@@ -301,7 +301,9 @@ test("an older save gains a poles count of zero", () => {
   assert.equal(career.getProfile().totals.poles, 0);
 });
 
-test("career and grid agree on qualifying points", () => {
-  const Grid = require("../grid.js");
-  assert.deepEqual(Career.QUALI_POINTS, Grid.QUALI_POINTS);
+test("qualifying points: P1 10, P2 6, P3 4, P4-P10 2, times the difficulty multiplier", () => {
+  assert.deepEqual(Career.QUALI_POINTS, [10, 6, 4, 2, 2, 2, 2, 2, 2, 2]);
+  assert.deepEqual(Career.qualifyingAward({ position: 1, difficulty: "legend" }), { points: 10, multiplier: 3, careerPoints: 30 });
+  assert.deepEqual(Career.qualifyingAward({ position: 4, difficulty: "pro" }), { points: 2, multiplier: 2, careerPoints: 4 });
+  assert.deepEqual(Career.qualifyingAward({ position: 11, difficulty: "rookie" }), { points: 0, multiplier: 1, careerPoints: 0 });
 });

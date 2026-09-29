@@ -14,8 +14,7 @@
   const POINTS_TABLE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
   const CUP_BONUS = [50, 30, 20];
   const MULTIPLIER = { rookie: 1, pro: 2, legend: 3 };
-  // Qualifying positions P1..P10, before the difficulty multiplier (grid.js
-  // uses the same table; a test keeps them equal).
+  // Qualifying positions P1..P10, before the difficulty multiplier.
   const QUALI_POINTS = [10, 6, 4, 2, 2, 2, 2, 2, 2, 2];
   const FIELD_STRENGTH = { rookie: 1000, pro: 1400, legend: 1800 };
   const DIFFICULTY_NAMES = { rookie: "Rookie", pro: "Pro", legend: "Legend" };

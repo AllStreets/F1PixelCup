@@ -54,12 +54,12 @@ async (page) => {
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 1, careerPoints: 276, rating: 1309, ratedRaces: 4,
-    totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1 },
+    totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1, poles: 2 },
     bestLaps: { monza: { ms: 36280 } }, history: [] })));
   await p.reload();
   await p.waitForTimeout(1000);
   const summary = await p.locator("#career-summary").innerText();
-  out.returning = summary.includes("1309") && summary.includes("0:36.280");
+  out.returning = summary.includes("1309") && summary.includes("0:36.280") && /Poles\s*2/i.test(summary);
   out.xss = await p.evaluate(() => window.__xss === undefined);
   out.careerLink = await p.locator("#career a[href*='play.html#career']").count();
 

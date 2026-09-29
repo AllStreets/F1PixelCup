@@ -205,3 +205,5 @@ html, body { height: 100%; overflow: hidden; }
 @media (max-width: 520px) {
   .quali-table .result-row, .quali-table .result-head { grid-template-columns: 2rem 4px minmax(4.5rem, 1fr) 5.6rem 4.6rem; gap: 6px; }
 }
+.choice-hint { margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; text-align: right; }
+.quali-note { margin: 6px 0 0; font-weight: 700; }

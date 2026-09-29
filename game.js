@@ -95,6 +95,35 @@ function render3dSafely(draw) {
   }
 }
 
+// A circuit's first appearance: the panel says so for one frame, then the
+// circuit is built (half a second of work) while the panel covers it. The
+// lights and the timing of the field wait until it's done.
+function prepareCircuit() {
+  const job = state.preparing;
+  if (!job) return;
+  const view3d = worldView();
+  if (view3d === "loading") return;
+  if (view3d !== "3d" || !window.Render3D.prepare) {
+    state.preparing = null;
+    return;
+  }
+  if (!job.painted) {
+    job.painted = true;
+    return;
+  }
+  const track = TRACKS.find((t) => t.id === job.trackId) || state.track;
+  render3dSafely(() => window.Render3D.prepare(track));
+  state.preparing = null;
+  state.preparedAt = performance.now();
+  // The lights start from here.
+  if (state.phase === "countdown") state.countdownStart = performance.now();
+}
+
+function setViewLoadingText(text) {
+  const label = document.getElementById("view-loading-text");
+  if (label && label.textContent !== text) label.textContent = text;
+}
+
 function showViewLoading(where) {
   if (!ui.viewLoading) return;
   const loading = where !== null;
@@ -270,6 +299,10 @@ const state = {
   boxHiddenUntil: [],
   fxFlashes: [],
   simOffset: 0,
+  stepAccum: 0,
+  // The circuit still to be built before the session starts (see prepareCircuit).
+  preparing: null,
+  headless: false,
   lastTick: null,
   // Starting grid: "back" (Mario Kart style, the default) or "qualifying".
   gridMode: "back",
@@ -491,11 +524,19 @@ function getCourseDistanceForRacer(racer, track) {
   return racer.shortcutActive ? getShortcutMappedDistance(racer, track) : getTrackDistanceForPoint(racer, track);
 }
 
+const SHORTCUTS_ENABLED = false;
+
 function shouldUseShortcutRoute() {
-  return false;
+  return SHORTCUTS_ENABLED;
 }
 
 function getActiveSurfaceInfo(racer, track, now) {
+  // Shortcuts are switched off, so the shortcut route isn't searched at all:
+  // it was a full search of every shortcut segment on every step.
+  if (!SHORTCUTS_ENABLED) {
+    racer.shortcutActive = false;
+    return findClosestSurfaceOnSegments(racer, track.segments, track.roadWidth, false);
+  }
   const { mainSurface, shortcutSurface } = getSurfacePair(racer, track);
   racer.shortcutActive = shouldUseShortcutRoute(racer, track, mainSurface, shortcutSurface, now);
   return racer.shortcutActive ? shortcutSurface : mainSurface;
@@ -631,7 +672,7 @@ function createRacer(driver, kart, isPlayer, slot) {
 function addFeed(message) {
   state.feed.unshift({ id: state.nextFeedId += 1, message });
   state.feed = state.feed.slice(0, 8);
-  if (window.Screens && (state.phase === "race" || state.phase === "countdown")) window.Screens.pushFeed(message);
+  if (window.Screens && ["race", "countdown", "qualifying", "qualifyingSim", "qualifyingResults"].includes(state.phase)) window.Screens.pushFeed(message);
 }
 
 // The pit lane is drawn by screens.js; this keeps the game's side in step.
@@ -754,9 +795,12 @@ const QUALI_RUN_UP = 320;
 const QUALI_ROLL_SPEED = 0.7;
 const QUALI_TIME_LIMIT_MS = 180000;
 
-function placeForQualifying(racer, track) {
+// Extra distance the player rolls in on autopilot before taking over.
+const QUALI_RUN_IN = 260;
+
+function placeForQualifying(racer, track, runIn = 0) {
   const route = getItemRoute(track);
-  const d = track.totalLength - QUALI_RUN_UP;
+  const d = track.totalLength - QUALI_RUN_UP - runIn;
   const w = route.toWorld(d, 0);
   // Tell the road lookup which stretch the car is on: the circuit runs past
   // itself in places, and the nearest bit of road may be another part of the lap.
@@ -770,22 +814,84 @@ function placeForQualifying(racer, track) {
   });
 }
 
-// The same lap with its own random numbers, so any CPU lap can be run again
-// and checked: its mistakes and line come from `seed`, nothing else.
-function simulateQualifyingLapSeeded(entry, track, seed) {
-  const realRandom = Math.random;
-  let s32 = seed >>> 0;
-  Math.random = () => {
-    s32 = (s32 + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(s32 ^ (s32 >>> 15), 1 | s32);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+// A CPU driver's qualifying lap, simulated alone on the circuit with the same
+// physics and AI that race them. It can be run in slices (a little each frame,
+// so timing the field never freezes the page), carries its own random numbers
+// when seeded (so any lap can be run again and checked), touches nothing
+// visible (no particles, no race events), and always puts the race state back.
+function createQualifyingSim(entry, track, seed = null) {
+  return { entry, track, seed, rng: seed === null ? null : seed >>> 0, racer: null, now: 0, done: false, result: null };
+}
+
+function stepQualifyingSim(sim, budgetMs = Infinity) {
+  if (sim.done) return true;
+  const saved = {
+    racers: state.racers, shots: state.shots, hazards: state.hazards, safetyCar: state.safetyCar,
+    boxHiddenUntil: state.boxHiddenUntil, flagOutAt: state.flagOutAt, feed: state.feed, track: state.track,
+    finishQueue: state.finishQueue, particles: state.particles, headless: state.headless,
   };
+  const savedWorld = { ...WORLD };
+  const realRandom = Math.random;
+  if (sim.rng !== null) {
+    Math.random = () => {
+      sim.rng = (sim.rng + 0x6d2b79f5) >>> 0;
+      let t = Math.imul(sim.rng ^ (sim.rng >>> 15), 1 | sim.rng);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const started = performance.now();
   try {
-    return simulateQualifyingLap(entry, track);
+    state.track = sim.track;
+    // Cars are kept inside the world box, which is sized to each circuit.
+    Object.assign(WORLD, sim.track.world);
+    if (!sim.racer) {
+      sim.racer = createRacer(sim.entry.driver, sim.entry.kart, false, 99);
+      placeForQualifying(sim.racer, sim.track);
+    }
+    Object.assign(state, {
+      racers: [sim.racer], shots: [], hazards: [], safetyCar: null, flagOutAt: 0, feed: [], finishQueue: [],
+      particles: [], headless: true, boxHiddenUntil: sim.track.itemBoxes.map(() => Infinity),
+    });
+    const racer = sim.racer;
+    while (!racer.lastLapTime && sim.now < QUALI_TIME_LIMIT_MS) {
+      sim.now += PHYSICS_STEP_MS;
+      updateRacer(racer, PHYSICS_DT, sim.now);
+      if (performance.now() - started >= budgetMs) break;
+    }
+    if (racer.lastLapTime > 0 || sim.now >= QUALI_TIME_LIMIT_MS) {
+      // The flying lap began at the first crossing; once it ends, lapStartAt
+      // has moved on to the next lap, so the start is the one before it.
+      const lapStart = racer.lastLapTime > 0 ? racer.previousLapStartAt : racer.lapStartAt;
+      sim.result = {
+        timeMs: racer.lastLapTime > 0 ? racer.lastLapTime : null,
+        splits: (racer.splits || []).slice(0, TIMING_POINTS_PER_LAP).map((t) => t - lapStart),
+      };
+      sim.done = true;
+    }
+  } catch (error) {
+    console.warn(`Qualifying: ${sim.entry.driver.name}'s lap could not be simulated; no time.`, error);
+    sim.result = { timeMs: null, splits: [] };
+    sim.done = true;
   } finally {
+    Object.assign(state, saved);
+    Object.assign(WORLD, savedWorld);
     Math.random = realRandom;
   }
+  return sim.done;
+}
+
+function simulateQualifyingLap(entry, track) {
+  const sim = createQualifyingSim(entry, track);
+  stepQualifyingSim(sim);
+  return sim.result;
+}
+
+// The same lap with its own random numbers: its mistakes and line come from `seed`, nothing else.
+function simulateQualifyingLapSeeded(entry, track, seed) {
+  const sim = createQualifyingSim(entry, track, seed);
+  stepQualifyingSim(sim);
+  return sim.result;
 }
 
 function startQualifying(index) {
@@ -795,20 +901,18 @@ function startQualifying(index) {
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
     shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
-    simOffset: 0, lastTick: null, flagOutAt: 0, resultsQueued: false, resultTimeoutAt: 0, finalLapAt: 0,
+    simOffset: 0, stepAccum: 0, lastTick: null, flagOutAt: 0, resultsQueued: false, resultTimeoutAt: 0, finalLapAt: 0,
     paused: false, pausedAt: 0, camPos: null, camRoll: 0, hudLastPlace: 0, hudPlaceFlashUntil: 0,
   });
-  // Every CPU driver's lap, simulated now with the physics and AI that race them.
-  const runSeed = hashSeed(`${state.cupRunId || "run"}:${index}`);
-  const times = state.cupEntries.filter((entry) => !entry.isPlayer).map((entry, i) => {
-    const seed = (runSeed + (i + 1) * 7919) >>> 0;
-    const lap = simulateQualifyingLapSeeded(entry, state.track, seed);
-    return { id: entry.driver.id, timeMs: lap.timeMs, splits: lap.splits, seed };
-  });
-  const poleLap = times.filter((t) => t.timeMs).sort((a, b) => a.timeMs - b.timeMs)[0];
+  // Set first, so every CPU lap reads the cup's difficulty.
+  state.phase = "qualifyingSim";
+  state.preparing = { trackId: state.track.id, painted: false };
   const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
   const player = createRacer(playerEntry.driver, playerEntry.kart, true, 0);
-  placeForQualifying(player, state.track);
+  // The player rolls in on autopilot while they get ready, and takes over at
+  // the same point and speed the CPU laps start from.
+  placeForQualifying(player, state.track, QUALI_RUN_IN);
+  player.qualiAutopilot = true;
   state.racers = [player];
   state.playerId = player.id;
   state.gridOrder = [];
@@ -816,19 +920,15 @@ function startQualifying(index) {
   state.boxHiddenUntil = state.track.itemBoxes.map(() => Infinity);
   state.cameraHeading = player.heading;
   state.camLastHeading = player.heading;
+  const runSeed = hashSeed(`${state.cupRunId || "run"}:${index}`);
+  const sims = state.cupEntries.filter((entry) => !entry.isPlayer).map((entry, i) => (
+    createQualifyingSim(entry, state.track, (runSeed + (i + 1) * 7919) >>> 0)));
   state.qualifying = {
-    raceIndex: index,
-    times,
-    poleSplits: poleLap ? poleLap.splits : [],
-    poleTimeMs: poleLap ? poleLap.timeMs : null,
-    playerTimeMs: null,
-    order: null,
-    readyFrom: null,
+    raceIndex: index, sims, times: [], poleSplits: [], poleTimeMs: null, playerTimeMs: null, order: null,
+    readyElapsed: 0, handedOver: false, releasedAt: null, aborted: false,
   };
-  state.phase = "qualifying";
   if (window.Screens) window.Screens.showRace();
-  addFeed(`${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
-  updateQualifyingTower();
+  addFeed(`${state.track.name} qualifying: the field is setting its times.`);
 }
 
 function hashSeed(text) {
@@ -840,22 +940,71 @@ function hashSeed(text) {
   return h >>> 0;
 }
 
-// A moment to settle before the rolling lap begins.
+// A moment to settle before the rolling lap begins, spent rolling in on autopilot.
 const QUALI_READY_MS = 1800;
+// Time spent timing the field per frame, so the page never stalls.
+const QUALI_SIM_BUDGET_MS = 6;
+
+// Timing the field: a slice of the CPU laps each frame.
+function updateQualifyingSim() {
+  const q = state.qualifying;
+  if (!q) return;
+  const started = performance.now();
+  for (const sim of q.sims) {
+    if (sim.done) continue;
+    const left = QUALI_SIM_BUDGET_MS - (performance.now() - started);
+    if (left <= 0) break;
+    stepQualifyingSim(sim, left);
+  }
+  const done = q.sims.filter((sim) => sim.done).length;
+  setViewLoadingText(`Timing the field · ${done} / ${q.sims.length}`);
+  if (done < q.sims.length) return;
+  q.times = q.sims.map((sim) => ({ id: sim.entry.driver.id, timeMs: sim.result.timeMs, splits: sim.result.splits, seed: sim.seed }));
+  const poleLap = q.times.filter((t) => t.timeMs).sort((a, b) => a.timeMs - b.timeMs)[0];
+  q.poleSplits = poleLap ? poleLap.splits : [];
+  q.poleTimeMs = poleLap ? poleLap.timeMs : null;
+  state.phase = "qualifying";
+  state.lastTick = performance.now();
+  state.stepAccum = 0;
+  addFeed(`${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
+  updateQualifyingTower(true);
+}
 
 function updateQualifying(dt, now) {
   const q = state.qualifying;
   const player = getPlayer();
   if (!q || !player) return;
-  if (q.readyFrom === null) q.readyFrom = now;
-  if (now - q.readyFrom < QUALI_READY_MS) return;
-  const step = dt * 1000;
-  const tick = (state.lastTick !== null ? state.lastTick : now - step) + step;
-  updateRacer(player, dt, tick);
-  state.lastTick = tick;
+  // Nothing starts until the circuit can be seen.
+  if (worldView() === "loading") return;
+  const steps = takePhysicsSteps(dt);
+  for (let i = 0; i < steps && state.phase === "qualifying"; i += 1) stepQualifying(q, player);
+  updateParticles(dt);
   updateQualifyingTower();
-  if (player.lastLapTime > 0) finishQualifying();
-  else if (player.lapStartAt && tick - player.lapStartAt > QUALI_TIME_LIMIT_MS) finishQualifying();
+}
+
+function stepQualifying(q, player) {
+  const tick = (state.lastTick !== null ? state.lastTick : performance.now()) + PHYSICS_STEP_MS;
+  if (!q.handedOver) {
+    // Rolling in on autopilot at the CPU laps' starting speed.
+    q.readyElapsed += PHYSICS_STEP_MS;
+    const driving = player.isPlayer;
+    player.isPlayer = false;
+    updateRacer(player, PHYSICS_DT, tick);
+    player.isPlayer = driving;
+    player.speed = player.physics.maxSpeed * QUALI_ROLL_SPEED;
+    if (q.readyElapsed >= QUALI_READY_MS) {
+      q.handedOver = true;
+      q.releasedAt = tick;
+      player.qualiAutopilot = false;
+    }
+  } else {
+    updateRacer(player, PHYSICS_DT, tick);
+  }
+  state.lastTick = tick;
+  if (state.phase !== "qualifying") return;
+  if (player.lastLapTime > 0 || q.aborted || (q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS)) {
+    finishQualifying();
+  }
 }
 
 // How far behind (+) or ahead (-) of the provisional pole the player was at
@@ -880,18 +1029,26 @@ function qualifyingClassification() {
 function finishQualifying() {
   const q = state.qualifying;
   const player = getPlayer();
-  q.playerTimeMs = player.lastLapTime > 0 ? player.lastLapTime : null;
+  q.playerTimeMs = player.lastLapTime > 0 && !q.aborted ? player.lastLapTime : null;
+  // Parked: the engine settles and the car is done for the session.
+  player.finished = true;
+  player.speed = 0;
+  player.drifting = false;
   const rows = qualifyingClassification();
   q.order = rows.map((row) => row.id);
   state.phase = "qualifyingResults";
   const pole = rows[0];
   const place = q.order.indexOf(player.driver.id) + 1;
-  addFeed(place === 1 ? `Pole position! ${formatLapTime(q.playerTimeMs)}.` : `Qualified ${formatOrdinal(place)}.`);
+  const note = q.aborted ? "Lap aborted — you went back over the line, so no time was set."
+    : !q.playerTimeMs ? "No time set within the session."
+      : place === 1 ? `Pole position! ${formatLapTime(q.playerTimeMs)}.` : `You qualified ${formatOrdinal(place)} · ${formatLapTime(q.playerTimeMs)}.`;
+  addFeed(note);
   if (!window.Screens) return;
   const cup = getActiveCup();
   window.Screens.showQualifying({
     kicker: `Qualifying · Race ${state.raceIndex + 1} of ${cup.tracks.length} · ${cup.name}`,
     title: state.track.name,
+    note,
     rows: rows.map((row, i) => {
       const entry = state.cupEntries.find((e) => e.driver.id === row.id);
       return {
@@ -915,10 +1072,10 @@ function startRaceFromQualifying() {
 }
 
 // The timing tower during qualifying: the provisional classification.
-function updateQualifyingTower() {
+function updateQualifyingTower(force = false) {
   if (!window.Screens) return;
   const now = performance.now();
-  if (now - (state.towerUpdatedAt || 0) < 250) return;
+  if (!force && now - (state.towerUpdatedAt || 0) < 250) return;
   state.towerUpdatedAt = now;
   const q = state.qualifying;
   const player = state.cupEntries.find((entry) => entry.isPlayer);
@@ -930,41 +1087,6 @@ function updateQualifyingTower() {
   });
   rows.push({ position: "—", code: player.driver.code, teamColor: player.kart.body, isPlayer: true, gap: "ON LAP" });
   window.Screens.updateTower(rows);
-}
-
-// One CPU driver's flying lap, simulated on an empty track.
-function simulateQualifyingLap(entry, track) {
-  const saved = {
-    racers: state.racers, shots: state.shots, hazards: state.hazards, safetyCar: state.safetyCar,
-    boxHiddenUntil: state.boxHiddenUntil, flagOutAt: state.flagOutAt, feed: state.feed, track: state.track,
-    finishQueue: state.finishQueue,
-  };
-  const savedWorld = { ...WORLD };
-  const racer = createRacer(entry.driver, entry.kart, false, 99);
-  state.track = track;
-  // Cars are kept inside the world box, which is sized to each circuit.
-  Object.assign(WORLD, track.world);
-  placeForQualifying(racer, track);
-  Object.assign(state, {
-    racers: [racer], shots: [], hazards: [], safetyCar: null, flagOutAt: 0, feed: [...state.feed], finishQueue: [],
-    boxHiddenUntil: track.itemBoxes.map(() => Infinity),
-  });
-  const dt = 1 / 60;
-  let now = 0;
-  while (!racer.lastLapTime && now < QUALI_TIME_LIMIT_MS) {
-    now += dt * 1000;
-    updateRacer(racer, dt, now);
-  }
-  // The flying lap began at the first crossing; once it ends, lapStartAt has
-  // moved on to the next lap, so the start is the one before it.
-  const lapStart = racer.lastLapTime > 0 ? racer.previousLapStartAt : racer.lapStartAt;
-  Object.assign(state, saved);
-  Object.assign(WORLD, savedWorld);
-  return {
-    timeMs: racer.lastLapTime > 0 ? racer.lastLapTime : null,
-    // Timing points relative to the start of the flying lap.
-    splits: (racer.splits || []).slice(0, TIMING_POINTS_PER_LAP).map((t) => t - lapStart),
-  };
 }
 
 function layoutGrid(track, count) {
@@ -1087,6 +1209,7 @@ function startRace(index) {
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
+  state.stepAccum = 0;
   state.lastTick = null;
   state.finishQueue = [];
   state.particles = [];
@@ -1112,6 +1235,7 @@ function startRace(index) {
     standings: Object.fromEntries(state.cupEntries.map((entry) => [entry.driver.id, entry.points])),
   });
   const lineUp = state.gridOrder.map((id) => state.cupEntries.find((entry) => entry.driver.id === id));
+  state.preparing = { trackId: state.track.id, painted: false };
   const grid = layoutGrid(state.track, lineUp.length);
   state.racers = lineUp.map((entry, slot) => {
     const racer = createRacer(entry.driver, entry.kart, entry.isPlayer, slot);
@@ -1250,7 +1374,7 @@ function isProtected(racer, now) {
 // Race events for the post-processing pass (boosts, hits) and anything else
 // that wants to follow the race: itemUsed carries the item id.
 function emitFx(type, racer, extra = {}) {
-  if (typeof window === "undefined" || typeof CustomEvent !== "function") return;
+  if (state.headless || typeof window === "undefined" || typeof CustomEvent !== "function") return;
   window.dispatchEvent(new CustomEvent("f1:fx", { detail: { type, racerId: racer.id, ...extra } }));
 }
 
@@ -1532,6 +1656,12 @@ function updateLapProgress(racer, now, dt = 0) {
   // Reversing back over the line hands the lap back, so progress round the
   // race stays continuous instead of jumping almost a lap ahead.
   const unwrapped = previousDistance < lapLength * 0.25 && currentDistance > lapLength * 0.75;
+  // In qualifying there is one flying lap: backing over the line ends it.
+  if (unwrapped && delta < 0 && racer.startedRaceLap && state.phase === "qualifying" && racer.id === state.playerId && state.qualifying) {
+    state.qualifying.aborted = true;
+    finishQualifying();
+    return;
+  }
   if (unwrapped && delta < 0 && racer.startedRaceLap) {
     racer.lapAccum += lapLength;
     if (racer.lap > 0) {
@@ -2029,6 +2159,27 @@ function handleRacerContacts(now) {
 
 const FLAG_FAST_FORWARD = 7;
 
+// All driving physics runs at one fixed step, whatever the frame rate: a 30 Hz
+// laptop and a 144 Hz display simulate exactly the same race, and a player's
+// qualifying lap is stepped exactly as the CPU laps are.
+const PHYSICS_STEP_MS = 1000 / 60;
+const PHYSICS_DT = 1 / 60;
+// A very slow frame is not caught up in one go (that would spiral); the
+// excess is let go, and the race runs slower for that moment instead.
+const MAX_STEPS_PER_FRAME = 8;
+
+// How many fixed steps this frame's time buys, keeping the remainder.
+function takePhysicsSteps(dt) {
+  state.stepAccum = (state.stepAccum || 0) + Math.min(Math.max(dt, 0), 0.25) * 1000;
+  let steps = 0;
+  while (state.stepAccum >= PHYSICS_STEP_MS - 1e-6 && steps < MAX_STEPS_PER_FRAME) {
+    state.stepAccum -= PHYSICS_STEP_MS;
+    steps += 1;
+  }
+  if (steps === MAX_STEPS_PER_FRAME) state.stepAccum = 0;
+  return steps;
+}
+
 function updateRace(dt, now) {
   // After the player takes the flag the rest of the field is sub-stepped, and
   // everything on track -- shots, oil, the safety car, contacts -- steps with
@@ -2037,24 +2188,28 @@ function updateRace(dt, now) {
   // Step the clock on from the last physics step by this frame's own steps:
   // whatever wall time passed (a hitch, a pause, a hidden tab), the race only
   // moves on by the time the physics actually simulates.
-  const steps = state.flagOutAt ? FLAG_FAST_FORWARD : 1;
-  const step = dt * 1000;
+  const physicsSteps = takePhysicsSteps(dt);
+  const steps = physicsSteps * (state.flagOutAt ? FLAG_FAST_FORWARD : 1);
+  const step = PHYSICS_STEP_MS;
   const from = state.lastTick !== null ? state.lastTick : now + state.simOffset - step;
   for (let index = 0; index < steps; index += 1) {
     const tick = from + (index + 1) * step;
+    // After the flag the field runs FLAG_FAST_FORWARD steps to the player's one
+    // (the player has finished, so in practice only the field moves).
+    const playerSteps = index % (state.flagOutAt ? FLAG_FAST_FORWARD : 1) === 0;
     state.racers.forEach((racer) => {
-      if (racer.finished || (index > 0 && racer.isPlayer)) return;
-      updateRacer(racer, dt, tick);
+      if (racer.finished || (!playerSteps && racer.isPlayer)) return;
+      updateRacer(racer, PHYSICS_DT, tick);
     });
     settleFinishers();
-    updateShots(dt, tick);
-    updateSafetyCar(dt, tick);
+    updateShots(PHYSICS_DT, tick);
+    updateSafetyCar(PHYSICS_DT, tick);
     updateHazards(tick);
     handleRacerContacts(tick);
     handleRacerContacts(tick);
     handleRacerContacts(tick);
   }
-  state.lastTick = from + steps * step;
+  if (steps > 0) state.lastTick = from + steps * step;
   // Kept for tools that drive the race with their own clock (raceNow(wall)).
   state.simOffset = state.lastTick - now;
   const raceTime = state.lastTick;
@@ -2200,7 +2355,7 @@ function careerForCup(cup, playerPlace) {
   if (!cup) return { lines: [], saved: true };
   const lines = cup.bonus > 0
     ? [`<strong>Cup ${formatOrdinal(playerPlace)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
-    : [];
+    : [`Cup ${formatOrdinal(playerPlace)}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${cup.careerTotal.toLocaleString()}`];
   return { lines, saved: cup.saved };
 }
 
@@ -2362,9 +2517,11 @@ function resetToGarage() {
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
+  state.stepAccum = 0;
   state.lastTick = null;
   state.finishQueue = [];
   state.qualifying = null;
+  state.preparing = null;
   state.gridOrder = [];
   state.cameraHeading = 0;
   state.camPos = null;
@@ -3082,7 +3239,11 @@ function drawDriverView(track) {
   // canvas then only carries the HUD on top. While it loads only the loading
   // state shows; the 2D view is only for when 3D is unavailable.
   const mode = worldView();
-  showViewLoading(mode === "loading" ? "race" : null);
+  // Timing the field shows its progress in the loading panel, over the circuit.
+  const timing = state.phase === "qualifyingSim";
+  if (state.preparing) setViewLoadingText("Building the circuit…");
+  else if (!timing) setViewLoadingText("Warming up the car…");
+  showViewLoading(mode === "loading" || timing || state.preparing ? "race" : null);
   if (mode === "loading") {
     ctx.clearRect(0, 0, view.width, view.height);
     return;
@@ -3387,7 +3548,7 @@ function updateEngineAudio(player) {
   if (!audio.ready || !audio.engine) return;
   const ctxA = audio.ctx;
   const now = ctxA.currentTime;
-  const racing = state.phase === "race" || state.phase === "countdown";
+  const racing = state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying";
   const maxSpeed = Math.max(1, player ? player.physics.maxSpeed : 1);
   const ratio = player ? clamp(Math.abs(player.speed) / maxSpeed, 0, 1.25) : 0;
 
@@ -3421,7 +3582,20 @@ function spawnParticle(particle) {
   state.particles.push(particle);
 }
 
+// Smoke, sparks and screen shake draw their own random numbers, never the
+// simulation's: how many puffs are alive depends on the frame rate, and if
+// they shared Math.random with the AI, a 30 fps race would play out
+// differently from a 60 fps one. The race itself is frame-rate independent.
+let visualSeed = (Date.now() ^ 0x9e3779b9) >>> 0;
+function visualRandom() {
+  visualSeed = (visualSeed + 0x6d2b79f5) >>> 0;
+  let t = Math.imul(visualSeed ^ (visualSeed >>> 15), 1 | visualSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
 function emitRacerParticles(racer, dt, now, offroad) {
+  if (state.headless) return;
   const boosting = racer.boostUntil > now || racer.formationUntil > now;
   const sliding = racer.drifting;
   const scuffing = offroad && Math.abs(racer.speed) > 40;
@@ -3433,7 +3607,7 @@ function emitRacerParticles(racer, dt, now, offroad) {
     racer.emitAccum -= interval;
     const cos = Math.cos(racer.heading);
     const sin = Math.sin(racer.heading);
-    const spread = (Math.random() - 0.5) * 13;
+    const spread = (visualRandom() - 0.5) * 13;
     const px = racer.x - cos * 15 - sin * spread;
     const py = racer.y - sin * 15 + cos * spread;
 
@@ -3444,21 +3618,21 @@ function emitRacerParticles(racer, dt, now, offroad) {
       const color = charge > 1.6 ? "#ff9a3c" : charge > 0.9 ? "#75d5ff" : "#e6e6ef";
       spawnParticle({
         x: px, y: py,
-        vx: (Math.random() - 0.5) * 28, vy: (Math.random() - 0.5) * 28,
-        life: 0.55, maxLife: 0.55, size: 5 + Math.random() * 4, color, height: 3,
+        vx: (visualRandom() - 0.5) * 28, vy: (visualRandom() - 0.5) * 28,
+        life: 0.55, maxLife: 0.55, size: 5 + visualRandom() * 4, color, height: 3,
       });
     } else if (boosting) {
       spawnParticle({
         x: px, y: py,
-        vx: (Math.random() - 0.5) * 18, vy: (Math.random() - 0.5) * 18,
-        life: 0.3, maxLife: 0.3, size: 4 + Math.random() * 3,
-        color: Math.random() < 0.5 ? "#ffd166" : "#ff6b35", height: 6,
+        vx: (visualRandom() - 0.5) * 18, vy: (visualRandom() - 0.5) * 18,
+        life: 0.3, maxLife: 0.3, size: 4 + visualRandom() * 3,
+        color: visualRandom() < 0.5 ? "#ffd166" : "#ff6b35", height: 6,
       });
     } else {
       spawnParticle({
         x: px, y: py,
-        vx: (Math.random() - 0.5) * 24, vy: (Math.random() - 0.5) * 24,
-        life: 0.7, maxLife: 0.7, size: 4 + Math.random() * 4, color: "#8f7a52", height: 3,
+        vx: (visualRandom() - 0.5) * 24, vy: (visualRandom() - 0.5) * 24,
+        life: 0.7, maxLife: 0.7, size: 4 + visualRandom() * 4, color: "#8f7a52", height: 3,
       });
     }
   }
@@ -3506,8 +3680,8 @@ function getScreenShake() {
   const remaining = ((state.shakeUntil - now) / 220);
   const mag = (state.shakeMag || 0) * clamp(remaining, 0, 1);
   return {
-    x: (Math.random() - 0.5) * mag * 2,
-    y: (Math.random() - 0.5) * mag * 2,
+    x: (visualRandom() - 0.5) * mag * 2,
+    y: (visualRandom() - 0.5) * mag * 2,
   };
 }
 
@@ -3853,8 +4027,9 @@ function drawQualifyingHud(track, player) {
   ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING`, 34, 34);
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 22px Georgia";
-  const ready = q && q.readyFrom !== null && now - q.readyFrom >= QUALI_READY_MS;
-  ctx.fillText(!ready ? "Get ready…" : onLap ? "Flying lap" : "Out lap", 34, 62);
+  const label = state.phase === "qualifyingSim" ? "Timing the field…" : state.phase === "qualifyingResults" ? "Session over"
+    : !(q && q.handedOver) ? "Get ready…" : onLap ? "Flying lap" : "Out lap";
+  ctx.fillText(label, 34, 62);
   const liveLap = onLap && player.lapStartAt ? now - player.lapStartAt : 0;
   const row = (label, text, y, color) => {
     ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
@@ -3872,7 +4047,7 @@ function drawQualifyingHud(track, player) {
 }
 
 function drawDriverHud(track, player) {
-  if (state.phase === "qualifying") {
+  if (state.phase === "qualifying" || state.phase === "qualifyingSim" || state.phase === "qualifyingResults") {
     drawQualifyingHud(track, player);
     return;
   }
@@ -4331,7 +4506,7 @@ function letGoOfOil() {
 }
 
 function togglePause() {
-  if (state.phase !== "race" && state.phase !== "countdown" && state.phase !== "qualifying") return;
+  if (!["race", "countdown", "qualifying", "qualifyingSim"].includes(state.phase)) return;
   if (state.paused) {
     shiftRaceClocks(performance.now() - state.pausedAt);
     state.paused = false;
@@ -4357,7 +4532,7 @@ function handleEscapeKey() {
     resetToGarage();
     return;
   }
-  if (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying") togglePause();
+  if (["race", "countdown", "qualifying", "qualifyingSim"].includes(state.phase)) togglePause();
 }
 
 function drawPauseOverlay() {
@@ -4379,16 +4554,20 @@ function drawPauseOverlay() {
 
 function update(now) {
   fitViewToElement();
-  const dt = clamp((now - (state.lastTimestamp || now)) / 1000, 0, 0.033);
+  // The real time since the last frame; physics turns it into fixed steps.
+  const dt = clamp((now - (state.lastTimestamp || now)) / 1000, 0, 0.25);
   state.lastTimestamp = now;
 
-  if (!state.paused) {
+  prepareCircuit();
+  if (!state.paused && !state.preparing) {
     if (state.phase === "countdown") {
       // The lights don't start until the cars can be seen.
       if (worldView() === "loading") state.countdownStart = now;
       updateCountdown(now);
     } else if (state.phase === "race") {
       updateRace(dt, now);
+    } else if (state.phase === "qualifyingSim") {
+      updateQualifyingSim();
     } else if (state.phase === "qualifying") {
       updateQualifying(dt, now);
     }
@@ -4491,6 +4670,13 @@ function bindEvents() {
       }
       return;
     }
+    // Enter moves on from the qualifying classification (to the race) and
+    // from the results (to the next race); the phase guards make a second
+    // press -- or a click on the focused button -- harmless.
+    if (event.key === "Enter" && !event.repeat && !(window.Screens && window.Screens.isOverlayOpen())) {
+      if (state.phase === "qualifyingResults") { event.preventDefault(); startRaceFromQualifying(); return; }
+      if (state.phase === "results") { event.preventDefault(); nextRace(); return; }
+    }
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Shift"].includes(event.key) || event.code === "Space") {
       event.preventDefault();
     }
@@ -4499,7 +4685,7 @@ function bindEvents() {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
     if (event.key === "Shift") input.drift = true;
-    if (event.key.toLowerCase() === "p" && (state.phase === "race" || state.phase === "countdown")) {
+    if (event.key.toLowerCase() === "p" && (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying")) {
       event.preventDefault();
       togglePause();
     }
@@ -4550,7 +4736,7 @@ function bindEvents() {
   // A hidden tab stops drawing, but the race clock would keep running behind
   // it: pause instead, so nothing runs out while nobody is watching.
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying") && !state.paused) togglePause();
+    if (document.hidden && ["race", "countdown", "qualifying", "qualifyingSim"].includes(state.phase) && !state.paused) togglePause();
   });
 }
 

@@ -174,7 +174,10 @@ async (page) => {
     let now = 100000;
     state.raceStart = now;
     state.racers.forEach((r) => { r.lapStartAt = now; });
-    const dt = Math.min(frameMs / 1000, 0.033);
+    const dt = frameMs / 1000;
+    // Lights out anchors the race clock, as in the game.
+    state.lastTick = now;
+    state.preparing = null;
     let guard = 0;
     // Items off: this compares the clock, not the luck of the boxes.
     while (!state.resultsQueued && guard < 200000) {
@@ -182,14 +185,16 @@ async (page) => {
       now += frameMs; updateRace(dt, now); guard += 1;
     }
     const times = state.racers.map((r) => r.finishTime).sort((a, b) => a - b);
-    return { median: times[10], best: Math.min(...state.racers.map((r) => r.bestLapTime || Infinity)) };
+    return { times, median: times[10], best: Math.min(...state.racers.map((r) => r.bestLapTime || Infinity)) };
   }, frameMs);
   const smooth = await raceWinner(1000 / 60);
   const choppy = await raceWinner(50);
-  // A wall-time clock would read about 50% slower at 20 fps (50 ms frames, 33 ms of physics).
-  // The coarser physics step itself costs a few percent through the corners (measured
-  // 1.5-2.7% on the median, up to 5.5% on the best lap), which is real driving, not the clock.
-  results.slowMachineTimesReal = Math.abs(choppy.median / smooth.median - 1) < 0.06 && Math.abs(choppy.best / smooth.best - 1) < 0.08;
+  // Physics runs at a fixed 1/60 s step whatever the frame rate, and nothing
+  // that depends on the frame rate draws the simulation's random numbers, so a
+  // 20 fps machine races exactly the same race: every car's time agrees to
+  // well under a millisecond. (A wall-time clock would read about 50% slower.)
+  const worstDiff = Math.max(...smooth.times.map((t, i) => Math.abs(t - choppy.times[i])));
+  results.slowMachineTimesReal = worstDiff < 1 || `worst difference ${worstDiff.toFixed(3)} ms`;
 
   // The timing tower shows real time gaps: never negative, even right after
   // the lead changes hands, and each gap agrees with the distance between the
@@ -271,12 +276,18 @@ async (page) => {
     updateCountdown(now);
     const lightsOut = state.raceStart;
     // A half-second hitch before the first race frame, then a 33 ms step, then normal frames.
-    now += 500; updateRace(0.033, now);
-    const firstTick = state.lastTick;
-    const ticks = [firstTick];
-    [1 / 60, 0.033, 1 / 60, 1 / 60].forEach((dt) => { now += 1000 * dt + 7; updateRace(dt, now); ticks.push(state.lastTick); });
-    const steps = [33, 1000 / 60, 33, 1000 / 60, 1000 / 60];
-    const stepsOk = ticks.every((t, i) => Math.abs((i === 0 ? t - lightsOut : t - ticks[i - 1]) - steps[i]) < 0.01);
+    // A half-second hitch before the first race frame, then uneven frames. The
+    // clock moves only in whole physics steps, and in total by the frame time
+    // (to within one step) -- the hitch itself is not counted.
+    const step = 1000 / 60;
+    const frames = [0.033, 1 / 60, 0.05, 1 / 60, 0.008, 0.02];
+    let simulated = 0;
+    now += 500; updateRace(frames[0], now); simulated += frames[0] * 1000;
+    const ticks = [state.lastTick];
+    frames.slice(1).forEach((dt) => { now += 1000 * dt + 7; updateRace(dt, now); simulated += dt * 1000; ticks.push(state.lastTick); });
+    const wholeSteps = ticks.every((t) => { const k = (t - lightsOut) / step; return Math.abs(k - Math.round(k)) < 1e-6; });
+    const total = ticks[ticks.length - 1] - lightsOut;
+    const stepsOk = wholeSteps && total <= simulated + 1e-6 && total > simulated - step;
     for (let t = 0; t < 900 && !state.resultsQueued; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
     const inResults = state.phase === "results" && raceNow() === state.lastTick && renderClock() === state.lastTick;
     return stepsOk && inResults;

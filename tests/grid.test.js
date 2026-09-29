@@ -1,7 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Grid = require("../grid.js");
-const Career = require("../career.js");
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -49,19 +48,6 @@ test("qualifying: the grid is the times in order; a missing or bad time goes to 
     { id: "e", timeMs: NaN },
   ]);
   assert.deepEqual(order, ["b", "d", "a", "c", "e"]);
-});
-
-test("qualifying points: P1 10, P2 6, P3 4, P4-P10 2, times the difficulty multiplier", () => {
-  assert.deepEqual(Grid.QUALI_POINTS, [10, 6, 4, 2, 2, 2, 2, 2, 2, 2]);
-  assert.deepEqual(Grid.qualifyingAward({ position: 1, difficulty: "legend" }), { points: 10, multiplier: 3, careerPoints: 30 });
-  assert.deepEqual(Grid.qualifyingAward({ position: 4, difficulty: "pro" }), { points: 2, multiplier: 2, careerPoints: 4 });
-  assert.deepEqual(Grid.qualifyingAward({ position: 11, difficulty: "rookie" }), { points: 0, multiplier: 1, careerPoints: 0 });
-});
-
-test("qualifying multipliers match the career's", () => {
-  ["rookie", "pro", "legend"].forEach((d) => {
-    assert.equal(Grid.qualifyingAward({ position: 1, difficulty: d }).multiplier, Career.multiplierFor(d));
-  });
 });
 
 test("qualifying delta at a timing point", () => {

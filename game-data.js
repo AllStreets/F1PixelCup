@@ -44,7 +44,7 @@ const DRIVERS = [
 ];
 
 // Difficulty changes how well the AI drives, not what its cars are made of.
-// On Pro and Legend the rivals run exactly the player's physics; aiPace is 1.
+// On Pro the rivals run exactly the player's physics (aiPace 1); Legend adds a 5% pace edge.
 // Rookie is the only setting that hands out a machinery handicap.
 const DIFFICULTIES = [
   {
@@ -63,13 +63,14 @@ const DIFFICULTIES = [
   },
   {
     // The only setting where rivals are quicker than you rather than just
-    // better drivers: a 4% pace edge on top of a near-perfect racing line.
+    // better drivers: a 5% pace edge on top of a near-perfect racing line.
     // Tuned by simulated laps (tools/checks/grid-check.js): later braking and a
     // longer look ahead than Pro made Legend run wide and lose time, so it
-    // keeps Pro's line and wins on pace and precision -- about 5% quicker than
-    // Pro, which is about 10% quicker than Rookie.
+    // keeps Pro's line and wins on pace and precision: measured 2.5-9.5% quicker
+    // than Pro depending on the circuit (least at Monza, where corners, not
+    // top speed, set the lap), and Pro is 7-15% quicker than Rookie.
     id: "legend", name: "Legend",
-    aiPace: 1.04, brakeBias: 0.62, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
+    aiPace: 1.05, brakeBias: 0.62, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
     lookBase: 76, lookSpeed: 0.52,
   },
 ];

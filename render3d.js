@@ -63,7 +63,18 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, inspect, prepare };
+
+// Build a circuit (geometry, scenery, shaders) ahead of its first frame, so
+// the heavy work happens behind a loading panel instead of mid-countdown.
+function prepare(track) {
+  const world = ensureWorld(track);
+  if (!world.compiled) {
+    renderer.compile(scene, camera);
+    world.compiled = true;
+  }
+  return true;
+}
 
 // What is on screen right now, for the browser checks.
 function inspect() {

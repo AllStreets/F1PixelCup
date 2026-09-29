@@ -43,7 +43,7 @@ async (page) => {
     updateRace(1 / 60, performance.now());
     const hidden = state.boxHiddenUntil[0] > performance.now();
     const rolled = [pl, other].filter((r) => r.rouletteUntil > 0).length === 1;
-    state.boxHiddenUntil[0] = performance.now() - 1;
+    state.boxHiddenUntil[0] = raceNow() - 1;
     return hidden && rolled;
   });
 
@@ -167,7 +167,7 @@ async (page) => {
 
   // Quit mid-race: nothing carries over.
   results.resetClears = await run(() => {
-    state.boxHiddenUntil[0] = performance.now() + 5000;
+    state.boxHiddenUntil[0] = raceNow() + 5000;
     Game.backToPitLane();
     buildCupEntries(); startRace(0);
     return state.shots.length === 0 && state.hazards.length === 0 && state.safetyCar === null
@@ -319,11 +319,12 @@ async (page) => {
       && seen.safetyCar === true && f.shots.length >= 2;
   });
   results.boxesHideIn3D = await run(async () => {
-    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? performance.now() + 3000 : 0));
+    // Box timers are on the race clock, which runs behind the wall clock after pauses.
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? raceNow() + 3000 : 0));
     await new Promise((r) => setTimeout(r, 400));
     const hiddenScale = Render3D.inspect().boxScales[0];
     const otherScale = Render3D.inspect().boxScales[1];
-    state.boxHiddenUntil[0] = performance.now() - 1;
+    state.boxHiddenUntil[0] = raceNow() - 1;
     await new Promise((r) => setTimeout(r, 600));
     return hiddenScale < 0.05 && otherScale > 0.95 && Render3D.inspect().boxScales[0] > 0.95;
   });
@@ -371,7 +372,7 @@ async (page) => {
   await setup();
   results.oilHoldClearedOnBlock = await run(() => {
     const pl = getPlayer();
-    pl.currentItem = "oilSlick"; pl.oilHoldStart = performance.now() - 500; useItem(pl, performance.now(), { trail: true });
+    pl.currentItem = "oilSlick"; pl.oilHoldStart = raceNow() - 500; useItem(pl, raceNow(), { trail: true });
     const shooter = getSortedRacers().find((r) => r.id !== pl.id);
     state.shots.push({ type: "debris", ownerId: shooter.id, d: (pl.trackDistance - PowerUps.TRAIL_GAP + state.track.totalLength) % state.track.totalLength, lat: pl.lat, speed: 0, latVel: 0, targetId: "", targetLat: 0, armedAt: 0, expiresAt: Infinity, age: 0 });
     updateShots(1 / 60, performance.now());
@@ -409,7 +410,7 @@ async (page) => {
   results.stewardFeedHonest = await run(() => {
     const shooter = getSortedRacers()[10];
     const leader = firstUnfinished();
-    leader.protectedUntil = performance.now() + 5000;
+    leader.protectedUntil = raceNow() + 5000;
     shooter.currentItem = "stewardPenalty"; useItem(shooter, performance.now());
     const s = state.shots.find((x) => x.type === "stewardPenalty");
     s.d = leader.trackDistance; s.armedAt = 0;
@@ -420,7 +421,7 @@ async (page) => {
   // While paused the picture freezes too: a hidden box does not grow back on the pause screen.
   await setup();
   results.pauseFreezesPicture = await run(async () => {
-    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? performance.now() + 600 : 0));
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? raceNow() + 600 : 0));
     await new Promise((r) => setTimeout(r, 150));
     togglePause();
     // Stay paused past the box's deadline in wall-clock time.

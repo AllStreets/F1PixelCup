@@ -34,9 +34,10 @@
           <button class="ghost-btn" data-action="settings" type="button">Settings</button>
         </header>
         <div class="pitlane-choices">
-          <div class="choice-row"><span class="choice-label">Cup</span><span id="cup-pills"></span></div>
-          <div class="choice-row"><span class="choice-label">Difficulty</span><span id="difficulty-pills"></span></div>
-          <div class="choice-row"><span class="choice-label">Grid</span><span id="grid-pills"></span></div>
+          <div class="choice-row"><span class="choice-label" id="cup-label">Cup</span><span id="cup-pills" role="group" aria-labelledby="cup-label"></span></div>
+          <div class="choice-row"><span class="choice-label" id="difficulty-label">Difficulty</span><span id="difficulty-pills" role="group" aria-labelledby="difficulty-label"></span></div>
+          <div class="choice-row"><span class="choice-label" id="grid-label">Grid</span><span id="grid-pills" role="group" aria-labelledby="grid-label" aria-describedby="grid-hint"></span></div>
+          <p id="grid-hint" class="choice-hint"></p>
           <ol id="cup-circuits" class="cup-circuits"></ol>
         </div>
         <div class="pitlane-driver">
@@ -70,7 +71,8 @@
         <div class="overlay-card wide">
           <p id="qualifying-kicker" class="kicker"></p>
           <h2 id="qualifying-title" class="it-title overlay-title"></h2>
-          <p class="muted quali-lede">Qualifying classification — this is the starting grid.</p>
+          <p class="muted quali-lede">Qualifying classification — this is the starting grid. Qualifying points count when you finish the race.</p>
+          <p id="qualifying-note" class="quali-note"></p>
           <div id="qualifying-table" class="results-table quali-table"></div>
           <div class="overlay-actions">
             <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
@@ -162,11 +164,14 @@
       <div class="stat"><span>${STAT_LABELS[key]}</span><div class="stat-bar"><i style="width:${Math.round(num(s.stats[key]) * 100)}%"></i></div></div>
     `).join("");
     $("cup-pills").innerHTML = s.cups.map((cup) => `
-      <button class="pill ${cup.index === s.selectedCup ? "is-on" : ""}" data-cup="${cup.index}" type="button">${esc(cup.name)}</button>`).join("");
+      <button class="pill ${cup.index === s.selectedCup ? "is-on" : ""}" data-cup="${cup.index}" type="button" aria-pressed="${cup.index === s.selectedCup}">${esc(cup.name)}</button>`).join("");
     $("difficulty-pills").innerHTML = s.difficulties.map((d) => `
-      <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button">${esc(d.name)}</button>`).join("");
+      <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button" aria-pressed="${d.index === s.selectedDifficulty}">${esc(d.name)}</button>`).join("");
     $("grid-pills").innerHTML = s.gridModes.map((m) => `
-      <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button">${esc(m.name)}</button>`).join("");
+      <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button" aria-pressed="${m.id === s.gridMode}">${esc(m.name)}</button>`).join("");
+    $("grid-hint").textContent = s.gridMode === "qualifying"
+      ? "Before every race: one flying lap sets your grid, and pays career points."
+      : "You start every race last and fight through the field.";
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
@@ -251,6 +256,7 @@
         </div>`).join("")}`;
     renderStrip($("results-career"), summary.career);
     show("results-screen");
+    $("results-next").focus();
   }
 
   function showQualifying(summary) {
@@ -260,12 +266,15 @@
     $("qualifying-table").innerHTML = `
       <div class="result-head quali-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span></div>
       ${summary.rows.map((r) => `
-        <div class="result-row quali-row ${r.isPlayer ? "is-player" : ""} ${r.position === 1 ? "is-pole" : ""}" data-driver="${esc(r.id)}">
+        <div class="result-row quali-row ${r.isPlayer ? "is-player" : ""} ${r.position === 1 ? "is-pole" : ""}" data-id="${esc(r.id)}">
           <b>${esc(ordinal(num(r.position)))}</b><i style="background:${esc(r.teamColor)}"></i>
           <span>${esc(r.name)}</span>
           <span class="r-time">${esc(r.time)}</span><span class="r-gap">${esc(r.gap)}</span>
         </div>`).join("")}`;
+    $("qualifying-note").textContent = summary.note || "";
     show("qualifying-screen");
+    // Keyboard: the race is one Enter away, and Back to pit lane isn't the first stop.
+    $("qualifying-screen").querySelector('[data-action="race"]').focus();
   }
 
   function showPodium(summary) {
@@ -302,6 +311,7 @@
       ["Races", num(totals.races)],
       ["Wins", num(totals.wins)],
       ["Podiums", num(totals.podiums)],
+      ["Poles", num(totals.poles)],
       ["Cups won", `${num(totals.cupsWon)} / ${num(totals.cupsCompleted)}`],
     ];
     $("career-card").innerHTML = `
@@ -315,10 +325,13 @@
         return `<div class="career-best"><span>${esc(c.name)}</span><strong>${best ? esc(lapTime(num(best.ms))) : "—"}</strong></div>`;
       }).join("")}</div>
       <p class="kicker career-section">Recent races</p>
-      ${races.length ? `<table class="career-history"><thead><tr><th>Circuit</th><th>Difficulty</th><th>Pos</th><th>Points</th><th>Rating</th></tr></thead><tbody>
+      ${races.length ? `<table class="career-history"><thead><tr><th>Circuit</th><th>Difficulty</th><th>Grid</th><th>Pos</th><th>Points</th><th>Rating</th></tr></thead><tbody>
         ${races.map((r) => {
           const delta = num(r.ratingAfter) - num(r.ratingBefore);
-          return `<tr><td>${esc(circuitName(r.trackId))}</td><td>${esc(difficultyName(r.difficulty))}</td><td>${esc(ordinal(num(r.position)))}</td><td>+${num(r.careerPointsEarned)}</td>
+          const q = r.qualifying && typeof r.qualifying === "object" ? r.qualifying : null;
+          // Race points plus qualifying points: what the race added to the career total.
+          const earned = num(r.careerPointsEarned) + (q ? num(q.careerPoints) : 0);
+          return `<tr><td>${esc(circuitName(r.trackId))}</td><td>${esc(difficultyName(r.difficulty))}</td><td>${q ? `P${num(q.position)}` : "Back"}</td><td>${esc(ordinal(num(r.position)))}</td><td>+${earned}</td>
             <td class="${delta > 0 ? "up" : delta < 0 ? "down" : ""}">${delta > 0 ? "+" : ""}${delta}</td></tr>`;
         }).join("")}</tbody></table>` : `<p class="muted">No races yet.</p>`}
       <div class="overlay-actions"><button class="ghost-btn" data-action="close" type="button">Back (Esc)</button></div>`;

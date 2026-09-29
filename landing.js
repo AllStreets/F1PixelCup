@@ -67,6 +67,7 @@
       ["Races", num(totals.races)],
       ["Wins", num(totals.wins)],
       ["Podiums", num(totals.podiums)],
+      ["Poles", num(totals.poles)],
       ["Cups won", `${num(totals.cupsWon)} / ${num(totals.cupsCompleted)}`],
     ];
     $("career-summary").innerHTML = `
