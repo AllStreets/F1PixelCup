@@ -58,6 +58,8 @@ const FinishShader = {
     uTime: { value: 0 },
     uGold: { value: 0 },
     uRed: { value: 0 },
+    uRain: { value: 0 },
+    uStreak: { value: 0 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -65,17 +67,52 @@ const FinishShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     uniform vec3 uLift, uGain;
-    uniform float uContrast, uSaturation, uVignette, uAspect, uSunVisible, uFlare, uBlur, uHaze, uTime, uGold, uRed;
+    uniform float uContrast, uSaturation, uVignette, uAspect, uSunVisible, uFlare, uBlur, uHaze, uTime, uGold, uRed, uRain, uStreak;
     uniform vec2 uSun;
     varying vec2 vUv;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    // Rain on the lens: in each cell of a grid, maybe a drop, that lands,
+    // slides down a little and dries; it bends the picture behind it like a
+    // lens. At speed the airflow stretches the drops sideways.
+    vec3 drops(vec2 uv, float scale, float seed) {
+      vec2 g = vec2(uv.x * uAspect, uv.y) * scale;
+      vec2 id = floor(g);
+      vec2 f = fract(g) - 0.5;
+      float h = hash(id + seed);
+      float t = fract(uTime * (0.18 + 0.2 * h) + h * 7.0);
+      vec2 c = (vec2(hash(id + seed + 1.3), hash(id + seed + 2.7)) - 0.5) * 0.6;
+      c.y -= t * 0.35;
+      float r = 0.16 * (0.5 + 0.5 * hash(id + seed + 4.1));
+      // Whole inside its cell (stretched by the airflow too), never cut by its edge.
+      float wide = r * (1.0 + uStreak * 1.5);
+      c = clamp(c, vec2(-0.48 + wide, -0.48 + r), vec2(0.48 - wide, 0.48 - r));
+      vec2 d = f - c;
+      d.x /= 1.0 + uStreak * 1.5;
+      float there = step(h, uRain * 0.5) * (1.0 - t);
+      float drop = smoothstep(r, r * 0.8, length(d)) * there;
+      // In screen units: a drop is a little lens, and turns what is behind
+      // it over (the offset is about its own size); its edge is a dark rim.
+      vec2 offset = d / scale;
+      offset.x /= uAspect;
+      float rim = smoothstep(r * 0.55, r * 0.95, length(d)) * drop;
+      return vec3(offset * drop * 1.8, rim);
+    }
     void main() {
       vec2 uv = vUv;
+      float rim = 0.0;
+      if (uRain > 0.001) {
+        vec3 a = drops(vUv, 7.0, 0.0);
+        vec3 b = drops(vUv, 13.0, 17.0);
+        uv -= a.xy + b.xy;
+        rim = max(a.z, b.z);
+      }
       // Heat haze: a shimmer in the band just above the road's horizon.
       if (uHaze > 0.0) {
         float band = smoothstep(0.38, 0.5, uv.y) * smoothstep(0.66, 0.52, uv.y);
         uv.x += sin(uv.y * 140.0 + uTime * 7.0) * 0.0011 * uHaze * band;
       }
       vec3 col = texture2D(tDiffuse, uv).rgb;
+      col *= 1.0 - rim * 0.18;
       // Speed: a radial blur that only touches the edges of the frame.
       if (uBlur > 0.001) {
         vec2 dir = uv - 0.5;
@@ -274,6 +311,9 @@ export function createPostFx(renderer, scene, camera) {
     u.uBlur.value = Math.min(1, steady + (passes.bursts ? burst.blur * 0.7 : 0));
     u.uGold.value = burst.gold;
     u.uRed.value = burst.red;
+    // Rain on the lens, stretched by the airflow at speed.
+    u.uRain.value = Math.max(0, Math.min(1, frame.rain || 0));
+    u.uStreak.value = speed;
     // Bloom only on real highlights (the sun, the floodlights, the item
     // boxes' glow), in display space: the sky and the white kerbs must not
     // bloom into a veil. Night bloom is only a touch stronger.
@@ -326,6 +366,7 @@ export function createPostFx(renderer, scene, camera) {
       sunVisible,
       sun: { onScreen: sunOnScreen, blocked: sunBlocked, by: sunBlocker },
       blur: finish ? finish.uniforms.uBlur.value : 0,
+      rain: finish ? finish.uniforms.uRain.value : 0,
       // What the effects hold on the GPU: the copied frame's size, or null.
       frame: frameTexture ? { width: frameTexture.image.width, height: frameTexture.image.height } : null,
     }),

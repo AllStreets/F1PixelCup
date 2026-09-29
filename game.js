@@ -114,7 +114,7 @@ function prepareCircuit() {
   const track = TRACKS.find((t) => t.id === job.trackId) || state.track;
   // Not ready yet (its shaders still compiling): ask again next frame. A
   // renderer failure ends the wait (the 2D view takes over).
-  const ready = render3dSafely(() => window.Render3D.prepare(track, state.racers));
+  const ready = render3dSafely(() => window.Render3D.prepare(track, state.racers, state.weather));
   if (ready.ok && ready.value === false) return;
   state.preparing = null;
   state.preparedAt = performance.now();
@@ -3469,7 +3469,7 @@ function drawDriverView(track) {
   const mode = worldView();
   // Timing the field shows its progress in the loading panel, over the circuit.
   const timing = state.phase === "qualifyingSim";
-  if (state.preparing) setViewLoadingText("Building the circuit…");
+  if (state.preparing) setViewLoadingText(state.weather === "wet" ? "Building the circuit… it's raining" : "Building the circuit…");
   else if (!timing) setViewLoadingText("Warming up the car…");
   showViewLoading(mode === "loading" || timing || state.preparing ? "race" : null);
   if (mode === "loading") {
@@ -3495,6 +3495,7 @@ function drawDriverView(track) {
       // fast-forward after the flag.
       racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
       trackside: tracksideFrame(now),
+      weather: state.weather,
     }));
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
@@ -3734,7 +3735,38 @@ function initAudio() {
   rotorGain.connect(audio.master);
   rotorSource.start();
   beat.start();
-  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, convolver, engineGain, feeding: false };
+  // Rain: a steady hiss of drops (the noise with its lows and highs taken
+  // off), and the wet tyres' hiss, brighter and following the speed.
+  const rainSource = ctxA.createBufferSource();
+  rainSource.buffer = makeNoiseBuffer(ctxA, 5);
+  rainSource.loop = true;
+  const rainLow = ctxA.createBiquadFilter();
+  rainLow.type = "highpass";
+  rainLow.frequency.value = 500;
+  const rainHigh = ctxA.createBiquadFilter();
+  rainHigh.type = "lowpass";
+  rainHigh.frequency.value = 5200;
+  const rainGain = ctxA.createGain();
+  rainGain.gain.value = 0;
+  rainSource.connect(rainLow);
+  rainLow.connect(rainHigh);
+  rainHigh.connect(rainGain);
+  rainGain.connect(audio.master);
+  rainSource.start();
+  const hissSource = ctxA.createBufferSource();
+  hissSource.buffer = makeNoiseBuffer(ctxA, 2.3);
+  hissSource.loop = true;
+  const hissFilter = ctxA.createBiquadFilter();
+  hissFilter.type = "bandpass";
+  hissFilter.frequency.value = 2600;
+  hissFilter.Q.value = 0.8;
+  const hissGain = ctxA.createGain();
+  hissGain.gain.value = 0;
+  hissSource.connect(hissFilter);
+  hissFilter.connect(hissGain);
+  hissGain.connect(audio.master);
+  hissSource.start();
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, rain: rainGain, hiss: hissGain, convolver, engineGain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -3859,7 +3891,7 @@ const sfx = {
 // and the crowd's. Kept in state.venueSound (the checks read it).
 function venueSound(player, racing) {
   const track = state.track;
-  const out = { reverb: 0, crowd: 0, hum: 0, helicopter: 0 };
+  const out = { reverb: 0, crowd: 0, hum: 0, helicopter: 0, rain: 0, hiss: 0 };
   if (track && player && racing && window.Venue) {
     // The helicopter flies 400 behind the leader, 260 up and 220 aside:
     // heard faintly when it is near.
@@ -3872,6 +3904,12 @@ function venueSound(player, racing) {
     out.reverb = Venue.reverbAt(player.trackDistance || 0, track.reverbZones, track.totalLength);
     out.crowd = Venue.crowdAt(player.trackDistance || 0, track.crowdStands, track.totalLength);
     out.hum = Venue.FLOODLIT.includes(track.id) ? 1 : 0;
+    if (state.weather === "wet") {
+      // Under the tunnel's roof the rain is shut out, and the road is dry.
+      const covered = track.tunnel ? Venue.reverbAt(player.trackDistance || 0, [track.tunnel], track.totalLength) : 0;
+      out.rain = 1 - covered;
+      out.hiss = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1) * (1 - covered);
+    }
   }
   state.venueSound = out;
   return out;
@@ -3908,6 +3946,8 @@ function updateEngineAudio(player) {
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
     audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05, now, 0.3);
+    audio.venue.rain.gain.setTargetAtTime(venue.rain * 0.045, now, 0.4);
+    audio.venue.hiss.gain.setTargetAtTime(venue.hiss * 0.06, now, 0.1);
   }
 
   if (audio.screech) {
@@ -4374,7 +4414,7 @@ function drawQualifyingHud(track, player) {
   hudPanel(20, 16, 300, 134, "#c77dff");
   ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
   ctx.font = "bold 11px Trebuchet MS";
-  ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING`, 34, 34);
+  ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING${state.weather === "wet" ? " · WET" : ""}`, 34, 34);
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 22px Georgia";
   const label = state.phase === "qualifyingSim" ? "Timing the field…" : state.phase === "qualifyingResults" ? "Session over"
@@ -4418,7 +4458,7 @@ function drawDriverHud(track, player) {
   hudPanel(20, 16, 262, 116, placeStyle.fill);
   ctx.fillStyle = "rgba(255, 240, 201, 0.62)";
   ctx.font = "bold 11px Trebuchet MS";
-  ctx.fillText(track.name.toUpperCase(), 34, 34);
+  ctx.fillText(`${track.name.toUpperCase()}${state.weather === "wet" ? " · WET" : ""}`, 34, 34);
 
   ctx.fillStyle = "rgba(255, 240, 201, 0.6)";
   ctx.font = "bold 12px Trebuchet MS";

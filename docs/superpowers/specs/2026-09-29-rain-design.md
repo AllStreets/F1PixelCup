@@ -9,7 +9,7 @@ The pit lane gets a **Weather** row next to Grid:
 - **Wet**: every race of the cup is wet;
 - **Changeable**: each race has a one-in-three chance of rain.
 
-The choice is kept like the grid choice (`f1pixelcup.weather`) and is fixed for the cup once it starts. Changeable is decided per race and is seeded by the cup run and the race index. So the same cup attempt always has the same weather, and a restart of the page mid-cup can't reroll it. The feed says when a race is wet ("Rain at Spa: the grip is down."). The race's weather also shows in the loading panel and on the timing tower's header.
+The choice is kept like the grid choice (`f1pixelcup.weather`) and is fixed for the cup once it starts. Changeable is decided per race and is seeded by the cup run and the race index. So the same cup attempt always has the same weather, and a restart of the page mid-cup can't reroll it. The feed says when a race is wet ("Rain at Spa: the grip is down."). The race's weather also shows in the loading panel ("Building the circuit… it's raining") and on the lap panel ("MONZA · WET").
 
 ## The physics (`weather.js`, pure, UMD like `marshals.js`)
 
@@ -33,13 +33,13 @@ The physics was pure yaw. Heading turned by steer × turn rate, and nothing limi
 Everything is quality-tiered, and all of it is off in a dry race.
 
 - **Wet road.**
-  - The track's tarmac, the pit lane and the run-off get lower roughness (0.85 becomes 0.28) and a darker albedo. The sky is then reflected in the road through the scene's environment.
+  - The track's tarmac, the pit lane and the run-off get lower roughness (0.85 becomes 0.28) and a darker albedo. The road then takes a sheen: it catches the veiled sun, as a glare below it, and the scene's (neutral) environment light. The white lines and the grass or city ground are wettable too, less so.
   - The kerbs and paint get lower roughness too.
   - The dry values are kept, and a dry race restores them.
-- **Overcast.** In the wet the sun is dimmer (× 0.45), the sky and fog are greyed and the fog comes in closer. It reads as rain, not night; night circuits keep their night.
+- **Overcast.** In the wet the sun is dimmer (× 0.3), the sky and fog are greyed and the fog comes in closer. It reads as rain, not night; night circuits keep their night.
 - **Rain.** Streaks fall in a box that moves with the camera (`THREE.LineSegments`), slanted by the car's speed. Counts are 5000 on High, 2500 on Medium and 1000 on Low.
-- **Spray.** A rooster tail rises from each rear wheel, at the real wheel positions from the car model. It scales with the car's speed, and the cars near the camera get the most. It is a pooled `THREE.Points` system (sizes by tier; none on Low).
-- **Droplets on the camera.** In the post-FX finish pass, procedural drops refract the frame, and they streak sideways with speed. On High and Medium (Low has no effects pass).
+- **Spray.** A rooster tail rises from each rear wheel, at the real wheel positions from the car model. It scales with the car's speed above 45, and only cars within 900 of the camera throw it. It is a pooled `THREE.Points` system: 1400 particles on High, 700 on Medium, none on Low.
+- **Droplets on the camera.** In the post-FX finish pass, procedural drops land, slide down and dry. Each one is a small lens that turns the picture behind it over, with a faint dark rim, and the airflow stretches them sideways at speed. They clear in the tunnel. On High and Medium (Low has no effects pass).
 
 ## How it sounds
 

@@ -15,6 +15,7 @@ import {
   color, seeded, hashString, photo, canvasTexture, makeKerbTexture, makeCheckerTexture,
   makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture, buildingMaterial, luminance,
 } from "./textures.js";
+import { wettable, WET_ROAD, WET_RUNOFF, WET_GRAVEL, WET_PAINT } from "./rain.js";
 
 export const SAMPLE_STEP = 6;
 export const BRIDGE_HEIGHT = 26;
@@ -429,14 +430,14 @@ export function buildCircuit(course, venue) {
   group.userData.occluders = occluders;
 
   // Run-off: concrete pavement in town, paved run-off elsewhere.
-  const runoffMat = course.street
+  const runoffMat = wettable(course.street
     ? new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 1, 1), color: color("#b8b4ac"), roughness: 0.95, side: THREE.DoubleSide })
-    : new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 1, 1), color: color(venue.runoffTint || "#9aa0a0"), roughness: 0.95, side: THREE.DoubleSide });
+    : new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 1, 1), color: color(venue.runoffTint || "#9aa0a0"), roughness: 0.95, side: THREE.DoubleSide }), WET_RUNOFF);
   mesh(ribbon(samples, L, R, 0.03, 70), runoffMat);
 
   // Gravel traps on the outside of the corners, for circuits that have them.
   if (!course.street) {
-    const gravelMat = new THREE.MeshStandardMaterial({ map: photo("gravel_road", 1, 1), color: color(venue.gravelTint || "#d8cbb0"), roughness: 1, side: THREE.DoubleSide });
+    const gravelMat = wettable(new THREE.MeshStandardMaterial({ map: photo("gravel_road", 1, 1), color: color(venue.gravelTint || "#d8cbb0"), roughness: 1, side: THREE.DoubleSide }), WET_GRAVEL);
     // curve > 0 turns towards +n, so the outside is -n (left).
     const outsideLeft = (p, i) => kerbOn[i] && p.curve > 0.0015 && p.outerL > width + 24;
     const outsideRight = (p, i) => kerbOn[i] && p.curve < -0.0015 && p.outerR > width + 24;
@@ -445,11 +446,12 @@ export function buildCircuit(course, venue) {
   }
 
   // Tarmac.
-  const road = new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color(bg.road, "#484850").lerp(new THREE.Color(0xffffff), 0.45), roughness: 0.85, side: THREE.DoubleSide });
+  const road = wettable(new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color(bg.road, "#484850").lerp(new THREE.Color(0xffffff), 0.45), roughness: 0.85, side: THREE.DoubleSide }), WET_ROAD);
+  road.userData.surface = "road";
   mesh(ribbon(samples, c(-width), c(width), 0.14, 60), road);
 
   // Edge lines.
-  const lineMat = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide });
+  const lineMat = wettable(new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide }), WET_PAINT);
   mesh(ribbon(samples, c(-width), c(-width + 2.2), 0.18, 50), lineMat);
   mesh(ribbon(samples, c(width - 2.2), c(width), 0.18, 50), lineMat);
 
@@ -581,7 +583,7 @@ function buildPitLane(course, lane, occluders) {
   // Tarmac: from the lane's inner edge out to the working lane, and right up
   // to the garage doors in front of them. In the mouths it runs under the
   // road (which sits higher), so it meets the road without a seam.
-  const tarmac = new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color("#6a6a70"), roughness: 0.9, side: THREE.DoubleSide });
+  const tarmac = wettable(new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color("#6a6a70"), roughness: 0.9, side: THREE.DoubleSide }), WET_ROAD);
   const reach = (p) => (lane.atGarage(p.d, 4) ? lane.garages.front : lane.outerAt(p.d));
   add(ribbon(samples, (p) => side * (Math.abs(lane.latAt(p.d)) - lane.laneHalf), (p) => side * reach(p), 0.1, 60, inZone), tarmac);
   // Lines. The lane's inner edge, from the road's edge where the lane leaves

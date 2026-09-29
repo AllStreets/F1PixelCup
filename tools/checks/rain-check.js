@@ -122,6 +122,48 @@ async (page) => {
     return ok || JSON.stringify(out);
   });
 
+  // A wet race looks and sounds wet; a dry one doesn't; Low keeps the rain
+  // and drops the spray and the lens.
+  const race = async (weather, tier) => {
+    await step(({ weather, tier }) => {
+      Render3D.setGraphics(tier);
+      Game.backToPitLane();
+      Game.selectCup(0);
+      Game.selectGridMode("back");
+      Game.selectWeatherMode(weather);
+      Game.startCup();
+    }, { weather, tier });
+    await p.waitForFunction(() => state.phase === "race" && !state.preparing, null, { timeout: 30000 });
+    await step(() => { input.throttle = true; });
+    await p.waitForTimeout(4500);
+    const seen = await step(() => ({
+      ...Render3D.inspect().weather,
+      lens: Render3D.inspect().postfx.rain,
+      rainGain: audio.venue ? audio.venue.rain.gain.value : null,
+      hissGain: audio.venue ? audio.venue.hiss.gain.value : null,
+      feed: state.feed.map((f) => f.message).join(" | "),
+    }));
+    await step(() => { input.throttle = false; });
+    return seen;
+  };
+  const wetHigh = await race("wet", "high");
+  const dryHigh = await race("dry", "high");
+  const wetLow = await race("wet", "low");
+  results.wetLooks = (wetHigh.wet && wetHigh.roadRoughness < 0.35 && wetHigh.streaks === 5000 && wetHigh.spray > 50
+    && wetHigh.lens > 0.5 && wetHigh.rainGain > 0.01 && wetHigh.hissGain > 0.01 && /Rain at/.test(wetHigh.feed))
+    || JSON.stringify(wetHigh);
+  results.dryIsDry = (!dryHigh.wet && dryHigh.roadRoughness > 0.8 && dryHigh.streaks === 0 && dryHigh.spray === 0
+    && dryHigh.lens === 0 && dryHigh.rainGain < 0.002 && dryHigh.hissGain < 0.002 && dryHigh.sunIntensity > wetHigh.sunIntensity * 2)
+    || JSON.stringify(dryHigh);
+  results.lowTiered = (wetLow.wet && wetLow.streaks === 1000 && wetLow.spray === 0) || JSON.stringify(wetLow);
+
+  // Nothing new stands over the track.
+  results.sceneryClear = await step(() => {
+    const bad = TRACKS.filter((t) => Render3D.auditScenery(t).length > 0).map((t) => t.id);
+    return bad.length === 0 || bad.join();
+  });
+  await step(() => { Game.backToPitLane(); Game.selectWeatherMode("dry"); Render3D.setGraphics("auto"); });
+
   await context.close();
   return { results, errors };
 }
