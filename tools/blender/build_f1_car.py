@@ -19,8 +19,8 @@ The colours below are linear values, tuned by eye on the car as it renders;
 the game recolours the livery and paints the helmet itself. (The power-up
 models in build_items.py are written as sRGB instead, to match their icons.)
 
-The script clears the scene first, so it refuses to run in a saved .blend
-file unless F1_BUILD_FORCE=1 is set.
+The script clears the scene first, so it refuses to run over any work (a
+saved .blend, or unsaved changes) unless F1_BUILD_FORCE=1 is set.
 """
 import bpy
 import bmesh
@@ -31,8 +31,8 @@ OUT = os.environ.get("F1_CAR_OUT", "")
 
 
 def reset():
-    if bpy.data.filepath and os.environ.get("F1_BUILD_FORCE") != "1":
-        raise RuntimeError(f"build_f1_car.py clears the scene; {bpy.data.filepath} is open. Use a new file, or set F1_BUILD_FORCE=1.")
+    if (bpy.data.filepath or bpy.data.is_dirty) and os.environ.get("F1_BUILD_FORCE") != "1":
+        raise RuntimeError("build_f1_car.py clears the scene, and this one has work in it (saved or not). Use a new file, or set F1_BUILD_FORCE=1.")
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.curves):
@@ -342,9 +342,45 @@ for v in bm.verts:
 helmet = link("helmet", bm, "helmet")
 for p in helmet.data.polygons:
     p.use_smooth = True
-# The rear spoiler on top: in the helmet's material (the painter's crown colour).
-spoiler = wing("helmet_spoiler", -0.20, 0.872, 0.13, 0.07, 0.012, material="helmet", pitch=0.18)
-# Its UVs all point at the top of the painted design, so it wears the crown colour.
+# The rear spoiler: a lip moulded to the top back of the shell. Its underside
+# follows the shell (sunk a hair into it), and it thickens toward the trailing
+# edge, as the real ones do.
+def shell_z(x, y):
+    k = 1 - ((x + 0.12) / 0.151) ** 2 - (y / 0.135) ** 2
+    return 0.74 + 0.135 * math.sqrt(max(k, 0.0))
+
+
+bm = bmesh.new()
+NX, NY = 8, 7
+X0, X1, HALF_SPAN = -0.168, -0.215, 0.058
+grid = {}
+for i in range(NX):
+    x = X0 + (X1 - X0) * i / (NX - 1)
+    lift = 0.002 + 0.008 * (i / (NX - 1)) ** 1.5
+    for j in range(NY):
+        y = -HALF_SPAN + 2 * HALF_SPAN * j / (NY - 1)
+        # Taper toward the ends of the span.
+        t = lift * (1 - 0.6 * abs(y) / HALF_SPAN)
+        zb = shell_z(x, y) - 0.003
+        grid[(i, j, 0)] = bm.verts.new((x, y, zb))
+        grid[(i, j, 1)] = bm.verts.new((x, y, zb + t + 0.003))
+for i in range(NX - 1):
+    for j in range(NY - 1):
+        bm.faces.new((grid[(i, j, 1)], grid[(i + 1, j, 1)], grid[(i + 1, j + 1, 1)], grid[(i, j + 1, 1)]))
+        bm.faces.new((grid[(i, j, 0)], grid[(i, j + 1, 0)], grid[(i + 1, j + 1, 0)], grid[(i + 1, j, 0)]))
+for i in range(NX - 1):
+    for j in (0, NY - 1):
+        bm.faces.new((grid[(i, j, 0)], grid[(i + 1, j, 0)], grid[(i + 1, j, 1)], grid[(i, j, 1)]))
+for j in range(NY - 1):
+    for i in (0, NX - 1):
+        bm.faces.new((grid[(i, j, 0)], grid[(i, j, 1)], grid[(i, j + 1, 1)], grid[(i, j + 1, 0)]))
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+spoiler = link("helmet_spoiler", bm, "helmet")
+for p in spoiler.data.polygons:
+    p.use_smooth = True
+# Every spoiler UV points at (0.25, 0.98) -- v = 0.02 once in glTF, the top rows
+# of the painted design at x = 64 -- which every motif paints in the crown
+# colour; so the spoiler wears the crown colour. A new motif must keep that.
 uv = spoiler.data.uv_layers.new(name="UVMap")
 for loop in uv.data:
     loop.uv = (0.25, 0.98)

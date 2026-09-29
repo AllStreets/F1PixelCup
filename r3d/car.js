@@ -146,12 +146,32 @@ const materialCache = new Map();
 // middle, y down from the crown. Original art in the driver's colours.
 // ---------------------------------------------------------------------------
 
+// The design is drawn on a 256 x 128 plan and painted at twice that, 512 x 256,
+// so close-ups stay crisp.
 const HELMET_W = 256;
 const HELMET_H = 128;
-// Where the checks read the design back: the crown colour near the top, the
-// base colour low on the side. Every motif keeps those two points.
-export const HELMET_SAMPLES = { crown: [64, 6], base: [64, 100], visor: [128, 57] };
+const HELMET_RES = 2;
+// Where the checks read the design back (plan coordinates): the crown near the
+// top, the base low on the side and the visor at the front, which every motif
+// keeps; and a point on each motif's stripe.
+export const HELMET_SAMPLES = {
+  crown: [64, 6], base: [64, 100], visor: [128, 57],
+  stripe: { band: [64, 44], crown: [64, 31], split: [53, 77], flash: [58, 58], tricolore: [64, 40] },
+};
 const helmetTextures = new Map();
+const helmetKey = (driver) => driver.id || driver.name;
+
+// A rounded rectangle, drawn by hand (canvas roundRect is too new for some
+// browsers that run the game).
+function roundedRect(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
 
 function paintHelmet(g, h) {
   const W = HELMET_W;
@@ -170,6 +190,8 @@ function paintHelmet(g, h) {
   };
   switch (h.motif) {
     case "band":
+      // A crown cap, a wide band at visor height with a pinstripe above it and
+      // a thinner one below.
       g.fillStyle = h.crown;
       g.fillRect(0, 0, W, 22);
       g.fillRect(0, 50, W, 22);
@@ -178,10 +200,11 @@ function paintHelmet(g, h) {
       g.fillRect(0, 75, W, 3);
       break;
     case "crown":
+      // A cap on top, the base colour carrying the rest of the helmet.
       g.fillStyle = h.crown;
-      g.fillRect(0, 0, W, 48);
+      g.fillRect(0, 0, W, 28);
       g.fillStyle = h.stripe;
-      g.fillRect(0, 48, W, 7);
+      g.fillRect(0, 28, W, 6);
       break;
     case "split":
       // Behind a diagonal from the top of the visor to the back of the neck,
@@ -192,6 +215,7 @@ function paintHelmet(g, h) {
       sides((at) => poly(h.stripe, [[at(44), 26], [at(58), 26], [at(106), 128], [at(92), 128]]));
       break;
     case "flash":
+      // A crown cap, then the flash.
       g.fillStyle = h.crown;
       g.fillRect(0, 0, W, 20);
       // A swept flash from the visor back to the neck, on each side.
@@ -212,12 +236,10 @@ function paintHelmet(g, h) {
   // design as a real one does, with a thin rubber seal and a sky highlight.
   const vx = front - 38;
   g.fillStyle = "#0b0b0e";
-  g.beginPath();
-  g.roundRect(vx - 2, 48, 80, 17, 7);
+  roundedRect(g, vx - 2, 48, 80, 17, 7);
   g.fill();
   g.fillStyle = h.visor;
-  g.beginPath();
-  g.roundRect(vx, 50, 76, 13, 6);
+  roundedRect(g, vx, 50, 76, 13, 6);
   g.fill();
   g.fillStyle = "rgba(255, 255, 255, 0.2)";
   g.fillRect(vx + 10, 51.5, 56, 2);
@@ -227,10 +249,13 @@ function paintHelmet(g, h) {
 }
 
 function helmetTexture(driver) {
-  const key = driver.id || driver.name;
+  const key = helmetKey(driver);
   if (!helmetTextures.has(key)) {
     const h = driver.helmet || { base: driver.color || "#ffffff", crown: driver.accent || "#ffffff", stripe: "#111111", visor: "#10141c", motif: "crown" };
-    const tex = canvasTexture(HELMET_W, HELMET_H, (g) => paintHelmet(g, h), { repeat: false });
+    const tex = canvasTexture(HELMET_W * HELMET_RES, HELMET_H * HELMET_RES, (g) => {
+      g.scale(HELMET_RES, HELMET_RES);
+      paintHelmet(g, h);
+    }, { repeat: false });
     // The model's UVs run v = 0 at the crown, which is the canvas's top row as drawn.
     tex.flipY = false;
     helmetTextures.set(key, tex);
@@ -241,9 +266,22 @@ function helmetTexture(driver) {
 // What a driver's helmet is painted with, read back from the canvas (for the checks).
 export function helmetInfo(driver) {
   const tex = helmetTexture(driver);
-  const g = tex.image.getContext("2d");
-  const at = ([x, y]) => `#${[...g.getImageData(x, y, 1, 1).data.slice(0, 3)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
-  return { painted: true, textureId: tex.uuid, crown: at(HELMET_SAMPLES.crown), base: at(HELMET_SAMPLES.base), visor: at(HELMET_SAMPLES.visor) };
+  const c = tex.image;
+  // One read of the whole canvas; samples are taken from it.
+  const pixels = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+  const at = ([x, y]) => {
+    const i = (Math.round(y * HELMET_RES) * c.width + Math.round(x * HELMET_RES)) * 4;
+    return `#${[pixels[i], pixels[i + 1], pixels[i + 2]].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  };
+  // A fingerprint of the whole design, so two helmets can be told apart.
+  let hash = 0;
+  for (let i = 0; i < pixels.length; i += 16) hash = (hash * 31 + pixels[i] + pixels[i + 1] * 7 + pixels[i + 2] * 13) >>> 0;
+  const motif = driver.helmet ? driver.helmet.motif : "crown";
+  return {
+    painted: true, textureId: tex.uuid, hash,
+    crown: at(HELMET_SAMPLES.crown), base: at(HELMET_SAMPLES.base), visor: at(HELMET_SAMPLES.visor),
+    stripe: at(HELMET_SAMPLES.stripe[motif]),
+  };
 }
 
 export function loadCar(onReady, onError) {
@@ -349,5 +387,10 @@ export function buildCar(kart, driver) {
   glow.visible = false;
   root.add(glow);
 
-  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, helmet: { driverId: driver.id, textureId: helmetTexture(driver).uuid } };
+  // Which painted helmet this car really wears: read off its own material.
+  let worn = null;
+  model.traverse((node) => {
+    if (node.isMesh && !worn) (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => { if (m.name === "helmet" && m.map) worn = m.map.uuid; });
+  });
+  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, helmet: { driverId: helmetKey(driver), textureId: worn } };
 }

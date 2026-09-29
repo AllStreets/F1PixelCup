@@ -119,10 +119,15 @@ test("every driver has a helmet design: valid colours, a known motif, no two ali
     assert.ok(h, `${d.id} has a helmet`);
     ["base", "crown", "stripe", "visor"].forEach((k) => assert.match(h[k], HEX, `${d.id}.${k}`));
     assert.ok(MOTIFS.includes(h.motif), `${d.id} motif ${h.motif}`);
-    const key = [h.base, h.crown, h.stripe, h.motif].join("|").toLowerCase();
-    assert.ok(!seen.has(key), `${d.id} repeats another driver's helmet`);
-    seen.add(key);
+    seen.add(d.id);
   });
+  // Told apart on track: no two drivers close in both base and crown colour.
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const dist = (a, b) => Math.hypot(...rgb(a).map((v, i) => v - rgb(b)[i]));
+  Data.DRIVERS.forEach((a, i) => Data.DRIVERS.slice(i + 1).forEach((b) => {
+    const apart = dist(a.helmet.base, b.helmet.base) + dist(a.helmet.crown, b.helmet.crown);
+    assert.ok(apart > 120, `${a.id} and ${b.id} helmets are too alike (${Math.round(apart)})`);
+  }));
   // The two favourites are told apart at a glance.
   const lec = Data.DRIVERS.find((d) => d.id === "leclerc").helmet;
   const ham = Data.DRIVERS.find((d) => d.id === "hamilton").helmet;

@@ -13,36 +13,38 @@ The user wants the driver helmets "more accurate and realistic". Today every hel
 
   | Motif | Shape |
   |---|---|
-  | `band` | a wide band round the helmet at visor height, and a thin pinstripe above it |
-  | `crown` | the top of the helmet in the crown colour, with a stripe where it meets the base |
+  | `band` | a crown cap, then a wide band at visor height with a pinstripe above it and a thinner one below |
+  | `crown` | a cap on top (about 40° down) in the crown colour, with a stripe where it meets the base; the base colour carries the rest of the helmet |
   | `split` | front and back in two colours, split by a diagonal stripe |
-  | `flash` | a swept flash along each side, from the visor back to the neck |
+  | `flash` | a crown cap, then a swept flash along each side, from the visor back to the neck |
   | `tricolore` | three bands across the top: crown, base, stripe |
 
 ## The sheet (2025)
 
+No two drivers are close in both base and crown colour: the RGB distances of the bases plus the crowns must exceed 120, so every pair can be told apart on track. This was revised after review, which had found Russell, Tsunoda and Lawson nearly alike. Hülkenberg, Hadjar, Piastri, Doohan, Ocon and Gasly changed to meet the rule.
+
 | Driver | Base | Crown | Stripe | Motif |
 |---|---|---|---|---|
-| Verstappen | `#0f1a3c` navy | `#ff6a13` orange | `#e10600` red | `flash` |
-| Lawson | `#111111` black | `#ffffff` white | `#1e41b2` blue | `crown` |
-| Leclerc | `#ffffff` white | `#d40000` red | `#0b1e4d` navy | `band` |
-| Hamilton | `#ffd400` yellow | `#d40000` red | `#111111` black | `crown` |
-| Norris | `#e4ff1a` neon yellow | `#1c1c1c` black | `#00a3e0` blue | `flash` |
-| Piastri | `#0b1e4d` navy | `#ff8000` papaya | `#ffffff` white | `band` |
-| Russell | `#111111` black | `#ffffff` white | `#00c5b5` teal | `split` |
-| Antonelli | `#ffffff` white | `#009246` green | `#ce2b37` red | `tricolore` |
-| Alonso | `#1a3a8f` blue | `#ffd100` yellow | `#d40000` red | `flash` |
-| Stroll | `#ffffff` white | `#111111` black | `#d40000` red | `crown` |
-| Gasly | `#ffffff` white | `#0f2a6b` navy | `#3fa9f5` light blue | `split` |
-| Doohan | `#0a3d91` blue | `#ffd100` yellow | `#ffffff` white | `band` |
-| Albon | `#1d4ed8` blue | `#ffffff` white | `#e10600` red | `crown` |
-| Sainz | `#d40000` red | `#ffd100` yellow | `#0b1e4d` navy | `flash` |
-| Bearman | `#111111` black | `#ffd400` yellow | `#ffffff` white | `band` |
-| Ocon | `#0f2a6b` navy | `#ffffff` white | `#e10600` red | `tricolore` |
-| Tsunoda | `#111111` black | `#ffffff` white | `#e10600` red | `split` |
-| Hadjar | `#ffffff` white | `#1d4ed8` blue | `#e10600` red | `band` |
-| Hülkenberg | `#ffffff` white | `#111111` black | `#ffcc00` yellow | `flash` |
-| Bortoleto | `#009c3b` green | `#ffdf00` yellow | `#002776` blue | `crown` |
+| Verstappen | `#0f1a3c` | `#ff6a13` | `#e10600` | `flash` |
+| Lawson | `#111111` | `#ffffff` | `#1e41b2` | `crown` |
+| Leclerc | `#ffffff` | `#d40000` | `#0b1e4d` | `band` |
+| Hamilton | `#ffd400` | `#d40000` | `#111111` | `crown` |
+| Norris | `#e4ff1a` | `#1c1c1c` | `#00a3e0` | `flash` |
+| Piastri | `#ff8000` | `#0b1e4d` | `#ffffff` | `band` |
+| Russell | `#111111` | `#00c5b5` | `#ffffff` | `split` |
+| Antonelli | `#ffffff` | `#009246` | `#ce2b37` | `tricolore` |
+| Alonso | `#1a3a8f` | `#ffd100` | `#d40000` | `flash` |
+| Stroll | `#ffffff` | `#111111` | `#d40000` | `crown` |
+| Gasly | `#ffffff` | `#3fa9f5` | `#0f2a6b` | `split` |
+| Doohan | `#ffd100` | `#0a3d91` | `#ffffff` | `band` |
+| Albon | `#1d4ed8` | `#ffffff` | `#e10600` | `crown` |
+| Sainz | `#d40000` | `#ffd100` | `#0b1e4d` | `flash` |
+| Bearman | `#111111` | `#ffd400` | `#ffffff` | `band` |
+| Ocon | `#e10600` | `#ffffff` | `#0f2a6b` | `tricolore` |
+| Tsunoda | `#111111` | `#e10600` | `#ffffff` | `split` |
+| Hadjar | `#5ab4ff` | `#ffffff` | `#0f2a6b` | `band` |
+| Hülkenberg | `#ffffff` | `#ffcc00` | `#111111` | `flash` |
+| Bortoleto | `#009c3b` | `#ffdf00` | `#002776` | `crown` |
 
 Every visor is dark smoked (`#10141c`), except Norris (`#1b3a5c`, blue mirror) and Hamilton (`#3a2a0a`, gold mirror).
 
@@ -51,30 +53,34 @@ Every visor is dark smoked (`#10141c`), except Norris (`#1b3a5c`, blue mirror) a
 `tools/blender/build_f1_car.py` gets a proper helmet in place of today's plain sphere:
 - **The shell** is a slightly long egg with a flatter chin and a skirt at the neck, with equirectangular UVs (`calc_uvs`). The seam sits at the back, under the spoiler.
 - **The visor** is painted onto the shell: a slot across the front at eye level, in the driver's visor tint, with a dark seal and a highlight. The old separate visor mesh sat mostly inside the shell and showed as a small black wedge. Painted, it follows the shell exactly and cuts through the design as a real visor does.
-- **The rear spoiler** is the small wing on top at the back of modern F1 helmets, in the crown colour.
+- **The rear spoiler** is a lip moulded to the top back of the shell, in the crown colour. Its underside follows the shell, and it thickens toward the trailing edge. `tests/car-model.test.js` reads the GLB and fails if anything on the helmet stands more than its thickness off the shell.
 
 The material is `helmet`, for the shell and spoiler. The spoiler's UVs point at the crown row, so it wears the crown colour. The `visor` material is gone.
 
 ## Painting
 
-`r3d/car.js` paints a 256 × 128 canvas per driver:
+`r3d/car.js` paints a canvas per driver: a 256 × 128 plan, painted at 512 × 256 for crisp close-ups.
 - x is the angle round the head, with the front at u = 0.5;
 - y is the height, with the crown at the top.
 
 The canvas is used as the helmet material's `map` (`flipY` off, to match the UVs), with a glossy finish, cached per driver. The checks read colours back at fixed points, which every motif keeps:
 - the crown at (64, 6);
 - the base at (64, 100);
-- the visor at (128, 57).
+- the visor at (128, 57);
+- a point on each motif's stripe.
 
-The 2D fallback car (`game.js`) draws the helmet from the same data: the base with a crown cap and a stripe.
+The 2D fallback car (`game.js`, `drawKartRear`) draws the helmet from the same data, over the rear wing: the base with a crown cap (a thin stripe doesn't read at that size).
 
 ## Tests
 
 - **Node** (`tests/game-data.test.js`): all 20 drivers have a helmet with valid hex colours and a known motif, and no two drivers share the same base, crown, stripe and motif.
-- **Browser** (`tools/checks/helmet-check.js`):
+- **Browser** (`tools/checks/helmet-check.js`), with a stripe sample per motif and a fingerprint of the whole design:
   - every driver's car helmet material has a map, one texture per driver;
   - the colour sampled at the crown and at the base matches the data;
-  - Leclerc's and Hamilton's helmets differ.
+  - Leclerc's and Hamilton's helmets differ (every design does);
+  - the car on track wears its driver's texture, read off its own material;
+  - rendered pixels: from behind, the top of Hamilton's helmet is his crown colour; from the front, the visor is dark. An upside-down texture fails both;
+  - the 2D fallback car shows the crown and base over its rear wing.
 - **Screenshots:** close-ups of Leclerc, Hamilton, Verstappen, Norris and Alonso in the showroom.
 
 The close-ups of Leclerc, Hamilton, Verstappen, Norris, Alonso and Russell are in `docs/superpowers/specs/assets/2026-09-29-helmets.png`.

@@ -142,13 +142,16 @@ Stage C shipped with its fresh review fixed: 5 Important and 18 Minor findings, 
 - [x] Write a spec, with a helmet-reference sheet for all 20 of the 2025 drivers (`docs/superpowers/specs/2026-09-29-helmets-design.md`).
   - It gives each driver's base colours, the main motif and its placement.
   - The designs are original art *inspired by* each design: no logos, sponsor marks or copied photos.
-- [ ] Add a `helmet` data block per driver in `game-data.js`: base, stripe, crown and visor colours, and a motif id.
-- [ ] Update `tests/game-data.test.js`: all 20 drivers have a valid helmet spec.
-- [ ] Update `tools/blender/build_f1_car.py` and `assets/f1_car.glb`: a better helmet shape (shell, visor and peak), with UV areas for the livery.
-- [ ] `r3d/car.js`: paint each driver's helmet design with a canvas texture on the helmet material, replacing today's flat `driver.color`.
-- [ ] Update the 2D fallback helmet (`game.js` around line 3176) to match.
-- [ ] Browser check: each driver's helmet material carries its own texture, and the colours match the data.
-- [ ] Take close-up screenshots of Leclerc, Hamilton, Verstappen, Norris and Alonso in the showroom or pit lane. Review, merge, push.
+- [x] Add a `helmet` data block per driver in `game-data.js`: base, stripe, crown and visor colours, and a motif id.
+- [x] Update `tests/game-data.test.js`: all 20 drivers have a valid helmet spec.
+- [x] Update `tools/blender/build_f1_car.py` and `assets/f1_car.glb`: a better helmet shape (shell, visor and peak), with UV areas for the livery.
+- [x] `r3d/car.js`: paint each driver's helmet design with a canvas texture on the helmet material, replacing today's flat `driver.color`.
+- [x] Update the 2D fallback helmet (`game.js` around line 3176) to match.
+- [x] Browser check: each driver's helmet material carries its own texture, and the colours match the data.
+- [x] Take close-up screenshots of Leclerc, Hamilton, Verstappen, Norris and Alonso in the showroom or pit lane. Review, merge, push.
+
+
+Stage D shipped with its fresh review fixed: 7 Important and 9 Minor findings, all fixed. A ruling: the car's existing material values are linear by design, and are documented in `build_f1_car.py`.
 
 ## Stage E — Website: the 2025 grid, properly (roadmap stage 5)
 
