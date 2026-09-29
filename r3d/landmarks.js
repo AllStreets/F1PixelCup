@@ -5,6 +5,7 @@
 // placed. Nothing here can end up on the track.
 
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, seeded, hashString, canvasTexture, buildingMaterial, photo } from "./textures.js";
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
 
@@ -103,52 +104,70 @@ const TEAM_COLOURS = ["#1e41b2", "#dc0000", "#ff8000", "#00d2be", "#006f62", "#0
 
 // The garages, behind the pit lane's working lane (pitlane.js): one bay per
 // team and the Safety Car's by the exit, following the lane round, with the
-// hospitality floor above and the circuit's name on the front.
+// hospitality floor above and the circuit's name on the front. Everything
+// stays within the garages' depth, and all bays share one mesh per material
+// (a frame per team colour).
 function garages(course, group, venue) {
   const lane = course.pitLane;
   if (!lane) return;
   const { garages: g } = lane;
   const side = lane.side;
-  // Each bay is a straight box on a lane that may curve: its front stands 4
-  // back from the working lane, so its corners never reach over it.
-  const front = g.inner + 4;
+  const front = g.front;
   const depth = g.outer - front;
   const mid = (front + g.outer) / 2;
   const wing = venue.pit === "wing";
-  const shell = std(0xd9d9dd);
-  const glass = std(0x5f7f9f, { metalness: 0.6, roughness: 0.15, emissive: venue.night ? 0x886644 : 0x000000, emissiveIntensity: 0.5 });
-  const inside = std(0x1c1d22, { roughness: 0.9 });
-  // Light roofs, short of white: the sun on white would bloom to a glare.
-  const roofMat = std(wing ? 0xdadade : 0xcfd0d4, { roughness: 0.55 });
+  const mats = {
+    shell: std(0xd9d9dd),
+    glass: std(0x5f7f9f, { metalness: 0.6, roughness: 0.15, emissive: venue.night ? 0x886644 : 0x000000, emissiveIntensity: 0.5 }),
+    inside: std(0x1c1d22, { roughness: 0.9 }),
+    // Light roofs, short of white: the sun on white would bloom to a glare.
+    roof: std(wing ? 0xdadade : 0xcfd0d4, { roughness: 0.55 }),
+  };
+  const parts = { shell: [], glass: [], inside: [], roof: [] };
+  const frames = new Map();
+  const bays = new THREE.Group();
+  bays.name = "garages";
   g.bays.forEach((bay, i) => {
     const p = course.sampleAt(bay.d);
-    const b = new THREE.Group();
-    const colour = bay.safetyCar ? "#c9ced6" : TEAM_COLOURS[i % TEAM_COLOURS.length];
     // Local x along the lap, local z out from the lane (away from the road).
-    addMesh(b, new THREE.BoxGeometry(30.4, 12, depth), shell, 0, 6, 0);
+    const m = new THREE.Matrix4().makeRotationY(-Math.atan2(p.ty, p.tx) + (side > 0 ? 0 : Math.PI));
+    m.setPosition(p.x + p.nx * side * mid, p.h, p.y + p.ny * side * mid);
+    const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).applyMatrix4(m);
+    parts.shell.push(box(30.4, 12, depth, 0, 6, 0));
     // The open door: a dark bay framed in the team's colour, lit inside.
-    addMesh(b, new THREE.BoxGeometry(24, 9, 0.6), inside, 0, 4.5, -depth / 2 - 0.2, { cast: false });
-    const frame = std(color(colour), { roughness: 0.4, emissive: color(colour), emissiveIntensity: venue.night ? 0.35 : 0.08 });
-    addMesh(b, new THREE.BoxGeometry(26, 1.4, 0.8), frame, 0, 9.7, -depth / 2 - 0.3, { cast: false });
-    [-12.6, 12.6].forEach((x) => addMesh(b, new THREE.BoxGeometry(1.2, 9, 0.8), frame, x, 4.5, -depth / 2 - 0.3, { cast: false }));
-    addMesh(b, new THREE.BoxGeometry(30.4, 10, depth - 2), glass, 0, 17, 1);
-    // The roofs stop at the garages' front: nothing hangs over the lane.
+    parts.inside.push(box(24, 9, 0.6, 0, 4.5, -depth / 2 - 0.2));
+    const colour = bay.safetyCar ? "#c9ced6" : TEAM_COLOURS[i % TEAM_COLOURS.length];
+    if (!frames.has(colour)) frames.set(colour, []);
+    frames.get(colour).push(box(26, 1.4, 0.8, 0, 9.7, -depth / 2 - 0.3), box(1.2, 9, 0.8, -12.6, 4.5, -depth / 2 - 0.3), box(1.2, 9, 0.8, 12.6, 4.5, -depth / 2 - 0.3));
+    // The hospitality floor, set back a little from the doors.
+    parts.glass.push(box(30.4, 10, depth - 2, 0, 17, 1));
     if (wing) {
-      // Silverstone's Wing: the roof rises and falls like an aerofoil, its
-      // sweep reaching back, away from the lane.
+      // Silverstone's Wing: the roof rises and falls like an aerofoil.
       const lift = Math.sin(((i + 0.5) / g.bays.length) * Math.PI) * 10;
-      const r = addMesh(b, new THREE.BoxGeometry(31, 2, depth + 10), roofMat, 0, 25 + lift, 5.5);
-      r.rotation.x = -0.12;
+      parts.roof.push(new THREE.BoxGeometry(31, 2, depth).rotateX(-0.12).translate(0, 25 + lift, 0).applyMatrix4(m));
     } else {
-      addMesh(b, new THREE.BoxGeometry(31, 2, depth), roofMat, 0, 23, 0);
+      parts.roof.push(box(31, 2, depth, 0, 23, 0));
     }
-    b.position.set(p.x + p.nx * side * mid, p.h, p.y + p.ny * side * mid);
-    // Local +z points away from the road: along +n on the right, -n on the left.
-    b.rotation.y = -Math.atan2(p.ty, p.tx) + (side > 0 ? 0 : Math.PI);
-    b.userData.bay = { index: i, safetyCar: bay.safetyCar, d: bay.d };
-    group.add(b);
-    course.occupied.add(b.position.x, b.position.z, Math.hypot(15, depth / 2) + 2);
+    // A marker per bay, for the checks (no mesh of its own).
+    const marker = new THREE.Object3D();
+    marker.applyMatrix4(m);
+    marker.userData.bay = { index: i, safetyCar: bay.safetyCar, d: bay.d, depth };
+    bays.add(marker);
+    course.occupied.add(marker.position.x, marker.position.z, Math.hypot(15, depth / 2) + 2);
   });
+  Object.entries(parts).forEach(([k, list]) => {
+    const mesh = new THREE.Mesh(mergeGeometries(list), mats[k]);
+    mesh.castShadow = k !== "inside";
+    mesh.receiveShadow = true;
+    mesh.name = `garages:${k}`;
+    bays.add(mesh);
+  });
+  frames.forEach((list, colour) => {
+    const mesh = new THREE.Mesh(mergeGeometries(list), std(color(colour), { roughness: 0.4, emissive: color(colour), emissiveIntensity: venue.night ? 0.35 : 0.08 }));
+    mesh.name = "garages:frame";
+    bays.add(mesh);
+  });
+  group.add(bays);
   // The circuit's name across the middle of the front.
   const centre = course.sampleAt(g.bays[Math.floor(g.bays.length / 2)].d);
   const signTex = canvasTexture(1024, 96, (cx, w, h) => {

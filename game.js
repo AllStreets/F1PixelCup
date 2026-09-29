@@ -1651,7 +1651,7 @@ function updateSafetyCar(dt, now) {
       sc.speed *= Math.pow(0.4, dt);
       if (now >= sc.leaveUntil) state.safetyCar = null;
     } else {
-      const way = Pit.wayIn(lane, sc.d, sc.inLane);
+      const way = Pit.wayIn(lane, sc.d, sc.inLane, sc.lat);
       sc.inLane = way.inLane;
       if (way.park) {
         sc.parked = true;
@@ -1673,7 +1673,8 @@ function updateSafetyCar(dt, now) {
   // It has a body on the road: it slows behind a car in its lane rather than
   // driving through it. In the pit lane there is nobody to hold it up.
   const me = { id: "safetyCar", d: sc.d, lat: sc.lat };
-  sc.pace = sc.inLane ? sc.speed : Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength));
+  const onRoad = Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < state.track.roadWidth;
+  sc.pace = onRoad ? Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength)) : sc.speed;
   sc.d = wrapLap(sc.d + sc.pace * dt);
 }
 
@@ -1950,7 +1951,10 @@ function updateRacer(racer, dt, now) {
   // Behind the safety car nobody passes: rivals hold station behind the car
   // ahead. The safety car itself is solid for everyone, the car that called it
   // included -- that car is free to go round it, not through it.
-  if (sc && !sc.inLane && !sc.parked) {
+  // Once the Safety Car is off the road (well into the pit lane, or parked)
+  // it holds nobody up; just after the entry it is still on the road.
+  const scOnRoad = sc && !sc.parked && Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < state.track.roadWidth;
+  if (scOnRoad) {
     const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
     const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.pace ?? sc.speed };
     const held = safetyCarActive(now) && racer.id !== sc.ownerId;
@@ -3164,7 +3168,8 @@ function drawDriverItemsInScene(player, cameraHeading) {
   const frame = powerUpFrame(renderClock());
   const colours = { undercut: "#dc0000", stewardPenalty: "#0090ff", debris: "#00d2be", oilSlick: "#111111", safetyCar: "#c9ced6" };
   [...frame.shots, ...frame.hazards, ...frame.trails.map((t) => ({ ...t, type: "oilSlick" })),
-    ...(frame.safetyCar ? [{ ...frame.safetyCar, type: "safetyCar" }] : [])]
+    // (The 2D view has no pit lane to show a parked Safety Car in.)
+    ...(frame.safetyCar && !frame.safetyCar.parked ? [{ ...frame.safetyCar, type: "safetyCar" }] : [])]
     .map((item) => ({ item, ...projectScene(camOrigin, cameraHeading, item, item.type === "stewardPenalty" ? 16 : 3) }))
     .filter((entry) => entry.visible && entry.forward < 700 && isOnRenderedStretch(entry.item, state.track, player, null))
     .sort((a, b) => b.forward - a.forward)
@@ -4012,9 +4017,11 @@ function drawMiniMap(track, player, frame) {
     ctx.fill();
     ctx.stroke();
   });
-  if (pu.safetyCar) {
+  // The Safety Car: flashing while it leads the field, steady on its way
+  // in, and off the map once parked in the pits.
+  if (pu.safetyCar && !pu.safetyCar.parked) {
     const point = toMap(pu.safetyCar);
-    ctx.fillStyle = Math.floor(renderClock() / 180) % 2 ? "#ffb000" : "#ffd000";
+    ctx.fillStyle = !pu.safetyCar.leaving && Math.floor(renderClock() / 180) % 2 ? "#ffb000" : "#ffd000";
     ctx.fillRect(point.x - 3, point.y - 3, 6, 6);
   }
 

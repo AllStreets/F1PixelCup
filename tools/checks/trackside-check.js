@@ -25,12 +25,13 @@ async (page) => {
 
   // Every circuit has its pit complex: eleven bays with the Safety Car's
   // nearest the exit, the garages behind the working lane (clear of every
-  // road), and the teams' stands on the pit wall, never over the road.
+  // road), the teams' stands on the pit wall, never over the road, and the
+  // start gantry's pit-side post on the pit wall, not in the lane or a garage.
   results.pitsOnEveryCircuit = await step(() => {
     const bad = [];
     CIRCUITS.forEach((c) => {
       const a = Render3D.auditPits(TRACKS.find((t) => t.id === c.id));
-      if (!a.lane || a.bays !== 11 || !a.safetyCarBayLast || a.garagesFromRoad < a.garagesNeed || a.stands !== 10 || a.standsFromRoad < a.roadEdge + 5) bad.push({ id: c.id, ...a });
+      if (!a.lane || a.bays !== 11 || !a.safetyCarBayLast || a.garagesFromOwnRoad < a.garagesOwnNeed || a.garagesFromOtherRoads < a.garagesOtherNeed || a.stands !== 10 || a.standsFromRoad < a.roadEdge + 5 || !a.gantryPostClear) bad.push({ id: c.id, ...a });
     });
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   });
@@ -88,13 +89,13 @@ async (page) => {
     }
     await frame();
     const parked = Render3D.inspect().safetyCarAt;
-    const bay = state.track.pitLane.garages.bays.find((b) => b.safetyCar);
-    const route = getItemRoute(state.track);
-    const spot = route.toWorld(bay.d, sc.lat);
+    // Against the garage as built: in front of its own door (the working
+    // lane is 10 from the doors), no nearer any other.
+    const door = Render3D.auditPits(state.track).safetyCarDoor;
     state.paused = false;
-    const ok = out && out.flashing && lane && !lane.flashing && parked && !parked.flashing
-      && Math.hypot(parked.x - spot.x, parked.z - spot.y) < 3;
-    return ok || JSON.stringify({ out, lane, parked, spot });
+    const toDoor = parked && door ? Math.hypot(parked.x - door.x, parked.z - door.z) : Infinity;
+    const ok = out && out.flashing && lane && !lane.flashing && parked && !parked.flashing && toDoor <= 13;
+    return ok || JSON.stringify({ out, lane, parked, door, toDoor });
   });
 
   await context.close();

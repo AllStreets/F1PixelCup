@@ -46,12 +46,52 @@ CIRCUITS = {
 }
 
 
-def project(coords):
-    lat0 = sum(c[1] for c in coords) / len(coords)
-    lon0 = sum(c[0] for c in coords) / len(coords)
+def project(coords, ref=None):
+    """Lon/lat to metres, around the centre of `ref` (default: the coords)."""
+    ref = ref or coords
+    lat0 = sum(c[1] for c in ref) / len(ref)
+    lon0 = sum(c[0] for c in ref) / len(ref)
     k = math.pi / 180 * 6371000
     # Game y grows downwards, so north is up on the mini map.
     return [((c[0] - lon0) * math.cos(math.radians(lat0)) * k, -(c[1] - lat0) * k) for c in coords]
+
+
+# Real features from OpenStreetMap (tools/tracks/fetch_osm.py): each circuit's
+# pit lane and the Monaco tunnel, five points along each, [lat, lon].
+OSM = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "osm-features.json")))
+
+
+def arc_lengths(pts):
+    """Cumulative length along a closed outline, one per point, and the total."""
+    run = [0.0]
+    for i in range(1, len(pts)):
+        run.append(run[-1] + math.dist(pts[i - 1], pts[i]))
+    return run, run[-1] + math.dist(pts[-1], pts[0])
+
+
+def nearest_index(pts, point, among=None):
+    return min(among if among is not None else range(len(pts)), key=lambda i: math.dist(pts[i], point))
+
+
+def true_span(fine, points):
+    """A real feature beside the lap (points along it, from OpenStreetMap),
+    on the true outline: the indices where it leaves and rejoins the lap (its
+    two ends join the track), in racing order, and which side of the road it
+    is on along n = (-ty, tx), judged against that stretch only -- a pit lane
+    can be nearer another stretch than its own (Monaco's lies between the
+    start straight and the swimming-pool section)."""
+    n = len(fine)
+    i, j = nearest_index(fine, points[0]), nearest_index(fine, points[-1])
+    # Real features are short against the lap: racing order is the short way.
+    if (j - i) % n > n // 2:
+        i, j = j, i
+    stretch = [(i + k) % n for k in range((j - i) % n + 1)]
+    votes = 0
+    for q in points[1:-1]:
+        m = nearest_index(fine, q, stretch)
+        a, b = fine[(m - 1) % n], fine[(m + 1) % n]
+        votes += 1 if (q[0] - fine[m][0]) * -(b[1] - a[1]) + (q[1] - fine[m][1]) * (b[0] - a[0]) > 0 else -1
+    return i, j, 1 if votes > 0 else -1
 
 
 def resample(pts, step):
@@ -237,12 +277,20 @@ PIT_LANE_CENTRE = 29
 PIT_LANE_HALF = 18
 PIT_WORK_OUT = 59
 PIT_GARAGE_OUT = 95
+# Shallow garages, where full ones fit nowhere (Monaco's are temporary).
+PIT_GARAGE_OUT_SHALLOW = 83
+# The garages' fronts stand this far back from the working lane.
+PIT_GARAGE_FRONT = 4
 PIT_EDGE_IN = 6
 PIT_MOUTH = 160
 PIT_BAY = 30
 PIT_BAYS = 11
-# Clear of any other stretch's road edge by this much.
-PIT_CLEAR = 40
+# Clear of any other stretch's road edge by this much: past that stretch's
+# run-off and barrier (r3d/track.js: 38 of run-off on a circuit, 14 on the
+# street circuits, a barrier at +1) with room to spare.
+PIT_CLEAR = 46
+PIT_CLEAR_STREET = 22
+STREET = {"monaco", "singapore"}
 
 
 class Lap:
@@ -276,7 +324,7 @@ class Lap:
         return min(g, self.total - g)
 
 
-def pit_room(lap, side, r, reach):
+def pit_room(lap, side, r, reach, clear=PIT_CLEAR, spare=30):
     """Whether the pit complex, from the pit wall out to `reach` beyond the
     centreline, fits at lap distance r on this side: clear of every other
     stretch of the lap, and not on the inside of a bend it would fold round."""
@@ -286,22 +334,29 @@ def pit_room(lap, side, r, reach):
     _, _, ax, ay, _ = lap.at(r - 60)
     _, _, bx, by, _ = lap.at(r + 60)
     turn = math.atan2(ax * by - ay * bx, ax * bx + ay * by) / 120
-    if turn * side > 0 and 1 / abs(turn) < reach + 30:
+    if turn * side > 0 and 1 / abs(turn) < reach + spare:
         return False
+    # The other stretches, followed every 10 (not just at their points, 30
+    # apart, where a segment's middle could come closer).
+    import numpy as np
+    if not hasattr(lap, "dense"):
+        ds = np.arange(0, lap.total, 10.0)
+        lap.dense = (ds, np.array([lap.at(d)[:2] for d in ds]))
+    ds, xy = lap.dense
+    gap = np.abs((ds - r) % lap.total)
+    other = np.minimum(gap, lap.total - gap) > 300
     for off in (HALF_WIDTH + PIT_WALL_IN, (HALF_WIDTH + PIT_WALL_IN + reach) / 2, reach):
         px, py = x + nx * side * off, y + ny * side * off
-        for j, q in enumerate(lap.pts):
-            if lap.gap(lap.cum[j], r) <= 300:
-                continue
-            if math.dist(q, (px, py)) - HALF_WIDTH < PIT_CLEAR:
-                return False
+        dist = np.hypot(xy[other, 0] - px, xy[other, 1] - py)
+        if dist.size and dist.min() - HALF_WIDTH < clear:
+            return False
     return True
 
 
 PIT_STEP = 10
 
 
-def place_pit_lane(pts, bridges, report):
+def place_pit_lane(pts, bridges, report, real=None, street=False):
     """The pit lane: along the start/finish stretch, on whichever side has
     room. Every point of the lane must have room for the lane and working
     lane (W + PIT_WORK_OUT), and the eleven bays for the garages as well
@@ -309,40 +364,71 @@ def place_pit_lane(pts, bridges, report):
     wins, as real ones do; where the stretch after the line bends too tightly
     (Monaco) it ends before it. Then the longest lane, then the one best
     centred on the line. Returns { side, entry, exit }, signed distances from
-    the line."""
+    the line.
+
+    With the real pit lane (`real`: its side and stretch, from OpenStreetMap),
+    the lane goes on its side and over as much of its stretch as fits.
+    """
     lap = Lap(pts)
     need = 2 * PIT_MOUTH + PIT_BAY * PIT_BAYS
-    # Along the stretch before the line, to just short of the first item
-    # boxes after it (450 after the line); boxes keep out of the zone.
-    lo, hi = -START_ZONE_BEFORE - 260, 440
+    real_side, real_lo, real_hi = None, None, None
+    if real:
+        real_side, real_lo, real_hi = real["side"], real["lo"], real["hi"]
+        report["real_pit"] = f"side {real_side}, {round(real_lo)}..{round(real_hi)}"
+    # Along the stretch either side of the line (the item boxes keep out of
+    # the zone: place_item_boxes).
+    lo, hi = -START_ZONE_BEFORE - 260, 900
     rs = list(range(lo, hi + 1, PIT_STEP))
     bridge_d = [lap.cum[k] for b in bridges for k in (b["under"], b["over"])]
     near_bridge = [any(lap.gap(bd, r) < 7 * WAYPOINT_STEP + PIT_MOUTH for bd in bridge_d) for r in rs]
-    best = None
-    for side in (1, -1):
-        lane_ok = [pit_room(lap, side, r, HALF_WIDTH + PIT_WORK_OUT) and not nb for r, nb in zip(rs, near_bridge)]
-        garage_ok = [ok and pit_room(lap, side, r, HALF_WIDTH + PIT_GARAGE_OUT) for r, ok in zip(rs, lane_ok)]
-        for i, entry in enumerate(rs):
-            if not lane_ok[i]:
-                continue
-            for k in range(i + 1, len(rs)):
-                if not lane_ok[k]:
-                    break
-                exit_ = rs[k]
-                if exit_ - entry < need or exit_ - entry > 1100:
+    def search(garage_out):
+        best = None
+        maps = []
+        for side in (1, -1):
+            clear = PIT_CLEAR_STREET if street else PIT_CLEAR
+            # The lane's tarmac can take a tighter bend than the garages'
+            # boxes (which would crowd each other at the back).
+            lane_ok = [pit_room(lap, side, r, HALF_WIDTH + PIT_WORK_OUT, clear, spare=10) and not nb for r, nb in zip(rs, near_bridge)]
+            garage_ok = [ok and pit_room(lap, side, r, HALF_WIDTH + garage_out, clear) for r, ok in zip(rs, lane_ok)]
+            # G: room for the garages, l: for the lane only, .: neither; | the line.
+            maps.append(f"{side:+d} " + "".join("|" if r == 0 else ("G" if g else "l" if l else ".") for r, l, g in zip(rs, lane_ok, garage_ok)))
+            for i, entry in enumerate(rs):
+                if not lane_ok[i]:
                     continue
-                # The garages sit in the middle of the flat part (pitlane.js).
-                flat_from, flat_to = entry + PIT_MOUTH, exit_ - PIT_MOUTH
-                g_from = flat_from + (flat_to - flat_from - PIT_BAY * PIT_BAYS) / 2
-                g_to = g_from + PIT_BAY * PIT_BAYS
-                if not all(garage_ok[j] for j, r in enumerate(rs) if g_from - PIT_STEP <= r <= g_to + PIT_STEP):
-                    continue
-                score = (entry < -PIT_MOUTH and exit_ > PIT_MOUTH, exit_ - entry, -abs(entry + exit_))
-                if best is None or score > best[0]:
-                    best = (score, {"side": side, "entry": entry, "exit": exit_})
-    assert best, "no room for a pit lane"
+                for k in range(i + 1, len(rs)):
+                    if not lane_ok[k]:
+                        break
+                    exit_ = rs[k]
+                    if exit_ - entry < need or exit_ - entry > 1100:
+                        continue
+                    # The garages: eleven bays along the flat part, on slots
+                    # with room, nearest its middle (one run where it can be,
+                    # split round a tight spot where it can't).
+                    flat_from, flat_to = entry + PIT_MOUTH, exit_ - PIT_MOUTH
+                    slots = [flat_from + PIT_BAY * (k + 0.5) for k in range(int((flat_to - flat_from) // PIT_BAY))]
+                    room = [c for c in slots if all(garage_ok[j] for j, r in enumerate(rs) if c - PIT_BAY / 2 - PIT_STEP <= r <= c + PIT_BAY / 2 + PIT_STEP)]
+                    if len(room) < PIT_BAYS:
+                        continue
+                    middle = (flat_from + flat_to) / 2
+                    bays = sorted(sorted(room, key=lambda c: abs(c - middle))[:PIT_BAYS])
+                    overlap = max(0, min(exit_, real_hi) - max(entry, real_lo)) if real else 0
+                    together = bays[-1] - bays[0] < PIT_BAY * PIT_BAYS
+                    score = (side == real_side, garage_out == PIT_GARAGE_OUT, together, overlap, entry < -PIT_MOUTH and exit_ > PIT_MOUTH, exit_ - entry, -abs(entry + exit_))
+                    if best is None or score > best[0]:
+                        best = (score, {"side": side, "entry": entry, "exit": exit_, "bays": [round(c, 1) for c in bays]})
+
+        return best, maps
+
+    # The real side comes first, with full garages if they fit there and
+    # shallow ones if not; the other side only if the real one has no room.
+    found = [(r, m, depth) for (r, m), depth in ((search(PIT_GARAGE_OUT), PIT_GARAGE_OUT), (search(PIT_GARAGE_OUT_SHALLOW), PIT_GARAGE_OUT_SHALLOW))]
+    candidates = [(r, depth) for r, _, depth in found if r]
+    assert candidates, "no room for a pit lane from %d to %d:\n%s" % (lo, hi, "\n".join(found[-1][1]))
+    best, depth = max(candidates, key=lambda c: c[0][0])
     pit = best[1]
-    report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']}"
+    if depth != PIT_GARAGE_OUT:
+        pit["garageOut"] = depth
+    report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']}" + (" (shallow garages)" if depth != PIT_GARAGE_OUT else "")
     return pit
 
 
@@ -354,7 +440,8 @@ def pit_footprint(pts, pit):
     while r <= pit["exit"]:
         x, y, tx, ty, _ = lap.at(r)
         nx, ny = -ty, tx
-        for off in range(int(HALF_WIDTH), int(HALF_WIDTH + PIT_GARAGE_OUT) + 1, 12):
+        # Out to the back of the garages, that included.
+        for off in list(range(int(HALF_WIDTH), int(HALF_WIDTH + PIT_GARAGE_OUT), 12)) + [HALF_WIDTH + PIT_GARAGE_OUT]:
             out.append((x + nx * pit["side"] * off, y + ny * pit["side"] * off))
         r += 12
     return out
@@ -492,6 +579,12 @@ def main():
             raw = raw[:-1]
         if reverse:
             raw = raw[::-1]
+        # Real features, in the same metres (and then the same scale).
+        osm_pit = OSM["pitLanes"].get(game_id)
+        osm_tunnel = OSM["tunnels"].get(game_id)
+        to_scaled = lambda latlons: [(x * SCALE, y * SCALE) for x, y in project([[lon, lat] for lat, lon in latlons], coords)]
+        real_pit = to_scaled(osm_pit["points"]) if osm_pit else None
+        real_tunnel = to_scaled(osm_tunnel["points"]) if osm_tunnel else None
         real_len = length(raw)
         scaled = [(x * SCALE, y * SCALE) for x, y in raw]
         fine_step = 12
@@ -501,8 +594,37 @@ def main():
         report["crossings"] = len(crossings)
         relaxed = relax(fine, crossings, fine_step, report)
         # Keep the start/finish line where the source puts it: the first
-        # vertex. Find the relaxed point nearest to it and start there.
-        s0 = min(range(len(relaxed)), key=lambda i: math.dist(relaxed[i], scaled[0]))
+        # vertex. Find the relaxed point nearest to it and start there. Where
+        # the source's first vertex is not the real line (Monaco's is at the
+        # Casino, Silverstone's on the old National straight), the line goes
+        # level with the middle of the real pit lane.
+        # Real features are found on the true outline, then carried to the
+        # relaxed one: a point of the true lap maps to the nearest relaxed
+        # point within its own part of the lap (by its fraction of the way
+        # round), never to another stretch the relaxation moved nearer.
+        fine_run, fine_total = arc_lengths(fine)
+        unrotated = relaxed  # (relaxed is rotated to the line below)
+        def on_relaxed(j):
+            relaxed = unrotated
+            n_rel = len(relaxed)
+            guess = round(fine_run[j] / fine_total * n_rel)
+            # Within 10 points (about 120): the relaxation shifts things along
+            # by less, and never brings another stretch within that reach.
+            window = [(guess + k) % n_rel for k in range(-10, 11)]
+            return min(window, key=lambda r: math.dist(relaxed[r], fine[j]))
+        pit_span = true_span(fine, real_pit) if real_pit else None
+        tunnel_span = true_span(fine, real_tunnel) if real_tunnel else None
+        relaxed_run, relaxed_total = arc_lengths(relaxed)
+        if game_id in OSM["lineAtPitMiddle"]:
+            # Halfway along the relaxed lap between the pit lane's two ends.
+            a, b = on_relaxed(pit_span[0]), on_relaxed(pit_span[1])
+            half = ((relaxed_run[b] - relaxed_run[a]) % relaxed_total) / 2
+            target = (relaxed_run[a] + half) % relaxed_total
+            s0 = min(range(len(relaxed)), key=lambda r: abs(((relaxed_run[r] - target) + relaxed_total / 2) % relaxed_total - relaxed_total / 2))
+        else:
+            s0 = min(range(len(relaxed)), key=lambda i: math.dist(relaxed[i], scaled[0]))
+        # Lap distance from the line, along the relaxed lap, of a true point.
+        lap_distance = lambda j: (relaxed_run[on_relaxed(j)] - relaxed_run[s0]) % relaxed_total
         relaxed = relaxed[s0:] + relaxed[:s0]
         pts = resample(relaxed, WAYPOINT_STEP)
         min_x = min(p[0] for p in pts)
@@ -535,7 +657,20 @@ def main():
             for i, j in fin:
                 bridges.append({"under": i, "over": j})
             report["bridges"] = bridges
-        pit = place_pit_lane(pts, bridges, report)
+        real = None
+        lap_len = length(pts)
+        to_lap = lambda j: lap_distance(j) * lap_len / relaxed_total
+        signed = lambda d: d if d <= lap_len / 2 else d - lap_len
+        if pit_span:
+            i, j, side = pit_span
+            real = {"side": side, "lo": signed(to_lap(i)), "hi": signed(to_lap(j))}
+            if real["hi"] < real["lo"]:
+                real["lo"], real["hi"] = real["hi"], real["lo"]
+        pit = place_pit_lane(pts, bridges, report, real, game_id in STREET)
+        tunnel = None
+        if tunnel_span:
+            tunnel = {"from": round(to_lap(tunnel_span[0]), 1), "to": round(to_lap(tunnel_span[1]), 1)}
+            report["tunnel"] = f"{tunnel['from']}..{tunnel['to']}"
         decor = place_scenery(pts, report, pit)
         boxes = place_item_boxes(pts, bridges, pit)
         out[game_id] = {
@@ -547,6 +682,8 @@ def main():
             "itemBoxes": boxes,
             "pit": pit,
         }
+        if tunnel:
+            out[game_id]["tunnel"] = tunnel
         print(game_id, report, file=sys.stderr)
         if plot_dir:
             plot(game_id, scaled_shift, pts, decor, boxes, plot_dir)

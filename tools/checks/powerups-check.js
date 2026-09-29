@@ -375,33 +375,44 @@ async (page) => {
   await setup(0);
   results.safetyCarGoesIntoPitLane = await run(() => {
     const bad = [];
-    CUPS.forEach((cup, ci) => cup.tracks.forEach((_, ti) => {
+    // From leader + 90 (usually past the entry: round a lap first), and
+    // called in just before the entry, out in the middle of the road: it
+    // can't swerve in, so it goes round again -- it never jumps sideways.
+    const cases = [];
+    CUPS.forEach((cup, ci) => cup.tracks.forEach((_, ti) => { cases.push([ci, ti, "leader"]); cases.push([ci, ti, "late"]); }));
+    cases.forEach(([ci, ti, how]) => {
       state.selectedCup = ci; state.activeCupIndex = ci; buildCupEntries(); startRace(ti); state.phase = "race";
       const lane = state.track.pitLane;
       const W = state.track.roadWidth;
+      const L = state.track.totalLength;
       const pl = getSortedRacers()[10];
       pl.currentItem = "safetyCar"; useItem(pl, performance.now());
       const sc = state.safetyCar;
+      if (how === "late") { sc.d = ((lane.entry - 60) % L + L) % L; sc.lat = 0; }
       sc.until = performance.now();
       let t = performance.now();
       let entered = null;
+      let prevLat = sc.lat;
+      const tag = `${state.track.id} (${how})`;
       for (let i = 0; i < 60 * 150 && !sc.parked; i += 1) {
         t += 16.7;
         updateSafetyCar(1 / 60, t);
         const off = Math.abs(sc.lat);
         const r = lane.rel(sc.d);
-        if (off > W - 5 && !lane.inZone(sc.d)) { bad.push(`${state.track.id}: off the road at ${Math.round(sc.d)}`); break; }
+        if (Math.abs(sc.lat - prevLat) > 1) { bad.push(`${tag}: jumped ${Math.abs(sc.lat - prevLat).toFixed(1)} sideways at ${Math.round(r)}`); break; }
+        prevLat = sc.lat;
+        if (off > W - 5 && !lane.inZone(sc.d)) { bad.push(`${tag}: off the road at ${Math.round(sc.d)}`); break; }
         if (lane.inZone(sc.d) && sc.inLane) {
           if (entered === null) entered = r;
-          if (lane.wallAt(sc.d) !== null && off < W + Pit.WALL_OUT + 4) { bad.push(`${state.track.id}: through the pit wall at ${Math.round(r)}`); break; }
-          if (off > lane.outerAt(sc.d)) { bad.push(`${state.track.id}: past the boundary at ${Math.round(r)}`); break; }
+          if (lane.wallAt(sc.d) !== null && off < W + Pit.WALL_OUT + 4) { bad.push(`${tag}: through the pit wall at ${Math.round(r)}`); break; }
+          if (off > lane.outerAt(sc.d)) { bad.push(`${tag}: past the boundary at ${Math.round(r)}`); break; }
         }
       }
       const bay = lane.garages.bays.find((b) => b.safetyCar);
-      if (!sc.parked) bad.push(`${state.track.id}: never parked`);
-      else if (Math.abs(sc.d - bay.d) > 1) bad.push(`${state.track.id}: parked away from its bay`);
-      if (entered === null || entered > lane.entry + 25) bad.push(`${state.track.id}: turned in at ${entered}, not the entry ${lane.entry}`);
-    }));
+      if (!sc.parked) bad.push(`${tag}: never parked`);
+      else if (Math.abs(sc.d - bay.d) > 1) bad.push(`${tag}: parked away from its bay`);
+      if (entered === null || entered > lane.entry + 25) bad.push(`${tag}: turned in at ${entered}, not the entry ${lane.entry}`);
+    });
     return bad.length === 0 || JSON.stringify(bad);
   });
 

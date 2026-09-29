@@ -215,9 +215,11 @@ function auditAdverts(track) {
 }
 
 // The pit complex, for the checks: the garages (eleven bays, the Safety
-// Car's nearest the exit) stand beyond the working lane, and nothing of the
-// pit wall's stands reaches over any road. Distances are from the nearest
-// point of any stretch of the lap, so a garage can't sit on another road.
+// Car's nearest the exit) stand beyond the working lane, nothing of the pit
+// wall's stands reaches over any road, and the start gantry's pit-side post
+// stands on the pit wall or past the whole complex -- never in the lane or a
+// garage. Distances are from the nearest point of any stretch of the lap, so
+// nothing can sit on another road either.
 function auditPits(track) {
   const world = ensureWorld(track);
   const { course } = world;
@@ -225,33 +227,69 @@ function auditPits(track) {
   world.group.updateMatrixWorld(true);
   const v = new THREE.Vector3();
   // The closest any vertex of an object comes to a road's centreline.
+  // How close an object's vertices come to the road: to its own stretch
+  // (the pit zone and 300 either side) and to any other stretch of the lap.
+  const own = (p) => lane && Math.abs(lane.rel(p.d) - Math.max(lane.entry, Math.min(lane.exit, lane.rel(p.d)))) <= 300;
   const closest = (obj) => {
-    let best = Infinity;
+    const best = { own: Infinity, other: Infinity, otherAt: null };
     obj.traverse((m) => {
       if (!m.isMesh) return;
       const pos = m.geometry.attributes.position;
       for (let i = 0; i < pos.count; i += 1) {
         v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-        const p = course.nearestSample(v.x, v.z);
-        if (p && Math.abs(v.y - p.h) < 30) best = Math.min(best, Math.hypot(p.x - v.x, p.y - v.z));
+        course.samples.forEach((p) => {
+          if (Math.abs(v.y - p.h) >= 30) return;
+          const gap = Math.hypot(p.x - v.x, p.y - v.z);
+          if (own(p)) best.own = Math.min(best.own, gap);
+          else if (gap < best.other) { best.other = gap; best.otherAt = Math.round(p.d); }
+        });
       }
     });
     return best;
   };
-  const bays = [];
-  world.landmarks.traverse((o) => { if (o.userData.bay) bays.push(o); });
-  bays.sort((a, b) => a.userData.bay.index - b.userData.bay.index);
+  const garages = world.landmarks.getObjectByName("garages");
+  const bays = garages ? garages.children.filter((o) => o.userData.bay).sort((a, b) => a.userData.bay.index - b.userData.bay.index) : [];
   const pitGroup = world.circuit.getObjectByName("pitLane");
-  const stands = pitGroup ? pitGroup.children.filter((c) => c.isGroup) : [];
+  const stands = pitGroup ? ["pitStands", "pitStandRoofs"].map((name) => pitGroup.getObjectByName(name)).filter(Boolean) : [];
+  // The gantry's post on the pit side: its offset across the road.
+  const gantry = world.circuit.getObjectByName("gantry");
+  let gantryPost = null;
+  if (gantry && lane) {
+    const start = course.samples[0];
+    gantry.children.filter((m) => m.userData.post).forEach((post) => {
+      post.getWorldPosition(v);
+      const off = (v.x - start.x) * start.nx + (v.z - start.y) * start.ny;
+      if (Math.sign(off) === lane.side) gantryPost = Math.abs(off);
+    });
+  }
+  const sc = bays.find((b) => b.userData.bay.safetyCar);
+  const scDoor = sc ? (() => {
+    // The front of its door: from the bay's middle, half its depth toward the road.
+    const p = new THREE.Vector3(0, 0, -sc.userData.bay.depth / 2).applyMatrix4(sc.matrixWorld);
+    return { x: p.x, z: p.z };
+  })() : null;
+  const wallMid = course.width + (Pit.WALL_IN + Pit.WALL_OUT) / 2;
+  const g = garages ? closest(garages) : null;
+  const st = stands.length ? stands.map(closest) : [];
   return {
     lane: lane ? { side: lane.side, entry: lane.entry, exit: lane.exit } : null,
     bays: bays.length,
     safetyCarBayLast: bays.length > 0 && bays[bays.length - 1].userData.bay.safetyCar && bays.filter((b) => b.userData.bay.safetyCar).length === 1,
-    garagesFromRoad: Math.round(Math.min(...bays.map(closest))),
-    garagesNeed: Math.round(course.width + Pit.WORK_OUT),
-    stands: stands.length,
-    standsFromRoad: Math.round(Math.min(...stands.map(closest))),
+    // From their own road: behind the working lane. From any other: past
+    // its run-off and barrier (pitlane.js CLEAR), less a unit for rounding.
+    garagesFromOwnRoad: g ? Math.round(g.own) : 0,
+    garagesOwnNeed: Math.round(course.width + Pit.WORK_OUT),
+    garagesFromOtherRoads: g ? Math.round(g.other) : 0,
+    garagesOtherNeed: Math.round(course.width + (course.street ? Pit.CLEAR_STREET : Pit.CLEAR) - 1),
+    stands: stands.length ? pitGroup.getObjectByName("pitStands").geometry.attributes.position.count / (3 * 24) : 0,
+    standsFromRoad: st.length ? Math.round(Math.min(...st.map((b) => Math.min(b.own, b.other)))) : 0,
     roadEdge: course.width,
+    gantryPost: gantryPost === null ? null : Math.round(gantryPost * 10) / 10,
+    // On the pit wall, or past the whole complex (in a mouth).
+    // (Past it means past the garages' back where the line is at a garage.)
+    gantryPostClear: gantryPost === null || Math.abs(gantryPost - wallMid) < 0.5
+      || gantryPost > (!lane.inZone(0) ? 0 : lane.atGarage(0, 4) ? lane.garages.outer : lane.outerAt(0)) + 2,
+    safetyCarDoor: scDoor,
   };
 }
 
@@ -752,9 +790,12 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const hits = [];
   course.samples.forEach((p, i) => {
     if (i % step) return;
-    for (let k = 0; k < lanes; k += 1) {
+    // At least `lanes` rays, and never more than 14 apart (the pit side is
+    // far wider than the road).
+    const count = Math.max(lanes, Math.ceil((p.outerL + p.outerR) / 14) + 1);
+    for (let k = 0; k < count; k += 1) {
       // Across the whole width inside the barriers, left to right.
-      const t = k / (lanes - 1);
+      const t = k / (count - 1);
       const off = -p.outerL + 1 + t * (p.outerL + p.outerR - 2);
       origin.set(p.x + p.nx * off, 3000, p.y + p.ny * off);
       ray.set(origin, down);

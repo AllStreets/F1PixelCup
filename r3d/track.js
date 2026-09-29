@@ -189,7 +189,9 @@ export function buildCourse(track) {
     return best;
   };
 
-  const sampleAt = (d) => samples[((Math.floor(d / SAMPLE_STEP) % n) + n) % n];
+  // The sample nearest a lap distance (they are total / n apart, a little
+  // under SAMPLE_STEP).
+  const sampleAt = (d) => samples[((Math.round((d * n) / total) % n) + n) % n];
   const nearestSample = (x, z) => {
     let best = null;
     let bestD = Infinity;
@@ -456,12 +458,9 @@ export function buildCircuit(course, venue) {
   const barrierH = course.street ? 8 : 7;
   const barrierMat = advertBarrierMaterial(advertTex);
   const pitLane = course.pitLane;
-  // Along the garages' frontage the garages are the boundary: no barrier.
-  const atGarages = (p) => {
-    if (!pitLane) return false;
-    const r = pitLane.rel(p.d);
-    return r >= pitLane.garages.from - 4 && r <= pitLane.garages.to + 4;
-  };
+  // Along the garages' frontage the garages are the boundary: no barrier
+  // (nor, on the street circuits, catch fence).
+  const atGarages = (p) => Boolean(pitLane) && pitLane.atGarage(p.d, 4);
   [["left", (p) => -p.outerL - 1, -1], ["right", (p) => p.outerR + 1, 1]].forEach(([side, off, sign]) => {
     const onPitSide = pitLane && pitLane.side === sign;
     const m = mesh(wall(samples, off, c(0), c(barrierH), 150, onPitSide ? (p) => !atGarages(p) : undefined), barrierMat, { cast: true });
@@ -471,8 +470,9 @@ export function buildCircuit(course, venue) {
   if (course.street) {
     const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
     fenceTex.repeat.set(1, 3);
-    [(p) => -p.outerL - 1, (p) => p.outerR + 1].forEach((off) => {
-      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24), fence);
+    [[(p) => -p.outerL - 1, -1], [(p) => p.outerR + 1, 1]].forEach(([off, sign]) => {
+      const onPitSide = pitLane && pitLane.side === sign;
+      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, onPitSide ? (p) => !atGarages(p) : undefined), fence);
     });
   }
 
@@ -525,7 +525,17 @@ export function buildCircuit(course, venue) {
   band.position.set(start.x, start.h + 0.24, start.y);
   band.receiveShadow = true;
   group.add(band);
-  const gantry = buildGantry(start, Math.max(start.outerL, start.outerR), startAngle);
+  // Each post stands just outside its own side's barrier -- on the pit side,
+  // on the pit wall where there is one (the garages are behind it), or past
+  // the whole pit complex in a mouth.
+  const postAt = (sign) => {
+    const lane = course.pitLane;
+    if (lane && lane.side === sign && lane.inZone(start.d)) {
+      return lane.wallAt(start.d) !== null ? width + (Pit.WALL_IN + Pit.WALL_OUT) / 2 : lane.outerAt(start.d) + 4;
+    }
+    return (sign > 0 ? start.outerR : start.outerL) + 4;
+  };
+  const gantry = buildGantry(start, postAt(1), postAt(-1), startAngle);
   group.add(gantry);
   occluders.push(gantry);
   const gridMat = new THREE.MeshBasicMaterial({ color: 0xf2f2ee });
@@ -560,24 +570,43 @@ function buildPitLane(course, lane, occluders) {
     group.add(m);
     return m;
   };
-  // Tarmac: from the lane's inner edge out to the front of the garages. In
-  // the mouths it runs under the road (which sits higher), so it meets the
-  // road without a seam.
+  // Tarmac: from the lane's inner edge out to the working lane, and right up
+  // to the garage doors in front of them. In the mouths it runs under the
+  // road (which sits higher), so it meets the road without a seam.
   const tarmac = new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color("#6a6a70"), roughness: 0.9, side: THREE.DoubleSide });
-  add(ribbon(samples, (p) => side * (Math.abs(lane.latAt(p.d)) - lane.laneHalf), (p) => side * lane.outerAt(p.d), 0.1, 60, inZone), tarmac);
-  // Lines: the lane's inner edge where it has left the road, and the dashed
-  // line between the fast lane and the working lane along the flat part.
+  const reach = (p) => (lane.atGarage(p.d, 4) ? lane.garages.front : lane.outerAt(p.d));
+  add(ribbon(samples, (p) => side * (Math.abs(lane.latAt(p.d)) - lane.laneHalf), (p) => side * reach(p), 0.1, 60, inZone), tarmac);
+  // Lines. The lane's inner edge, from the road's edge where the lane leaves
+  // it (the blend line painted on the track at the entry and the exit) all
+  // the way along; and the dashed line between the fast lane and the working
+  // lane along the flat part.
   const paint = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide });
-  const edge = (p) => Math.abs(lane.latAt(p.d)) - lane.laneHalf;
-  add(ribbon(samples, (p) => side * edge(p), (p) => side * (edge(p) + 1.6), 0.16, 50, (p) => inZone(p) && edge(p) > width + 1), paint);
+  const edge = (p) => Math.max(width - 2.2, Math.abs(lane.latAt(p.d)) - lane.laneHalf);
+  add(ribbon(samples, (p) => side * edge(p), (p) => side * (edge(p) + 1.6), 0.18, 50, inZone), paint);
   const fast = width + Pit.LANE_CENTRE + Pit.LANE_HALF;
   const flat = (p) => {
     const r = lane.rel(p.d);
     return r >= lane.flatFrom && r <= lane.flatTo;
   };
   add(ribbon(samples, () => side * (fast - 0.8), () => side * (fast + 0.8), 0.16, 50, (p) => flat(p) && Math.floor(p.d / 12) % 2 === 0), paint);
-  // The pit wall: concrete, where the lane has cleared it; a catch fence on
-  // top. Its two faces and a cap.
+  // "PIT" painted on the lane just past the entry mouth, reading as you
+  // drive in.
+  const pitTex = canvasTexture(256, 128, (cx, w, h) => {
+    cx.clearRect(0, 0, w, h);
+    cx.fillStyle = "#f2f2ee";
+    cx.font = "900 110px Trebuchet MS, sans-serif";
+    cx.textAlign = "center";
+    cx.textBaseline = "middle";
+    cx.fillText("PIT", w / 2, h / 2 + 6);
+  }, { repeat: false });
+  pitTex.userData.print = true;
+  const word = course.sampleAt(((lane.entry + Pit.MOUTH + 40) % course.track.totalLength + course.track.totalLength) % course.track.totalLength);
+  const wordAt = Math.abs(lane.latAt(word.d));
+  const letters = add(new THREE.PlaneGeometry(26, 13), new THREE.MeshStandardMaterial({ map: pitTex, transparent: true, roughness: 0.6 }));
+  letters.rotation.set(-Math.PI / 2, 0, -Math.atan2(word.ty, word.tx) - Math.PI / 2);
+  letters.position.set(word.x + word.nx * side * wordAt, word.h + 0.17, word.y + word.ny * side * wordAt);
+  // The pit wall: concrete, where the lane has cleared it -- two faces, a
+  // cap, and ends -- with a catch fence on top that stops at the stands.
   const concrete = new THREE.MeshStandardMaterial({ color: 0xc9c6bf, roughness: 0.85, side: THREE.DoubleSide });
   const hasWall = (p) => lane.wallAt(p.d) !== null;
   const wallIn = width + Pit.WALL_IN;
@@ -585,48 +614,63 @@ function buildPitLane(course, lane, occluders) {
   const wallH = 6;
   [wallIn, wallOut].forEach((o) => occluders.push(add(wall(samples, () => side * o, () => 0, () => wallH, 40, hasWall), concrete, { cast: true })));
   add(ribbon(samples, () => side * wallIn, () => side * wallOut, wallH, 40, hasWall), concrete);
+  const n = samples.length;
+  samples.forEach((p, i) => {
+    const next = samples[(i + 1) % n];
+    if (hasWall(p) === hasWall(next)) return;
+    const end = hasWall(p) ? p : next;
+    const cap = add(new THREE.BoxGeometry(1, wallH, wallOut - wallIn), concrete, { cast: true });
+    cap.position.set(end.x + end.nx * side * (wallIn + wallOut) / 2, end.h + wallH / 2, end.y + end.ny * side * (wallIn + wallOut) / 2);
+    cap.rotation.y = -Math.atan2(end.ty, end.tx);
+  });
+  const stands = lane.garages.bays.filter((bay) => !bay.safetyCar);
+  const atStand = (p) => stands.some((bay) => Math.abs(lane.rel(p.d) - bay.rel) <= 10);
   const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
-  add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, hasWall), fence);
-  // The teams' stands on the wall, one opposite each garage: a desk under a
-  // roof that sits over the wall and the lane's edge, never the road.
+  add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, (p) => hasWall(p) && !atStand(p)), fence);
+  // The teams' stands on the wall, one opposite each team's garage: a desk
+  // under a roof over the wall and the lane's edge, never the road. One mesh
+  // per material for all ten.
   const standMat = new THREE.MeshStandardMaterial({ color: 0x2a2d34, roughness: 0.5, metalness: 0.3 });
   // Light, short of white: the sun on white would bloom to a glare.
   const roofMat = new THREE.MeshStandardMaterial({ color: 0xcfd0d4, roughness: 0.6 });
-  lane.garages.bays.forEach((bay) => {
-    if (bay.safetyCar) return;
+  const parts = { stand: [], roof: [] };
+  const place = (geo, x, y, z, p) => {
+    const m = new THREE.Matrix4().makeRotationY(-Math.atan2(p.ty, p.tx));
+    m.setPosition(p.x + p.nx * side * wallIn, p.h, p.y + p.ny * side * wallIn);
+    return geo.translate(x, y, z).applyMatrix4(m);
+  };
+  stands.forEach((bay) => {
     const p = course.sampleAt(bay.d);
-    const stand = new THREE.Group();
-    const desk = new THREE.Mesh(new THREE.BoxGeometry(14, 3, 4), standMat);
-    desk.position.set(0, wallH + 1.5, side * 2);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(18, 0.8, 7), roofMat);
-    roof.position.set(0, wallH + 9, side * 3.5);
-    [-7, 7].forEach((u) => {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.6, 9, 0.6), standMat);
-      post.position.set(u, wallH + 4.5, side * 6);
-      stand.add(post);
-    });
-    stand.add(desk, roof);
-    stand.children.forEach((m) => { m.castShadow = true; });
     // Local x along the lap, local z across it (toward the pit side).
-    stand.position.set(p.x + p.nx * side * wallIn, p.h, p.y + p.ny * side * wallIn);
-    stand.rotation.y = -Math.atan2(p.ty, p.tx);
-    group.add(stand);
+    parts.stand.push(place(new THREE.BoxGeometry(14, 3, 4), 0, wallH + 1.5, side * 2, p));
+    [-7, 7].forEach((u) => parts.stand.push(place(new THREE.BoxGeometry(0.6, 9, 0.6), u, wallH + 4.5, side * 6, p)));
+    parts.roof.push(place(new THREE.BoxGeometry(18, 0.8, 7), 0, wallH + 9, side * 3.5, p));
   });
+  if (stands.length) {
+    const standsMesh = add(mergeGeometries(parts.stand), standMat, { cast: true });
+    const roofsMesh = add(mergeGeometries(parts.roof), roofMat, { cast: true });
+    standsMesh.name = "pitStands";
+    roofsMesh.name = "pitStandRoofs";
+  }
   return group;
 }
 
-function buildGantry(start, halfSpan, angle) {
+// The start gantry: posts `right` along +n and `left` along -n from the
+// centreline, the beam between them, the lights over the middle of the road.
+function buildGantry(start, right, left, angle) {
   const g = new THREE.Group();
+  g.name = "gantry";
   const steel = new THREE.MeshStandardMaterial({ color: 0x2a2a32, metalness: 0.6, roughness: 0.4 });
-  const span = halfSpan * 2 + 8;
-  [-1, 1].forEach((s) => {
+  const span = right + left;
+  [right, -left].forEach((z) => {
     const post = new THREE.Mesh(new THREE.BoxGeometry(3, 46, 3), steel);
-    post.position.set(0, 23, (s * span) / 2);
+    post.position.set(0, 23, z);
     post.castShadow = true;
+    post.userData.post = true;
     g.add(post);
   });
   const beam = new THREE.Mesh(new THREE.BoxGeometry(5, 7, span), steel);
-  beam.position.set(0, 44, 0);
+  beam.position.set(0, 44, (right - left) / 2);
   beam.castShadow = true;
   g.add(beam);
   const lampMat = new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff1a0a, emissiveIntensity: 0.25 });
@@ -649,7 +693,8 @@ function buildGantry(start, halfSpan, angle) {
     cx.fillText("F1 PIXEL CUP", w / 2, h / 2 + 2);
   }, { repeat: false });
   bannerTex.userData.print = true;
-  const banner = new THREE.Mesh(new THREE.PlaneGeometry(span * 0.7, 6), readsBothWays(new THREE.MeshStandardMaterial({ map: bannerTex, side: THREE.DoubleSide })));
+  // Centred over the road, within the nearer post.
+  const banner = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(right, left) * 1.4, 6), readsBothWays(new THREE.MeshStandardMaterial({ map: bannerTex, side: THREE.DoubleSide })));
   banner.position.set(-2.6, 51, 0);
   banner.rotation.y = -Math.PI / 2;
   g.add(banner);

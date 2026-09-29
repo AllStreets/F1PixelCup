@@ -30,6 +30,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ------------------------------------------------------------------------------
+OpenStreetMap
+https://www.openstreetmap.org/copyright
+Used in tools/tracks/osm-features.json (fetched by tools/tracks/fetch_osm.py)
+and, through it, tracks-data.js: the positions of the real pit lanes, the
+Monaco and Silverstone start lines and the Monaco tunnel.
+
+Contains information from OpenStreetMap, © OpenStreetMap contributors, which
+is made available under the Open Database License (ODbL) 1.0:
+https://opendatacommons.org/licenses/odbl/1-0/
+
+------------------------------------------------------------------------------
 three.js (vendor/three/)
 https://github.com/mrdoob/three.js
 
