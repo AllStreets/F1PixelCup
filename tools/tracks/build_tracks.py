@@ -296,17 +296,34 @@ def place_scenery(pts, report):
     return decor
 
 
-def place_item_boxes(pts):
-    """Rows of three across the road on the straightest stretches."""
+# Keep boxes out of the start zone (grid.js START_ZONE_BEFORE): the 20-car grid
+# and the qualifying roll-in, with margin, all lie within this of the line.
+START_ZONE_BEFORE = 640
+
+
+def place_item_boxes(pts, bridges=()):
+    """Rows of three across the road on the straightest stretches, between a
+    launch run after the line and the start zone before it, and never at a
+    crossover (under or on the bridge)."""
     n = len(pts)
     curv = curvature_series(pts, 3)
     rows = 5
     boxes = []
     skip = max(1, int(450 / WAYPOINT_STEP))
+    # Index of the last point that is clear of the start zone.
+    run, dist = 0.0, []
+    for i in range(n):
+        dist.append(run)
+        run += math.dist(pts[i], pts[(i + 1) % n])
+    end = max(i for i in range(n) if dist[i] <= run - START_ZONE_BEFORE - WAYPOINT_STEP) + 1
     for r in range(rows):
-        lo = skip + (n - skip) * r // rows
-        hi = skip + (n - skip) * (r + 1) // rows
-        best = min(range(lo, hi), key=lambda i: sum(abs(curv[(i + d) % n]) for d in range(-2, 3)))
+        lo = skip + (end - skip) * r // rows
+        hi = skip + (end - skip) * (r + 1) // rows
+        near_bridge = lambda i: any(min(abs(i - k), n - abs(i - k)) <= 7
+                                    for b in bridges for k in (b["under"], b["over"]))
+        candidates = [i for i in range(lo, hi) if not near_bridge(i)]
+        assert candidates, "a box row has nowhere to go"
+        best = min(candidates, key=lambda i: sum(abs(curv[(i + d) % n]) for d in range(-2, 3)))
         tx, ty = tangent(pts, best)
         nx, ny = -ty, tx
         for lane in (-0.5, 0, 0.5):
@@ -373,7 +390,7 @@ def main():
                 bridges.append({"under": i, "over": j})
             report["bridges"] = bridges
         decor = place_scenery(pts, report)
-        boxes = place_item_boxes(pts)
+        boxes = place_item_boxes(pts, bridges)
         out[game_id] = {
             "source": src_id,
             "world": {"width": round(world_w), "height": round(world_h)},

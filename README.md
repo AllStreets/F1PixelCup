@@ -326,4 +326,4 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 
 ## License
 
-MIT — do whatever you want with it.
+The code is released under the [MIT License](LICENSE). Third-party pieces keep their own licences: circuit outlines from bacinger/f1-circuits (MIT), textures from Poly Haven (CC0) and Three.js (MIT).

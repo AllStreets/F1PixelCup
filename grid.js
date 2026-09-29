@@ -52,5 +52,27 @@
     return mine - pole;
   }
 
-  return { gridFromBack, gridFromQualifying, qualifyingDelta };
+  // The start zone: the grid (20 cars, 36 apart in pairs, the first row 12
+  // behind the line) and the qualifying roll-in (260 + 320 before the line),
+  // with margin, plus the launch just after the line. No item box may sit in
+  // it: the field would start on top of them.
+  const START_ZONE_BEFORE = 640;
+  const START_ZONE_AFTER = 160;
+
+  // d is a distance round the lap from the start line, totalLength the lap.
+  function inStartZone(d, totalLength) {
+    const lap = ((d % totalLength) + totalLength) % totalLength;
+    return lap < START_ZONE_AFTER || lap > totalLength - START_ZONE_BEFORE;
+  }
+
+  // Belt and braces for the circuit data: boxes carry d, their distance round
+  // the lap; any in the start zone are left out.
+  function boxesClearOfStart(boxes, totalLength) {
+    return boxes.filter((box) => !inStartZone(box.d, totalLength));
+  }
+
+  return {
+    gridFromBack, gridFromQualifying, qualifyingDelta,
+    START_ZONE_BEFORE, START_ZONE_AFTER, inStartZone, boxesClearOfStart,
+  };
 }));

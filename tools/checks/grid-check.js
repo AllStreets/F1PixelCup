@@ -357,6 +357,26 @@ async (page) => {
     return (building && lightsFrom >= state.preparedAt - 0.5) || JSON.stringify({ building, lightsFrom, preparedAt: state.preparedAt });
   });
 
+  // No item box on the grid or the qualifying roll-in, on any circuit: every box
+  // is well clear of all 20 grid slots and of the line the qualifying car rolls
+  // in on. And the boxes the 3D world draws are exactly the game's boxes.
+  results.noBoxesOnGrid = await step(() => {
+    const bad = [];
+    TRACKS.forEach((track) => {
+      const route = getItemRoute(track);
+      const L = track.totalLength;
+      const spots = layoutGrid(track, 20).map((slot) => ({ x: slot.x, y: slot.y }));
+      for (let d = L - QUALI_RUN_UP - QUALI_RUN_IN; d <= L + 150; d += 15) spots.push(route.toWorld(d % L, 0));
+      track.itemBoxes.forEach((box) => {
+        const gap = Math.min(...spots.map((s) => Math.hypot(s.x - box.x, s.y - box.y)));
+        if (gap < 90) bad.push(`${track.id} (${box.x}, ${box.y}) ${Math.round(gap)}`);
+      });
+      if (track.itemBoxes.length < 9) bad.push(`${track.id} has ${track.itemBoxes.length} boxes`);
+    });
+    const drawn = Render3D.inspect().boxScales.length === state.track.itemBoxes.length;
+    return (bad.length === 0 && drawn) || JSON.stringify({ bad, drawn });
+  });
+
   // Difficulty really changes the CPU drivers: Rookie is slower than Pro, Pro
   // slower than Legend -- alone on track (qualifying laps) and in full races.
   const ladder = await step(() => {
