@@ -22,7 +22,7 @@
     safetyCar: "#ffb000",
   };
   // The shared tile. Gradient ids are per icon: the site inlines all eight.
-  const icon = (id, glyph) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
+  const icon = (id, glyph) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">`
     + `<defs><linearGradient id="tile-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d212b"/><stop offset="1" stop-color="#0c0e13"/></linearGradient></defs>`
     + `<rect width="64" height="64" rx="14" fill="url(#tile-${id})"/>`
     + `<rect x=".5" y=".5" width="63" height="63" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity=".09"/>`
@@ -72,14 +72,15 @@
       const opacity = i === 0 ? ` fill-opacity=".45"` : "";
       return `<path fill="${fill}"${opacity} d="M${x} 18h6l10 14-10 14h-6l10-14z"/>`;
     }).join("")),
-    // A GT car with its light bar.
     // A long, low GT with its light bar on the roof.
     safetyCar: icon("safetyCar", (a) => `<rect x="28" y="21" width="14" height="3.5" rx="1.75" fill="${a}"/>`
-      + `<path fill="${WHITE}" d="M7 40v-3c0-2 1.4-3.3 3.6-3.7L21 31.2c3.6-3.7 7.6-5.7 13.2-5.7h4.6c3.6 0 6.8 2.4 9.8 5.9l4.2.9c1.9.4 3.2 1.9 3.2 3.8V40a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z"/>`
+      + `<path fill="${WHITE}" d="M8 40v-3c0-2 1.4-3.3 3.6-3.7L21 31.2c3.6-3.7 7.6-5.7 13.2-5.7h4.6c3.6 0 6.8 2.4 9.8 5.9l4.2.9c1.9.4 3.2 1.9 3.2 3.8V40a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z"/>`
       + `<path fill="${INK}" d="M24.5 31.2c3-3 6-4.2 9.8-4.2h4.3c2.4 0 4.8 1.5 6.9 4.2z"/>`
       + `<rect x="12" y="36" width="42" height="1.4" rx=".7" fill="${INK}" fill-opacity=".35"/>`
       + `<circle cx="17" cy="42" r="5.5" fill="${INK}"/><circle cx="17" cy="42" r="2.2" fill="${WHITE}"/>`
       + `<circle cx="46" cy="42" r="5.5" fill="${INK}"/><circle cx="46" cy="42" r="2.2" fill="${WHITE}"/>`),
   };
-  return Object.assign(icons, { ACCENTS });
+  // The accents ride along, but not as an icon: the map's keys are the items.
+  Object.defineProperty(icons, "ACCENTS", { value: ACCENTS, enumerable: false });
+  return icons;
 }));

@@ -31,6 +31,10 @@ async (page) => {
   const shot = (name, clip) => p.screenshot({ path: `${OUT}${name}.jpg`, type: "jpeg", quality: 88, scale: "css", ...(clip ? { clip } : {}) });
   const written = [];
 
+  // Every picture shows the hand-built item models (boxes included), so they
+  // must be in before anything is photographed.
+  await p.waitForFunction(() => window.Render3D && Render3D.inspect && Render3D.inspect().items.ready, null, { timeout: 30000 });
+
   // Who drives in each shot is data (SHOT_DRIVERS in game-data.js), so the
   // site's alt text names the same driver: Leclerc first, Hamilton second,
   // then the rest of the grid.
@@ -78,8 +82,6 @@ async (page) => {
     { id: "formationLap", circuit: "interlagos" },
     { id: "safetyCar", circuit: "silverstone" },
   ].map((s) => ({ ...s, driver: SHOTS.items[s.id] }));
-  // The hand-built item models must be in before any item is photographed.
-  await p.waitForFunction(() => window.Render3D && Render3D.inspect && Render3D.inspect().items.ready, null, { timeout: 30000 });
   for (const s of parts.includes("items") ? ITEM_SHOTS : []) {
     const c = circuits.find((x) => x.id === s.circuit);
     await p.evaluate(({ ci, ti, driverId }) => {
@@ -105,8 +107,8 @@ async (page) => {
       // Far enough past the row that the camera, behind the car, is clear of it.
       const turn = (d) => Math.abs(Math.atan2(Math.sin(route.toWorld((d + 120) % L, 0).heading - route.toWorld(d % L, 0).heading),
         Math.cos(route.toWorld((d + 120) % L, 0).heading - route.toWorld(d % L, 0).heading)));
-      const rows = state.track.itemBoxes.filter((_, i) => i % 3 === 1).map((b) => (b.d + 60) % L);
-      const base = rows.reduce((best, d) => (turn(d) < turn(best) ? d : best), rows[0]);
+      const rows = state.track.itemBoxes.map((b) => (b.d + 60) % L);
+      const base = rows.length ? rows.reduce((best, d) => (turn(d) < turn(best) ? d : best), rows[0]) : 0;
       const at = (gap) => (base + gap) % L;
       const put = (r, gap, lat) => {
         const w = route.toWorld(at(gap), lat);
@@ -151,16 +153,20 @@ async (page) => {
       const spot = ([gap, lat, h]) => { const w = route.toWorld(at(gap), lat); return { x: w.x, y: w.y, d: at(gap), h }; };
       Render3D.setPhotoCamera({ from: spot(FRAME.from), at: spot(FRAME.at), fov: 44 });
     }, s.id);
-    await hideOverlays();
-    await p.waitForTimeout(600);
-    await shot(`items/${s.id}`);
-    written.push(`items/${s.id}`);
-    await p.evaluate(() => {
-      Render3D.setPhotoCamera(null);
-      state.paused = false;
-      document.getElementById("game").style.visibility = "";
-      document.getElementById("screens").style.visibility = "";
-    });
+    // Whatever happens, the game gets its own camera back.
+    try {
+      await hideOverlays();
+      await p.waitForTimeout(600);
+      await shot(`items/${s.id}`);
+      written.push(`items/${s.id}`);
+    } finally {
+      await p.evaluate(() => {
+        Render3D.setPhotoCamera(null);
+        state.paused = false;
+        document.getElementById("game").style.visibility = "";
+        document.getElementById("screens").style.visibility = "";
+      });
+    }
   }
 
   // One showroom shot per team, the car framed in the right part of the window.

@@ -37,7 +37,6 @@ function holder(kind, standIn) {
   const body = model || standIn();
   g.add(body);
   g.userData.body = body;
-  g.userData.kind = kind;
   return g;
 }
 
@@ -167,6 +166,12 @@ function oilMesh() {
   });
   dressOil(g.userData.body);
   return g;
+}
+
+// The game's own materials that the models are drawn with, for render3d to
+// compile before the models swap in.
+export function itemRuntimeMaterials() {
+  return [oilModelMaterial()];
 }
 
 function dressOil(body) {
@@ -343,12 +348,29 @@ export function createPowerUpLayer(scene) {
     return car.aura;
   }
 
+  // How far each rolling tyre has turned: kept per shot and advanced by the
+  // distance it moved, so crossing the line (d wraps to 0) is seamless.
+  const rolled = new WeakMap();
+  let lapLength = 0;
+  function rollAngle(s) {
+    const d = s.d || 0;
+    const r = rolled.get(s);
+    if (!r) { rolled.set(s, { d, angle: d / 3.2 }); return d / 3.2; }
+    let step = d - r.d;
+    if (lapLength && step < -lapLength / 2) step += lapLength;
+    if (lapLength && step > lapLength / 2) step -= lapLength;
+    r.d = d;
+    r.angle += step / 3.2;
+    return r.angle;
+  }
+
   function place(mesh, item, course, lift) {
     mesh.position.set(item.x, course.heightAt(item.d) + lift, item.y);
     mesh.rotation.y = -(item.heading || 0);
   }
 
   function sync({ powerUps, racers, cars, course, now }) {
+    lapLength = course.track.totalLength;
     const fx = quality !== "low";
     const used = { undercut: 0, stewardPenalty: 0, debris: 0 };
     Object.entries(shots).forEach(([type, list]) => list.grow(powerUps.shots.filter((s) => s.type === type).length));
@@ -364,13 +386,15 @@ export function createPowerUpLayer(scene) {
       const modelled = mesh.userData.body && mesh.userData.body.userData.fromGlb;
       // The modelled Undercut is a tyre: it stands on the road and rolls.
       const rolling = s.type === "undercut" && modelled;
-      place(mesh, s, course, flying ? 16 : rolling ? 3.2 : 2.4);
-      if (rolling) mesh.userData.body.rotation.z = -(s.d || 0) / 3.2;
+      // Debris spins with a wobble, lifted clear of its own reach, so it never
+      // cuts into the road.
+      place(mesh, s, course, flying ? 16 : rolling ? 3.2 : s.type === "debris" ? 3.6 : 2.4);
+      if (rolling) mesh.userData.body.rotation.z = -rollAngle(s);
       // Behind the modelled tyre the trail is a slim, faint streak (the
       // stand-in puck's broad cone swamped it).
       // (The cone runs along its own Y; X and Z are its radius.)
       if (mesh.userData.trail) mesh.userData.trail.scale.set(rolling ? 0.4 : 1, rolling ? 0.8 : 1, rolling ? 0.4 : 1);
-      if (s.type === "debris") mesh.rotation.set(now / 90, now / 70, now / 110);
+      if (s.type === "debris") mesh.rotation.set(Math.sin(now / 160) * 0.28, now / 70, Math.cos(now / 190) * 0.28);
       if (mesh.userData.trail) mesh.userData.trail.visible = fx;
       if (mesh.userData.ring) mesh.userData.ring.rotation.z = now / 120;
     });

@@ -4,10 +4,14 @@
 // item swaps to the model the moment it lands (see swapBody), so nothing is
 // ever missing and nothing waits on them.
 //
-// The models' materials are named by role. Most are used as they come; a few
-// are swapped for the game's own: the oil pool gets the thin-film slick
-// texture, the shards a carbon weave, and each safety-car lamp its own copy so
-// the two can flash in turn.
+// The models' materials are named by role. Most are used as they come; the
+// shards get a carbon weave here, the oil pool its slick surface in
+// ./powerups.js (dressOil), and each safety-car lamp and each item box's
+// glowing materials get their own copies so they can animate on their own.
+//
+// Each model settles on its own: one that fails to load leaves only that kind
+// on its stand-in. Before anything swaps, the caller's prepare step (render3d
+// compiles the new shaders) runs, so a swap never stalls a frame.
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { canvasTexture } from "./textures.js";
@@ -23,8 +27,8 @@ const FILES = {
 
 const templates = {};
 const waiting = [];
+const failedKinds = new Set();
 let ready = false;
-let failed = false;
 
 let weave = null;
 function carbonWeave() {
@@ -55,37 +59,54 @@ const overrides = {
   carbon_weave: () => new THREE.MeshStandardMaterial({ map: carbonWeave(), color: 0xffffff, roughness: 0.3, metalness: 0.55 }),
 };
 
+// Materials a copy animates on its own, so each copy gets a clone.
+const OWN = new Set(["box_glass", "box_frame", "sc_lamp"]);
+
 function prepare(kind, scene) {
   scene.traverse((node) => {
     if (!node.isMesh) return;
-    node.castShadow = kind !== "oil";
+    const mats = () => (Array.isArray(node.material) ? node.material : [node.material]);
+    // The oil lies flat on the road; the box's "?" and glass are too slight to
+    // shadow (the frame's shadow is the box's).
+    node.castShadow = kind !== "oil" && !mats().some((m) => m.name === "box_mark" || m.name === "box_glass");
     node.receiveShadow = true;
     const swap = (m) => (overrides[m.name] ? overrides[m.name]() : m);
     node.material = Array.isArray(node.material) ? node.material.map(swap) : swap(node.material);
-    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => {
-      if (m.name === "box_glass") { m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; }
+    mats().forEach((m) => {
+      // See-through glass, both faces in one pass (three otherwise draws a
+      // transparent double-sided material twice, re-checking its shader).
+      if (m.name === "box_glass") { m.transparent = true; m.depthWrite = false; m.side = THREE.DoubleSide; m.forceSinglePass = true; }
+      // What the box's pulse multiplies (see r3d/track.js).
+      if ("emissiveIntensity" in m) m.userData.baseEmissive = m.emissiveIntensity;
     });
   });
   scene.userData.kind = kind;
   return scene;
 }
 
-export function loadItemModels() {
+// prepare(templates) may return a promise (render3d compiles the shaders);
+// the swaps wait for it.
+export function loadItemModels({ prepare: beforeSwap } = {}) {
   const loader = new GLTFLoader();
   const kinds = Object.keys(FILES);
   let left = kinds.length;
+  const settle = () => {
+    left -= 1;
+    if (left > 0) return;
+    Promise.resolve(beforeSwap ? beforeSwap({ ...templates }) : null).catch(() => {}).then(() => {
+      ready = true;
+      waiting.splice(0).forEach((fn) => fn());
+    });
+  };
   kinds.forEach((kind) => {
     loader.load(`./assets/items/${FILES[kind]}.glb`, (gltf) => {
       templates[kind] = prepare(kind, gltf.scene);
-      left -= 1;
-      if (left === 0) {
-        ready = true;
-        waiting.splice(0).forEach((fn) => fn());
-      }
+      settle();
     }, undefined, (error) => {
-      // A missing model is not fatal: the stand-ins stay.
-      failed = true;
+      // A missing model is not fatal: that kind keeps its stand-in.
+      failedKinds.add(kind);
       console.warn(`Item model ${kind} did not load`, error);
+      settle();
     });
   });
 }
@@ -95,12 +116,17 @@ export function loadItemModels() {
 // glow and the safety-car lamps), which are cloned.
 export function itemModel(kind) {
   const t = templates[kind];
-  if (!t) return null;
+  if (!t || !ready) return null;
   const copy = t.clone(true);
   copy.traverse((node) => {
     if (!node.isMesh) return;
-    const own = kind === "itemBox" || /^lamp_/.test(node.name);
-    if (own) node.material = Array.isArray(node.material) ? node.material.map((m) => m.clone()) : node.material.clone();
+    const own = (m) => {
+      if (!OWN.has(m.name)) return m;
+      const c = m.clone();
+      c.userData.ownedClone = true;
+      return c;
+    };
+    node.material = Array.isArray(node.material) ? node.material.map(own) : own(node.material);
   });
   copy.userData.fromGlb = true;
   return copy;
@@ -112,13 +138,40 @@ export function whenItemsReady(fn) {
   else waiting.push(fn);
 }
 
-export const itemsState = () => ({ ready, failed });
+export const itemsState = () => ({ ready, failed: [...failedKinds] });
+
+// One copy of every loaded model: what render3d compiles before the swaps.
+export const itemTemplates = () => ({ ...templates });
+
+// Free what a copy owns (its cloned materials); the shared geometry and the
+// shared materials belong to the templates.
+export function disposeItemCopy(model) {
+  model.traverse((node) => {
+    if (!node.isMesh) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => { if (m.userData.ownedClone) m.dispose(); });
+  });
+}
+
+// Free a stand-in outright: its geometry, materials and textures are its own.
+function disposeStandIn(body) {
+  body.traverse((node) => {
+    if (node.geometry) node.geometry.dispose();
+    if (!node.material) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => {
+      if (m.map && !m.map.userData.shared) m.map.dispose();
+      m.dispose();
+    });
+  });
+}
 
 // Replace a holder's body (its stand-in) with the model's copy.
 export function swapBody(holder, model) {
   if (!model) return false;
   const old = holder.userData.body;
-  if (old) holder.remove(old);
+  if (old) {
+    holder.remove(old);
+    if (!old.userData.fromGlb) disposeStandIn(old);
+  }
   holder.add(model);
   holder.userData.body = model;
   return true;

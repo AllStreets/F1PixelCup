@@ -14,8 +14,19 @@ carbon weave). The safety car's two roof lamps are separate objects,
 lamp_L and lamp_R, so the game can flash them.
 
 Footprints match the meshes they replace (see r3d/powerups.js and
-r3d/track.js buildItemBox): box 11 cube, oil pool 30 across, debris ~12,
-Undercut tyre radius 3.2, Steward puck radius 4.5, safety car 26 x 9.6.
+r3d/track.js buildItemBox): box 11 cube, oil pool about 29 x 24, debris about
+12.8 x 8.4 (origin in its middle), Undercut tyre radius 3.2, Steward puck
+radius 4.5, safety car about 26.5 x 10.1. Budgets: under 3k triangles each,
+the safety car (one on track at most) under 5k.
+
+Colours are written as sRGB hex values (as the icon style guide gives them)
+and converted to linear, which is what Blender's Base Color and glTF's
+baseColorFactor hold. Only the box glass is double-sided.
+
+Built with Blender 5.2: the item box's "?" uses Blender's built-in font, so a
+different Blender version may draw it slightly differently. The script clears
+the scene first, so it refuses to run in a saved .blend file unless
+F1_BUILD_FORCE=1 is set.
 """
 import bpy
 import bmesh
@@ -27,6 +38,8 @@ OUT = os.environ.get("F1_ITEMS_OUT", "")
 
 
 def reset():
+    if bpy.data.filepath and os.environ.get("F1_BUILD_FORCE") != "1":
+        raise RuntimeError(f"build_items.py clears the scene; {bpy.data.filepath} is open. Use a new file, or set F1_BUILD_FORCE=1.")
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.curves, bpy.data.collections):
@@ -38,8 +51,16 @@ def principled(m):
     return next(n for n in m.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
 
 
+def linear(c):
+    return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+
+
 def mat(name, color, metal=0.0, rough=0.4, emit=0.0, alpha=1.0):
+    """color is sRGB (0-1 per channel, as in a hex code); stored linear."""
+    color = tuple(linear(c) for c in color)
     m = bpy.data.materials.new(name)
+    # Closed meshes cull their back faces; only see-through glass shows both.
+    m.use_backface_culling = alpha >= 1
     m.use_nodes = True
     b = principled(m)
     b.inputs["Base Color"].default_value = (*color, 1)
@@ -149,14 +170,15 @@ def box(name, center, size, material, coll):
     return link(name, bm, material, coll)
 
 
-def tyre(name, r, width, coll, band=True, seg=48):
-    """A slick: rounded tread profile swept round the Y axis, a compound band on
-    each sidewall and a rim, as one object with its origin on the axle."""
+def tyre(name, r, width, coll, band=True, seg=48, steps=10):
+    """A slick: rounded tread profile swept round the Y axis, closed by an inner
+    barrel, with a compound band on each sidewall and a rim, as one object with
+    its origin on the axle."""
     bm = bmesh.new()
     rin = r * 0.6
     prof = [(rin, -width / 2)]
-    for i in range(11):
-        a = -math.pi / 2 + math.pi * i / 10
+    for i in range(steps + 1):
+        a = -math.pi / 2 + math.pi * i / steps
         prof.append((r - 0.12 * r + 0.12 * r * math.cos(a), (width / 2) * math.sin(a)))
     prof.append((rin, width / 2))
     rings = []
@@ -167,6 +189,8 @@ def tyre(name, r, width, coll, band=True, seg=48):
         a, b = rings[k], rings[(k + 1) % seg]
         for i in range(len(prof) - 1):
             bm.faces.new((a[i], b[i], b[i + 1], a[i + 1]))
+        # The inner barrel: no seeing into the tyre past the rim.
+        bm.faces.new((a[-1], b[-1], b[0], a[0]))
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     ob = link(name, bm, "tyre", coll, smooth=True)
     ob.data.materials.append(MATS["tyre_band"])
@@ -280,6 +304,12 @@ for k, (pts, off, rot) in enumerate([
     shards.append(s)
 debris = join(shards[0], shards[1:])
 debris.name = "debris"
+# Turn about its own middle: the game tumbles it.
+bpy.ops.object.select_all(action="DESELECT")
+debris.select_set(True)
+bpy.context.view_layer.objects.active = debris
+bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
+debris.location = (0, 0, 0)
 
 # --- Undercut: a fresh soft, rolling -----------------------------------------
 C_UND = collection("undercut")
@@ -318,7 +348,7 @@ body = loft("sc_body", [
     (-10.4, 4.8, 0.95, 4.8),
     (-12.3, 4.2, 1.25, 4.6),
     (-13.0, 3.5, 1.7, 4.2),
-], C_SC, "sc_paint", segs=40, exp=3.2)
+], C_SC, "sc_paint", segs=32, exp=3.2)
 glass = loft("sc_glass", [
     (4.2, 3.4, 4.3, 4.5),
     (2.0, 3.7, 4.4, 7.0),
@@ -357,7 +387,7 @@ car.name = "sc_body"
 bevel(car, 0.08, segments=1, harden=False)
 for x in (8.0, -8.0):
     for sgn in (1, -1):
-        w = tyre(f"sc_wheel_{'F' if x > 0 else 'R'}{'L' if sgn > 0 else 'R'}", 2.35, 1.8, C_SC, band=False)
+        w = tyre(f"sc_wheel_{'F' if x > 0 else 'R'}{'L' if sgn > 0 else 'R'}", 2.35, 1.8, C_SC, band=False, seg=20, steps=6)
         w.location = (x, sgn * 4.0, 2.35)
 
 # --- Export: one GLB per collection ----------------------------------------------

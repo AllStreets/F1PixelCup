@@ -17,13 +17,14 @@ const ACCENTS = {
 };
 
 test("every power-up has an icon, and nothing else does", () => {
-  assert.deepEqual(Object.keys(ICONS).filter((k) => k !== "ACCENTS").sort(), [...IDS].sort());
+  assert.deepEqual(Object.keys(ICONS).sort(), [...IDS].sort());
 });
 
 for (const id of Object.keys(ACCENTS)) {
   test(`${id}: one SVG on the 64 grid, in the shared style`, () => {
     const svg = ICONS[id];
-    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 64 64">[\s\S]*<\/svg>$/);
+    // An intrinsic size too: some browsers can't draw a size-less SVG to a canvas.
+    assert.match(svg, /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="64" height="64" viewBox="0 0 64 64">[\s\S]*<\/svg>$/);
     assert.equal((svg.match(/<svg/g) || []).length, 1);
     // Balanced tags: every opened element is closed or self-closed.
     const opened = (svg.match(/<(?!\/)[a-zA-Z]+[^>]*[^/]>/g) || []).length;

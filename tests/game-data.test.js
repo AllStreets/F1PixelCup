@@ -73,7 +73,8 @@ test("the removed power-ups are gone", () => {
 
 test("every power-up has a painted SVG icon", () => {
   PowerUps.ITEM_ORDER.forEach((id) => {
-    assert.match(ITEM_ICONS[id], /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 64 64">[\s\S]*<\/svg>$/, id);
+    // (The style of each icon is tested in item-icons.test.js.)
+    assert.match(ITEM_ICONS[id], /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="64" height="64" viewBox="0 0 64 64">[\s\S]*<\/svg>$/, id);
   });
 });
 
@@ -101,4 +102,10 @@ test("promo shots feature the whole grid: Leclerc first, Hamilton second, six te
     assert.equal(new Set(set).size, set.length, "no driver twice in a set");
   }
   assert.equal(SHOT_DRIVERS.hero, "leclerc");
+});
+
+test("every team has a short name for captions", () => {
+  const want = { redBull: "Red Bull", ferrari: "Ferrari", mclaren: "McLaren", mercedes: "Mercedes", astonMartin: "Aston Martin",
+    alpine: "Alpine", williams: "Williams", haas: "Haas", racingBulls: "Racing Bulls", sauber: "Sauber" };
+  Data.TEAMS.forEach((t) => assert.equal(t.short, want[t.id], t.id));
 });

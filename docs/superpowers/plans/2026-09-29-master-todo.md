@@ -111,8 +111,8 @@ The full regression set, run before every merge:
 
 ## Stage C — Power-ups beauty pass (roadmap stage 4)
 
-- [ ] Spec `2026-09-29-power-ups-beauty-design.md` and plan: the art direction for each item, the icon style guide, and the promo shot list.
-- [ ] Build the Blender models through the Blender MCP (start it with `tools/start-blender-mcp.sh`). Add `tools/blender/build_items.py`, which exports `assets/items/*.glb`.
+- [x] Spec `2026-09-29-power-ups-beauty-design.md` and plan: the art direction for each item, the icon style guide, and the promo shot list.
+- [x] Build the Blender models through the Blender MCP (start it with `tools/start-blender-mcp.sh`). Add `tools/blender/build_items.py`, which exports `assets/items/*.glb`.
   - The models are hand-modelled with baked materials, not primitives:
     - the item box;
     - the oil pool;
@@ -120,23 +120,26 @@ The full regression set, run before every merge:
     - the Undercut puck;
     - the Steward Penalty puck and ring;
     - a proper safety car with its light bar.
-- [ ] `r3d/powerups.js` loads the GLBs through the car loader (`r3d/car.js` pattern), falls back to today's meshes while loading, and keeps pooling.
-- [ ] **Icons redo:** rewrite `item-icons.js`. The current SVGs read as AI-made.
+- [x] `r3d/powerups.js` loads the GLBs through the car loader (`r3d/car.js` pattern), falls back to today's meshes while loading, and keeps pooling.
+- [x] **Icons redo:** rewrite `item-icons.js`. The current SVGs read as AI-made.
   - Use one consistent hand-drawn style: shared stroke weight, light direction, palette and silhouette-first shapes.
   - Or render the icons from the new Blender models as crisp PNG/SVG, then pick one approach.
   - The icons must read at HUD size (32px) and at card size.
   - Show them on a comparison sheet before and after.
-- [ ] Update `tests/game-data.test.js`: every item has an icon, and every icon is valid SVG or a present file.
-- [ ] Extend `powerups-check.js`: every item's GLB mesh is visible on the road, correctly sized, and `auditScenery` stays at 0.
-- [ ] **Varied promo shots:** update `tools/capture-shots.js`.
+- [x] Update `tests/game-data.test.js`: every item has an icon, and every icon is valid SVG or a present file.
+- [x] Extend `powerups-check.js`: every item's GLB mesh is visible on the road, correctly sized, and `auditScenery` stays at 0.
+- [x] **Varied promo shots:** update `tools/capture-shots.js`.
   - Items and circuits each feature different drivers and teams across the grid: Leclerc first and Hamilton second, then Norris, Piastri, Verstappen, Russell, Alonso, Albon, Gasly, Hülkenberg and others.
   - Recapture `assets/shots/items/*.jpg` and `assets/shots/circuit-*.jpg`.
-- [ ] Extend `landing-check.js`: the item and circuit shots cover at least 6 different teams.
-- [ ] Visual check of the HUD roulette and the site cards at desktop and phone widths. Review, fix everything, merge, push.
+- [x] Extend `landing-check.js`: the item and circuit shots cover at least 6 different teams.
+- [x] Visual check of the HUD roulette and the site cards at desktop and phone widths. Review, fix everything, merge, push.
+
+
+Stage C shipped with its fresh review fixed: 5 Important and 18 Minor findings, every one fixed.
 
 ## Stage D — Driver helmet realism pass
 
-- [ ] Write a spec, with a helmet-reference sheet for all 20 of the 2025 drivers.
+- [x] Write a spec, with a helmet-reference sheet for all 20 of the 2025 drivers (`docs/superpowers/specs/2026-09-29-helmets-design.md`).
   - It gives each driver's base colours, the main motif and its placement.
   - The designs are original art *inspired by* each design: no logos, sponsor marks or copied photos.
 - [ ] Add a `helmet` data block per driver in `game-data.js`: base, stripe, crown and visor colours, and a motif id.

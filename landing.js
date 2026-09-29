@@ -49,7 +49,7 @@
     const driver = DRIVERS.find((d) => d.id === driverId);
     if (!driver) return "A car";
     const team = TEAMS.find((t) => t.id === driver.teamId);
-    return `${driver.name}'s ${team ? team.name : "car"}`;
+    return `${driver.name}'s ${team ? team.short : "car"}`;
   }
 
   // Your drivers: every driver has their own career. The one raced most
@@ -177,6 +177,9 @@
     if (again) again.focus({ preventScroll: true });
   });
 
+  // The hero's caption names the driver the picture was taken with.
+  const heroImg = document.querySelector("#hero img");
+  if (heroImg) heroImg.alt = `${shotCar(SHOT_DRIVERS.hero)} leading the field through the forest at Spa-Francorchamps`;
   renderCircuits();
   renderCareer();
   renderGrid();
