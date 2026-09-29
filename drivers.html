@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The drivers — F1 Pixel Cup</title>
+  <meta name="description" content="All 20 drivers of the 2025 grid in F1 Pixel Cup: their helmets, their 2025 season and their careers.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231b1620'/%3E%3Crect x='4' y='5' width='24' height='8' rx='2' fill='%23dc0000'/%3E%3Crect x='4' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='12' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='20' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='8' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='16' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='24' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap">
+  <link rel="stylesheet" href="./site.css">
+  <link rel="stylesheet" href="./landing.css">
+</head>
+<body class="landing grid-page">
+  <header class="topbar">
+    <a class="wordmark" href="./index.html#hero">F1 PIXEL CUP</a>
+    <nav class="topnav" aria-label="Site">
+      <a href="./index.html#circuits">Circuits</a>
+      <a href="./index.html#career">Your drivers</a>
+      <a href="./drivers.html" aria-current="page">Drivers</a>
+      <a href="./teams.html">Teams</a>
+      <a href="./index.html#how-to-play">How to play</a>
+      <a href="./index.html#power-ups">Power-ups</a>
+    </nav>
+    <a class="go-btn play-link" href="./play.html"><span>Play</span></a>
+  </header>
+
+  <main>
+    <section class="section">
+      <p class="kicker">The grid</p>
+      <h1 class="it-title section-title">Twenty drivers</h1>
+      <p class="muted section-lead">The 2025 grid as it lined up in Melbourne, with each driver's helmet as the game paints it, their 2025 season and their career to the end of it.</p>
+      <p class="grid-links"><a href="./teams.html">See the teams ›</a> · <a href="./index.html#career">Your drivers ›</a></p>
+      <p id="grid-status" class="visually-hidden" role="status">Loading the grid…</p>
+      <noscript><p class="muted">The grid needs JavaScript to show.</p></noscript>
+      <div id="driver-cards" class="driver-cards"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Race data: <a href="https://github.com/f1db/f1db">F1DB</a> by Marcel Overdijk, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, release v2026.15.1, adapted: 2025 figures and careers to the end of 2025 counted from its race results, names matched to the game's teams.</p>
+    <p>Circuit outlines: <a href="https://github.com/bacinger/f1-circuits">bacinger/f1-circuits</a> (MIT) · Textures: <a href="https://polyhaven.com">Poly Haven</a> (CC0) · 3D: <a href="https://threejs.org">Three.js</a> (MIT)</p>
+    <p class="muted">Fan-made: F1 Pixel Cup is not affiliated with Formula 1, the FIA or the teams. Every picture is the game's own render. Code released under the <a href="https://github.com/AllStreets/F1PixelCup/blob/main/LICENSE">MIT License</a>.</p>
+  </footer>
+
+  <dialog id="phone-play-note" class="phone-note">
+    <p class="kicker">Heads up</p>
+    <h2 class="it-title">Best played on a computer with a keyboard</h2>
+    <p class="muted">F1 Pixel Cup is driven with the keyboard. Touch controls are on the way.</p>
+    <div class="note-actions">
+      <button class="ghost-btn" type="button" data-close>Stay here</button>
+      <a class="go-btn" href="./play.html"><span>Play anyway ›</span></a>
+    </div>
+  </dialog>
+
+  <script src="./game-data.js"></script>
+  <script src="./assets/data/grid-2025.js"></script>
+  <script src="./device.js"></script>
+  <script src="./grid-pages.js"></script>
+</body>
+</html>

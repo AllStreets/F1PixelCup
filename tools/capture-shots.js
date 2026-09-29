@@ -3,7 +3,7 @@
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
-// ["items"]; the default takes circuits, teams and items.
+// ["items"]; the default takes circuits, teams, items and helmets.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -11,7 +11,7 @@ async (page) => {
     const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
     await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
   } catch (e) { /* not fatal */ }
-  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items"];
+  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets"];
   // Relative to the Playwright server, which runs from the repo root.
   const OUT = "assets/shots/";
   const context = await page.context().browser().newContext({ viewport: null });
@@ -159,6 +159,41 @@ async (page) => {
       await p.waitForTimeout(600);
       await shot(`items/${s.id}`);
       written.push(`items/${s.id}`);
+    } finally {
+      await p.evaluate(() => {
+        Render3D.setPhotoCamera(null);
+        state.paused = false;
+        document.getElementById("game").style.visibility = "";
+        document.getElementById("screens").style.visibility = "";
+      });
+    }
+  }
+
+  // One helmet portrait per driver, for the site's driver cards: each car on
+  // the grid, paused, with a photo camera low at the front three-quarter (the
+  // visor, the design and the cockpit's edge). The halo stays: it's the car.
+  for (const id of parts.includes("helmets") ? await p.evaluate(() => DRIVERS.map((d) => d.id)) : []) {
+    await p.evaluate(async (id) => {
+      Game.backToPitLane();
+      Game.selectGridMode("back");
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === id));
+      Game.startCup();
+      for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+      state.paused = true;
+      state.pausedAt = performance.now();
+      const pl = getPlayer();
+      const c = Math.cos(pl.heading ?? pl.angle);
+      const s = Math.sin(pl.heading ?? pl.angle);
+      const spot = ([fwd, side, h]) => ({ x: pl.x + c * fwd - s * side, y: pl.y + s * fwd + c * side, d: pl.trackDistance, h });
+      Render3D.setPhotoCamera({ from: spot([7.5, -5.5, 6.2]), at: spot([-0.6, 0, 4.6]), fov: 30 });
+    }, id);
+    try {
+      await hideOverlays();
+      await p.waitForTimeout(500);
+      const view = await p.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+      const side = Math.round(Math.min(view.w, view.h) * 0.42);
+      await shot(`helmets/${id}`, { x: Math.round(view.w / 2 - side / 2), y: Math.round(view.h / 2 - side / 2), width: side, height: side });
+      written.push(`helmets/${id}`);
     } finally {
       await p.evaluate(() => {
         Render3D.setPhotoCamera(null);

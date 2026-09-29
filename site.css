@@ -125,3 +125,6 @@ a { color: inherit; }
 .career-strip p { margin: 0; }
 .career-strip strong { color: #fff; }
 .career-strip-warning { margin-top: 0.4em !important; color: #ffb4a8; font-size: 0.85rem; }
+
+/* Read by screen readers, not shown. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
