@@ -237,10 +237,11 @@ function trackDefinition(definition) {
     shortcutTotalLength,
     // Each box knows its distance round the lap, so at Suzuka's crossover a box
     // on one level can't be taken by a car on the other.
-    itemBoxes: options.itemBoxes.map((box) => ({
+    // None may sit on the grid or the qualifying roll-in (grid.js).
+    itemBoxes: Grid.boxesClearOfStart(options.itemBoxes.map((box) => ({
       ...box,
       d: box.d ?? getRouteDistanceForPoint(box, segments, cumulativeStarts),
-    })),
+    })), totalLength),
   };
 }
 
