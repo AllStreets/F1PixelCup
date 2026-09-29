@@ -23,6 +23,7 @@ import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox } f
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
+import { createPostFx } from "./r3d/postfx.js";
 
 const MAX_PARTICLES = 256;
 
@@ -53,6 +54,78 @@ scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 2, 9000);
 
+// ---------------------------------------------------------------------------
+// Graphics quality and post-processing (quality.js, r3d/postfx.js). The tier
+// starts from a guess about the device, steps down once if the first seconds
+// of racing run slow, and the player's choice in Settings overrides it.
+// ---------------------------------------------------------------------------
+
+const postfx = createPostFx(renderer, scene, camera);
+const GRAPHICS_KEY = "f1pixelcup.graphics";
+const Quality = window.Quality;
+
+function storedGraphics() {
+  try {
+    return Quality.parseChoice(window.localStorage.getItem(GRAPHICS_KEY));
+  } catch (error) {
+    return "auto";
+  }
+}
+
+function deviceInfo() {
+  let gpu = "";
+  try {
+    const gl = renderer.getContext();
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    gpu = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  } catch (error) {
+    gpu = "";
+  }
+  const touchOnly = Boolean(window.Device && window.Device.isTouchOnly(window.matchMedia && window.matchMedia.bind(window)));
+  return { cores: navigator.hardwareConcurrency || 0, memoryGb: navigator.deviceMemory || 0, touchOnly, gpu };
+}
+
+let graphicsChoice = storedGraphics();
+let autoTier = Quality.initialTier(deviceInfo());
+let autoSettled = false;
+const frameSamples = [];
+let lastFrameAt = 0;
+const currentTier = () => Quality.effectiveTier(graphicsChoice, autoTier);
+postfx.setTier(currentTier());
+
+// The first 90 frames of racing (not paused) decide whether auto steps down.
+function sampleFrame(racing) {
+  if (autoSettled || graphicsChoice !== "auto") return;
+  const t = performance.now();
+  if (!racing) { lastFrameAt = 0; return; }
+  if (lastFrameAt) frameSamples.push(t - lastFrameAt);
+  lastFrameAt = t;
+  if (frameSamples.length >= 90) {
+    autoSettled = true;
+    // The first frames of a race carry one-off work: judge the rest.
+    const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
+    if (next !== autoTier) {
+      autoTier = next;
+      postfx.setTier(currentTier());
+    }
+  }
+}
+
+function setGraphics(choice) {
+  graphicsChoice = Quality.parseChoice(choice);
+  try {
+    window.localStorage.setItem(GRAPHICS_KEY, graphicsChoice);
+  } catch (error) {
+    // The choice holds for this visit only.
+  }
+  postfx.setTier(currentTier());
+  return graphics();
+}
+
+function graphics() {
+  return { choice: graphicsChoice, autoTier, tier: currentTier() };
+}
+
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.1);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 2.4);
@@ -64,7 +137,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -97,10 +170,11 @@ function inspect() {
   const flaps = {};
   if (current) current.cars.forEach((car, id) => { if (car.flap) flaps[id] = car.flap.rotation.z; });
   const layer = powerUpLayer.inspect();
+  const fx = postfx.inspect();
   // Which painted helmet each car on track wears, by driver.
   const helmets = {};
   if (current) current.cars.forEach((car) => { if (car.helmet) helmets[car.helmet.driverId] = car.helmet.textureId; });
-  return { flaps, helmets, ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  return { flaps, helmets, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -411,6 +485,7 @@ function resize() {
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     particleMat.uniforms.scale.value = h * dpr * 0.9;
+    postfx.setSize(w, h, dpr);
   }
 }
 
@@ -523,7 +598,13 @@ function render(frame) {
     if (o.userData.followCamera) o.position.copy(camera.position);
   });
 
-  renderer.render(scene, camera);
+  // The frame, through the post-processing of the current tier.
+  sampleFrame(dt > 0);
+  postfx.render({
+    dt, now, trackId: track.id, speedFraction: sf, boosting, playerId: player.id,
+    sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
+    occluders: [world.decor, world.landmarks],
+  });
   return surface;
 }
 
