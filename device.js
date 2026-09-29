@@ -13,5 +13,34 @@
       return false;
     }
   }
-  return { isTouchOnly };
+  // On a touch-only device, "Play" links open the note (a <dialog>) first.
+  // "Play anyway" goes on to the game, which then doesn't show its own note
+  // again this visit.
+  function guardPlayLinks(doc, win, noteId = "phone-play-note") {
+    if (!doc || !win || !isTouchOnly(win.matchMedia && win.matchMedia.bind(win))) return false;
+    const note = doc.getElementById(noteId);
+    if (!note) return false;
+    doc.querySelectorAll("a.play-link").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (typeof note.showModal === "function") note.showModal();
+        else win.location.href = link.href;
+      });
+    });
+    const close = note.querySelector("[data-close]");
+    if (close) close.addEventListener("click", () => note.close());
+    const go = note.querySelector("a.go-btn");
+    if (go) {
+      go.addEventListener("click", () => {
+        try {
+          win.sessionStorage.setItem("f1pixelcup.phoneNote", "seen");
+        } catch (error) {
+          // The game shows its note once more, that's all.
+        }
+      });
+    }
+    return true;
+  }
+
+  return { isTouchOnly, guardPlayLinks };
 }));

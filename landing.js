@@ -144,25 +144,9 @@
   }
 
   function guardPlayOnPhones() {
-    if (!window.Device || !Device.isTouchOnly(window.matchMedia && window.matchMedia.bind(window))) return;
-    const note = $("phone-play-note");
-    document.querySelectorAll("a.play-link").forEach((link) => {
-      link.addEventListener("click", (event) => {
-        event.preventDefault();
-        if (typeof note.showModal === "function") note.showModal();
-        else window.location.href = link.href;
-      });
-    });
-    note.querySelector("[data-close]").addEventListener("click", () => note.close());
-    // "Play anyway": the game won't put the same note up again this visit.
-    note.querySelector("a.go-btn").addEventListener("click", () => {
-      try {
-        window.sessionStorage.setItem("f1pixelcup.phoneNote", "seen");
-      } catch (error) {
-        // The game shows its note once more, that's all.
-      }
-    });
+    if (window.Device) Device.guardPlayLinks(document, window);
   }
+
 
   // Another tab raced: the career section follows (only for the profile
   // itself -- a backup key changes nothing here), keeping focus where it was.

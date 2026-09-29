@@ -173,11 +173,21 @@ async (page) => {
   await q.waitForTimeout(300);
   out.phoneNote = await q.evaluate(() => { const n = document.getElementById("phone-play-note"); return Boolean(n) && n.open === true; });
   out.phoneStayed = !q.url().includes("play.html");
-  // The grid pages at phone width: no side scroll.
+  // The grid pages at phone width: no side scroll, one card per row, and a
+  // visible way to the other page (the top nav is hidden on phones).
   for (const page of ["drivers", "teams"]) {
     await q.goto(`http://localhost:8765/${page}.html?${Date.now()}`);
     await q.waitForTimeout(900);
     out[`${page}PhoneNoSideScroll`] = await q.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+    out[`${page}PhoneOneColumn`] = await q.evaluate(() => {
+      const cards = [...document.querySelectorAll(".driver-card, #team-cards .team-card")];
+      return cards.length > 0 && new Set(cards.map((c) => Math.round(c.getBoundingClientRect().left))).size === 1;
+    });
+    const other = page === "drivers" ? "teams" : "drivers";
+    out[`${page}PhoneCrossLink`] = await q.evaluate((other) => {
+      const a = document.querySelector(`.grid-links a[href="./${other}.html"]`);
+      return Boolean(a) && a.getClientRects().length > 0;
+    }, other);
   }
   await phone.close();
 
@@ -194,32 +204,54 @@ async (page) => {
     const footerOk = () => g.evaluate(() => {
       const f = document.querySelector("footer.footer");
       return Boolean(f) && /not affiliated with Formula 1, the FIA or the teams/i.test(f.textContent)
-        && Boolean(f.querySelector('a[href="https://github.com/f1db/f1db"]')) && /CC BY 4\.0/.test(f.textContent);
+        && Boolean(f.querySelector('a[href="https://github.com/f1db/f1db"]'))
+        && Boolean(f.querySelector('a[href="https://creativecommons.org/licenses/by/4.0/"]')) && /Marcel Overdijk/.test(f.textContent);
     });
+    // Every picture loads: each scrolled into view (they're lazy), with a
+    // time limit so a stuck image fails rather than hangs.
     const imagesOk = () => g.evaluate(async () => {
       const imgs = [...document.querySelectorAll("main img")];
-      await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))));
-      return imgs.length > 0 && imgs.every((i) => i.naturalWidth > 0);
+      for (const i of imgs) {
+        i.scrollIntoView({ block: "center" });
+        if (!i.complete) await Promise.race([new Promise((r) => { i.onload = i.onerror = r; }), new Promise((r) => setTimeout(r, 4000))]);
+      }
+      window.scrollTo(0, 0);
+      return imgs.length > 0 && imgs.every((i) => i.complete && i.naturalWidth > 0);
     });
     await g.goto(`http://localhost:8765/drivers.html?${Date.now()}`);
     await g.waitForTimeout(1200);
     out.driverCards = await g.locator(".driver-card").count();
     out.driverImages = await imagesOk();
-    out.driverOrder = await g.evaluate(() => [...document.querySelectorAll(".driver-card h3")].slice(0, 2).map((h) => h.textContent).join("|") === "Charles Leclerc|Lewis Hamilton");
-    out.driverFacts = await g.evaluate(async () => {
-      const data = await (await fetch("./assets/data/grid-2025.json")).json();
-      const norris = data.drivers.find((d) => d.id === "norris");
-      const card = document.querySelector('.driver-card[data-id="norris"]');
-      return Boolean(card) && card.textContent.includes(`${norris.season.points}`) && /champion/i.test(card.textContent)
-        && document.querySelector('.driver-card[data-id="tsunoda"]').textContent.includes("Red Bull");
+    out.driverOrder = await g.evaluate(() => [...document.querySelectorAll(".driver-card h2")].slice(0, 2).map((h) => h.textContent).join("|") === "Charles Leclerc|Lewis Hamilton");
+    // Known facts, stated literally: Norris, champion on 423; Tsunoda moved to
+    // Red Bull; Antonelli's career to the end of 2025 has no wins.
+    out.driverFacts = await g.evaluate(() => {
+      const card = (id) => document.querySelector(`.driver-card[data-id="${id}"]`).textContent;
+      return /423 pts/.test(card("norris")) && /2025 World Champion/.test(card("norris"))
+        && /Red Bull in rounds 3–24/.test(card("tsunoda")) && /Career to the end of 2025: 24 starts · 0 wins/.test(card("antonelli"));
     });
     out.driversFooter = await footerOk();
     await g.goto(`http://localhost:8765/teams.html?${Date.now()}`);
     await g.waitForTimeout(1200);
-    out.teamCards = await g.locator(".team-card").count();
+    out.teamCards = await g.locator("#team-cards .team-card").count();
     out.teamImages = await imagesOk();
     out.teamsFooter = await footerOk();
-    out.gridNav = await g.evaluate(() => ["./index.html", "./drivers.html", "./teams.html"].every((href) => document.querySelector(`.topnav a[href^="${href}"], .wordmark[href^="${href}"]`)));
+    // The way between the pages works: the cross-link and the top nav.
+    await g.locator('.grid-links a[href="./drivers.html"]').click();
+    await g.waitForURL(/drivers\.html/);
+    await g.waitForTimeout(600);
+    const onDrivers = await g.locator(".driver-card").count();
+    await g.locator('.topnav a[href="./teams.html"]').click();
+    await g.waitForURL(/teams\.html/);
+    await g.waitForTimeout(600);
+    out.gridNav = (onDrivers === 20 && await g.locator("#team-cards .team-card").count() === 10
+      && await g.evaluate(() => document.querySelector('.topnav a[aria-current="page"]').getAttribute("href") === "./teams.html")) || "nav failed";
+    // Without its data, a page says so instead of sitting empty.
+    await g.route("**/assets/data/grid-2025.js*", (route) => route.abort());
+    await g.goto(`http://localhost:8765/drivers.html?${Date.now()}`);
+    await g.waitForTimeout(600);
+    out.gridDataMissingSaysSo = await g.evaluate(() => /didn.t load/.test(document.getElementById("driver-cards").textContent));
+    await g.unrouteAll({ behavior: "ignoreErrors" });
     await g.goto(`http://localhost:8765/?${Date.now()}`);
     await g.waitForTimeout(800);
     out.indexFooter = await footerOk();

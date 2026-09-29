@@ -8,7 +8,7 @@ Two new site pages, `drivers.html` and `teams.html`, give the game's 2025 grid i
 
 ## The data
 
-- **Build.** `tools/site/build_grid_data.js <f1db-json-dir>` reads an F1DB JSON release (`f1db-json-splitted.zip`) and writes `assets/data/grid-2025.json`. The JSON is committed, so the site never fetches at run time.
+- **Build.** `tools/site/build_grid_data.js <f1db-json-dir>` reads an F1DB JSON release (`f1db-json-splitted.zip`) and writes `assets/data/grid-2025.js` (`window.GRID_2025`). The script is committed and loaded by the pages, so there is no fetch at all, and no failure over `file://`.
 - **Source block.**
 
   ```
@@ -23,7 +23,8 @@ Two new site pages, `drivers.html` and `teams.html`, give the game's 2025 grid i
 
 - **Drivers.** `id` and `teamId` are the game's own (`game-data.js`); `f1dbId` is F1DB's.
 - **2025 season.** Race wins, podiums and poles count Grands Prix only (not sprints). They are computed from F1DB's 2025 race results and qualifying.
-- **Career totals** are F1DB's totals as of the release, which is named on the page.
+- **The page is a snapshot at the end of 2025.** The latest release also holds later races, so career totals are counted from F1DB's race rows up to and including 2025. The builder first checks that this rule, run over every year, gives F1DB's own all-time totals. Team records are for F1DB's constructor under its current name, labelled "As Racing Bulls" and so on, so earlier names such as Toro Rosso aren't counted.
+- **Names** are the game's, everywhere: no title sponsors in team names. F1DB's own names are kept as `f1dbName`.
 - **Nationality** is the F1DB country's demonym.
 - **No prose is invented.** The cards show F1DB facts and the game's own title for each driver ("Monaco Maestro"); no written biographies.
 
@@ -45,7 +46,7 @@ Two new site pages, `drivers.html` and `teams.html`, give the game's 2025 grid i
 - **No official material:** no official photos, logos or sponsor marks. Everything pictured is the game's own render.
 - **Footer on every site page** (index, drivers, teams):
   - "Fan-made, not affiliated with Formula 1, the FIA or the teams."
-  - "Race data: F1DB (CC BY 4.0), release …" with a link, alongside the existing credits.
+  - "Race data: F1DB by Marcel Overdijk, CC BY 4.0 (linked), release …, adapted: …", alongside the existing credits. The same static text is on all three pages, and a Node test ties the release to the data.
 - **Layout:** no horizontal scroll at phone width, and the cards stack to one column.
 
 ## Tests
@@ -60,3 +61,17 @@ Two new site pages, `drivers.html` and `teams.html`, give the game's 2025 grid i
   - there is no horizontal scroll at 390 px;
   - the footer carries the not-affiliated line and the F1DB credit on all three pages;
   - the nav links work.
+
+## Revisions after review
+
+- **Snapshot.** Careers now stop at the end of 2025 (Antonelli's 2026 wins were showing).
+- **Credit.** The CC BY credit is complete: author, licence link and a note of what was adapted.
+- **Titles.** The game's driver titles were corrected: Hadjar "F2 Runner-up", Piastri "Clinical Contender", and Sainz, not Albon, is the "Smooth Operator".
+- **Sponsors.** Title sponsors were removed from team names and descriptions (tested).
+- **Page structure:**
+  - no live region over the list, a status line, and a noscript note;
+  - cross-links for phones, and one nav labelled "Site";
+  - h2 card names, and lighter red for small text on the panels.
+- **Phone guard.** It is shared in `device.js`.
+- **Checks.** Stronger: literal facts, clicked navigation, one column at 390 px, and the missing-data state.
+- **Ruling:** the team shots keep the showroom's dark backdrop above the turntable. It reads as a studio and is the same on all ten cards and on the landing page.
