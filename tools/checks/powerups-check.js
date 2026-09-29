@@ -77,15 +77,20 @@ async (page) => {
   results.undercut = await run(async () => {
     const sorted = getSortedRacers();
     const pl = sorted[10];
-    const ahead = sorted[9];
+    // Live frames run between steps, so ask the game which car is directly ahead.
+    const ahead = carAhead(pl);
     pl.currentItem = "undercut"; useItem(pl, performance.now());
     const s = state.shots[state.shots.length - 1];
     const aimed = s.type === "undercut" && s.targetId === ahead.id;
     state.racers.forEach((r) => { r.speed = 0; });
+    const before = Object.fromEntries(state.racers.map((r) => [r.id, r.spinUntil]));
     let t = performance.now();
     for (let i = 0; i < 600 && state.shots.includes(s); i += 1) { t += 16.7; updateShots(1 / 60, t); }
     const route = getItemRoute(state.track);
-    return aimed && !state.shots.includes(s) && ahead.spinUntil > t - 1000 && Math.abs(s.lat) <= route.halfWidthAt(0) - PowerUps.SHOT_EDGE;
+    // It spins the first car in its path: the target, or one alongside it.
+    const hit = state.racers.filter((r) => r.spinUntil !== before[r.id]);
+    const hitAhead = hit.length === 1 && getRaceProgress(hit[0]) > getRaceProgress(pl);
+    return aimed && !state.shots.includes(s) && hitAhead && Math.abs(s.lat) <= route.halfWidthAt(0) - PowerUps.SHOT_EDGE;
   });
 
   // Steward Penalty: passes the field, hits the leader; re-targets if the leader finishes.
@@ -159,6 +164,94 @@ async (page) => {
     buildCupEntries(); startRace(0);
     return state.shots.length === 0 && state.hazards.length === 0 && state.safetyCar === null
       && state.boxHiddenUntil.every((t) => !t) && state.lastSafetyCarAt === null;
+  });
+
+  // Safety Car: a car on track ahead of the leader, rivals capped and held, user free.
+  await setup();
+  results.safetyCar = await run(() => {
+    const pl = getSortedRacers()[10];
+    pl.currentItem = "safetyCar";
+    const now = performance.now();
+    useItem(pl, now);
+    const sc = state.safetyCar;
+    const leader = firstUnfinished();
+    const ahead = sc && PowerUps.wrapDelta(sc.d, leader.trackDistance, state.track.totalLength) > 0;
+    let t = now;
+    for (let i = 0; i < 120; i += 1) { t += 16.7; updateRace(1 / 60, t); }
+    const rivals = state.racers.filter((r) => r.id !== pl.id && !r.finished);
+    const capped = rivals.every((r) => r.speed <= r.physics.maxSpeed * PowerUps.FACTORS.safetyCar + 1);
+    const leaderBehind = PowerUps.wrapDelta(state.safetyCar.d, firstUnfinished().trackDistance, state.track.totalLength) > 0;
+    return Boolean(sc) && ahead && capped && leaderBehind && state.lastSafetyCarAt !== null;
+  });
+  results.safetyCarLeaves = await run(() => {
+    let t = performance.now();
+    state.safetyCar.until = t;
+    for (let i = 0; i < 200; i += 1) { t += 16.7; updateRace(1 / 60, t); }
+    return state.safetyCar === null;
+  });
+
+  // Pausing freezes everything in flight.
+  await setup();
+  results.pauseFreezes = await run(async () => {
+    const pl = getPlayer();
+    pl.currentItem = "debris"; useItem(pl, performance.now());
+    const s = state.shots[state.shots.length - 1];
+    state.boxHiddenUntil[0] = performance.now() + 3000;
+    const leftShot = s.expiresAt - performance.now();
+    const leftBox = state.boxHiddenUntil[0] - performance.now();
+    togglePause();
+    await new Promise((r) => setTimeout(r, 1500));
+    togglePause();
+    const nowShot = s.expiresAt - performance.now();
+    const nowBox = state.boxHiddenUntil[0] - performance.now();
+    return Math.abs(leftShot - nowShot) < 150 && Math.abs(leftBox - nowBox) < 150;
+  });
+
+  // Player oil: tap drops, hold trails, key-up drops, losing focus drops.
+  await setup();
+  results.oilTap = await run(async () => {
+    const pl = getPlayer(); pl.currentItem = "oilSlick";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " " }));
+    return pl.currentItem === "none" && state.hazards.length === 1 && !pl.trailingOil;
+  });
+  results.oilHold = await run(async () => {
+    const pl = getPlayer(); pl.currentItem = "oilSlick";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    await new Promise((r) => setTimeout(r, 400));
+    const trailing = pl.trailingOil && pl.currentItem === "oilSlick";
+    // Cars are racing meanwhile and can drive over earlier slicks, so count
+    // only what this release drops.
+    const before = state.hazards.length;
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "Space", key: " " }));
+    return trailing && !pl.trailingOil && pl.currentItem === "none" && state.hazards.length === before + 1;
+  });
+  results.oilBlurDrops = await run(async () => {
+    const pl = getPlayer(); pl.currentItem = "oilSlick";
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "Space", key: " " }));
+    await new Promise((r) => setTimeout(r, 400));
+    const before = state.hazards.length;
+    window.dispatchEvent(new Event("blur"));
+    return !pl.trailingOil && pl.currentItem === "none" && state.hazards.length === before + 1;
+  });
+
+  // AI: holds items for a reason, and uses every item in a real race.
+  results.aiUsesEveryItem = await run(() => {
+    window.__usedItems = [];
+    const all = CUPS.flatMap((cup, ci) => cup.tracks.map((_, ti) => [ci, ti]));
+    for (const [ci, ti] of all.slice(0, 4)) {
+      state.selectedCup = ci; state.activeCupIndex = ci; buildCupEntries(); startRace(ti);
+      state.racers.forEach((r) => { r.isPlayer = false; });
+      state.phase = "race";
+      let now = 100000;
+      state.raceStart = now;
+      state.racers.forEach((r) => { r.lapStartAt = now; });
+      for (let t = 0; t < 400 && !state.racers.every((r) => r.finished); t += 1 / 60) {
+        now += 1000 / 60;
+        updateRace(1 / 60, now);
+      }
+    }
+    return PowerUps.ITEM_ORDER.every((id) => window.__usedItems.includes(id));
   });
 
   await context.close();

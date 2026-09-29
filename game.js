@@ -919,9 +919,32 @@ function finishRoulette(racer, now) {
   if (racer.isPlayer) addFeed(`Power-up ready: ${labelizeItem(racer.currentItem)}.`);
 }
 
-function maybeUseAiItem(racer, now, dt) {
-  // Task 5 gives the AI real rules; until then it holds its items.
-  return;
+// The AI uses items for a reason, not at random: an Undercut when there is a
+// car to aim at, oil trailed when someone is right behind, DRS and Overtake
+// Mode on a straight or under attack, the rest as soon as it has reacted.
+function maybeUseAiItem(racer, now) {
+  if (state.flagOutAt || racer.isPlayer || racer.currentItem === "none") return;
+  if (now < racer.itemReadyAt || racer.spinUntil > now) return;
+  const T = PowerUps.TIMINGS;
+  const L = state.track.totalLength;
+  const me = { id: racer.id, d: racer.trackDistance || 0 };
+  const { behind } = PowerUps.nearestGaps(me, itemBodies(), L);
+  const item = racer.currentItem;
+  if (item === "undercut") {
+    if (carAhead(racer) && getRaceProgress(carAhead(racer)) - getRaceProgress(racer) <= L * 0.2) useItem(racer, now);
+  } else if (item === "oilSlick") {
+    if (racer.trailingOil) {
+      if (now - racer.trailSince >= T.aiTrailMs) releaseTrail(racer, now);
+    } else if (behind !== null && behind <= 60) {
+      useItem(racer, now, { trail: true });
+    } else if (now - racer.itemHeldSince >= T.aiHoldMs) {
+      useItem(racer, now);
+    }
+  } else if (item === "drs" || item === "overtakeMode") {
+    if (PowerUps.isStraight(getItemRoute(state.track), me.d) || (behind !== null && behind <= 40)) useItem(racer, now);
+  } else {
+    useItem(racer, now);
+  }
 }
 
 function useItem(racer, now, { trail = false } = {}) {
@@ -932,9 +955,13 @@ function useItem(racer, now, { trail = false } = {}) {
   if (item === "oilSlick" && trail) {
     racer.trailingOil = true;
     racer.trailSince = now;
+  // Every use is recorded for the browser check that proves each item fires.
+  (window.__usedItems = window.__usedItems || []).includes("oilSlick") || window.__usedItems.push("oilSlick");
     return;
   }
   racer.currentItem = "none";
+  // Every use is recorded for the browser check that proves each item fires.
+  (window.__usedItems = window.__usedItems || []).includes(item) || window.__usedItems.push(item);
   racer.trailingOil = false;
   racer.oilHoldStart = 0;
   if (racer.isPlayer) sfx.itemUse();
@@ -1030,8 +1057,45 @@ function spinRacer(racer, duration = 900, now = performance.now()) {
   return true;
 }
 
+function safetyCarActive(now) {
+  return Boolean(state.safetyCar) && now < state.safetyCar.until;
+}
+
 function deploySafetyCar(racer, now) {
-  // Replaced in Task 5.
+  const leader = firstUnfinished() || racer;
+  const field = state.racers.filter((r) => !r.finished);
+  const meanMax = field.reduce((s, r) => s + r.physics.maxSpeed, 0) / Math.max(1, field.length);
+  state.safetyCar = {
+    ownerId: racer.id,
+    d: wrapLap((leader.trackDistance || 0) + 90),
+    lat: 0,
+    speed: meanMax * PowerUps.FACTORS.safetyCar,
+    until: now + PowerUps.TIMINGS.safetyCarMs,
+    leaveUntil: 0,
+  };
+  state.lastSafetyCarAt = raceSeconds(now);
+  addFeed("Safety Car deployed.");
+}
+
+// While out, it drives the racing line at safety-car pace. Then it pulls off
+// into the run-off at the side of the track (there is no pit lane in the
+// circuit geometry) and is gone two seconds later.
+function updateSafetyCar(dt, now) {
+  const sc = state.safetyCar;
+  if (!sc) return;
+  const route = getItemRoute(state.track);
+  if (now >= sc.until) {
+    if (!sc.leaveUntil) {
+      sc.leaveUntil = now + PowerUps.TIMINGS.safetyCarLeaveMs;
+      addFeed("Safety Car in this lap. Racing resumes.");
+    }
+    sc.lat = Math.min(route.halfWidthAt(sc.d) + 30, sc.lat + 40 * dt);
+    sc.speed *= Math.pow(0.4, dt);
+    if (now >= sc.leaveUntil) state.safetyCar = null;
+  } else {
+    sc.lat += clamp(0 - sc.lat, -40 * dt, 40 * dt);
+  }
+  if (state.safetyCar) sc.d = wrapLap(sc.d + sc.speed * dt);
 }
 
 function applyTrackBarrier(racer, surface) {
@@ -1166,6 +1230,10 @@ function updateRacer(racer, dt, now) {
     steerInput = (input.right ? 1 : 0) - (input.left ? 1 : 0);
     drifting = input.drift && input.throttle && Math.abs(steerInput) > 0 && racer.speed > 70;
     driftSide = steerInput;
+    if (racer.oilHoldStart && !racer.trailingOil && racer.currentItem === "oilSlick"
+      && now - racer.oilHoldStart >= PowerUps.TIMINGS.trailHoldMs) {
+      useItem(racer, now, { trail: true });
+    }
   } else {
     const difficulty = getDifficulty();
     const angleDiff = normalizeAngle(targetAngle - racer.heading);
@@ -1186,7 +1254,7 @@ function updateRacer(racer, dt, now) {
     } else if (Math.random() < difficulty.mistakeRate * dt) {
       racer.mistakeUntil = now + 420 + Math.random() * 520;
     }
-    maybeUseAiItem(racer, now, dt);
+    maybeUseAiItem(racer, now);
   }
 
   if (racer.spinUntil > now) {
@@ -1214,6 +1282,10 @@ function updateRacer(racer, dt, now) {
   if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
   if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
   if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
+  const sc = state.safetyCar;
+  if (sc && safetyCarActive(now) && racer.id !== sc.ownerId) {
+    targetSpeed = Math.min(targetSpeed, racer.physics.maxSpeed * PowerUps.FACTORS.safetyCar);
+  }
 
   if (!racer.isPlayer) {
     const difficulty = getDifficulty();
@@ -1258,6 +1330,13 @@ function updateRacer(racer, dt, now) {
   }
 
   racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992, dt * 60);
+
+  // Behind the safety car nobody passes: hold station behind the car ahead.
+  if (sc && safetyCarActive(now) && racer.id !== sc.ownerId) {
+    const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
+    const others = [...itemBodies(), { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.speed }];
+    racer.speed = Math.min(racer.speed, PowerUps.holdStationSpeed(me, others, state.track.totalLength));
+  }
 
   if (drifting) {
     racer.drifting = true;
@@ -1518,6 +1597,7 @@ function updateRace(dt, now) {
     for (let step = 0; step < steps; step += 1) updateRacer(racer, dt, now);
   });
   updateShots(dt, now);
+  updateSafetyCar(dt, now);
   updateHazards(now);
   updateParticles(dt);
   handleRacerContacts(now);
@@ -3780,6 +3860,20 @@ function bindEvents() {
     if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = false;
     if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = false;
     if (event.key === "Shift") input.drift = false;
+    if (event.code === "Space") {
+      const player = getPlayer();
+      if (player && player.currentItem === "oilSlick" && (player.oilHoldStart || player.trailingOil)) {
+        if (player.trailingOil) releaseTrail(player, performance.now());
+        else useItem(player, performance.now());
+      }
+    }
+  });
+
+  // Losing focus loses the key-up; drop a trailed slick rather than keep it forever.
+  window.addEventListener("blur", () => {
+    const player = getPlayer();
+    if (player && player.trailingOil) releaseTrail(player, performance.now());
+    if (player) player.oilHoldStart = 0;
   });
 }
 
