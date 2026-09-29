@@ -1,7 +1,10 @@
 // Browser check for index.html (landing page). Run with the Playwright MCP
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
-// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true.
+// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
+// yourDrivers, latestByRace, v1Split and v1LeftAlone true; threeLoaded false
+// (the site never loads the 3D engine); every noSideScroll true; errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -26,7 +29,10 @@ async (page) => {
 
   await size(1440, 900);
   await p.goto(`http://localhost:8765/?${Date.now()}`);
-  await p.evaluate(() => localStorage.removeItem("f1pixelcup.profile"));
+  // Every saved profile, the v1 one and any backups included.
+  const clearProfiles = () => p.evaluate(() => Object.keys(localStorage)
+    .filter((k) => k.startsWith("f1pixelcup.profile")).forEach((k) => localStorage.removeItem(k)));
+  await clearProfiles();
   await p.reload();
   await p.waitForTimeout(1200);
   out.threeLoaded = await p.evaluate(() => performance.getEntriesByType("resource").some((r) => r.name.includes("three")));
@@ -53,6 +59,7 @@ async (page) => {
   out.navLink = await p.locator('nav a[href="#power-ups"]').count();
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
+  await clearProfiles();
   await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 1, careerPoints: 276, rating: 1309, ratedRaces: 4,
     totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1, poles: 2 },
     bestLaps: { monza: { ms: 36280 } }, history: [] })));
@@ -61,7 +68,52 @@ async (page) => {
   const summary = await p.locator("#career-summary").innerText();
   out.returning = summary.includes("1309") && summary.includes("0:36.280") && /Poles\s*2/i.test(summary);
   out.xss = await p.evaluate(() => window.__xss === undefined);
-  out.careerLink = await p.locator("#career a[href*='play.html#career']").count();
+  // An old save with no drivers on record is Leclerc's; the link opens his career.
+  out.careerLink = await p.locator("#career a[href='./play.html?driver=leclerc#career']").count();
+
+  // One career per driver: the latest driver leads (here the lower-rated one),
+  // the others follow.
+  await clearProfiles();
+  await p.evaluate(() => localStorage.setItem("f1pixelcup.profile.v2", JSON.stringify({ version: 2, profileId: "p", lastDriverId: "hamilton",
+    drivers: {
+      leclerc: { driverId: "leclerc", careerPoints: 184, rating: 1352, ratedRaces: 6, totals: { races: 6, wins: 2, podiums: 4, cupsCompleted: 1, cupsWon: 1, poles: 3 },
+        bestLaps: { monaco: { ms: 18950.4 } }, history: [{ type: "race", at: "2026-09-28T10:00:00.000Z" }] },
+      hamilton: { driverId: "hamilton", careerPoints: 40, rating: 1244, ratedRaces: 2, totals: { races: 2, wins: 0, podiums: 1, cupsCompleted: 0, cupsWon: 0, poles: 0 }, bestLaps: {}, history: [] },
+    } })));
+  await p.reload();
+  await p.waitForTimeout(1000);
+  const drivers = await p.locator("#career-summary").innerText();
+  out.yourDrivers = /Latest · Lewis Hamilton/i.test(drivers) && drivers.includes("1244")
+    && /Your other drivers[\s\S]*Charles Leclerc[\s\S]*1352/i.test(drivers)
+    && await p.locator("#career a[href='./play.html?driver=hamilton#career']").count() === 1;
+
+  // No driver on record as the last: the one with the latest race leads.
+  await p.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("f1pixelcup.profile.v2"));
+    saved.lastDriverId = null;
+    saved.drivers.hamilton.history = [{ type: "race", at: "2026-09-29T10:00:00.000Z" }];
+    localStorage.setItem("f1pixelcup.profile.v2", JSON.stringify(saved));
+  });
+  await p.reload();
+  await p.waitForTimeout(800);
+  out.latestByRace = /Latest · Lewis Hamilton/i.test(await p.locator("#career-summary").innerText());
+
+  // A shared v1 career raced with two drivers is split on the landing page too,
+  // and the v1 save is left exactly as it was.
+  await clearProfiles();
+  const v1 = JSON.stringify({ version: 1, profileId: "old", careerPoints: 72, rating: 1250, ratedRaces: 2,
+    totals: { races: 2, wins: 1, podiums: 1 }, bestLaps: {}, history: [
+      { id: "a", type: "race", at: "2026-09-20T10:00:00.000Z", trackId: "monza", difficulty: "pro", driverId: "leclerc", position: 1, fieldSize: 20, careerPointsEarned: 52 },
+      { id: "b", type: "race", at: "2026-09-21T10:00:00.000Z", trackId: "spa", difficulty: "pro", driverId: "hamilton", position: 9, fieldSize: 20, careerPointsEarned: 20 },
+    ] });
+  await p.evaluate((raw) => localStorage.setItem("f1pixelcup.profile", raw), v1);
+  await p.reload();
+  await p.waitForTimeout(800);
+  const split = await p.locator("#career-summary").innerText();
+  out.v1Split = /Latest · Lewis Hamilton/i.test(split) && /Charles Leclerc[\s\S]*52 pts · 1 race\b/i.test(split);
+  out.v1LeftAlone = await p.evaluate((raw) => localStorage.getItem("f1pixelcup.profile") === raw
+    && JSON.parse(localStorage.getItem("f1pixelcup.profile.v2")).version === 2, v1);
+  await clearProfiles();
 
   for (const [w, h] of [[1000, 700], [1900, 760], [560, 800]]) {
     await size(w, h);
@@ -98,5 +150,5 @@ async (page) => {
   out.phoneNote = await q.evaluate(() => { const n = document.getElementById("phone-play-note"); return Boolean(n) && n.open === true; });
   out.phoneStayed = !q.url().includes("play.html");
   await phone.close();
-  return { ...out, errors };
+  return { results: out, errors };
 }

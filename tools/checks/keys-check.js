@@ -3,6 +3,7 @@
 // filename: tools/checks/keys-check.js, dev server on http://localhost:8765.
 // Expected: enterOnPillSelects true, enterOnPillDidNotStart true,
 // nextRaceIgnoredMidRace true, shortWindowStartReachable true, errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -57,5 +58,5 @@ async (page) => {
   out.shortWindowNoSideScroll = await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
 
   await context.close();
-  return { ...out, errors };
+  return { results: out, errors };
 }

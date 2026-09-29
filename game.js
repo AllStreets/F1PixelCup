@@ -688,7 +688,7 @@ function getPitLaneState() {
   return {
     drivers: DRIVERS.map((d, index) => ({ index, code: d.code, number: d.number, name: d.name, teamColor: getTeamForDriver(d).body })),
     selectedDriver: state.selectedDriver,
-    driver: { name: driver.name, number: driver.number, title: driver.title },
+    driver: { id: driver.id, name: driver.name, number: driver.number, title: driver.title },
     team: { name: team.name, car: team.car, body: team.body, trim: team.trim },
     stats: { speed: stats.speed, handling: stats.handling, acceleration: stats.acceleration, traction: stats.traction },
     cups: CUPS.map((cup, index) => ({ index, name: cup.name, circuits: cup.tracks.map((track) => track.name) })),
@@ -697,6 +697,8 @@ function getPitLaneState() {
     selectedDifficulty: state.difficulty,
     gridModes: GRID_MODES,
     gridMode: state.gridMode,
+    // Drivers can be changed only in the pit lane, between cups.
+    canChooseDriver: state.phase === "garage",
   };
 }
 
@@ -728,9 +730,51 @@ function loadGridPreference() {
 
 function selectDriver(index) {
   if (state.phase !== "garage") return;
+  setSelectedDriver(index);
+  try {
+    window.localStorage.setItem("f1pixelcup.driver", DRIVERS[state.selectedDriver].id);
+  } catch (err) {
+    // Preference just will not persist.
+  }
+  renderGarage();
+}
+
+function setSelectedDriver(index) {
   state.selectedDriver = ((index % DRIVERS.length) + DRIVERS.length) % DRIVERS.length;
   state.selectedKart = TEAMS.findIndex((t) => t.id === DRIVERS[state.selectedDriver].teamId);
-  renderGarage();
+}
+
+// Every driver has their own career, so the game comes back to the driver you
+// were racing: a ?driver= link (the site's "Open career"), else the driver you
+// last picked, else the one you last raced, else Leclerc.
+function loadDriverPreference() {
+  const candidates = [];
+  try {
+    const url = new URL(window.location.href);
+    const linked = url.searchParams.get("driver");
+    if (linked !== null) {
+      candidates.push(linked);
+      // The link's driver becomes the chosen one; the address goes back to plain
+      // play.html, so a reload later can't undo a different pick.
+      if (DRIVERS.some((d) => d.id === linked)) window.localStorage.setItem("f1pixelcup.driver", linked);
+      url.searchParams.delete("driver");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch (err) {
+    // No link driver.
+  }
+  try {
+    candidates.push(window.localStorage.getItem("f1pixelcup.driver"));
+  } catch (err) {
+    // No stored driver.
+  }
+  try {
+    if (window.Career) candidates.push(window.Career.lastDriverId());
+  } catch (err) {
+    // No career to go by.
+  }
+  const index = candidates.map((id) => DRIVERS.findIndex((d) => d.id === id)).find((i) => i >= 0);
+  if (index !== undefined) setSelectedDriver(index);
 }
 
 function selectCup(index) {
@@ -2328,8 +2372,18 @@ function playerQualifying(player) {
   return { position: q.order.indexOf(player.driver.id) + 1, timeMs: q.playerTimeMs };
 }
 
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+}
+
 function careerDifficultyName(id) {
   return (window.Career && window.Career.DIFFICULTY_NAMES[id]) || id;
+}
+
+// "Charles Leclerc" -> "Leclerc", as on the pit-lane career chip.
+function surnameOf(name) {
+  const parts = String(name || "").trim().split(/\s+/);
+  return parts[parts.length - 1] || "";
 }
 
 function careerForRace(summary) {
@@ -2337,8 +2391,11 @@ function careerForRace(summary) {
   const difficulty = careerDifficultyName(getDifficulty().id);
   const { before, after, delta } = summary.rating;
   const trend = delta > 0 ? `▲ +${delta}` : delta < 0 ? `▼ ${delta}` : "=";
+  // Every driver has their own career: the strip names whose it is.
+  const driver = DRIVERS.find((d) => d.id === summary.driverId);
+  const whose = driver ? `${surnameOf(driver.name)}: ` : "";
   const lines = [
-    `<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier})`,
+    `${escapeHtml(whose)}<strong>+${summary.careerPoints} career points</strong> (${summary.racePoints} × ${difficulty} ×${summary.multiplier}) · total ${summary.careerTotal.toLocaleString()}`,
     `Rating ${before} → <strong>${after}</strong> ${trend} · ${summary.tier}`,
   ];
   if (summary.qualifying) {
@@ -2356,6 +2413,8 @@ function careerForCup(cup, playerPlace) {
   const lines = cup.bonus > 0
     ? [`<strong>Cup ${formatOrdinal(playerPlace)} bonus +${cup.careerPoints}</strong> (${cup.bonus} × ${careerDifficultyName(getDifficulty().id)} ×${cup.multiplier}) · Career total ${cup.careerTotal.toLocaleString()}`]
     : [`Cup ${formatOrdinal(playerPlace)}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${cup.careerTotal.toLocaleString()}`];
+  const driver = state.cupEntries.find((entry) => entry.isPlayer);
+  if (driver && lines.length) lines[0] = `${escapeHtml(surnameOf(driver.driver.name))}: ${lines[0]}`;
   return { lines, saved: cup.saved };
 }
 
@@ -2370,6 +2429,7 @@ function recordPlayerCup() {
     state.lastCupCareer = playerEntry ? window.Career.recordCup({
       cupId: getActiveCup().id,
       cupRunId: state.cupRunId,
+      driverId: playerEntry.driver.id,
       difficulty: getDifficulty().id,
       position: state.cupEntries.indexOf(playerEntry) + 1,
       cupPoints: playerEntry.points,
@@ -4763,6 +4823,7 @@ window.Game = {
 
 loadAudioPreference();
 loadDifficultyPreference();
+loadDriverPreference();
 if (window.Screens) {
   window.Screens.init();
   window.Screens.showPitLane();

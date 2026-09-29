@@ -118,3 +118,9 @@ body.landing { overflow-x: hidden; }
   .pu-odds td::before { content: attr(data-label) " "; color: var(--muted); }
 }
 .pu-shot.no-shot { display: none; }
+
+/* Your other drivers */
+.summary-drivers { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 6px; }
+.summary-drivers li { display: grid; grid-template-columns: minmax(0, 1.4fr) 1fr 1.2fr; gap: 10px; padding: 8px 12px; background: var(--panel); border-left: 3px solid var(--red); }
+.summary-drivers li span { color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .summary-drivers li { grid-template-columns: 1fr; gap: 2px; } }

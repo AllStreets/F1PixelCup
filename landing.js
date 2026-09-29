@@ -44,41 +44,54 @@
     }).join("");
   }
 
+  // Your drivers: every driver has their own career. The one raced most
+  // recently leads (Leclerc before any racing); the others follow in a row each.
   function renderCareer() {
-    let profile = null;
+    let list = [];
+    let lastId = null;
     try {
-      profile = window.Career ? Career.getProfile() : null;
+      list = window.Career ? Career.listDrivers() : [];
+      lastId = window.Career ? Career.lastDriverId() : null;
     } catch (error) {
-      profile = null;
+      list = [];
     }
-    const totals = (profile && profile.totals) || {};
-    const rating = profile ? num(profile.rating) : 1200;
-    const tier = window.Career ? Career.tierFor(rating) : "F4";
-    if (!profile || num(totals.races) === 0) {
+    const nameOf = (id) => (DRIVERS.find((d) => d.id === id) || { name: id }).name;
+    if (list.length === 0) {
       $("career-summary").innerHTML = `
-        <div><span class="career-tier">${esc(tier)}</span></div>
-        <p>Your career starts at <strong>1200 · F4</strong>. Every race earns career points (more on harder difficulties), moves your rating up or down, and records your best lap on every circuit — saved in this browser.</p>
-        <p><a class="go-btn" href="./play.html"><span>Start your career ›</span></a></p>`;
+        <div><span class="career-tier">F4</span></div>
+        <p>Every driver has their own career, and each one starts at <strong>1200 · F4</strong>. Race as Leclerc and it's Leclerc's career that climbs — his points, rating, poles and best lap on every circuit — while Hamilton's waits for you. Saved in this browser.</p>
+        <p><a class="go-btn" href="./play.html"><span>Start your first career ›</span></a></p>`;
       return;
     }
+    // The driver raced most recently: as recorded, or else by their latest race.
+    const byLatestRace = [...list].sort((a, b) => String(b.lastRaceAt || "").localeCompare(String(a.lastRaceAt || "")))[0];
+    const leadId = list.some((d) => d.driverId === lastId) ? lastId : byLatestRace.driverId;
+    const lead = Career.getDriver(leadId);
+    const totals = lead.totals || {};
+    const rating = num(lead.rating);
     const stats = [
       ["Rating", rating],
-      ["Career points", num(profile.careerPoints).toLocaleString()],
+      ["Career points", num(lead.careerPoints).toLocaleString()],
       ["Races", num(totals.races)],
       ["Wins", num(totals.wins)],
       ["Podiums", num(totals.podiums)],
       ["Poles", num(totals.poles)],
       ["Cups won", `${num(totals.cupsWon)} / ${num(totals.cupsCompleted)}`],
     ];
+    const others = list.filter((d) => d.driverId !== leadId);
     $("career-summary").innerHTML = `
-      <div><span class="career-tier">${esc(tier)}</span> <span class="muted">· rating ${rating}</span></div>
+      <p class="kicker">Latest · ${esc(nameOf(leadId))}</p>
+      <div><span class="career-tier">${esc(Career.tierFor(rating))}</span> <span class="muted">· rating ${rating}</span></div>
       <div class="summary-stats">${stats.map(([label, value]) => `<div class="summary-stat"><span>${label}</span><strong>${esc(value)}</strong></div>`).join("")}</div>
       <div class="summary-bests">${CIRCUITS.map((c) => {
-        const best = profile.bestLaps ? profile.bestLaps[c.id] : null;
+        const best = lead.bestLaps ? lead.bestLaps[c.id] : null;
         return `<div class="summary-best"><span>${esc(c.name)}</span><strong>${esc(lapTime(best ? num(best.ms) : 0))}</strong></div>`;
       }).join("")}</div>
-      <p><a class="ghost-btn" href="./play.html#career">Open career</a></p>`;
+      ${others.length ? `<p class="kicker">Your other drivers</p>
+      <ul class="summary-drivers">${others.map((d) => `<li><strong>${esc(nameOf(d.driverId))}</strong><span>${esc(d.tier)} · ${num(d.rating)}</span><span>${num(d.careerPoints).toLocaleString()} pts · ${num(d.races)} ${num(d.races) === 1 ? "race" : "races"}</span></li>`).join("")}</ul>` : ""}
+      <p><a class="ghost-btn" href="./play.html?driver=${encodeURIComponent(leadId)}#career">Open ${esc(nameOf(leadId).split(" ").pop())}'s career</a></p>`;
   }
+
 
   function renderGrid() {
     $("team-list").innerHTML = TEAMS.map((team) => {

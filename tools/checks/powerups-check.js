@@ -2,6 +2,7 @@
 // Run with the Playwright MCP tool browser_run_code_unsafe,
 // filename: tools/checks/powerups-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   const errors = [];
   const results = {};
@@ -22,8 +23,10 @@ async (page) => {
   await p.waitForTimeout(1500);
 
   // A race at Monza, 40 s in (past every limit), everyone on the grid.
-  const setup = (circuit = 0) => p.evaluate((ti) => {
+  const setup = (circuit = 0) => p.evaluate(async (ti) => {
     Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(ti);
+    // A circuit's first appearance is built before anything moves: wait for it.
+    for (let i = 0; i < 100 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     state.phase = "race";
     const now = performance.now();
     state.raceStart = now - 40000;
@@ -225,13 +228,19 @@ async (page) => {
     togglePause();
     await new Promise((r) => setTimeout(r, 1500));
     togglePause();
+    const resumedAt = performance.now();
     // Let the race run two frames after resuming: the clock must have moved on
-    // by about two frames, not by the 1.5 s spent paused.
+    // by no more than the time actually spent running (however slow those
+    // frames were), never by the 1.5 s spent paused.
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const running = performance.now() - resumedAt;
     const moved = raceNow() - clockBefore;
     const nowShot = s.expiresAt - raceNow();
     const nowBox = state.boxHiddenUntil[0] - raceNow();
-    return moved > 0 && moved < 80 && Math.abs(leftShot - nowShot - moved) < 1 && Math.abs(leftBox - nowBox - moved) < 1;
+    // (+2 steps: the physics accumulator carries up to a step from before the pause.)
+    const ok = moved > 0 && moved <= running + 2 * PHYSICS_STEP_MS && moved < 1000
+      && Math.abs(leftShot - nowShot - moved) < 1 && Math.abs(leftBox - nowBox - moved) < 1;
+    return ok || JSON.stringify({ moved, running, shot: leftShot - nowShot, box: leftBox - nowBox });
   });
 
   // Player oil: tap drops, hold trails, key-up drops, losing focus drops.
@@ -420,15 +429,25 @@ async (page) => {
 
   // While paused the picture freezes too: a hidden box does not grow back on the pause screen.
   await setup();
+  // (It once flaked: the shrink was waited for on wall-clock timeouts, so a
+  // stalled or throttled page could pause before a frame had shrunk the box,
+  // and the short deadline raced the wait. Now the wait is on rendered frames,
+  // the deadline is set only once the box is gone, and without the pause the
+  // box would be back well inside the wait.)
   results.pauseFreezesPicture = await run(async () => {
-    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? raceNow() + 600 : 0));
-    await new Promise((r) => setTimeout(r, 150));
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    state.boxHiddenUntil = state.track.itemBoxes.map((_, i) => (i === 0 ? Infinity : 0));
+    for (let i = 0; i < 240 && Render3D.inspect().boxScales[0] > 0.001; i += 1) await frame();
+    const shrunk = Render3D.inspect().boxScales[0] <= 0.001;
+    // Due back in 300 ms of race time...
+    state.boxHiddenUntil[0] = raceNow() + 300;
     togglePause();
-    // Stay paused past the box's deadline in wall-clock time.
+    // ...but paused for over a second: it must still be gone.
     await new Promise((r) => setTimeout(r, 1100));
+    await frame(); await frame();
     const scale = Render3D.inspect().boxScales[0];
     togglePause();
-    return scale < 0.05;
+    return (shrunk && scale <= 0.001) || JSON.stringify({ shrunk, scale });
   });
 
 

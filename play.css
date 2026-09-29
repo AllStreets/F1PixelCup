@@ -207,3 +207,9 @@ html, body { height: 100%; overflow: hidden; }
 }
 .choice-hint { margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; text-align: right; }
 .quali-note { margin: 6px 0 0; font-weight: 700; }
+
+/* Your drivers: every career on this browser. */
+.career-drivers tr.is-current td { color: #fff; font-weight: 700; }
+.career-drivers tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+.link-btn { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
+.link-btn:hover, .link-btn:focus-visible { text-decoration-color: var(--red); color: #fff; }

@@ -3,6 +3,7 @@
 // filename: tools/checks/grid-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors []. `measured` reports the
 // difficulty margins.
+// Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   const errors = [];
   const results = {};
@@ -23,7 +24,7 @@ async (page) => {
   // One failing step reports its error instead of stopping the whole check.
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
-  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); });
+  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); localStorage.removeItem("f1pixelcup.profile.v2"); localStorage.removeItem("f1pixelcup.driver"); });
   await p.reload();
   await p.waitForTimeout(1800);
   await step(() => {
@@ -272,7 +273,7 @@ async (page) => {
     state.raceStart = state.lastTick = performance.now();
     completeRemainingFinishers(raceNow());
     finalizeRace();
-    const profile = Career.getProfile();
+    const profile = Career.getDriver(player.driver.id);
     const last = profile.history[profile.history.length - 1];
     const award = Career.qualifyingAward({ position: qPos, difficulty: getDifficulty().id });
     const strip = document.getElementById("results-career").textContent;
@@ -327,13 +328,14 @@ async (page) => {
   results.fromBackRecordsNoQualifying = await step(() => {
     Game.backToPitLane();
     Game.selectGridMode("back");
-    const before = Career.getProfile().history.length;
+    const me = DRIVERS[state.selectedDriver].id;
+    const before = Career.getDriver(me).history.length;
     Game.startCup();
     state.phase = "race";
     state.raceStart = state.lastTick = performance.now();
     completeRemainingFinishers(raceNow());
     finalizeRace();
-    const h = Career.getProfile().history;
+    const h = Career.getDriver(me).history;
     return h.length === before + 1 && h[h.length - 1].qualifying === null;
   });
 
