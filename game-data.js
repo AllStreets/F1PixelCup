@@ -88,19 +88,34 @@ const CUP_DEFS = [
   { id: "constructorCup", name: "Constructor Cup", icon: "Constructor Cup", circuitIds: ["monaco", "singapore", "bahrain", "interlagos"] },
 ];
 
-// What each power-up does, in the words the How to play section uses.
+// The eight power-ups, common to rare (the same order as PowerUps.ITEM_ORDER).
+// Each is an F1 idea with a Mario Kart counterpart. The site's cards and the
+// game's HUD both read this copy, so it must say exactly what the game does.
 const POWER_UPS = [
-  { id: "overtake", name: "Overtake", effect: "A short burst of extra speed." },
-  { id: "powerDeploy", name: "Power Deploy", effect: "Five seconds quicker and untouchable, with a boost: anyone you hit spins." },
-  { id: "formationLap", name: "Formation Lap", effect: "Four seconds on autopilot at huge speed, spinning anyone in the way." },
-  { id: "safetyCar", name: "Safety Car", effect: "Every rival wobbles, shrinks and slows for a few seconds." },
-  { id: "graining", name: "Graining", effect: "Smears every rival's view for six seconds." },
-  { id: "undercut", name: "Undercut", effect: "A homing shot at the car ahead." },
-  { id: "stewardPenalty", name: "Steward Penalty", effect: "A homing shot at the race leader." },
-  { id: "engineBlast", name: "Engine Blast", effect: "A slow shot that spins whoever it hits." },
-  { id: "debris", name: "Debris", effect: "Fired straight ahead." },
-  { id: "oilSlick", name: "Oil Slick", effect: "Dropped behind you; spins whoever drives through it." },
-  { id: "drsSignPost", name: "DRS Sign", effect: "Dropped behind you; a long spin for whoever hits it." },
+  { id: "oilSlick", name: "Oil Slick", counterpart: "Banana",
+    effect: "Drops a slick behind you that spins whoever drives through it, you included. Trail it behind your car and it blocks one Undercut or Debris from behind.",
+    controls: "Tap Space to drop it. Hold Space to trail it; let go to drop it." },
+  { id: "debris", name: "Debris", counterpart: "Green shell",
+    effect: "Fired straight ahead. It bounces off the barriers for six seconds and spins anyone it hits, you included.",
+    controls: "Space to fire." },
+  { id: "drs", name: "DRS", counterpart: "Mushroom",
+    effect: "Opens your rear wing for a two-second boost, or three seconds if you use it on a straight.",
+    controls: "Space to open the wing." },
+  { id: "undercut", name: "Undercut", counterpart: "Red shell",
+    effect: "Follows the track round the corners to the car ahead of you and spins it. A trailed Oil Slick stops it.",
+    controls: "Space to fire." },
+  { id: "overtakeMode", name: "Overtake Mode", counterpart: "Star",
+    effect: "Five seconds faster and untouchable: shots, oil and contact can't spin you, and any car you touch spins.",
+    controls: "Space to deploy." },
+  { id: "stewardPenalty", name: "Steward Penalty", counterpart: "Blue shell",
+    effect: "Flies over the field to the race leader and hands them a long spin, and anyone right beside them.",
+    controls: "Space to call the stewards." },
+  { id: "formationLap", name: "Formation Lap", counterpart: "Bullet Bill",
+    effect: "Four seconds of autopilot at huge speed along the racing line, untouchable, spinning anyone in the way.",
+    controls: "Space to engage." },
+  { id: "safetyCar", name: "Safety Car", counterpart: "Lightning",
+    effect: "A safety car comes out ahead of the leader for five seconds. Every rival is slowed to its pace and can't overtake. You aren't.",
+    controls: "Space to deploy it." },
 ];
 
 if (typeof module === "object" && module.exports) {

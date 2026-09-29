@@ -47,13 +47,33 @@ test("the two cups use every circuit exactly once", () => {
   assert.deepEqual(Data.CUP_DEFS.map((cup) => cup.id), ["trophyCup", "constructorCup"]);
 });
 
-test("every power-up the game hands out has a name and an effect", () => {
-  const handedOut = ["oilSlick", "debris", "drsSignPost", "undercut", "overtake", "graining",
-    "engineBlast", "safetyCar", "formationLap", "powerDeploy", "stewardPenalty"];
-  handedOut.forEach((id) => {
-    const p = Data.POWER_UPS.find((entry) => entry.id === id);
-    assert.ok(p, id);
-    assert.ok(p.name && p.effect);
+const PowerUps = require("../powerups.js");
+const ITEM_ICONS = require("../item-icons.js");
+
+test("the roster is exactly the eight items, common to rare, with full card copy", () => {
+  assert.deepEqual(Data.POWER_UPS.map((p) => p.id), PowerUps.ITEM_ORDER);
+  Data.POWER_UPS.forEach((p) => {
+    ["name", "counterpart", "effect", "controls"].forEach((field) => {
+      assert.equal(typeof p[field], "string", `${p.id}.${field}`);
+      assert.ok(p[field].trim().length > 0, `${p.id}.${field}`);
+    });
+  });
+  const counterparts = Object.fromEntries(Data.POWER_UPS.map((p) => [p.id, p.counterpart]));
+  assert.deepEqual(counterparts, {
+    oilSlick: "Banana", debris: "Green shell", drs: "Mushroom", undercut: "Red shell",
+    overtakeMode: "Star", stewardPenalty: "Blue shell", formationLap: "Bullet Bill", safetyCar: "Lightning",
+  });
+});
+
+test("the removed power-ups are gone", () => {
+  ["graining", "engineBlast", "drsSignPost", "overtake", "powerDeploy"].forEach((id) => {
+    assert.equal(Data.POWER_UPS.find((p) => p.id === id), undefined, id);
+  });
+});
+
+test("every power-up has a painted SVG icon", () => {
+  PowerUps.ITEM_ORDER.forEach((id) => {
+    assert.match(ITEM_ICONS[id], /^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" viewBox="0 0 64 64">[\s\S]*<\/svg>$/, id);
   });
 });
 
