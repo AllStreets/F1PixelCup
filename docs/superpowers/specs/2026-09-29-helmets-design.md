@@ -17,7 +17,7 @@ The user wants the driver helmets "more accurate and realistic". Today every hel
   | `crown` | the top of the helmet in the crown colour, with a stripe where it meets the base |
   | `split` | front and back in two colours, split by a diagonal stripe |
   | `flash` | a swept flash along each side, from the visor back to the neck |
-  | `tricolore` | three bands front to back over the crown |
+  | `tricolore` | three bands across the top: crown, base, stripe |
 
 ## The sheet (2025)
 
@@ -50,10 +50,10 @@ Every visor is dark smoked (`#10141c`), except Norris (`#1b3a5c`, blue mirror) a
 
 `tools/blender/build_f1_car.py` gets a proper helmet in place of today's plain sphere:
 - **The shell** is a slightly long egg with a flatter chin and a skirt at the neck, with equirectangular UVs (`calc_uvs`). The seam sits at the back, under the spoiler.
-- **The visor opening** is a dark band across the front, as today, but shaped to the shell.
+- **The visor** is painted onto the shell: a slot across the front at eye level, in the driver's visor tint, with a dark seal and a highlight. The old separate visor mesh sat mostly inside the shell and showed as a small black wedge. Painted, it follows the shell exactly and cuts through the design as a real visor does.
 - **The rear spoiler** is the small wing on top at the back of modern F1 helmets, in the crown colour.
 
-Material names stay the same: `helmet` for the shell and spoiler, `visor` for the visor.
+The material is `helmet`, for the shell and spoiler. The spoiler's UVs point at the crown row, so it wears the crown colour. The `visor` material is gone.
 
 ## Painting
 
@@ -61,7 +61,10 @@ Material names stay the same: `helmet` for the shell and spoiler, `visor` for th
 - x is the angle round the head, with the front at u = 0.5;
 - y is the height, with the crown at the top.
 
-The canvas is used as the helmet material's `map`, with a light clear-coat. It's cached per driver. The visor material takes the driver's visor tint.
+The canvas is used as the helmet material's `map` (`flipY` off, to match the UVs), with a glossy finish, cached per driver. The checks read colours back at fixed points, which every motif keeps:
+- the crown at (64, 6);
+- the base at (64, 100);
+- the visor at (128, 57).
 
 The 2D fallback car (`game.js`) draws the helmet from the same data: the base with a crown cap and a stripe.
 
@@ -73,3 +76,5 @@ The 2D fallback car (`game.js`) draws the helmet from the same data: the base wi
   - the colour sampled at the crown and at the base matches the data;
   - Leclerc's and Hamilton's helmets differ.
 - **Screenshots:** close-ups of Leclerc, Hamilton, Verstappen, Norris and Alonso in the showroom.
+
+The close-ups of Leclerc, Hamilton, Verstappen, Norris, Alonso and Russell are in `docs/superpowers/specs/assets/2026-09-29-helmets.png`.

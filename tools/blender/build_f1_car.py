@@ -9,6 +9,18 @@ the middle of the car. Materials are named by role (livery_body, livery_trim,
 helmet, ...) so the game can recolour one model into all ten liveries. The
 four wheels and the DRS flap (`drs_flap`, origin on its leading edge) are
 separate objects, so the game can spin and steer the wheels and open the flap.
+
+The helmet (material `helmet`, with the rear spoiler) has equirectangular UVs
+(its visor is painted on, not modelled):
+u runs round the head with the front at u = 0.5 (the seam at the back), v up
+to the crown. r3d/car.js paints each driver's design onto it.
+
+The colours below are linear values, tuned by eye on the car as it renders;
+the game recolours the livery and paints the helmet itself. (The power-up
+models in build_items.py are written as sRGB instead, to match their icons.)
+
+The script clears the scene first, so it refuses to run in a saved .blend
+file unless F1_BUILD_FORCE=1 is set.
 """
 import bpy
 import bmesh
@@ -19,6 +31,8 @@ OUT = os.environ.get("F1_CAR_OUT", "")
 
 
 def reset():
+    if bpy.data.filepath and os.environ.get("F1_BUILD_FORCE") != "1":
+        raise RuntimeError(f"build_f1_car.py clears the scene; {bpy.data.filepath} is open. Use a new file, or set F1_BUILD_FORCE=1.")
     for o in list(bpy.data.objects):
         bpy.data.objects.remove(o, do_unlink=True)
     for coll in (bpy.data.meshes, bpy.data.materials, bpy.data.curves):
@@ -53,7 +67,6 @@ MATS = {
     "tyre_band": mat("tyre_band", (0.95, 0.8, 0.05), 0.0, 0.6),
     "rim": mat("rim", (0.12, 0.12, 0.13), 0.9, 0.3),
     "helmet": mat("helmet", (1.0, 1.0, 1.0), 0.1, 0.2),
-    "visor": mat("visor", (0.02, 0.02, 0.03), 0.8, 0.1),
     "halo": mat("halo", (0.05, 0.05, 0.06), 0.6, 0.35),
     "rain_light": mat("rain_light", (1.0, 0.06, 0.03), 0.0, 0.3, emit=4.0),
 }
@@ -311,19 +324,31 @@ cu.materials.append(MATS["halo"])
 rod("halo_strut", (0.45, 0, 0.68), (0.27, 0, 0.895), 0.022, "halo")
 
 # --- Driver -----------------------------------------------------------------
+# The helmet: an egg a little longer than it is wide, a flatter chin, a skirt
+# flared at the neck, and UVs for the painted design (seam at the back).
 bm = bmesh.new()
-bmesh.ops.create_uvsphere(bm, u_segments=24, v_segments=16, radius=0.135)
+bm.loops.layers.uv.new("UVMap")
+bmesh.ops.create_uvsphere(bm, u_segments=32, v_segments=20, radius=0.135, calc_uvs=True)
 for v in bm.verts:
-    v.co.x *= 1.12
-    v.co.z += 0.74
-    v.co.x += -0.12
+    x, y, z = v.co
+    # (Blender's UV sphere puts u = 0.5 on +X, the front, and its seam at the back.)
+    x *= 1.12
+    if z < -0.03:
+        # Flatter chin at the front, a flared skirt at the neck.
+        k = (-0.03 - z) / 0.105
+        x *= 1 - 0.18 * k if x > 0 else 1 + 0.04 * k
+        y *= 1 + 0.05 * k
+    v.co = (x - 0.12, y, z + 0.74)
 helmet = link("helmet", bm, "helmet")
 for p in helmet.data.polygons:
     p.use_smooth = True
-loft("visor", [
-    (-0.03, 0.095, 0.745, 0.785),
-    (0.005, 0.085, 0.75, 0.78),
-], segs=16, material="visor")
+# The rear spoiler on top: in the helmet's material (the painter's crown colour).
+spoiler = wing("helmet_spoiler", -0.20, 0.872, 0.13, 0.07, 0.012, material="helmet", pitch=0.18)
+# Its UVs all point at the top of the painted design, so it wears the crown colour.
+uv = spoiler.data.uv_layers.new(name="UVMap")
+for loop in uv.data:
+    loop.uv = (0.25, 0.98)
+# The visor is painted onto the helmet (r3d/car.js), so it follows the shell.
 
 # --- Suspension ---------------------------------------------------------------
 FRONT_X, REAR_X, TRACK_Y, R_FRONT, R_REAR = 1.85, -1.72, 0.80, 0.355, 0.36

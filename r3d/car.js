@@ -139,6 +139,113 @@ function numberTexture(number, ink) {
 let template = null;
 const materialCache = new Map();
 
+// ---------------------------------------------------------------------------
+// Helmets: each driver's design (driver.helmet in game-data.js; see
+// docs/superpowers/specs/2026-09-29-helmets-design.md) painted onto the
+// helmet's equirectangular UVs: x round the head with the front in the
+// middle, y down from the crown. Original art in the driver's colours.
+// ---------------------------------------------------------------------------
+
+const HELMET_W = 256;
+const HELMET_H = 128;
+// Where the checks read the design back: the crown colour near the top, the
+// base colour low on the side. Every motif keeps those two points.
+export const HELMET_SAMPLES = { crown: [64, 6], base: [64, 100], visor: [128, 57] };
+const helmetTextures = new Map();
+
+function paintHelmet(g, h) {
+  const W = HELMET_W;
+  const H = HELMET_H;
+  const front = W / 2;
+  g.fillStyle = h.base;
+  g.fillRect(0, 0, W, H);
+  // Both sides of the head: x measured from the front, left and right.
+  const sides = (draw) => [-1, 1].forEach((s) => draw((dx) => front + s * dx));
+  const poly = (fill, pts) => {
+    g.fillStyle = fill;
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.closePath();
+    g.fill();
+  };
+  switch (h.motif) {
+    case "band":
+      g.fillStyle = h.crown;
+      g.fillRect(0, 0, W, 22);
+      g.fillRect(0, 50, W, 22);
+      g.fillStyle = h.stripe;
+      g.fillRect(0, 42, W, 5);
+      g.fillRect(0, 75, W, 3);
+      break;
+    case "crown":
+      g.fillStyle = h.crown;
+      g.fillRect(0, 0, W, 48);
+      g.fillStyle = h.stripe;
+      g.fillRect(0, 48, W, 7);
+      break;
+    case "split":
+      // Behind a diagonal from the top of the visor to the back of the neck,
+      // the crown colour; the diagonal itself in the stripe colour.
+      g.fillStyle = h.crown;
+      g.fillRect(0, 0, W, 26);
+      sides((at) => poly(h.crown, [[at(44), 26], [at(58), 26], [at(106), 128], [at(128), 128], [at(128), 26]]));
+      sides((at) => poly(h.stripe, [[at(44), 26], [at(58), 26], [at(106), 128], [at(92), 128]]));
+      break;
+    case "flash":
+      g.fillStyle = h.crown;
+      g.fillRect(0, 0, W, 20);
+      // A swept flash from the visor back to the neck, on each side.
+      sides((at) => poly(h.stripe, [[at(14), 46], [at(40), 36], [at(118), 66], [at(122), 84], [at(90), 74], [at(30), 58]]));
+      break;
+    case "tricolore":
+      g.fillStyle = h.crown;
+      g.fillRect(0, 0, W, 20);
+      g.fillStyle = h.base;
+      g.fillRect(0, 20, W, 14);
+      g.fillStyle = h.stripe;
+      g.fillRect(0, 34, W, 14);
+      break;
+    default:
+      break;
+  }
+  // The visor: a band across the front at eye level, cutting through the
+  // design as a real one does, with a thin rubber seal and a sky highlight.
+  const vx = front - 38;
+  g.fillStyle = "#0b0b0e";
+  g.beginPath();
+  g.roundRect(vx - 2, 48, 80, 17, 7);
+  g.fill();
+  g.fillStyle = h.visor;
+  g.beginPath();
+  g.roundRect(vx, 50, 76, 13, 6);
+  g.fill();
+  g.fillStyle = "rgba(255, 255, 255, 0.2)";
+  g.fillRect(vx + 10, 51.5, 56, 2);
+  // A thin dark trim round the neck.
+  g.fillStyle = "rgba(0, 0, 0, 0.35)";
+  g.fillRect(0, H - 4, W, 4);
+}
+
+function helmetTexture(driver) {
+  const key = driver.id || driver.name;
+  if (!helmetTextures.has(key)) {
+    const h = driver.helmet || { base: driver.color || "#ffffff", crown: driver.accent || "#ffffff", stripe: "#111111", visor: "#10141c", motif: "crown" };
+    const tex = canvasTexture(HELMET_W, HELMET_H, (g) => paintHelmet(g, h), { repeat: false });
+    // The model's UVs run v = 0 at the crown, which is the canvas's top row as drawn.
+    tex.flipY = false;
+    helmetTextures.set(key, tex);
+  }
+  return helmetTextures.get(key);
+}
+
+// What a driver's helmet is painted with, read back from the canvas (for the checks).
+export function helmetInfo(driver) {
+  const tex = helmetTexture(driver);
+  const g = tex.image.getContext("2d");
+  const at = ([x, y]) => `#${[...g.getImageData(x, y, 1, 1).data.slice(0, 3)].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  return { painted: true, textureId: tex.uuid, crown: at(HELMET_SAMPLES.crown), base: at(HELMET_SAMPLES.base), visor: at(HELMET_SAMPLES.visor) };
+}
+
 export function loadCar(onReady, onError) {
   const progress = () => { if (window.Render3DBoot) window.Render3DBoot.progressAt = performance.now(); };
   new GLTFLoader().load("./assets/f1_car.glb", (gltf) => {
@@ -167,7 +274,12 @@ function materialsFor(kart, driver) {
       else {
         out = m.clone();
         if (m.name === "livery_trim") out.color = color(livery.trim || kart.trim);
-        if (m.name === "helmet") out.color = color(driver.color, "#ffffff");
+        if (m.name === "helmet") {
+          out.map = helmetTexture(driver);
+          out.color = new THREE.Color(0xffffff);
+          out.roughness = 0.22;
+          out.metalness = 0.12;
+        }
       }
       mats.set(m.name, out);
     });
@@ -237,5 +349,5 @@ export function buildCar(kart, driver) {
   glow.visible = false;
   root.add(glow);
 
-  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0 };
+  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, helmet: { driverId: driver.id, textureId: helmetTexture(driver).uuid } };
 }

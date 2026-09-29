@@ -109,3 +109,22 @@ test("every team has a short name for captions", () => {
     alpine: "Alpine", williams: "Williams", haas: "Haas", racingBulls: "Racing Bulls", sauber: "Sauber" };
   Data.TEAMS.forEach((t) => assert.equal(t.short, want[t.id], t.id));
 });
+
+test("every driver has a helmet design: valid colours, a known motif, no two alike", () => {
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const MOTIFS = ["band", "crown", "split", "flash", "tricolore"];
+  const seen = new Set();
+  Data.DRIVERS.forEach((d) => {
+    const h = d.helmet;
+    assert.ok(h, `${d.id} has a helmet`);
+    ["base", "crown", "stripe", "visor"].forEach((k) => assert.match(h[k], HEX, `${d.id}.${k}`));
+    assert.ok(MOTIFS.includes(h.motif), `${d.id} motif ${h.motif}`);
+    const key = [h.base, h.crown, h.stripe, h.motif].join("|").toLowerCase();
+    assert.ok(!seen.has(key), `${d.id} repeats another driver's helmet`);
+    seen.add(key);
+  });
+  // The two favourites are told apart at a glance.
+  const lec = Data.DRIVERS.find((d) => d.id === "leclerc").helmet;
+  const ham = Data.DRIVERS.find((d) => d.id === "hamilton").helmet;
+  assert.notEqual(lec.base, ham.base);
+});
