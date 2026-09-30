@@ -1715,7 +1715,9 @@ const SC_LEAVING_PACE = 0.85;
 const SC_PIT_LIMIT = 0.35;
 function updateSafetyCar(dt, now) {
   const sc = state.safetyCar;
+  if (sc) sc.drawFrom = null;
   if (!sc || sc.parked) return;
+  sc.drawFrom = { d: sc.d, lat: sc.lat };
   const route = getItemRoute(state.track);
   const lane = state.track.pitLane;
   if (now >= sc.until) {
@@ -1879,11 +1881,55 @@ function updateLapProgress(racer, now, dt = 0) {
   }
 }
 
+// How tight the road is along the lap, every few units, for the CPU drivers
+// (racecraft.js); worked out once per circuit.
+const CURVE_STEP = 8;
+const CURVE_WINDOW = 3;
+function curvatureProfile(track) {
+  if (track.aiCurvature) return track.aiCurvature;
+  const route = getMainRoute(track);
+  const n = Math.max(8, Math.round(track.totalLength / CURVE_STEP));
+  const step = track.totalLength / n;
+  const headings = Array.from({ length: n }, (_, i) => {
+    const at = sampleRouteSurfaceAtDistance(route, i * step);
+    return Math.atan2(at.tangentY, at.tangentX);
+  });
+  track.aiCurvature = { step, values: Racecraft.curvatureFromHeadings(headings, step, CURVE_WINDOW) };
+  return track.aiCurvature;
+}
+
+// Whether a CPU car must brake now for the road ahead: it looks as far as it
+// would take to stop, and checks each corner there against the speed it
+// allows and the brakes the car has.
+const CORNER_LOOK_STEP = 16;
+function mustBrakeForCorners(racer, difficulty) {
+  const speed = racer.speed;
+  if (speed <= 0) return false;
+  const wet = state.weather === "wet" && !racer.underRoof;
+  const grip = wet ? Weather.WET.corner : 1;
+  const decel = racer.physics.brakeRate * (wet ? Weather.WET.brake : 1);
+  const profile = curvatureProfile(state.track);
+  const L = state.track.totalLength;
+  const from = racer.trackDistance || 0;
+  const horizon = (speed * speed) / (2 * decel) + CORNER_LOOK_STEP * 2;
+  const corners = [];
+  for (let at = 0; at <= horizon; at += CORNER_LOOK_STEP) {
+    const index = Math.floor((((from + at) % L) + L) % L / profile.step) % profile.values.length;
+    corners.push({ at, speed: Racecraft.cornerSpeed(racer.physics, profile.values[index], { margin: difficulty.cornerMargin, grip }) });
+  }
+  return Racecraft.mustBrake(speed, corners, decel);
+}
+
 function updateRacer(racer, dt, now) {
-  if (racer.finished) return;
-  // Where this step starts from, for timing the line crossing exactly.
+  if (racer.finished) {
+    racer.drawFrom = null;
+    return;
+  }
+  // Where this step starts from, for timing the line crossing exactly, and
+  // for drawing the car between its last two steps (placeForDrawing).
   racer.stepFromX = racer.x;
   racer.stepFromY = racer.y;
+  racer.drawFrom = { x: racer.x, y: racer.y, heading: racer.heading };
   if (racer.rouletteUntil && now >= racer.rouletteUntil) {
     finishRoulette(racer, now);
   }
@@ -1935,13 +1981,11 @@ function updateRacer(racer, dt, now) {
     const angleDiff = normalizeAngle(targetAngle - racer.heading);
     throttle = 1;
     steerInput = clamp(angleDiff * 1.7, -1, 1);
-    const turnSeverity = Math.abs(angleDiff);
-    // A better driver carries the corner further before lifting.
-    // A wet road: they lift earlier (the speed a corner allows goes as the
-    // square root of grip).
-    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather === "wet" && !racer.underRoof ? "wet" : "dry")) {
-      brake = 1;
-    }
+    // Braking as a driver does: for each corner ahead, the fastest this car
+    // can take it (its own turning, and wet, its grip -- racecraft.js), and
+    // brakes when it could no longer slow to that in time. A better driver
+    // dares nearer the limit (the difficulty's corner margin).
+    if (mustBrakeForCorners(racer, difficulty)) brake = 1;
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
     driftSide = steerInput;
 
@@ -2759,7 +2803,46 @@ function resetToGarage() {
 
 function drawTrack(track) {
   state.viewMode = "driver";
-  drawDriverView(track);
+  const restore = placeForDrawing();
+  try {
+    drawDriverView(track);
+  } finally {
+    restore();
+  }
+}
+
+// The physics steps at 60 Hz; a screen refreshes at its own rate (120 Hz on
+// many laptops). Drawn straight from the physics, cars would move on some
+// frames and not others -- a judder, worst in a pack. So each frame draws
+// every car between its last two steps, by how far the clock has got into
+// the next one, and puts it back afterwards. (A jump -- a rescue, the grid --
+// is drawn as it is.)
+function placeForDrawing() {
+  const alpha = clamp((state.stepAccum || 0) / PHYSICS_STEP_MS, 0, 1);
+  const moved = [];
+  state.racers.forEach((racer) => {
+    const from = racer.drawFrom;
+    if (!from || Math.hypot(racer.x - from.x, racer.y - from.y) > 60) return;
+    moved.push([racer, racer.x, racer.y, racer.heading]);
+    racer.x = from.x + (racer.x - from.x) * alpha;
+    racer.y = from.y + (racer.y - from.y) * alpha;
+    racer.heading = from.heading + normalizeAngle(racer.heading - from.heading) * alpha;
+  });
+  const sc = state.safetyCar;
+  let scWas = null;
+  if (sc && sc.drawFrom && state.track) {
+    const L = state.track.totalLength;
+    const along = ((sc.d - sc.drawFrom.d) % L + L * 1.5) % L - L / 2;
+    if (Math.abs(along) < 60) {
+      scWas = [sc.d, sc.lat];
+      sc.d = ((sc.drawFrom.d + along * alpha) % L + L) % L;
+      sc.lat = sc.drawFrom.lat + (sc.lat - sc.drawFrom.lat) * alpha;
+    }
+  }
+  return () => {
+    moved.forEach(([racer, x, y, heading]) => { racer.x = x; racer.y = y; racer.heading = heading; });
+    if (scWas) [sc.d, sc.lat] = scWas;
+  };
 }
 
 function drawTrackBarriers(points, width, color) {
@@ -3507,7 +3590,6 @@ function drawDriverView(track) {
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
       if (onKerb && state.phase === "race" && !state.paused && Math.abs(player.speed) > 40) sfx.kerb();
-      drawSpeedLines(player);
       drawDriverItemBadge(player);
       drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
       drawDriverHud(track, player);
@@ -4441,6 +4523,7 @@ function drawQualifyingHud(track, player) {
   const delta = qualifyingDeltaNow();
   row("DELTA", delta === null ? "—" : `${delta <= 0 ? "−" : "+"}${formatGapTime(Math.abs(delta))}`, 136,
     delta === null ? "rgba(255, 240, 201, 0.5)" : delta <= 0 ? "#39d98a" : "#ff5f57");
+  drawSpeedPanel(player);
 }
 
 function drawDriverHud(track, player) {
@@ -4594,7 +4677,11 @@ function drawDriverHud(track, player) {
     ctx.textAlign = "left";
   }
 
-  // ---- Speed, bottom right ----
+  drawSpeedPanel(player);
+}
+
+// Speed, bottom right: in the race and on a qualifying lap alike.
+function drawSpeedPanel(player) {
   const kph = Math.round(Math.abs(player.speed) * 1.45);
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
   const sx = view.width - 208;
@@ -4621,7 +4708,6 @@ function drawDriverHud(track, player) {
   ctx.fillStyle = speedGradient;
   ctx.fillRect(sx + 14, sy + 80, 160 * speedRatio, 5);
 }
-
 
 const iconImages = {};
 

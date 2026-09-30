@@ -67,11 +67,5 @@
     return Math.exp(-WET.scrub * load * load * dt);
   }
 
-  // The speed a driver can carry through a given corner goes as the square
-  // root of grip.
-  function cornerSpeedScale(weather) {
-    return Math.sqrt(grip(weather));
-  }
-
-  return { MODES, RAIN_CHANCE, WET, DRIFT_YAW, raceWeather, grip, dryLimitAt, capYaw, scrub, cornerSpeedScale };
+  return { MODES, RAIN_CHANCE, WET, DRIFT_YAW, raceWeather, grip, dryLimitAt, capYaw, scrub };
 }));
