@@ -97,12 +97,16 @@ async (page) => {
   };
   const hamHelmet = await p.evaluate(() => DRIVERS.find((d) => d.id === "hamilton").helmet);
   const rear = await pose("rear");
-  const top = await pixelAt(Math.round(rear.w / 2), Math.round(rear.h / 2));
+  // Either side of the car's centreline: car v2's blade roll hoop stands on
+  // it, just behind the helmet, and hides the crown's very middle from behind.
+  const topL = await pixelAt(Math.round(rear.w * 0.25), Math.round(rear.h / 2));
+  const topR = await pixelAt(Math.round(rear.w * 0.75), Math.round(rear.h / 2));
   const front = await pose("front");
   const visor = await pixelAt(Math.round(front.w / 2), Math.round(front.h / 2));
   await p.evaluate(() => { Render3D.setPhotoCamera(null); state.paused = false; Game.backToPitLane(); });
   // Lit and shaded, so a generous tolerance: red is red, dark is dark.
-  results.renderedCrown = (top[0] > 120 && top[1] < 90 && top[2] < 90 && near(top, hamHelmet.crown, 110)) || JSON.stringify({ top, want: hamHelmet.crown });
+  const red = (px) => px[0] > 120 && px[1] < 90 && px[2] < 90 && near(px, hamHelmet.crown, 110);
+  results.renderedCrown = (red(topL) && red(topR)) || JSON.stringify({ topL, topR, want: hamHelmet.crown });
   results.renderedVisor = (Math.max(...visor) < 90) || JSON.stringify({ visor, want: hamHelmet.visor });
   // The 2D fallback car, seen from behind: its helmet shows over the rear
   // wing in the driver's crown and base colours.
