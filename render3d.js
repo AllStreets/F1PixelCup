@@ -18,7 +18,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
-import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet } from "./r3d/car.js";
+import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
@@ -604,7 +604,9 @@ function inspect() {
     ...rain.inspect(), roadRoughness: road ? road.roughness : null, kerbWet: kerb ? kerb.uniforms.wet.value : null,
     sunIntensity: sun.intensity, fogFar: scene.fog ? scene.fog.far : null,
   };
-  return { drawing, weather, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  const cars = {};
+  if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
+  return { drawing, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -1157,6 +1159,8 @@ function render(frame) {
   // spray off the wheels.
   const wet = frame.weather === "wet";
   rain.apply(world, scene, wet);
+  // Intermediates in the wet: the tyres' lettering turns green.
+  setTyreCompound(frame.weather);
   updateTunnelLight(world, track, dt);
   updateTrackside(world, track, frame.trackside, now, dt);
   rain.update({ camera, world, racers, dt, isWet: wet });
@@ -1297,6 +1301,8 @@ function renderGarage(kart, driver, now) {
   }
   powerUpLayer.group.visible = particles.visible = false;
   rain.update({ camera, world: null, racers: [], dt: 0, isWet: false });
+  // The showroom car is on dry tyres, whatever the last race was.
+  setTyreCompound("dry");
   garage.group.visible = true;
   scene.fog = null;
   scene.environmentIntensity = 0.6;

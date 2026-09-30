@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { DecalGeometry } from "three/addons/geometries/DecalGeometry.js";
 import { color, canvasTexture } from "./textures.js";
 
 export const CAR_SCALE = 6;
@@ -103,7 +104,13 @@ function paintedBody(material, livery) {
         uniform vec3 uNoseC; uniform float uNoseX;
         uniform vec3 uTopC; uniform float uTopY;`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        vec3 paint = diffuseColor.rgb;
+        // The baked occlusion (COLOR_0) shades the paint's zones too: taken
+        // out of the base here, put back over the whole scheme below.
+        vec3 ao = vec3(1.0);
+        #if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
+          ao = vColor.rgb;
+        #endif
+        vec3 paint = diffuseColor.rgb / max(ao, vec3(0.02));
         if (uFade.z > 0.5) {
           float t = smoothstep(uFade.x, uFade.y, vCarPos.x);
           paint = mix(paint, uFadeC, t);
@@ -116,7 +123,7 @@ function paintedBody(material, livery) {
           paint = mix(paint, uStripeC, band * flank);
         }
         paint = mix(paint, uNoseC, smoothstep(uNoseX - 0.01, uNoseX + 0.01, vCarPos.x));
-        diffuseColor.rgb = paint;`);
+        diffuseColor.rgb = paint * ao;`);
   };
   mat.customProgramCacheKey = () => "livery";
   return mat;
@@ -138,6 +145,42 @@ function numberTexture(number, ink) {
 
 let template = null;
 const materialCache = new Map();
+
+// The tyres' sidewall lettering (the model's tyre_band UVs: u round the
+// tyre, v from the rim out): an original wordmark in the compound's colour,
+// yellow mediums in the dry, green intermediates in the wet. One texture for
+// every car, repainted when the weather changes.
+const COMPOUNDS = { dry: { ink: "#f2c200", name: "MEDIUM" }, wet: { ink: "#2fb34a", name: "INTERMEDIATE" } };
+let tyreCompound = "dry";
+// The canvas is in the band's own proportions (one repeat is about 0.44 m of
+// arc, the band 0.085 m from rim to shoulder), so the letters aren't
+// stretched. Unflipped, as glTF's UVs are: its top row is the shoulder.
+const tyreLettering = canvasTexture(1024, 200, paintTyre, { srgb: true });
+tyreLettering.flipY = false;
+tyreLettering.anisotropy = 4;
+function paintTyre(g, w, h) {
+  const { ink, name } = COMPOUNDS[tyreCompound];
+  g.fillStyle = "#151515";
+  g.fillRect(0, 0, w, h);
+  // A thin ring near the shoulder, then the wordmark and the compound between it and the rim.
+  g.fillStyle = ink;
+  g.fillRect(0, h * 0.12, w, h * 0.07);
+  g.font = "900 italic 92px Trebuchet MS, sans-serif";
+  g.textBaseline = "middle";
+  g.fillText("PIXEL CUP", w * 0.06, h * 0.6);
+  g.font = "700 60px Trebuchet MS, sans-serif";
+  g.fillText(name, w * 0.56, h * 0.6);
+}
+export function setTyreCompound(weather) {
+  const next = weather === "wet" ? "wet" : "dry";
+  if (next === tyreCompound) return;
+  tyreCompound = next;
+  paintTyre(tyreLettering.image.getContext("2d"), tyreLettering.image.width, tyreLettering.image.height);
+  tyreLettering.needsUpdate = true;
+}
+export function tyreCompoundInk() {
+  return COMPOUNDS[tyreCompound].ink;
+}
 
 // ---------------------------------------------------------------------------
 // Helmets: each driver's design (driver.helmet in game-data.js; see
@@ -312,6 +355,10 @@ function materialsFor(kart, driver) {
       else {
         out = m.clone();
         if (m.name === "livery_trim") out.color = color(livery.trim || kart.trim);
+        if (m.name === "tyre_band") {
+          out.map = tyreLettering;
+          out.color = new THREE.Color(0xffffff);
+        }
         if (m.name === "helmet") {
           out.map = helmetTexture(driver);
           out.color = new THREE.Color(0xffffff);
@@ -324,15 +371,38 @@ function materialsFor(kart, driver) {
   });
   const lum = color(livery.base).getHSL({}).l;
   mats.set("__number", new THREE.MeshStandardMaterial({
-    map: numberTexture(driver.number ?? "", lum > 0.6 ? "#111111" : "#ffffff"),
-    transparent: true, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: -4,
+    map: numberTexture(driver.number ?? "", lum > 0.6 ? "#111111" : "#ececec"),
+    // Matte paint: a glossy white number would catch the sun and bloom.
+    transparent: true, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4,
   }));
   materialCache.set(key, mats);
   return mats;
 }
 
-function decal(material, w, h) {
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+// The race numbers, projected onto the livery surface of the body (so they
+// follow the curve of the nose and the taper of the engine cover): made once
+// from the model, in its own space, shared by every car.
+let numberGeometries = null;
+function numberDecals() {
+  if (numberGeometries) return numberGeometries;
+  template.updateMatrixWorld(true);
+  let body = null;
+  template.traverse((node) => {
+    if (!body && node.isMesh && !Array.isArray(node.material) && node.material.name === "livery_body") body = node;
+  });
+  if (!body) return (numberGeometries = []);
+  const nose = new THREE.Object3D();
+  nose.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
+  nose.rotateX(-0.22);
+  // Read from ahead, as a real car's nose number is.
+  nose.rotateZ(Math.PI);
+  numberGeometries = [
+    new DecalGeometry(body, new THREE.Vector3(2.05, 0.42, 0), nose.rotation.clone(), new THREE.Vector3(0.24, 0.17, 0.2)),
+    // The engine cover's flanks, projected from each side.
+    new DecalGeometry(body, new THREE.Vector3(-1.2, 0.6, 0.15), new THREE.Euler(0, 0, 0), new THREE.Vector3(0.24, 0.17, 0.12)),
+    new DecalGeometry(body, new THREE.Vector3(-1.2, 0.6, -0.15), new THREE.Euler(0, Math.PI, 0), new THREE.Vector3(0.24, 0.17, 0.12)),
+  ];
+  return numberGeometries;
 }
 
 export function buildCar(kart, driver) {
@@ -362,19 +432,9 @@ export function buildCar(kart, driver) {
     wheels[`${id}pivot`] = pivot;
   });
 
-  // Race numbers: on the nose, and both sides of the engine-cover fin.
+  // Race numbers: on the nose, and both flanks of the engine cover.
   const numberMat = mats.get("__number");
-  const nose = decal(numberMat, 0.3, 0.22);
-  nose.position.set(2.08, 0.458, 0);
-  nose.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
-  nose.rotateX(-0.22);
-  model.add(nose);
-  [-1, 1].forEach((side) => {
-    const fin = decal(numberMat, 0.34, 0.26);
-    fin.position.set(-1.55, 0.78, side * 0.013);
-    fin.rotation.y = side > 0 ? 0 : Math.PI;
-    model.add(fin);
-  });
+  numberDecals().forEach((geometry) => model.add(new THREE.Mesh(geometry, numberMat)));
 
   model.scale.setScalar(CAR_SCALE);
   root.add(model);
@@ -392,5 +452,26 @@ export function buildCar(kart, driver) {
   model.traverse((node) => {
     if (node.isMesh && !worn) (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => { if (m.name === "helmet" && m.map) worn = m.map.uuid; });
   });
-  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, helmet: { driverId: helmetKey(driver), textureId: worn } };
+  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, teamId: kart.id, helmet: { driverId: helmetKey(driver), textureId: worn } };
+}
+
+// What a built car is really painted with, for the checks: its body's base
+// colour, whether the baked occlusion shades it, and its tyres' ink.
+export function carLooks(car) {
+  let body = null;
+  let ao = false;
+  let tyreInk = null;
+  car.model.traverse((node) => {
+    if (!node.isMesh) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => {
+      if (m.name === "livery_body") {
+        body = `#${m.color.getHexString()}`;
+        ao = Boolean(m.vertexColors && node.geometry.attributes.color);
+      }
+      // The ink really on this car's tyres: only if its sidewall wears the lettering.
+      if (m.name === "tyre_band" && m.map === tyreLettering) tyreInk = tyreCompoundInk();
+    });
+  });
+  const livery = LIVERIES[car.teamId];
+  return { team: car.teamId, body, planned: livery ? `#${color(livery.base).getHexString()}` : null, ao, tyreInk };
 }
