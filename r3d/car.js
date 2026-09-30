@@ -103,7 +103,13 @@ function paintedBody(material, livery) {
         uniform vec3 uNoseC; uniform float uNoseX;
         uniform vec3 uTopC; uniform float uTopY;`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        vec3 paint = diffuseColor.rgb;
+        // The baked occlusion (COLOR_0) shades the paint's zones too: taken
+        // out of the base here, put back over the whole scheme below.
+        vec3 ao = vec3(1.0);
+        #if defined( USE_COLOR ) || defined( USE_COLOR_ALPHA )
+          ao = vColor.rgb;
+        #endif
+        vec3 paint = diffuseColor.rgb / max(ao, vec3(0.02));
         if (uFade.z > 0.5) {
           float t = smoothstep(uFade.x, uFade.y, vCarPos.x);
           paint = mix(paint, uFadeC, t);
@@ -116,7 +122,7 @@ function paintedBody(material, livery) {
           paint = mix(paint, uStripeC, band * flank);
         }
         paint = mix(paint, uNoseC, smoothstep(uNoseX - 0.01, uNoseX + 0.01, vCarPos.x));
-        diffuseColor.rgb = paint;`);
+        diffuseColor.rgb = paint * ao;`);
   };
   mat.customProgramCacheKey = () => "livery";
   return mat;
@@ -138,6 +144,38 @@ function numberTexture(number, ink) {
 
 let template = null;
 const materialCache = new Map();
+
+// The tyres' sidewall lettering (the model's tyre_band UVs: u round the
+// tyre, v from the rim out): an original wordmark in the compound's colour,
+// yellow mediums in the dry, green intermediates in the wet. One texture for
+// every car, repainted when the weather changes.
+const COMPOUNDS = { dry: { ink: "#f2c200", name: "MEDIUM" }, wet: { ink: "#2fb34a", name: "INTERMEDIATE" } };
+let tyreCompound = "dry";
+const tyreLettering = canvasTexture(1024, 64, paintTyre, { srgb: true });
+tyreLettering.anisotropy = 4;
+function paintTyre(g, w, h) {
+  const { ink, name } = COMPOUNDS[tyreCompound];
+  g.fillStyle = "#151515";
+  g.fillRect(0, 0, w, h);
+  // A thin ring near the shoulder, then the wordmark and the compound between it and the rim.
+  g.fillStyle = ink;
+  g.fillRect(0, h * 0.14, w, h * 0.07);
+  g.font = "900 italic 30px Trebuchet MS, sans-serif";
+  g.textBaseline = "middle";
+  g.fillText("PIXEL CUP", w * 0.08, h * 0.6);
+  g.font = "700 20px Trebuchet MS, sans-serif";
+  g.fillText(name, w * 0.58, h * 0.6);
+}
+export function setTyreCompound(weather) {
+  const next = weather === "wet" ? "wet" : "dry";
+  if (next === tyreCompound) return;
+  tyreCompound = next;
+  paintTyre(tyreLettering.image.getContext("2d"), tyreLettering.image.width, tyreLettering.image.height);
+  tyreLettering.needsUpdate = true;
+}
+export function tyreCompoundInk() {
+  return COMPOUNDS[tyreCompound].ink;
+}
 
 // ---------------------------------------------------------------------------
 // Helmets: each driver's design (driver.helmet in game-data.js; see
@@ -312,6 +350,10 @@ function materialsFor(kart, driver) {
       else {
         out = m.clone();
         if (m.name === "livery_trim") out.color = color(livery.trim || kart.trim);
+        if (m.name === "tyre_band") {
+          out.map = tyreLettering;
+          out.color = new THREE.Color(0xffffff);
+        }
         if (m.name === "helmet") {
           out.map = helmetTexture(driver);
           out.color = new THREE.Color(0xffffff);
@@ -364,16 +406,18 @@ export function buildCar(kart, driver) {
 
   // Race numbers: on the nose, and both sides of the engine-cover fin.
   const numberMat = mats.get("__number");
-  const nose = decal(numberMat, 0.3, 0.22);
-  nose.position.set(2.08, 0.458, 0);
+  // (On car v2 the nose is lower and the fin a trace: the side numbers go on
+  // the engine cover's flanks.)
+  const nose = decal(numberMat, 0.28, 0.2);
+  nose.position.set(2.05, 0.425, 0);
   nose.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
   nose.rotateX(-0.22);
   model.add(nose);
   [-1, 1].forEach((side) => {
-    const fin = decal(numberMat, 0.34, 0.26);
-    fin.position.set(-1.55, 0.78, side * 0.013);
-    fin.rotation.y = side > 0 ? 0 : Math.PI;
-    model.add(fin);
+    const flank = decal(numberMat, 0.26, 0.19);
+    flank.position.set(-1.2, 0.6, side * 0.152);
+    flank.rotation.y = side > 0 ? 0 : Math.PI;
+    model.add(flank);
   });
 
   model.scale.setScalar(CAR_SCALE);
@@ -392,5 +436,23 @@ export function buildCar(kart, driver) {
   model.traverse((node) => {
     if (node.isMesh && !worn) (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => { if (m.name === "helmet" && m.map) worn = m.map.uuid; });
   });
-  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, helmet: { driverId: helmetKey(driver), textureId: worn } };
+  return { root, model, wheels, glow, flap, spin: 0, flapOpen: 0, teamId: kart.id, helmet: { driverId: helmetKey(driver), textureId: worn } };
+}
+
+// What a built car is really painted with, for the checks: its body's base
+// colour, whether the baked occlusion shades it, and its tyres' ink.
+export function carLooks(car) {
+  let body = null;
+  let ao = false;
+  car.model.traverse((node) => {
+    if (!node.isMesh) return;
+    (Array.isArray(node.material) ? node.material : [node.material]).forEach((m) => {
+      if (m.name === "livery_body") {
+        body = `#${m.color.getHexString()}`;
+        ao = Boolean(m.vertexColors && node.geometry.attributes.color);
+      }
+    });
+  });
+  const livery = LIVERIES[car.teamId];
+  return { team: car.teamId, body, planned: livery ? `#${color(livery.base).getHexString()}` : null, ao, tyreInk: tyreCompoundInk() };
 }
