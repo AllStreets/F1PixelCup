@@ -473,10 +473,13 @@ def wheel(name, x, y, r, rin, width):
             for loop, (kk, ii) in zip(f.loops, ((k, i), (k + 1, i), (k + 1, i + 1), (k, i + 1))):
                 u = kk / seg * TYRE_REPEATS
                 if on_band:
-                    # v from the rim (0) out to the shoulder (1); the inboard wall reads mirrored.
+                    # v from the rim (0) out to the shoulder (1). u runs so that
+                    # the wall facing +y (i = last) and the wall facing -y (i = 0)
+                    # both read forward from outside; the wheels on the left
+                    # show their +y wall, those on the right their -y wall.
                     rr = prof[ii][0]
                     v = min(max((rr - rin) / (prof[1][0] - rin), 0.0), 1.0)
-                    loop[uv_layer].uv = (u if i == 0 else -u, v)
+                    loop[uv_layer].uv = (-u if i == 0 else u, v)
                 else:
                     loop[uv_layer].uv = (u, ii / len(prof))
     bmesh.ops.remove_doubles(bm, verts=[v for ring in (rings[0], rings[-1]) for v in ring], dist=1e-6)

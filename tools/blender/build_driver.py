@@ -344,8 +344,9 @@ def wave(t):
     aim("hand_R", (0.05, -0.2 + 0.3 * math.sin(t), 1.0))
 
 
+# (The root bone points up, so its own Y is the world's up: a bob is along Y.)
 def arms_up(t):
-    rig.pose.bones["root"].location = Vector((0, 0.03 * math.sin(t), 0))
+    rig.pose.bones["root"].location = Vector((0, 0.03 * abs(math.sin(t)), 0))
     aim("chest", (0.0, 0, 1))
     aim("head", (0.08, 0, 1))
     for s, sgn in (("L", 1), ("R", -1)):
@@ -355,7 +356,7 @@ def arms_up(t):
 
 
 def trophy_up(t):
-    rig.pose.bones["root"].location = Vector((0, 0, 0.02 * abs(math.sin(t))))
+    rig.pose.bones["root"].location = Vector((0, 0.02 * abs(math.sin(t)), 0))
     aim("chest", (-0.03, 0, 1))
     aim("head", (0.12, 0, 1))
     aim("upper_arm_R", (0.08, -0.32, 1.0))
@@ -377,23 +378,37 @@ def spray(t):
     aim("forearm_L", (0.7, -0.1, 0.1))
 
 
+# Each pose: its length in frames, how often it is keyed (the spray's shake
+# is quick: keyed every frame, or its keys would all fall on its zeros), and
+# the function that poses it.
 POSES = {
-    "stand": (60, lambda f: stand(math.sin(2 * math.pi * f / 60))),
-    "wave": (40, lambda f: wave(2 * math.pi * f / 40)),
-    "arms_up": (40, lambda f: arms_up(2 * math.pi * f / 40)),
-    "trophy": (60, lambda f: trophy_up(2 * math.pi * f / 60)),
-    "spray": (30, lambda f: spray(2 * math.pi * f / 30)),
+    "stand": (60, 5, lambda f: stand(math.sin(2 * math.pi * f / 60))),
+    "wave": (40, 4, lambda f: wave(2 * math.pi * f / 40)),
+    "arms_up": (40, 4, lambda f: arms_up(2 * math.pi * f / 40)),
+    "trophy": (60, 5, lambda f: trophy_up(2 * math.pi * f / 60)),
+    "spray": (30, 1, lambda f: spray(2 * math.pi * f / 30)),
 }
-KEY_EVERY = 5
 rig.animation_data_create()
 actions = {}
-for name, (length, pose) in POSES.items():
+BOOTS = [bpy.data.objects["boot_L"], bpy.data.objects["boot_R"]]
+
+
+def lowest_boot():
+    bpy.context.view_layer.update()
+    return min((b.matrix_world @ v.co).z for b in BOOTS for v in b.data.vertices)
+
+
+for name, (length, every, pose) in POSES.items():
     act = bpy.data.actions.new(name)
     act.use_fake_user = True
     rig.animation_data.action = act
-    for f in range(0, length + 1, KEY_EVERY):
+    for f in range(0, length + 1, every):
         reset_pose()
         pose(f)
+        # Standing on the podium, never in it.
+        low = lowest_boot()
+        if low < -0.005:
+            raise RuntimeError(f"{name} frame {f}: a boot is {-low * 100:.1f} cm below the ground")
         key_all(f)
     actions[name] = act
     # Each action on its own NLA track, so the exporter writes them all.
@@ -424,11 +439,11 @@ if PREVIEW:
     cam.location = (3.4, 1.6, 1.3)
     cam.rotation_euler = (Vector((0, 0, 0.95)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     props = {"trophy": bpy.data.objects["trophy"], "spray": bpy.data.objects["bottle"]}
-    for name, (length, pose) in POSES.items():
+    for name, (length, _every, pose) in POSES.items():
         rig.animation_data.action = actions[name]
         for pname, pob in (("trophy", props["trophy"]), ("spray", props["spray"])):
             pob.hide_render = pname != name
-        scene.frame_set(length // 4)
+        scene.frame_set(length // 4 + 1)
         scene.render.filepath = os.path.join(PREVIEW, f"driver_{name}.png")
         bpy.ops.render.render(write_still=True)
     rig.animation_data.action = None

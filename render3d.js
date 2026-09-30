@@ -1301,6 +1301,8 @@ function renderGarage(kart, driver, now) {
   }
   powerUpLayer.group.visible = particles.visible = false;
   rain.update({ camera, world: null, racers: [], dt: 0, isWet: false });
+  // The showroom car is on dry tyres, whatever the last race was.
+  setTyreCompound("dry");
   garage.group.visible = true;
   scene.fog = null;
   scene.environmentIntensity = 0.6;

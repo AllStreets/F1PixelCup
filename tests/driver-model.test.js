@@ -86,3 +86,31 @@ test("the driver's helmet is the car's shell, with UVs for the painted design", 
   // The car's shell: 0.135 round, 1.12 x longer front to back.
   assert.ok(Math.abs((a.max[2] - a.min[2]) / 2 - 0.135 * 1.05) < 0.01, "the helmet is the same shell");
 });
+
+test("every pose moves over its loop: the spray really shakes, the arms really wave", () => {
+  const buf = fs.readFileSync(FILE);
+  const doc = gltf(FILE);
+  const bin = buf.subarray(20 + buf.readUInt32LE(12) + 8);
+  const read = (i) => {
+    const a = doc.accessors[i];
+    const view = doc.bufferViews[a.bufferView];
+    const size = { SCALAR: 1, VEC3: 3, VEC4: 4 }[a.type];
+    const base = (view.byteOffset || 0) + (a.byteOffset || 0);
+    const stride = view.byteStride || size * 4;
+    return Array.from({ length: a.count }, (_, k) => Array.from({ length: size }, (_, c) => bin.readFloatLE(base + k * stride + c * 4)));
+  };
+  const nodeName = (i) => doc.nodes[i].name;
+  // How far a bone's rotation swings over the loop (the largest change of any quaternion component).
+  const swing = (anim, bone) => {
+    let most = 0;
+    anim.channels.filter((c) => c.target.path === "rotation" && nodeName(c.target.node) === bone).forEach((c) => {
+      const out = read(anim.samplers[c.sampler].output);
+      for (let k = 0; k < 4; k += 1) most = Math.max(most, Math.max(...out.map((q) => q[k])) - Math.min(...out.map((q) => q[k])));
+    });
+    return most;
+  };
+  const anim = (name) => doc.animations.find((a) => a.name === name);
+  assert.ok(swing(anim("spray"), "upper_arm_R") > 0.02, "the spray's arm shakes");
+  assert.ok(swing(anim("wave"), "forearm_R") > 0.05, "the wave's forearm waves");
+  assert.ok(swing(anim("stand"), "chest") > 0.001, "standing, the chest breathes");
+});
