@@ -1881,6 +1881,45 @@ function updateLapProgress(racer, now, dt = 0) {
   }
 }
 
+// How tight the road is along the lap, every few units, for the CPU drivers
+// (racecraft.js); worked out once per circuit.
+const CURVE_STEP = 8;
+const CURVE_WINDOW = 3;
+function curvatureProfile(track) {
+  if (track.aiCurvature) return track.aiCurvature;
+  const route = getMainRoute(track);
+  const n = Math.max(8, Math.round(track.totalLength / CURVE_STEP));
+  const step = track.totalLength / n;
+  const headings = Array.from({ length: n }, (_, i) => {
+    const at = sampleRouteSurfaceAtDistance(route, i * step);
+    return Math.atan2(at.tangentY, at.tangentX);
+  });
+  track.aiCurvature = { step, values: Racecraft.curvatureFromHeadings(headings, step, CURVE_WINDOW) };
+  return track.aiCurvature;
+}
+
+// Whether a CPU car must brake now for the road ahead: it looks as far as it
+// would take to stop, and checks each corner there against the speed it
+// allows and the brakes the car has.
+const CORNER_LOOK_STEP = 16;
+function mustBrakeForCorners(racer, difficulty) {
+  const speed = racer.speed;
+  if (speed <= 0) return false;
+  const wet = state.weather === "wet" && !racer.underRoof;
+  const grip = wet ? Weather.WET.corner : 1;
+  const decel = racer.physics.brakeRate * (wet ? Weather.WET.brake : 1);
+  const profile = curvatureProfile(state.track);
+  const L = state.track.totalLength;
+  const from = racer.trackDistance || 0;
+  const horizon = (speed * speed) / (2 * decel) + CORNER_LOOK_STEP * 2;
+  const corners = [];
+  for (let at = 0; at <= horizon; at += CORNER_LOOK_STEP) {
+    const index = Math.floor((((from + at) % L) + L) % L / profile.step) % profile.values.length;
+    corners.push({ at, speed: Racecraft.cornerSpeed(racer.physics, profile.values[index], { margin: difficulty.cornerMargin, grip }) });
+  }
+  return Racecraft.mustBrake(speed, corners, decel);
+}
+
 function updateRacer(racer, dt, now) {
   if (racer.finished) {
     racer.drawFrom = null;
@@ -1942,13 +1981,11 @@ function updateRacer(racer, dt, now) {
     const angleDiff = normalizeAngle(targetAngle - racer.heading);
     throttle = 1;
     steerInput = clamp(angleDiff * 1.7, -1, 1);
-    const turnSeverity = Math.abs(angleDiff);
-    // A better driver carries the corner further before lifting.
-    // A wet road: they lift earlier (the speed a corner allows goes as the
-    // square root of grip).
-    if (turnSeverity > difficulty.brakeBias && racer.speed > racer.physics.maxSpeed * 0.62 * Weather.cornerSpeedScale(state.weather === "wet" && !racer.underRoof ? "wet" : "dry")) {
-      brake = 1;
-    }
+    // Braking as a driver does: for each corner ahead, the fastest this car
+    // can take it (its own turning, and wet, its grip -- racecraft.js), and
+    // brakes when it could no longer slow to that in time. A better driver
+    // dares nearer the limit (the difficulty's corner margin).
+    if (mustBrakeForCorners(racer, difficulty)) brake = 1;
     drifting = Math.abs(angleDiff) > 0.48 && racer.speed > 80 && Math.random() < 0.78;
     driftSide = steerInput;
 

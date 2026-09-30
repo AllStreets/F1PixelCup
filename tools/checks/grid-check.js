@@ -450,6 +450,32 @@ async (page) => {
     return { lap, race };
   });
   measured.ladder = ladder;
+
+  // Qualifying is contested: on Pro the CPU pole is quicker than the
+  // player's own car driven clean (no mistakes, on the racing line) -- pole
+  // takes a genuinely good lap, not just a tidy one.
+  const contest = await step(() => {
+    Game.backToPitLane();
+    seedRandom(3);
+    state.difficulty = 1;
+    buildCupEntries();
+    const d = DIFFICULTIES[1];
+    const out = {};
+    ["monza", "silverstone", "monaco"].forEach((id) => {
+      const track = TRACKS.find((t) => t.id === id);
+      const pole = Math.min(...state.cupEntries.filter((e) => !e.isPlayer)
+        .map((e, i) => simulateQualifyingLapSeeded(e, track, 1000 + i * 7919).timeMs || Infinity));
+      const saved = { mistakeRate: d.mistakeRate, lineNoise: d.lineNoise };
+      Object.assign(d, { mistakeRate: 0, lineNoise: 0 });
+      const me = state.cupEntries.find((e) => e.isPlayer);
+      const clean = simulateQualifyingLapSeeded(me, track, 3).timeMs;
+      Object.assign(d, saved);
+      out[id] = { pole: Math.round(pole), clean: Math.round(clean) };
+    });
+    return out;
+  });
+  measured.contest = contest;
+  results.poleBeatsACleanLap = Object.values(contest).every((c) => c.pole < c.clean) || JSON.stringify(contest);
   // The README states the measured margins: Pro 7-15% quicker than Rookie, Legend 2.5-9.5% quicker than Pro.
   const ordered = (xs) => xs[0] > xs[1] * 1.05 && xs[1] > xs[2] * 1.02;
   results.difficultyLadder = Object.values(ladder.lap).every(ordered) && Object.values(ladder.race).every(ordered);

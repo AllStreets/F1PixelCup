@@ -214,6 +214,7 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 - [ ] Spec: the 2025 shape, with undercut sidepods, floor, sponsor-style (original) livery art, tyre lettering and baked AO.
 - [ ] Update `tools/blender/build_f1_car.py`, keeping every part name, including the working **`drs_flap`** (with its pivot at the leading edge), `helmet` and the livery materials. Re-export `assets/f1_car.glb`.
+- [ ] Build the driver figure in Blender (`tools/blender/build_driver.py` → `assets/driver.glb`): a race suit and gloves that take team colours, a helmet that takes the stage D designs, and podium poses. It is used by Stage K.
 - [ ] Node or browser check: every required part name is present, the DRS flap still rotates 12°, and all 10 liveries recolour correctly.
 - [ ] Recapture the showroom, team and site shots with varied drivers (`tools/capture-shots.js`). Review, merge, push.
 
@@ -226,6 +227,7 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 ## Stage K — 3D podium ceremony (roadmap stage 11)
 
 - [ ] Spec: the podium set, the drivers (helmets from stage D), champagne spray, confetti and an orbiting camera. It is driven by the **real** cup results.
+- [ ] The drivers are **Blender-built figures** (user, 2026-09-29): race suits in team colours, their own helmets, poses for the podium (arms up, trophy, champagne). They are built in Stage I alongside car v2, so the ceremony has real people on it.
 - [ ] Add `r3d/podium.js`, and hook it into the cup-end flow in `screens.js` and `game.js`. The 2D podium stays as the fallback.
 - [ ] Browser check: the top three on the podium equal the real cup standings, the scene skips cleanly, and there are no errors. Screenshots, review, merge, push.
 
@@ -233,6 +235,13 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 - [ ] Spec: the season mode, with drivers' and constructors' standings, saved progress, and per-driver careers credited.
 - [ ] Add the new circuits from `tools/tracks/f1-circuits.geojson` through `build_tracks.py`, in batches, until all 24 of the real 2025 calendar are in.
+- [ ] **Every new circuit gets the same care as the first eight** (user, 2026-09-29), not a bare outline:
+  - its real pit lane and garages, from OpenStreetMap (ODbL);
+  - its signature corners named on boards, and its venue moments seen and heard (a tunnel, a bridge, floodlights at night races, a crowd at the famous stands);
+  - its own venue look: ground, run-off, trees or city, sky, grade and weather odds;
+  - landmarks from Stage J where the venue has one;
+  - marshal posts, stands and the TV helicopter;
+  - screenshots reviewed like the first eight.
 - [ ] Each new circuit passes:
   - [ ] relaxation;
   - [ ] bridge detection;

@@ -52,7 +52,7 @@ const DIFFICULTIES = [
   {
     id: "rookie", name: "Rookie",
     aiPace: 0.90,      // the only speed handicap in the game
-    brakeBias: 0.44,   // lifts early for corners
+    cornerMargin: 0.7, // takes corners well inside what the car can do (racecraft.js)
     lineNoise: 36,     // wanders off the ideal line
     mistakeRate: 0.5,  // errors per second
     catchUp: 0.12,
@@ -60,19 +60,17 @@ const DIFFICULTIES = [
   },
   {
     id: "pro", name: "Pro",
-    aiPace: 1.0, brakeBias: 0.58, lineNoise: 20, mistakeRate: 0.16, catchUp: 0.05,
+    aiPace: 1.0, cornerMargin: 0.85, lineNoise: 20, mistakeRate: 0.16, catchUp: 0.05,
     lookBase: 76, lookSpeed: 0.52,
   },
   {
     // The only setting where rivals are quicker than you rather than just
-    // better drivers: a 5% pace edge on top of a near-perfect racing line.
-    // Tuned by simulated laps (tools/checks/grid-check.js): later braking and a
-    // longer look ahead than Pro made Legend run wide and lose time, so it
-    // keeps Pro's line and wins on pace and precision: measured 2.5-9.5% quicker
-    // than Pro depending on the circuit (least at Monza, where corners, not
-    // top speed, set the lap), and Pro is 7-15% quicker than Rookie.
+    // better drivers: a 5% pace edge, a near-perfect line and corners taken
+    // nearest the limit (racecraft.js). Measured by simulated laps
+    // (tools/checks/grid-check.js): 5-7% quicker than Pro, and Pro 10-12%
+    // quicker than Rookie.
     id: "legend", name: "Legend",
-    aiPace: 1.05, brakeBias: 0.62, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
+    aiPace: 1.05, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
     lookBase: 76, lookSpeed: 0.52,
   },
 ];

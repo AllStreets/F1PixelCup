@@ -53,11 +53,6 @@ test("capYaw leaves yaw under the limit alone, and caps it at limit / speed abov
   assert.equal(Weather.capYaw(3, -50, 100), 2);
 });
 
-test("CPU drivers lift for corners at a speed scaled by the square root of grip", () => {
-  assert.equal(Weather.cornerSpeedScale("dry"), 1);
-  assert.ok(Math.abs(Weather.cornerSpeedScale("wet") - Math.sqrt(Weather.WET.corner)) < 1e-9);
-});
-
 test("a wet tyre sliding near its limit scrubs speed: none going straight, most at the limit", () => {
   assert.equal(Weather.scrub(0, 1000, 1 / 60), 1);
   const half = Weather.scrub(500, 1000, 1 / 60);
