@@ -212,11 +212,11 @@ Stage E shipped with its fresh review fixed: 8 Important and 17 Minor findings, 
 
 ## Stage I — Blender car v2 (roadmap stage 9)
 
-- [ ] Spec: the 2025 shape, with undercut sidepods, floor, sponsor-style (original) livery art, tyre lettering and baked AO.
-- [ ] Update `tools/blender/build_f1_car.py`, keeping every part name, including the working **`drs_flap`** (with its pivot at the leading edge), `helmet` and the livery materials. Re-export `assets/f1_car.glb`.
-- [ ] Build the driver figure in Blender (`tools/blender/build_driver.py` → `assets/driver.glb`): a race suit and gloves that take team colours, a helmet that takes the stage D designs, and podium poses. It is used by Stage K.
-- [ ] Node or browser check: every required part name is present, the DRS flap still rotates 12°, and all 10 liveries recolour correctly.
-- [ ] Recapture the showroom, team and site shots with varied drivers (`tools/capture-shots.js`). Review, merge, push.
+- [x] Spec (docs/superpowers/specs/2026-09-30-car-v2-design.md): the 2025 shape, with undercut sidepods, floor, sponsor-style (original) livery art, tyre lettering and baked AO.
+- [x] Update `tools/blender/build_f1_car.py`, keeping every part name, including the working **`drs_flap`** (with its pivot at the leading edge), `helmet` and the livery materials. Re-export `assets/f1_car.glb`.
+- [x] Build the driver figure in Blender (`tools/blender/build_driver.py` → `assets/driver.glb`): a race suit and gloves that take team colours, a helmet that takes the stage D designs, and podium poses. It is used by Stage K.
+- [x] Node or browser check: every required part name is present, the DRS flap still rotates 12°, and all 10 liveries recolour correctly.
+- [x] Recapture the showroom, team and site shots with varied drivers (`tools/capture-shots.js`). Review, merge, push.
 
 ## Stage J — Blender landmarks (roadmap stage 10)
 
