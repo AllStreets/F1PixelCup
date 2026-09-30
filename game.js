@@ -1715,7 +1715,9 @@ const SC_LEAVING_PACE = 0.85;
 const SC_PIT_LIMIT = 0.35;
 function updateSafetyCar(dt, now) {
   const sc = state.safetyCar;
+  if (sc) sc.drawFrom = null;
   if (!sc || sc.parked) return;
+  sc.drawFrom = { d: sc.d, lat: sc.lat };
   const route = getItemRoute(state.track);
   const lane = state.track.pitLane;
   if (now >= sc.until) {
@@ -1880,10 +1882,15 @@ function updateLapProgress(racer, now, dt = 0) {
 }
 
 function updateRacer(racer, dt, now) {
-  if (racer.finished) return;
-  // Where this step starts from, for timing the line crossing exactly.
+  if (racer.finished) {
+    racer.drawFrom = null;
+    return;
+  }
+  // Where this step starts from, for timing the line crossing exactly, and
+  // for drawing the car between its last two steps (placeForDrawing).
   racer.stepFromX = racer.x;
   racer.stepFromY = racer.y;
+  racer.drawFrom = { x: racer.x, y: racer.y, heading: racer.heading };
   if (racer.rouletteUntil && now >= racer.rouletteUntil) {
     finishRoulette(racer, now);
   }
@@ -2759,7 +2766,46 @@ function resetToGarage() {
 
 function drawTrack(track) {
   state.viewMode = "driver";
-  drawDriverView(track);
+  const restore = placeForDrawing();
+  try {
+    drawDriverView(track);
+  } finally {
+    restore();
+  }
+}
+
+// The physics steps at 60 Hz; a screen refreshes at its own rate (120 Hz on
+// many laptops). Drawn straight from the physics, cars would move on some
+// frames and not others -- a judder, worst in a pack. So each frame draws
+// every car between its last two steps, by how far the clock has got into
+// the next one, and puts it back afterwards. (A jump -- a rescue, the grid --
+// is drawn as it is.)
+function placeForDrawing() {
+  const alpha = clamp((state.stepAccum || 0) / PHYSICS_STEP_MS, 0, 1);
+  const moved = [];
+  state.racers.forEach((racer) => {
+    const from = racer.drawFrom;
+    if (!from || Math.hypot(racer.x - from.x, racer.y - from.y) > 60) return;
+    moved.push([racer, racer.x, racer.y, racer.heading]);
+    racer.x = from.x + (racer.x - from.x) * alpha;
+    racer.y = from.y + (racer.y - from.y) * alpha;
+    racer.heading = from.heading + normalizeAngle(racer.heading - from.heading) * alpha;
+  });
+  const sc = state.safetyCar;
+  let scWas = null;
+  if (sc && sc.drawFrom && state.track) {
+    const L = state.track.totalLength;
+    const along = ((sc.d - sc.drawFrom.d) % L + L * 1.5) % L - L / 2;
+    if (Math.abs(along) < 60) {
+      scWas = [sc.d, sc.lat];
+      sc.d = ((sc.drawFrom.d + along * alpha) % L + L) % L;
+      sc.lat = sc.drawFrom.lat + (sc.lat - sc.drawFrom.lat) * alpha;
+    }
+  }
+  return () => {
+    moved.forEach(([racer, x, y, heading]) => { racer.x = x; racer.y = y; racer.heading = heading; });
+    if (scWas) [sc.d, sc.lat] = scWas;
+  };
 }
 
 function drawTrackBarriers(points, width, color) {
@@ -3507,7 +3553,6 @@ function drawDriverView(track) {
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
       if (onKerb && state.phase === "race" && !state.paused && Math.abs(player.speed) > 40) sfx.kerb();
-      drawSpeedLines(player);
       drawDriverItemBadge(player);
       drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
       drawDriverHud(track, player);
@@ -4441,6 +4486,7 @@ function drawQualifyingHud(track, player) {
   const delta = qualifyingDeltaNow();
   row("DELTA", delta === null ? "—" : `${delta <= 0 ? "−" : "+"}${formatGapTime(Math.abs(delta))}`, 136,
     delta === null ? "rgba(255, 240, 201, 0.5)" : delta <= 0 ? "#39d98a" : "#ff5f57");
+  drawSpeedPanel(player);
 }
 
 function drawDriverHud(track, player) {
@@ -4594,7 +4640,11 @@ function drawDriverHud(track, player) {
     ctx.textAlign = "left";
   }
 
-  // ---- Speed, bottom right ----
+  drawSpeedPanel(player);
+}
+
+// Speed, bottom right: in the race and on a qualifying lap alike.
+function drawSpeedPanel(player) {
   const kph = Math.round(Math.abs(player.speed) * 1.45);
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
   const sx = view.width - 208;
@@ -4621,7 +4671,6 @@ function drawDriverHud(track, player) {
   ctx.fillStyle = speedGradient;
   ctx.fillRect(sx + 14, sy + 80, 160 * speedRatio, 5);
 }
-
 
 const iconImages = {};
 
