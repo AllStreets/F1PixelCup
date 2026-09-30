@@ -218,6 +218,16 @@ async (page) => {
     || JSON.stringify(dryHigh);
   results.lowTiered = (wetLow.wet && wetLow.streaks === 1000 && wetLow.spray === 0) || JSON.stringify(wetLow);
 
+  // Standing still on a wet grid (no throttle, after the lights): the car
+  // stays put and whole -- no grip limit yet is no reason for NaN.
+  results.standingStillInTheWet = await (async () => {
+    await step(() => { Game.backToPitLane(); Game.selectCup(0); Game.selectGridMode("back"); Game.selectWeatherMode("wet"); Game.startCup(); });
+    await p.waitForFunction(() => state.phase === "race" && !state.preparing, null, { timeout: 30000 });
+    await p.waitForTimeout(2500);
+    const seen = await step(() => ({ x: getPlayer().x, speed: getPlayer().speed, broken: state.racers.filter((r) => !Number.isFinite(r.x) || !Number.isFinite(r.speed)).length }));
+    return (Number.isFinite(seen.x) && Number.isFinite(seen.speed) && seen.broken === 0) || JSON.stringify(seen);
+  })();
+
   // Nothing new stands over the track.
   results.sceneryClear = await step(() => {
     const bad = TRACKS.filter((t) => Render3D.auditScenery(t).length > 0).map((t) => t.id);

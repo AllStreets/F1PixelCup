@@ -226,8 +226,9 @@ export function createRain(scene) {
     }
     time += dt;
     if (dt > 0) camVel.copy(camera.position).sub(lastCamera).divideScalar(dt);
-    // A jump (a new camera, a new circuit) is not the camera driving.
-    if (camVel.length() > 1500) camVel.set(0, 0, 0);
+    // A jump (a new camera, a new circuit) is not the camera driving; and a
+    // bad value is never carried on.
+    if (!(camVel.length() <= 1500)) camVel.set(0, 0, 0);
     lastCamera.copy(camera.position);
     const u = streaks.material.uniforms;
     u.uTime.value = time;

@@ -63,6 +63,8 @@
   // latAccel against its limit: the nearer the limit, the more it slides and
   // scrubs (none going straight; no more past the limit than at it).
   function scrub(latAccel, limit, dt) {
+    // Standing still there is no limit yet (and nothing to scrub).
+    if (!(limit > 0)) return 1;
     const load = Math.min(1, Math.abs(latAccel) / limit);
     return Math.exp(-WET.scrub * load * load * dt);
   }

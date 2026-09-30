@@ -65,3 +65,9 @@ test("a wet tyre sliding near its limit scrubs speed: none going straight, most 
   for (let i = 0; i < 60; i += 1) v *= Weather.scrub(1000, 1000, 1 / 60);
   assert.ok(Math.abs(v - Math.exp(-Weather.WET.scrub)) < 0.01);
 });
+
+test("a car standing still (no grip limit yet) keeps its speed: never NaN", () => {
+  assert.equal(Weather.scrub(0, 0, 1 / 60), 1);
+  assert.equal(Weather.scrub(5, 0, 1 / 60), 1);
+  assert.ok(Number.isFinite(Weather.scrub(0, 1e-12, 1 / 60)));
+});
