@@ -3,6 +3,7 @@ http://localhost:8765 with caching off (so a reload always gets the latest
 modules).
 
   python3 tools/dev-server.py .
+  python3 tools/dev-server.py . 8766      # another port, e.g. for a second worktree
 """
 import functools
 import http.server
@@ -19,4 +20,5 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 root = sys.argv[1] if len(sys.argv) > 1 else "."
-http.server.ThreadingHTTPServer(("", 8765), functools.partial(Handler, directory=root)).serve_forever()
+port = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
+http.server.ThreadingHTTPServer(("", port), functools.partial(Handler, directory=root)).serve_forever()
