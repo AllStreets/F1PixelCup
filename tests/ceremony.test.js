@@ -148,3 +148,12 @@ test("spray: a drop leaves the neck along the bottle and falls under gravity", (
   assert.ok(Math.abs(drop.vy - (v0 - 0.981)) < 0.05, "gravity");
   assert.ok(drop.y > 2 && drop.z > 0);
 });
+
+test("the name plates: in once the camera settles, out for the trophy close-up, back for the spray", () => {
+  assert.equal(Ceremony.platesShown(1), false);
+  assert.equal(Ceremony.platesShown(2.4), true);
+  assert.equal(Ceremony.platesShown(4.5), true);
+  assert.equal(Ceremony.platesShown(7), false);
+  assert.equal(Ceremony.platesShown(10.5), true);
+  assert.equal(Ceremony.platesShown(300), true);
+});

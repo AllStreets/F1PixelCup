@@ -58,6 +58,10 @@
   const confettiOn = (t) => t >= BEATS.trophy;
   const sprayOn = (t, tier) => t >= BEATS.spray && tier !== "low";
 
+  // The name plates come in as the camera settles and step aside while it
+  // is close on P1 with the trophy, as a broadcast's captions do.
+  const platesShown = (t) => t >= BEATS.sweepEnd - 0.3 && !(t > BEATS.trophy + 0.4 && t < BEATS.spray + 0.6);
+
   const COUNTS = {
     high: { confetti: 600, spray: 1500 },
     medium: { confetti: 300, spray: 750 },
@@ -173,7 +177,7 @@
   }
 
   return {
-    BEATS, STEP_FORWARD, ORBIT_PERIOD, stepFor, beatAt, poseAt, forwardAt, trophyShown, confettiOn, sprayOn,
+    BEATS, STEP_FORWARD, ORBIT_PERIOD, stepFor, beatAt, poseAt, forwardAt, trophyShown, confettiOn, sprayOn, platesShown,
     counts, cameraAt, fitFov, cupColour, stepConfetti, sprayDrop, stepDrop,
   };
 }));

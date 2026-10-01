@@ -2748,8 +2748,6 @@ function showPodium() {
   }
 }
 
-const PODIUM_PLATES_AT = 2.2;
-
 // The podium phase's frame: the ceremony behind the screen, its name plates
 // placed under the drivers; the 2D steps while it loads or without 3D.
 function drawPodiumScene() {
@@ -2763,8 +2761,7 @@ function drawPodiumScene() {
   const on = Boolean(frame && frame.drawing);
   if (on !== state.podium3d || on) {
     state.podium3d = on;
-    // The plates come in as the camera settles, as a broadcast's captions do.
-    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.t >= PODIUM_PLATES_AT);
+    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && window.Ceremony.platesShown(frame.t));
   }
 }
 

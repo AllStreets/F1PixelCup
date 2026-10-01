@@ -89,7 +89,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     // like an LED wall.
     const wallTex = tex(backdropTexture());
     const wall = new THREE.Mesh(geo(new THREE.PlaneGeometry(WALL_W, WALL_H)), mat(new THREE.MeshStandardMaterial({
-      map: wallTex, emissiveMap: wallTex, emissive: "#ffffff", emissiveIntensity: 0.55, roughness: 0.6, metalness: 0,
+      map: wallTex, emissiveMap: wallTex, emissive: "#ffffff", emissiveIntensity: 0.42, roughness: 0.6, metalness: 0,
     })));
     wall.position.set(0, WALL_H / 2, WALL_Z);
     wall.receiveShadow = true;
@@ -391,7 +391,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
           vAge = aAge;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = aAge >= 1.0 ? 0.0 : mix(0.03, 0.15, sqrt(aAge)) * uScale / -mv.z;
+          gl_PointSize = aAge >= 1.0 ? 0.0 : mix(0.025, 0.11, sqrt(aAge)) * uScale / -mv.z;
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
