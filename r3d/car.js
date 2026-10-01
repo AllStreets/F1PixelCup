@@ -70,7 +70,7 @@ const LIVERIES = {
   },
 };
 
-function liveryFor(kart) {
+export function liveryFor(kart) {
   return LIVERIES[kart.id] || { base: kart.body, trim: kart.trim };
 }
 
@@ -291,7 +291,7 @@ function paintHelmet(g, h) {
   g.fillRect(0, H - 4, W, 4);
 }
 
-function helmetTexture(driver) {
+export function helmetTexture(driver) {
   const key = helmetKey(driver);
   if (!helmetTextures.has(key)) {
     const h = driver.helmet || { base: driver.color || "#ffffff", crown: driver.accent || "#ffffff", stripe: "#111111", visor: "#10141c", motif: "crown" };
