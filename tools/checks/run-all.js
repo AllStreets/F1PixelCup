@@ -15,7 +15,9 @@ async (page) => {
     const file = n === "race-sim" ? "race-sim.js" : `${n}-check.js`;
     const t0 = Date.now();
     try {
-      const src = await (await page.request.get(`http://localhost:8765/tools/checks/${file}?${Date.now()}`)).text();
+      // (A headless runner on another port sets globalThis.HOST; every check is pointed at it.)
+      const host = globalThis.HOST || "localhost:8765";
+      const src = (await (await page.request.get(`http://${host}/tools/checks/${file}?${Date.now()}`)).text()).replaceAll("localhost:8765", host);
       const r = await eval(src)(page);
       const bad = Object.entries(r.results || {}).filter(([, v]) => v !== true);
       // Informational values (counts, strings) are compared by eye; list them short.
