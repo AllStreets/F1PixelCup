@@ -1,5 +1,7 @@
 # F1 Pixel Cup — master to-do list
 
+> **Superseded for what comes next by `docs/superpowers/plans/2026-10-01-work-order.md`** (2026-10-01): Stages J to N carry on there, with the user's new instructions (all 24 circuits of 2025 in 4-race cups, historical cups, random and custom races, a README overhaul, and design reviews for the drivers, the podium and the trackside elements). Stages A to I below are done. The working rules here still apply. The handoff for a new session is `docs/HANDOFF.md`.
+
 Written 2026-09-29, after the user's instruction: "go ahead until a rate limit and plan everything we talked about, write specs, revise tests, build again, and perfect all the way up to stopping before supabase … DO NOT DISRUPT THE WORKFLOW".
 
 Work this list top to bottom and tick each item as it ships. It covers every source:
