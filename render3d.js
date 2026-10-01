@@ -28,6 +28,8 @@ import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
 import { createRain, wettable, WET_GRASS, WET_RUNOFF } from "./r3d/rain.js";
+import { loadDriver, driverLoaded } from "./r3d/driver.js";
+import { createPodium } from "./r3d/podium.js";
 
 const MAX_PARTICLES = 256;
 
@@ -150,7 +152,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -1334,3 +1336,87 @@ function renderGarage(kart, driver, now) {
   renderer.render(scene, camera);
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// The podium ceremony (r3d/podium.js): its own scene, drawn while the podium
+// screen is up. begin() builds it and compiles it in the background; frame()
+// draws nothing (drawing: false, the page keeps its 2D steps) until it can
+// draw without a stall; end() frees it all.
+// ---------------------------------------------------------------------------
+
+const ceremony = { podium: null, fx: null, size: "", driverLoading: false, last: null };
+
+// The driver model, fetched ahead (the cup's last results screen asks).
+function podiumPreload() {
+  if (driverLoaded() || ceremony.driverLoading) return;
+  ceremony.driverLoading = true;
+  loadDriver(() => { ceremony.driverLoading = false; }, (error) => {
+    ceremony.driverLoading = false;
+    console.warn("Driver model failed to load; the podium stays 2D.", error);
+  });
+}
+
+// summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
+function podiumBegin(summary) {
+  podiumEnd();
+  if (!api.ready) return false;
+  podiumPreload();
+  // The race's circuit is done with: free it now, as the pit lane would.
+  if (current) {
+    disposeWorld(current);
+    current = null;
+  }
+  const entries = summary.podium.map((p) => {
+    const driver = DRIVERS.find((d) => d.id === p.driverId);
+    return driver ? { place: p.place, driver, team: getTeamForDriver(driver), points: p.points } : null;
+  }).filter(Boolean);
+  if (entries.length !== 3) return false;
+  const tier = currentTier();
+  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment, fx: null });
+  const fx = createPostFx(renderer, podium.scene, podium.camera);
+  fx.setTier(tier);
+  podium.setFx(fx);
+  ceremony.podium = podium;
+  ceremony.fx = fx;
+  ceremony.size = "";
+  ceremony.last = podium;
+  return true;
+}
+
+function podiumFrame(now) {
+  const podium = ceremony.podium;
+  if (!podium || !api.ready) return { drawing: false };
+  resize();
+  const w = canvas2d.clientWidth || canvas2d.width;
+  const h = canvas2d.clientHeight || canvas2d.height;
+  const dpr = renderer.getPixelRatio();
+  const size = `${w}x${h}@${dpr}`;
+  if (size !== ceremony.size) {
+    ceremony.size = size;
+    podium.setSize(w, h);
+    ceremony.fx.setSize(w, h, dpr);
+  }
+  if (!podium.prepare()) {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(0x06070b, 1);
+    renderer.clear();
+    return { drawing: false };
+  }
+  const t = podium.render(now);
+  return { drawing: true, t, anchors: podium.anchors(w, h) };
+}
+
+function podiumEnd() {
+  if (ceremony.podium) ceremony.podium.dispose();
+  if (ceremony.fx) ceremony.fx.dispose();
+  ceremony.podium = null;
+  ceremony.fx = null;
+}
+
+function podiumInspect() {
+  const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
+  if (!ceremony.podium) return { active: false, memory, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
+  return { active: true, memory, ...ceremony.podium.inspect(), owned: ceremony.podium.owned() };
+}
+
+api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect };

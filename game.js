@@ -2689,6 +2689,10 @@ function showResults(finishers) {
     racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
   ), null);
   state.phase = "results";
+  // The cup's last race: the podium's drivers start loading now.
+  if (state.raceIndex === activeCup.tracks.length - 1 && worldView() === "3d" && window.Render3D.podium) {
+    render3dSafely(() => window.Render3D.podium.preload());
+  }
   if (!window.Screens) return;
   window.Screens.showResults({
     kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
@@ -2721,19 +2725,47 @@ function showPodium() {
   state.phase = "podium";
   if (!window.Screens) return;
   const playerPlace = state.cupEntries.findIndex((entry) => entry.isPlayer) + 1;
+  const podium = state.cupEntries.slice(0, 3).map((entry, index) => ({
+    place: index + 1,
+    driverId: entry.driver.id,
+    name: entry.driver.name,
+    team: entry.kart.name,
+    teamColor: entry.kart.body,
+    points: entry.points,
+    isPlayer: entry.isPlayer,
+  }));
   window.Screens.showPodium({
     kicker: `${activeCup.name} complete`,
     title: playerPlace === 1 ? "Cup winner" : `You finished ${formatOrdinal(playerPlace)}`,
-    podium: state.cupEntries.slice(0, 3).map((entry, index) => ({
-      place: index + 1,
-      name: entry.driver.name,
-      team: entry.kart.name,
-      teamColor: entry.kart.body,
-      points: entry.points,
-      isPlayer: entry.isPlayer,
-    })),
+    podium,
     career: careerForCup(state.lastCupCareer, playerPlace),
   });
+  // The ceremony in 3D (r3d/podium.js): the cup's real top three. Until it
+  // can draw, the screen's 2D steps stand in.
+  state.podium3d = false;
+  if (worldView() === "3d" && window.Render3D.podium) {
+    render3dSafely(() => window.Render3D.podium.begin({ cup: { id: activeCup.id, name: activeCup.name }, podium }));
+  }
+}
+
+const PODIUM_PLATES_AT = 2.2;
+
+// The podium phase's frame: the ceremony behind the screen, its name plates
+// placed under the drivers; the 2D steps while it loads or without 3D.
+function drawPodiumScene() {
+  ctx.clearRect(0, 0, view.width, view.height);
+  showViewLoading(null);
+  let frame = null;
+  if (worldView() === "3d" && window.Render3D.podium) {
+    const drawn = render3dSafely(() => window.Render3D.podium.frame(performance.now()));
+    if (drawn.ok) frame = drawn.value;
+  }
+  const on = Boolean(frame && frame.drawing);
+  if (on !== state.podium3d || on) {
+    state.podium3d = on;
+    // The plates come in as the camera settles, as a broadcast's captions do.
+    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.t >= PODIUM_PLATES_AT);
+  }
 }
 
 function nextRace() {
@@ -2775,6 +2807,9 @@ function resetToGarage() {
     audio.master.gain.setTargetAtTime(audio.enabled ? 0.55 : 0, audio.ctx.currentTime, 0.05);
   }
   state.phase = "garage";
+  // The ceremony stops and frees its drivers, set and effects.
+  if (window.Render3D && window.Render3D.podium) render3dSafely(() => window.Render3D.podium.end());
+  state.podium3d = false;
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
   // Nothing run from the pit lane is wet.
@@ -5016,7 +5051,9 @@ function update(now) {
 
   updateEngineAudio(getPlayer());
 
-  if (state.phase !== "garage") {
+  if (state.phase === "podium") {
+    drawPodiumScene();
+  } else if (state.phase !== "garage") {
     drawTrack(state.track);
     if (state.paused) drawPauseOverlay();
   } else {

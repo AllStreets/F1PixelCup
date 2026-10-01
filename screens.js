@@ -91,12 +91,17 @@
 
       <section id="podium-screen" class="screen overlay hidden" aria-live="polite">
         <div class="overlay-card">
-          <p id="podium-kicker" class="kicker"></p>
-          <h2 id="podium-title" class="it-title overlay-title"></h2>
+          <div class="podium-head">
+            <p id="podium-kicker" class="kicker"></p>
+            <h2 id="podium-title" class="it-title overlay-title"></h2>
+            <div id="podium-career" class="career-strip hidden"></div>
+          </div>
           <div id="podium-scene" class="podium"></div>
-          <div id="podium-career" class="career-strip hidden"></div>
-          <div class="overlay-actions">
-            <button class="go-btn" data-action="pitlane" type="button"><span>Back to pit lane ›</span></button>
+          <div id="podium-plates" class="podium-plates" aria-hidden="true"></div>
+          <div class="podium-foot">
+            <div class="overlay-actions">
+              <button class="go-btn" data-action="pitlane" type="button"><span>Back to pit lane ›</span></button>
+            </div>
           </div>
         </div>
       </section>
@@ -378,8 +383,70 @@
         <strong>${esc(p.name)}</strong><span>${esc(p.team)} · ${num(p.points)} pts</span>
         <div class="block">${num(p.place)}</div>
       </div>`).join("");
+    // The same three as name plates, for when the ceremony draws in 3D
+    // (placePodium puts each under its driver).
+    $("podium-plates").innerHTML = summary.podium.map((p) => `
+      <div class="podium-plate p${num(p.place)} ${p.isPlayer ? "is-player" : ""}" data-place="${num(p.place)}" style="--team:${esc(p.teamColor)}">
+        <b>${esc(ordinal(num(p.place)))}</b><strong>${esc(p.name)}</strong><span>${esc(p.team)}</span><em>${num(p.points)} pts</em>
+      </div>`).join("");
+    placePodium(null);
     renderStrip($("podium-career"), summary.career);
     show("podium-screen");
+  }
+
+  // anchors: [{ place, x, y }] in the window's pixels, from the 3D scene; null
+  // goes back to the 2D steps. platesIn: whether the plates are showing yet. Each plate is centred on its point and kept on
+  // screen, clear of the title above and the buttons below.
+  function placePodium(anchors, platesIn = true) {
+    const screen = $("podium-screen");
+    const on = Boolean(anchors && anchors.length);
+    screen.classList.toggle("is-3d", on);
+    screen.classList.toggle("plates-in", on && platesIn);
+    if (!on) return;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const card = screen.querySelector(".overlay-card");
+    const head = $("podium-title").getBoundingClientRect().bottom;
+    const actions = screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect();
+    const margin = 12;
+    const placed = anchors.map((a) => {
+      const plate = card.querySelector(`.podium-plate[data-place="${a.place}"]`);
+      if (!plate) return null;
+      const { width: w, height: h } = plate.getBoundingClientRect();
+      return { plate, place: a.place, w, h, x: a.x, y: a.y };
+    }).filter(Boolean).sort((a, b) => a.x - b.x);
+    // Side by side with a gap: pushed apart where they would touch, and kept
+    // inside the window. If the window is too narrow for all three in a row,
+    // the winner's drops below the other two.
+    const gap = 8;
+    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
+    if (room) {
+      for (let i = 1; i < placed.length; i += 1) {
+        const l = placed[i - 1];
+        const r = placed[i];
+        r.x = Math.max(r.x, l.x + l.w / 2 + gap + r.w / 2);
+      }
+      const last = placed[placed.length - 1];
+      last.x = Math.min(last.x, W - margin - last.w / 2);
+      for (let i = placed.length - 2; i >= 0; i -= 1) {
+        const l = placed[i];
+        const r = placed[i + 1];
+        l.x = Math.min(l.x, r.x - r.w / 2 - gap - l.w / 2);
+      }
+      placed[0].x = Math.max(placed[0].x, margin + placed[0].w / 2);
+    } else {
+      placed.forEach((p) => { p.x = Math.max(margin + p.w / 2, Math.min(W - margin - p.w / 2, p.x)); });
+      const winner = placed.find((p) => p.place === 1);
+      const others = placed.filter((p) => p !== winner);
+      if (winner) winner.y = Math.max(...others.map((p) => p.y + p.h + gap));
+    }
+    placed.forEach((p) => {
+      // Clear of the buttons when it would sit over them.
+      const overButtons = p.x + p.w / 2 > actions.left - 8 && p.x - p.w / 2 < actions.right + 8;
+      const floor = (overButtons ? actions.top : H) - 8;
+      const y = Math.max(head + 8, Math.min(floor - p.h, p.y));
+      p.plate.style.transform = `translate(${Math.round(p.x - p.w / 2)}px, ${Math.round(y)}px)`;
+    });
   }
 
   // ---- Career ----
@@ -598,7 +665,7 @@
 
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
-    showResults, showQualifying, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showResults, showQualifying, showPodium, placePodium, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());
