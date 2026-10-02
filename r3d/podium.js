@@ -253,17 +253,17 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       g.fillRect(0, 0, W, H);
       g.fillStyle = trim;
       g.fillRect(0, 26, W, 14);
-      g.fillRect(0, H - cut - 60, W, 10);
+      g.fillRect(0, H - cut - 34, W, 10);
       g.fillStyle = "#ffffff";
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.font = `italic 900 130px ${FONT}`;
       g.shadowColor = "rgba(0,0,0,0.4)";
       g.shadowBlur = 10;
-      g.fillText(String(e.driver.number), W / 2, 150);
+      g.fillText(String(e.driver.number), W / 2, 138);
       g.shadowBlur = 0;
-      g.font = `700 42px ${FONT}`;
-      g.fillText(spaced(e.driver.code), W / 2, 248);
+      g.font = `700 46px ${FONT}`;
+      g.fillText(spaced(e.driver.code), W / 2, 230);
       g.restore();
     }, { repeat: false });
   }
@@ -391,7 +391,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
           vAge = aAge;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           gl_Position = projectionMatrix * mv;
-          gl_PointSize = aAge >= 1.0 ? 0.0 : mix(0.025, 0.11, sqrt(aAge)) * uScale / -mv.z;
+          gl_PointSize = aAge >= 1.0 ? 0.0 : min(mix(0.02, 0.07, sqrt(aAge)) * uScale / -mv.z, uScale * 0.03);
         }`,
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;

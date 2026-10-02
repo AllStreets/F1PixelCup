@@ -83,7 +83,7 @@
     const p1Head = STEPS[1].height + 1.6;
     // Distance to what it looks at, its height, and where it looks.
     const radius = 17 + (9.4 - 17) * sweep + (8.8 - 9.4) * smooth(BEATS.sweepEnd, BEATS.trophy, t)
-      + (6.0 - 8.8) * push + (9.2 - 6.0) * back;
+      + (5.0 - 8.8) * push + (9.2 - 5.0) * back;
     const lookY = 2.1 + (p1Head - 2.1) * push + (2.15 - p1Head) * back;
     const height = 6.8 + (2.5 - 6.8) * sweep + (p1Head + 0.1 - 2.5) * push + (2.7 - p1Head - 0.1) * back;
     const lookZ = 0.0 + 0.1 * push - 0.1 * back;

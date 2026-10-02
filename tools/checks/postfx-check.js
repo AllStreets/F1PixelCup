@@ -241,6 +241,7 @@ async (page) => {
     const c = document.getElementById("game3d");
     return (low === null && high && high.width === c.width && high.height === c.height) || JSON.stringify({ low, high, canvas: [c.width, c.height] });
   });
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } }).catch(() => {});
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1180, height: 760 } });
   await p.waitForTimeout(600);
   results.frameFollowsResize = await step(() => {
@@ -248,6 +249,7 @@ async (page) => {
     const c = document.getElementById("game3d");
     return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Math.min(devicePixelRatio, 2))) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
   });
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } }).catch(() => {});
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.waitForTimeout(400);
 
