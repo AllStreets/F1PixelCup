@@ -10,9 +10,16 @@ body.landing { overflow-x: hidden; }
   backdrop-filter: blur(8px);
   border-bottom: 2px solid var(--red);
 }
-.wordmark { font: italic 900 1.15rem/1 var(--font); text-decoration: none; letter-spacing: 0.02em; }
+.wordmark { font: italic 900 1.15rem/1 var(--font); text-decoration: none; letter-spacing: 0.02em; white-space: nowrap; }
 .topnav { display: flex; gap: 22px; margin-left: auto; }
-.topnav a { text-decoration: none; font: 700 0.8rem/1 var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: #ddd; }
+.topnav a { text-decoration: none; font: 700 0.8rem/1 var(--font); letter-spacing: 0.12em; text-transform: uppercase; color: #ddd; white-space: nowrap; }
+.topbar .go-btn { white-space: nowrap; }
+/* Seven links on one line down to the phone layout. */
+@media (max-width: 1180px) {
+  .topbar { gap: 16px; }
+  .topnav { gap: 14px; }
+  .topnav a { font-size: 0.72rem; letter-spacing: 0.06em; }
+}
 .topnav a:hover { color: #fff; }
 .topbar .go-btn { font-size: 0.85rem; padding: 0.65em 1.4em; }
 
@@ -155,4 +162,74 @@ body.landing { overflow-x: hidden; }
 .team-cards .team-body .kicker { margin: 0 0 2px; }
 @media (max-width: 520px) {
   .driver-card { grid-template-columns: 96px 1fr; }
+}
+
+/* ---- Race day: replays, the podium, two players ---- */
+.hero-features { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
+.hero-features .chip { text-decoration: none; }
+.hero-features .chip:hover, .hero-features .chip:focus-visible { background: rgba(225, 6, 0, 0.3); }
+
+.race-day .section-lead { max-width: 44em; }
+.feature {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-areas: "gallery copy";
+  gap: clamp(20px, 3.4vw, 48px);
+  align-items: center;
+  margin-top: clamp(36px, 6vw, 80px);
+}
+.feature.flip { grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr); grid-template-areas: "copy gallery"; }
+.feature-gallery { grid-area: gallery; display: grid; gap: 10px; min-width: 0; }
+.feature-main { margin: 0; background: #05050a; border-top: 3px solid var(--red); box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55); }
+.feature-main img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; background: #05050a; }
+.feature-main.no-shot { aspect-ratio: 16 / 9; background: radial-gradient(circle at 60% 40%, #2a0605, var(--panel) 70%); }
+.feature-main figcaption { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 12px; background: var(--panel); font-size: 0.85rem; color: #d6d6de; }
+.cap-tag { flex: none; padding: 0.4em 0.65em; background: var(--red); color: #fff; font: italic 900 0.72rem/1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+.cap-text { min-width: 0; }
+.feature-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.thumb { position: relative; display: block; padding: 0; border: 0; background: #05050a; color: #fff; cursor: pointer; overflow: hidden; opacity: 0.6; transition: opacity 0.15s; }
+.thumb img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; }
+.thumb span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 8px 5px; background: linear-gradient(0deg, rgba(5, 5, 10, 0.9), rgba(5, 5, 10, 0)); font: 700 0.68rem/1 var(--font); letter-spacing: 0.08em; text-align: left; text-transform: uppercase; }
+.thumb::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: transparent; }
+.thumb:hover, .thumb:focus-visible, .thumb.is-on { opacity: 1; }
+.thumb.is-on::after { background: var(--red); }
+.thumb:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.thumb.no-shot { min-height: 48px; }
+
+.feature-copy { grid-area: copy; min-width: 0; }
+.feature-num { margin: 0 0 14px; font: italic 900 clamp(3rem, 6vw, 4.8rem)/1 var(--font); color: transparent; -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.42); letter-spacing: -0.02em; }
+.feature-title { font-size: clamp(1.8rem, 3.4vw, 2.7rem); margin: 10px 0 14px; padding-right: 0.1em; }
+.feature-copy > p:not([class]) { color: #d6d6de; line-height: 1.55; }
+.feature-points { list-style: none; margin: 18px 0; padding: 0; display: grid; gap: 10px; }
+.feature-points li { padding: 2px 0 2px 14px; border-left: 3px solid var(--red); color: var(--muted); line-height: 1.5; }
+.feature-points strong { color: #fff; }
+.feature-copy .feature-how { color: var(--muted); font-size: 0.92rem; }
+.feature-how b, .feature-copy p b { color: #fff; }
+
+/* The two players' keys, P1 sky blue and P2 pink as in the game. */
+.keymap { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0 4px; }
+.keymap-col { --p: #75d5ff; min-width: 0; padding: 12px 10px 14px; background: var(--panel-2); border-top: 3px solid var(--p); display: grid; justify-items: center; gap: 8px; }
+.keymap-col[data-player="2"] { --p: #ff7ac6; }
+.keymap-tag { justify-self: start; margin: 0; padding: 0.15em 0.45em; background: var(--p); color: #0b0b12; font: 900 0.8rem/1.2 var(--font); letter-spacing: 0.04em; border-radius: 2px; }
+.key-cluster { display: grid; grid-template-columns: repeat(3, 2.3em); grid-auto-rows: 2.1em; gap: 4px; }
+.key-cluster .key-throttle { grid-column: 2; }
+.key-cluster .key-left { grid-column: 1; grid-row: 2; }
+.key-cluster .key-brake { grid-column: 2; grid-row: 2; }
+.key-cluster .key-right { grid-column: 3; grid-row: 2; }
+.key-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.key {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  min-width: 2.3em; padding: 0.3em 0.55em; background: #1d1d29; color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-bottom: 3px solid #000; border-radius: 4px;
+  font: 700 0.85rem/1 var(--font); white-space: nowrap;
+}
+.key small { color: var(--p); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.howto-sub { margin-top: 22px !important; }
+
+@media (max-width: 900px) {
+  .feature, .feature.flip { grid-template-columns: minmax(0, 1fr); grid-template-areas: "gallery" "copy"; }
+}
+@media (max-width: 520px) {
+  .feature-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .keymap { grid-template-columns: minmax(0, 1fr); }
 }

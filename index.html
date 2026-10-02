@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>F1 Pixel Cup — Race the real circuits in your browser</title>
-  <meta name="description" content="All 20 drivers of the 2025 season on eight real circuits, in 3D, in your browser.">
+  <title>F1 Pixel Cup: race the real circuits in your browser</title>
+  <meta name="description" content="All 20 drivers of the 2025 season on eight real circuits, in 3D, in your browser, with TV-camera replays, a 3D podium and two-player split screen.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231b1620'/%3E%3Crect x='4' y='5' width='24' height='8' rx='2' fill='%23dc0000'/%3E%3Crect x='4' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='12' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='20' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='8' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='16' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='24' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -17,6 +17,7 @@
     <a class="wordmark" href="#hero">F1 PIXEL CUP</a>
     <nav class="topnav" aria-label="Site">
       <a href="#circuits">Circuits</a>
+      <a href="#race-day">Race day</a>
       <a href="#career">Your drivers</a>
       <a href="./drivers.html">Drivers</a>
       <a href="./teams.html">Teams</a>
@@ -41,6 +42,7 @@
         <h1 class="it-title hero-title">Lights out.<br>Your race.</h1>
         <p class="hero-lead">All 20 drivers, eight real circuits and a career that remembers every lap. In 3D, in your browser.</p>
         <a class="go-btn play-link" href="./play.html"><span>Play now ›</span></a>
+        <p class="hero-features"><a class="chip" href="#replays">TV replays</a><a class="chip" href="#podium">3D podium</a><a class="chip" href="#two-player">Two players</a></p>
       </div>
     </section>
 
@@ -49,6 +51,61 @@
       <h2 class="it-title section-title">Eight real circuits</h2>
       <p class="section-lead muted">Every track is traced from the real layout, from Monza's straights to Suzuka's figure of eight.</p>
       <div id="circuit-list" class="circuit-list"></div>
+    </section>
+
+    <section id="race-day" class="section race-day">
+      <p class="kicker">Race day</p>
+      <h2 class="it-title section-title">The whole show</h2>
+      <p class="section-lead muted">Every race comes back as a TV replay, every cup ends with the top three on a 3D podium, and a friend can take the second car in split screen.</p>
+
+      <article id="replays" class="feature" aria-labelledby="replays-title">
+        <div class="feature-gallery" data-gallery="replays"></div>
+        <div class="feature-copy">
+          <p class="feature-num" aria-hidden="true">01</p>
+          <p class="kicker">TV-camera replays</p>
+          <h3 id="replays-title" class="it-title feature-title">Watch it back like it's on TV</h3>
+          <p>Every race is recorded as it runs, and the replay is that race exactly, from lights out to the last car home.</p>
+          <ul class="feature-points">
+            <li><strong>Four cameras:</strong> Director, Trackside, Onboard and Helicopter. Trackside cameras pan and zoom to follow the car, then cut to the next one round the lap.</li>
+            <li><strong>A director</strong> cuts between them on its own and follows the closest battle at the front.</li>
+            <li><strong>Broadcast graphics:</strong> a timing tower, a lower third naming the driver in shot, the lap count and, onboard, the throttle, brake and steering trace.</li>
+            <li><strong>0.25x to 4x</strong>, pause, and jump to any moment of the race. Pick the camera and the car yourself, or leave it to the director.</li>
+          </ul>
+          <p class="feature-how">On the results screen, press <b>Watch the replay</b>. It replays the race you just ran.</p>
+        </div>
+      </article>
+
+      <article id="podium" class="feature flip" aria-labelledby="podium-title">
+        <div class="feature-gallery" data-gallery="podium"></div>
+        <div class="feature-copy">
+          <p class="feature-num" aria-hidden="true">02</p>
+          <p class="kicker">The podium ceremony</p>
+          <h3 id="podium-title" class="it-title feature-title">Spray the champagne</h3>
+          <p>At the end of every cup, the top three of the standings take the podium in 3D, each in their team's suit and their own painted helmet.</p>
+          <ul class="feature-points">
+            <li><strong>Arms up:</strong> third, then second, then the winner step forward and raise their arms.</li>
+            <li><strong>The trophy:</strong> the winner lifts it while second and third wave, and confetti comes down in the three teams' colours and gold.</li>
+            <li><strong>The champagne:</strong> all three spray it, the camera orbits, and the ceremony plays on until you leave.</li>
+          </ul>
+          <p class="feature-how">Name plates show each driver's place, team and cup points.</p>
+        </div>
+      </article>
+
+      <article id="two-player" class="feature" aria-labelledby="two-player-title">
+        <div class="feature-gallery" data-gallery="two-player"></div>
+        <div class="feature-copy">
+          <p class="feature-num" aria-hidden="true">03</p>
+          <p class="kicker">Two players, split screen</p>
+          <h3 id="two-player-title" class="it-title feature-title">Bring a rival</h3>
+          <p>Pick <b>2 players</b> in the pit lane and a second driver joins the same race: the same 20-car field, the same cup, two views, each with its own full HUD.</p>
+          <ul class="feature-points">
+            <li><strong>Stacked or side by side:</strong> the views stack on most windows and sit side by side on very wide ones.</li>
+            <li><strong>Two careers:</strong> each player's points, rating, qualifying and best laps go to their own driver's career.</li>
+            <li><strong>Gamepads:</strong> the first pad is P1's and the second is P2's, and the keys still work alongside.</li>
+          </ul>
+          <div class="keymap" data-keymap></div>
+        </div>
+      </article>
     </section>
 
     <section id="career" class="section">
@@ -77,13 +134,17 @@
             <dt>Shift</dt><dd>Hold through a corner to drift</dd>
             <dt>Space</dt><dd>Use your power-up</dd>
             <dt>Esc / P</dt><dd>Pause (Q from pause to quit)</dd>
+            <dt>Gamepad</dt><dd>Stick or d-pad to steer, right trigger for throttle, left trigger to brake, a bumper to drift, the left or top face button for power-ups</dd>
           </dl>
+          <h3 class="howto-sub">Two players</h3>
+          <p class="muted">Pick 2 players in the pit lane. P or Esc pauses for both.</p>
+          <div class="keymap" data-keymap></div>
         </div>
         <div class="howto-block">
           <h3>Drift boost</h3>
-          <p class="muted">Hold Shift through a corner. The tyre smoke turns white, then blue, then orange as the boost charges — let go on orange for the biggest kick.</p>
+          <p class="muted">Hold Shift through a corner. The tyre smoke turns white, then blue, then orange as the boost charges. Let go on orange for the biggest kick.</p>
           <h3>Careers</h3>
-          <p class="muted">Every driver has their own career — points, rating, tier, poles and best laps — each starting at 1200 · F4. Pick a driver and it's their career that climbs.</p>
+          <p class="muted">Every driver has their own career (points, rating, tier, poles and best laps), each starting at 1200 · F4. Pick a driver and it's their career that climbs.</p>
           <h3>Starting grid</h3>
           <p class="muted" id="grid-howto">Choose it in the pit lane for the whole cup. <strong>From the back</strong>: you line up last and fight through, Mario Kart style, with the field in championship order ahead. <strong>Qualifying</strong>: before every race, one flying lap from a rolling start sets your grid, and it pays career points: pole 10, P2 6, P3 4, P4–P10 2, times the difficulty.</p>
           <h3>Power-ups</h3>
@@ -121,6 +182,7 @@
   <script src="./tracks-data.js"></script>
   <script src="./game-data.js"></script>
   <script src="./powerups.js"></script>
+  <script src="./twoplayer.js"></script>
   <script src="./item-icons.js"></script>
   <script src="./trackmap.js"></script>
   <script src="./device.js"></script>

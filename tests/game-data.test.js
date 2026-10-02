@@ -104,6 +104,19 @@ test("promo shots feature the whole grid: Leclerc first, Hamilton second, six te
   assert.equal(SHOT_DRIVERS.hero, "leclerc");
 });
 
+test("race-day shots (replays, podium, two players): Leclerc first, Hamilton second", () => {
+  const { SHOT_DRIVERS, DRIVERS } = Data;
+  const day = SHOT_DRIVERS.raceDay;
+  assert.ok(day, "SHOT_DRIVERS.raceDay");
+  assert.equal(day.replay, "leclerc");
+  assert.equal(day.onboard, "hamilton");
+  assert.deepEqual(day.players, ["leclerc", "hamilton"]);
+  assert.equal(day.podium.length, 3);
+  assert.deepEqual(day.podium.slice(0, 2), ["leclerc", "hamilton"]);
+  assert.equal(new Set(day.podium).size, 3, "three different drivers on the podium");
+  [day.replay, day.onboard, ...day.players, ...day.podium].forEach((id) => assert.ok(DRIVERS.some((d) => d.id === id), `${id} is a driver`));
+});
+
 test("every team has a short name for captions", () => {
   const want = { redBull: "Red Bull", ferrari: "Ferrari", mclaren: "McLaren", mercedes: "Mercedes", astonMartin: "Aston Martin",
     alpine: "Alpine", williams: "Williams", haas: "Haas", racingBulls: "Racing Bulls", sauber: "Sauber" };

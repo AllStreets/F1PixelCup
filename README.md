@@ -359,7 +359,10 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   game; resize them afterwards with
   `sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg` and
   `sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team}-*.jpg` and
-  `sips -Z 960 assets/shots/items/*.jpg`. Set `globalThis.CAPTURE_PARTS = ["items"]`
+  `sips -Z 960 assets/shots/items/*.jpg` and `sips -Z 360 assets/shots/helmets/*.jpg`. The race-day
+  shots (parts `replay`, `podium` and `split`, in `assets/shots/race-day/`) get an 800 px copy each,
+  `sips -Z 800 -s formatOptions 74 <shot>.jpg --out <shot>-800.jpg`, then
+  `sips -Z 1600 -s formatOptions 76 <shot>.jpg`. Set `globalThis.CAPTURE_PARTS = ["items"]`
   first to retake only the power-up shots (posed in a paused race on a clear
   straight, with a hand-placed photo camera). Who drives in each shot is
   `SHOT_DRIVERS` in `game-data.js` -- Leclerc first, Hamilton second, then the

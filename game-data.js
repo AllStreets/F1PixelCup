@@ -136,6 +136,14 @@ const SHOT_DRIVERS = {
     monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
     monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
   },
+  // Race day: the replay follows Leclerc (the onboard rides with Hamilton,
+  // whose recorded controls draw the trace), the podium is the cup's top three
+  // in this order, and the split screen is P1 then P2.
+  raceDay: {
+    replay: "leclerc", onboard: "hamilton",
+    podium: ["leclerc", "hamilton", "norris"],
+    players: ["leclerc", "hamilton"],
+  },
 };
 
 if (typeof module === "object" && module.exports) {
