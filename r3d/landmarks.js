@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, seeded, hashString, canvasTexture, buildingMaterial, photo } from "./textures.js";
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
+import { tracksideModel } from "./models.js";
 
 // ---------------------------------------------------------------------------
 // Venue settings
@@ -40,15 +41,16 @@ export const VENUES = {
     extras: ["ferrisWheel"],
   },
   monaco: {
-    ground: "water", standColor: "#dc0000",
+    ground: "water", standColor: "#dc0000", stand: "covered",
     trees: [{ kind: "palm", count: 120, tint: "#3f7a3a", near: 60 }],
-    extras: ["monacoCity", "yachts", "mountains", "casino"],
+    // The casino claims its square first; the town fills in round it.
+    extras: ["casino", "monacoCity", "yachts", "mountains"],
     runoffTint: "#b8b4ac",
   },
   singapore: {
-    ground: "city", night: true, standColor: "#e03030",
+    ground: "city", night: true, standColor: "#e03030", stand: "covered",
     trees: [{ kind: "broadleaf", count: 140, tint: "#2d5a3a", near: 80 }],
-    extras: ["singaporeCity", "marinaBaySands", "flyer", "skyline", "floodlights"],
+    extras: ["marinaBaySands", "singaporeCity", "flyer", "skyline", "floodlights"],
   },
   bahrain: {
     ground: "sand", standColor: "#b8001f", runoffTint: "#b8a888", gravelTint: "#e0c89a",
@@ -100,6 +102,12 @@ function pushClear(course, x, z, radius, margin = 40) {
   return null;
 }
 
+// The garages' height and their open doors (people stand in them: a 1.78 m
+// person is 10.7 units at the car's scale, so the door is 17, about 2.8 m).
+const GARAGE_HEIGHT = 21;
+const GARAGE_DOOR = 17;
+const GARAGE_RECESS = 9;
+
 const TEAM_COLOURS = ["#1e41b2", "#dc0000", "#ff8000", "#00d2be", "#006f62", "#0090ff", "#005aff", "#e8002d", "#6692ff", "#39ff14"];
 
 // The garages, behind the pit lane's working lane (pitlane.js): one bay per
@@ -119,7 +127,8 @@ function garages(course, group, venue) {
   const mats = {
     shell: std(0xd9d9dd),
     glass: std(0x5f7f9f, { metalness: 0.6, roughness: 0.15, emissive: venue.night ? 0x886644 : 0x000000, emissiveIntensity: 0.5 }),
-    inside: std(0x1c1d22, { roughness: 0.9 }),
+    // The garage inside: dark, under its own lights.
+    inside: std(0x2c2e35, { roughness: 0.9, emissive: 0xfff1dc, emissiveIntensity: venue.night ? 0.12 : 0.05 }),
     // Light roofs, short of white: the sun on white would bloom to a glare.
     roof: std(wing ? 0xdadade : 0xcfd0d4, { roughness: 0.55 }),
   };
@@ -133,25 +142,31 @@ function garages(course, group, venue) {
     const m = new THREE.Matrix4().makeRotationY(-Math.atan2(p.ty, p.tx) + (side > 0 ? 0 : Math.PI));
     m.setPosition(p.x + p.nx * side * mid, p.h, p.y + p.ny * side * mid);
     const box = (w, h, d, x, y, z) => new THREE.BoxGeometry(w, h, d).translate(x, y, z).applyMatrix4(m);
-    parts.shell.push(box(30.4, 12, depth, 0, 6, 0));
-    // The open door: a dark bay framed in the team's colour, lit inside.
-    parts.inside.push(box(24, 9, 0.6, 0, 4.5, -depth / 2 - 0.2));
+    // The shell round an open door: the back of the garage, the walls
+    // either side of the door and the lintel over it. The door is a recess
+    // the crew stand in (r3d/people.js), lit inside, tall enough for them.
+    const back = depth - GARAGE_RECESS;
+    parts.shell.push(box(30.4, GARAGE_HEIGHT, back, 0, GARAGE_HEIGHT / 2, GARAGE_RECESS / 2));
+    [-1, 1].forEach((u) => parts.shell.push(box(3.2, GARAGE_HEIGHT, GARAGE_RECESS, u * 13.6, GARAGE_HEIGHT / 2, -depth / 2 + GARAGE_RECESS / 2)));
+    parts.shell.push(box(24, GARAGE_HEIGHT - GARAGE_DOOR, GARAGE_RECESS, 0, (GARAGE_HEIGHT + GARAGE_DOOR) / 2, -depth / 2 + GARAGE_RECESS / 2));
+    parts.inside.push(box(24, GARAGE_DOOR, 0.6, 0, GARAGE_DOOR / 2, -depth / 2 + GARAGE_RECESS + 0.3));
+    parts.inside.push(box(24, 0.3, GARAGE_RECESS, 0, 0.15, -depth / 2 + GARAGE_RECESS / 2));
     const colour = bay.safetyCar ? "#c9ced6" : TEAM_COLOURS[i % TEAM_COLOURS.length];
     if (!frames.has(colour)) frames.set(colour, []);
-    frames.get(colour).push(box(26, 1.4, 0.8, 0, 9.7, -depth / 2 - 0.3), box(1.2, 9, 0.8, -12.6, 4.5, -depth / 2 - 0.3), box(1.2, 9, 0.8, 12.6, 4.5, -depth / 2 - 0.3));
+    frames.get(colour).push(box(26, 1.4, 0.8, 0, GARAGE_DOOR + 0.7, -depth / 2 - 0.3), box(1.2, GARAGE_DOOR, 0.8, -12.6, GARAGE_DOOR / 2, -depth / 2 - 0.3), box(1.2, GARAGE_DOOR, 0.8, 12.6, GARAGE_DOOR / 2, -depth / 2 - 0.3));
     // The hospitality floor, set back a little from the doors.
-    parts.glass.push(box(30.4, 10, depth - 2, 0, 17, 1));
+    parts.glass.push(box(30.4, 10, depth - 2, 0, GARAGE_HEIGHT + 5, 1));
     if (wing) {
       // Silverstone's Wing: the roof rises and falls like an aerofoil.
       const lift = Math.sin(((i + 0.5) / g.bays.length) * Math.PI) * 10;
-      parts.roof.push(new THREE.BoxGeometry(31, 2, depth).rotateX(-0.12).translate(0, 25 + lift, 0).applyMatrix4(m));
+      parts.roof.push(new THREE.BoxGeometry(31, 2, depth).rotateX(-0.12).translate(0, GARAGE_HEIGHT + 13 + lift, 0).applyMatrix4(m));
     } else {
-      parts.roof.push(box(31, 2, depth, 0, 23, 0));
+      parts.roof.push(box(31, 2, depth, 0, GARAGE_HEIGHT + 11, 0));
     }
     // A marker per bay, for the checks (no mesh of its own).
     const marker = new THREE.Object3D();
     marker.applyMatrix4(m);
-    marker.userData.bay = { index: i, safetyCar: bay.safetyCar, d: bay.d, depth };
+    marker.userData.bay = { index: i, safetyCar: bay.safetyCar, d: bay.d, depth, recess: GARAGE_RECESS };
     bays.add(marker);
     course.occupied.add(marker.position.x, marker.position.z, Math.hypot(15, depth / 2) + 2);
   });
@@ -182,7 +197,7 @@ function garages(course, group, venue) {
   signTex.userData.print = true;
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(150, 7), new THREE.MeshStandardMaterial({ map: signTex, emissive: 0xffffff, emissiveIntensity: venue.night ? 0.6 : 0.1, emissiveMap: signTex }));
   const face = front - 0.4;
-  sign.position.set(centre.x + centre.nx * side * face, centre.h + 17, centre.y + centre.ny * side * face);
+  sign.position.set(centre.x + centre.nx * side * face, centre.h + GARAGE_HEIGHT + 5, centre.y + centre.ny * side * face);
   // Facing the lane: toward the road.
   sign.rotation.y = -Math.atan2(centre.ty, centre.tx) + (side > 0 ? Math.PI : 0);
   group.add(sign);
@@ -437,6 +452,208 @@ function floodlights(course, group, venue) {
 }
 
 // ---------------------------------------------------------------------------
+// Landmarks built in Blender (assets/landmarks/*.glb, r3d/models.js)
+// ---------------------------------------------------------------------------
+
+// Landmarks are modelled in metres and drawn at the city's scale: its
+// windows are 8 units a storey (buildingMaterial), about 2.5 units a metre
+// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+export const LANDMARK_SCALE = 2.5;
+
+// Facades with a grid of rooms read off the model's UVs (metres: u along
+// the wall, v up): glass between the floor slabs and mullions, and at night
+// a share of the rooms lit, warm and a few cool.
+function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55 } = {}) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uGlass = { value: color(glass) };
+    shader.uniforms.uSlab = { value: color(slab) };
+    shader.uniforms.uNight = { value: night ? 1 : 0 };
+    shader.uniforms.uLit = { value: lit };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec2 vFacade;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFacade = uv;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+        varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit;
+        float facadeHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        vec2 cell = vec2(vFacade.x / 4.0, vFacade.y / 3.2);
+        vec2 f = fract(cell);
+        vec2 room = floor(cell);
+        float slabLine = 1.0 - step(0.14, f.y);
+        float mullion = 1.0 - step(0.05, f.x);
+        float frame = max(slabLine, mullion * 0.6);
+        diffuseColor.rgb = mix(uGlass, uSlab, frame);
+        float h = facadeHash(room + floor(vFacade.x / 37.0));
+        float on = step(1.0 - uLit, h) * (1.0 - frame) * step(5.0, vFacade.y);`)
+      .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
+        vec3 roomLight = mix(vec3(1.0, 0.76, 0.46), vec3(0.85, 0.9, 1.0), step(0.85, facadeHash(room * 1.7 + 3.1)));
+        totalEmissiveRadiance += roomLight * on * uNight * (0.45 + 0.5 * facadeHash(room + 9.3));`);
+  };
+  m.customProgramCacheKey = () => `facade-${night ? 1 : 0}-${glass}-${lit}`;
+  return m;
+}
+
+// A landmark's own materials, lit for the venue by their role.
+function dressLandmark(model, venue) {
+  const made = new Map();
+  const night = Boolean(venue.night);
+  const dressed = (src) => {
+    if (made.has(src.name)) return made.get(src.name);
+    let out;
+    if (src.name === "facade") out = facadeMaterial(night);
+    else {
+      out = src.clone();
+      if (src.name === "window_lit") Object.assign(out, { emissive: color(night ? "#ffe6c0" : "#000000"), emissiveIntensity: night ? 1.6 : 0 });
+      if (src.name === "pool") Object.assign(out, { emissive: color("#3fb4e8"), emissiveIntensity: night ? 1.4 : 0.1 });
+      if (src.name === "glass") Object.assign(out, { roughness: 0.12, metalness: 0.5, emissive: color("#ffcf8a"), emissiveIntensity: night ? 0.35 : 0 });
+      if (src.name === "gold") Object.assign(out, { metalness: 0.9, roughness: 0.3 });
+    }
+    out.name = src.name;
+    made.set(src.name, out);
+    return out;
+  };
+  model.traverse((m) => {
+    if (!m.isMesh) return;
+    m.material = dressed(m.material);
+    m.castShadow = true;
+    m.receiveShadow = true;
+  });
+}
+
+// A rectangle (in the model's metres) per named part, as the model has it.
+function partRects(template, names) {
+  template.updateMatrixWorld(true);
+  return names.map((n) => {
+    const node = template.getObjectByName(n);
+    const box = new THREE.Box3().setFromObject(node);
+    return { x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z };
+  });
+}
+
+// Grid points over a rectangle placed at (x, z) turned by yaw, `step` apart.
+function rectPoints(rect, scale, x, z, yaw, step) {
+  const pts = [];
+  const cs = Math.cos(yaw);
+  const sn = Math.sin(yaw);
+  const nx = Math.max(1, Math.ceil(((rect.x1 - rect.x0) * scale) / step));
+  const nz = Math.max(1, Math.ceil(((rect.z1 - rect.z0) * scale) / step));
+  for (let i = 0; i <= nx; i += 1) {
+    for (let k = 0; k <= nz; k += 1) {
+      const lx = (rect.x0 + ((rect.x1 - rect.x0) * i) / nx) * scale;
+      const lz = (rect.z0 + ((rect.z1 - rect.z0) * k) / nz) * scale;
+      pts.push([x + lx * cs + lz * sn, z - lx * sn + lz * cs]);
+    }
+  }
+  return pts;
+}
+
+// Place a model beside the circuit with its front (-z) to the track: tries
+// each lap distance, side and gap in turn until every rectangle's ground is
+// clear of the circuit (by `margin`) and of everything placed; then claims it.
+function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14 }) {
+  const total = course.track.totalLength;
+  const front = Math.min(...rects.map((r) => r.z0)) * scale;
+  for (const { d, side } of anchors) {
+    const p = course.sampleAt(((d % total) + total) % total);
+    for (const gap of gaps) {
+      const off = side * ((side > 0 ? p.outerR : p.outerL) + 2 + gap - front);
+      const x = p.x + p.nx * off;
+      const z = p.y + p.ny * off;
+      const yaw = Math.atan2(x - p.x, z - p.y);
+      const pts = rects.flatMap((r) => rectPoints(r, scale, x, z, yaw, step));
+      if (pts.some(([px, pz]) => course.clearance(px, pz) < margin || course.occupied.blocked(px, pz, step * 0.5))) continue;
+      pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
+      return { x, z, yaw, p, side };
+    }
+  }
+  return null;
+}
+
+// Lap distances round an anchor (a share of the lap), nearest first, on the
+// given sides.
+function anchorsAround(course, share, spread, sides) {
+  const total = course.track.totalLength;
+  const out = [];
+  for (let k = 0; k <= 12; k += 1) {
+    [1, -1].forEach((sgn) => {
+      if (k === 0 && sgn < 0) return;
+      const d = total * share + sgn * k * spread;
+      sides(course.sampleAt(((d % total) + total) % total)).forEach((side) => out.push({ d, side }));
+    });
+  }
+  return out;
+}
+
+// The Casino de Monte-Carlo and the Hôtel de Paris, at Casino Square: about
+// a third of the lap, on the outside of the bend (else its inside), the
+// square paved in front of them.
+function casinoModel(course, group, venue) {
+  const template = tracksideModel("casino");
+  if (!template) return false;
+  const rects = partRects(template, ["casino", "hotel_de_paris"]);
+  const spot = placeModel(course, {
+    rects, scale: LANDMARK_SCALE, gaps: [8, 20, 35, 55, 80, 110],
+    anchors: anchorsAround(course, 0.33, 40, (p) => (p.curve > 0 ? [-1, 1] : [1, -1])),
+  });
+  if (!spot) return false;
+  const model = template.clone(true);
+  dressLandmark(model, venue);
+  model.scale.setScalar(LANDMARK_SCALE);
+  model.position.set(spot.x, 0, spot.z);
+  model.rotation.y = spot.yaw;
+  model.name = "landmark:casino";
+  model.userData.landmark = { name: "casino", fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  // The square: paving under the casino, the hotel and the space between.
+  const all = rects.reduce((a, r) => ({ x0: Math.min(a.x0, r.x0), x1: Math.max(a.x1, r.x1), z0: Math.min(a.z0, r.z0), z1: Math.max(a.z1, r.z1) }));
+  const pad = new THREE.Mesh(
+    new THREE.PlaneGeometry(all.x1 - all.x0 + 8, all.z1 - all.z0 + 8).rotateX(-Math.PI / 2).translate((all.x0 + all.x1) / 2, 0.02, (all.z0 + all.z1) / 2),
+    new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 4, 4), color: color("#d8cdb8"), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
+  );
+  pad.receiveShadow = true;
+  pad.userData.ground = true;
+  model.add(pad);
+  group.add(model);
+  return true;
+}
+
+// Marina Bay Sands across the water from the pit straight, on the side away
+// from the pits, the bay between it and the circuit.
+function marinaBaySandsModel(course, group, venue) {
+  const template = tracksideModel("marinaBaySands");
+  if (!template) return false;
+  const rects = partRects(template, ["tower_1", "tower_2", "tower_3", "skypark"]);
+  const lane = course.pitLane;
+  const away = lane ? -lane.side : 1;
+  // The bay in front: from the barrier to the towers' feet.
+  const bayDepth = 110;
+  const front = Math.min(...rects.map((r) => r.z0));
+  const span = rects.reduce((a, r) => ({ x0: Math.min(a.x0, r.x0), x1: Math.max(a.x1, r.x1) }), { x0: Infinity, x1: -Infinity });
+  const bay = { x0: span.x0, x1: span.x1, z0: front - bayDepth, z1: front - 4 };
+  const spot = placeModel(course, {
+    rects: [...rects, bay], scale: LANDMARK_SCALE, gaps: [15, 40, 80, 130, 200, 300], step: 24,
+    anchors: anchorsAround(course, 0, 120, () => [away, -away]),
+  });
+  if (!spot) return false;
+  const model = template.clone(true);
+  dressLandmark(model, venue);
+  model.scale.setScalar(LANDMARK_SCALE);
+  model.position.set(spot.x, 0, spot.z);
+  model.rotation.y = spot.yaw;
+  model.name = "landmark:marinaBaySands";
+  model.userData.landmark = { name: "marinaBaySands", fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  const water = new THREE.Mesh(
+    new THREE.PlaneGeometry(bay.x1 - bay.x0 + 60, bay.z1 - bay.z0).rotateX(-Math.PI / 2).translate((bay.x0 + bay.x1) / 2, 0.05, (bay.z0 + bay.z1) / 2),
+    waterMaterial("#0e2238"),
+  );
+  water.userData.ground = true;
+  model.add(water);
+  group.add(model);
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Circuit-specific landmarks
 // ---------------------------------------------------------------------------
 
@@ -548,7 +765,8 @@ const EXTRAS = {
     }
   },
 
-  casino(course, group) {
+  casino(course, group, venue) {
+    if (casinoModel(course, group, venue)) return;
     const b = course.bounds;
     const spot = course.findSpot(b.cx, b.minZ + 150, 52, 900, 8);
     if (!spot) return;
@@ -560,6 +778,8 @@ const EXTRAS = {
     });
     addMesh(g, new THREE.SphereGeometry(14, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), std(0x7f9e88, { metalness: 0.4 }), 0, 26, 0);
     g.position.set(spot.x, 0, spot.z);
+    g.name = "landmark:casino";
+    g.userData.landmark = { name: "casino", fromModel: false };
     group.add(g);
   },
 
@@ -571,7 +791,8 @@ const EXTRAS = {
     });
   },
 
-  marinaBaySands(course, group) {
+  marinaBaySands(course, group, venue) {
+    if (marinaBaySandsModel(course, group, venue)) return;
     const b = course.bounds;
     const spot = course.findSpot(b.maxX + 120, b.cz, 128, 1400, 20);
     if (!spot) return;
@@ -586,6 +807,8 @@ const EXTRAS = {
     lights.castShadow = false;
     g.position.set(spot.x, 0, spot.z);
     g.rotation.y = 0.4;
+    g.name = "landmark:marinaBaySands";
+    g.userData.landmark = { name: "marinaBaySands", fromModel: false };
     group.add(g);
     // The bay beside it.
     const baySpot = pushClear(course, spot.x + 650, spot.z, 700, 20);

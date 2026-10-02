@@ -24,6 +24,8 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
+import { loadTracksideModels, tracksideModelsState } from "./r3d/models.js";
+import { buildPeople, updatePeople, inspectPeople } from "./r3d/people.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
@@ -150,7 +152,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -606,7 +608,12 @@ function inspect() {
   };
   const cars = {};
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
-  return { drawing, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // The trackside models and people (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+  const landmarks = [];
+  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
+  const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
+  const trackside = { models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayer) : null };
+  return { drawing, weather, cars, flaps, helmets, life, trackside, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -660,10 +667,17 @@ function itemsInView() {
   return n;
 }
 
-loadCar(() => { api.ready = true; }, (error) => {
+// Ready once the car has loaded and the trackside models (landmarks, the
+// grandstand, the people) have loaded or failed: a circuit is only built
+// with everything it draws, so prepare() compiles all of it.
+let carLoaded = false;
+let tracksideSettled = false;
+const markReady = () => { if (carLoaded && tracksideSettled) api.ready = true; };
+loadCar(() => { carLoaded = true; markReady(); }, (error) => {
   console.warn("3D car model failed to load; using the 2D view.", error);
   api.failed = true;
 });
+loadTracksideModels(() => { tracksideSettled = true; markReady(); });
 
 // ---------------------------------------------------------------------------
 // Venue: sky, ground, lighting
@@ -749,7 +763,7 @@ function finishShot(world, life, player) {
 }
 
 let lastWallMs = 0;
-function updateTrackside(world, track, life, now, dt) {
+function updateTrackside(world, track, life, now, dt, { player, racers } = {}) {
   const wall = performance.now();
   const wallDt = lastWallMs ? Math.min(100, wall - lastWallMs) : 0;
   lastWallMs = wall;
@@ -771,6 +785,7 @@ function updateTrackside(world, track, life, now, dt) {
   updateHelicopter(helicopter, world, life && life.helicopter, dt);
   world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
   world.life.starter = updateStarter(world.starter, flag, show.ms, t);
+  updatePeople(world.people, { camera, player, racers, tier: currentTier(), t, dt: paused ? 0 : dt });
 }
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
@@ -836,6 +851,10 @@ function buildWorld(track) {
   group.add(marshals);
   const starter = buildStarter(course);
   if (starter) group.add(starter);
+  // The people (r3d/people.js): the crowd in the stands, the pit crews, the
+  // photographers and the TV crew, after everything else has its ground.
+  const people = buildPeople(course, { decor, landmarks });
+  group.add(people);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -845,7 +864,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -1060,12 +1079,14 @@ function surfaceUnder(world, player) {
 const jitter = (t, seed) => Math.sin(t * 61 + seed) * 0.5 + Math.sin(t * 97 + seed * 2.3) * 0.3 + Math.sin(t * 143 + seed * 4.1) * 0.2;
 
 let lastNow = 0;
+let lastPlayer = null;
 const lookTarget = new THREE.Vector3();
 
 // Called by game.js each frame in place of the 2D road, scenery and cars.
 function render(frame) {
   if (!api.ready) return null;
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
+  lastPlayer = player;
   const dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
   lastNow = now;
   resize();
@@ -1162,7 +1183,7 @@ function render(frame) {
   // Intermediates in the wet: the tyres' lettering turns green.
   setTyreCompound(frame.weather);
   updateTunnelLight(world, track, dt);
-  updateTrackside(world, track, frame.trackside, now, dt);
+  updateTrackside(world, track, frame.trackside, now, dt, { player, racers });
   rain.update({ camera, world, racers, dt, isWet: wet });
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
@@ -1197,7 +1218,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const world = ensureWorld(track);
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter, world.people].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
@@ -1262,6 +1283,28 @@ function auditItemBoxes(track) {
     });
   });
   return problems;
+}
+
+// Every person placed at a circuit, against the track: none may stand
+// inside the barriers (on the road, its run-off or the pit lane). Their
+// clearance is how far outside the nearest barrier each one's feet are.
+function auditPeople(track) {
+  const world = ensureWorld(track);
+  const figures = world.people ? world.people.userData.figures : [];
+  const byKind = {};
+  const onRoad = [];
+  const samples = {};
+  let least = Infinity;
+  figures.forEach((f) => {
+    byKind[f.kind] = (byKind[f.kind] || 0) + 1;
+    if (!samples[f.kind]) samples[f.kind] = [];
+    if (samples[f.kind].length < 6) samples[f.kind].push({ x: Math.round(f.x), y: Math.round(f.y), z: Math.round(f.z) });
+    // A body's half width at the car's scale: about 0.3 m.
+    const clear = world.course.clearance(f.x, f.z) - 2;
+    least = Math.min(least, clear);
+    if (clear < 0) onRoad.push({ kind: f.kind, x: Math.round(f.x), z: Math.round(f.z), clear: Math.round(clear * 10) / 10 });
+  });
+  return { count: figures.length, byKind, onRoad, samples, leastClearance: Math.round(least * 10) / 10 };
 }
 
 // ---------------------------------------------------------------------------
