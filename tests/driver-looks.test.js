@@ -13,6 +13,16 @@ test("every driver has a complete look", () => {
   });
 });
 
+test("every driver's face is his own: no two looks alike, each shaped", () => {
+  const seen = new Set();
+  DRIVERS.forEach((d) => {
+    const key = JSON.stringify(d.look);
+    assert.ok(!seen.has(key), `${d.id}'s look is somebody else's`);
+    seen.add(key);
+    assert.ok(Object.keys(d.look.shape).length >= 6, `${d.id}'s face has its own shape`);
+  });
+});
+
 test("a look's colours, styles, heritage and shapes are checked", () => {
   const good = DRIVERS.find((d) => d.id === "leclerc").look;
   assert.deepEqual(Faces.checkLook(good), []);
