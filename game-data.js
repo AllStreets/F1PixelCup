@@ -106,9 +106,9 @@ const CIRCUITS = [
   { id: "yasmarina", name: "Yas Marina Circuit", country: "United Arab Emirates", theme: "Night race at the marina", lengthM: 5281, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0d1230", grass: "#2a3040", accent: "#7fd0ff", road: "#3a3848", shoulder: "#565262", horizonA: "#101438", horizonB: "#2a2f60", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffb070" } },
 ];
 
+// The 2025 calendar as six 4-race cups, in order. (The Trophy and
+// Constructor Cups before them became these: season.js resolveCup.)
 const CUP_DEFS = [
-  { id: "trophyCup", name: "Trophy Cup", icon: "Trophy Cup", circuitIds: ["monza", "spa", "silverstone", "suzuka"] },
-  { id: "constructorCup", name: "Constructor Cup", icon: "Constructor Cup", circuitIds: ["monaco", "singapore", "bahrain", "interlagos"] },
   { id: "openingCup", name: "Opening Cup", icon: "Opening Cup", circuitIds: ["albertpark", "shanghai", "suzuka", "bahrain"] },
   { id: "springCup", name: "Spring Cup", icon: "Spring Cup", circuitIds: ["jeddah", "miami", "imola", "monaco"] },
   { id: "summerCup", name: "Summer Cup", icon: "Summer Cup", circuitIds: ["barcelona", "montreal", "redbullring", "silverstone"] },
@@ -116,6 +116,9 @@ const CUP_DEFS = [
   { id: "autumnCup", name: "Autumn Cup", icon: "Autumn Cup", circuitIds: ["baku", "singapore", "cota", "mexico"] },
   { id: "finaleCup", name: "Finale Cup", icon: "Finale Cup", circuitIds: ["interlagos", "lasvegas", "losail", "yasmarina"] },
 ];
+
+// The whole calendar as one championship (season.js).
+const SEASON = { id: "season", name: "2025 Season", icon: "2025 Season", circuitIds: CIRCUITS.map((c) => c.id) };
 
 // The eight power-ups, common to rare (the same order as PowerUps.ITEM_ORDER).
 // Each is an F1 idea with a Mario Kart counterpart. The site's cards and the
@@ -166,5 +169,5 @@ const SHOT_DRIVERS = {
 };
 
 if (typeof module === "object" && module.exports) {
-  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, POWER_UPS, SHOT_DRIVERS, getTeamForDriver };
+  module.exports = { TEAMS, DRIVERS, DIFFICULTIES, CIRCUITS, CUP_DEFS, SEASON, POWER_UPS, SHOT_DRIVERS, getTeamForDriver };
 }

@@ -266,12 +266,41 @@ function trackDefinition(definition) {
 // (tracks-data.js); names, colours and lengths from CIRCUITS (game-data.js).
 const TRACKS = CIRCUITS.map((circuit) => trackDefinition({ ...circuit }));
 
-const CUPS = CUP_DEFS.map((cup) => ({
+// The six calendar cups, then the season: the whole calendar as one
+// championship (season.js), saved after every race.
+const CUPS = [...CUP_DEFS, SEASON].map((cup) => ({
   id: cup.id,
   name: cup.name,
   icon: cup.icon,
+  season: cup.id === SEASON.id,
   tracks: cup.circuitIds.map((id) => TRACKS.find((track) => track.id === id)),
 }));
+
+// The season's save (season.js checks it against this game: the same
+// calendar and drivers).
+const SEASON_CONTEXT = {
+  trackIds: SEASON.circuitIds,
+  field: DRIVERS.map((d) => d.id),
+  teamOf: Object.fromEntries(DRIVERS.map((d) => [d.id, d.teamId])),
+};
+
+function loadSavedSeason() {
+  try {
+    return Season.parse(window.localStorage.getItem(Season.STORAGE_KEY), SEASON_CONTEXT);
+  } catch (err) {
+    return null;
+  }
+}
+
+// Saved after every race; once the last race is run there is nothing to resume.
+function saveSeason(season) {
+  try {
+    if (!season || Season.isOver(season)) window.localStorage.removeItem(Season.STORAGE_KEY);
+    else window.localStorage.setItem(Season.STORAGE_KEY, Season.serialize(season));
+  } catch (err) {
+    // The season just will not resume.
+  }
+}
 
 
 
@@ -297,6 +326,10 @@ const state = {
   selectedDriver: Math.max(0, DRIVERS.findIndex((driver) => driver.id === "leclerc")),
   selectedKart: Math.max(0, TEAMS.findIndex((team) => team.id === "ferrari")),
   selectedCup: 0,
+  // The season being raced (season.js), and whether "New season" is asking
+  // once more before it throws a saved one away.
+  season: null,
+  confirmNewSeason: false,
   difficulty: 1,
   activeCupIndex: 0,
   phase: "garage",
@@ -717,8 +750,16 @@ function getPitLaneState() {
     driver: { id: driver.id, name: driver.name, number: driver.number, title: driver.title },
     team: { name: team.name, car: team.car, body: team.body, trim: team.trim },
     stats: { speed: stats.speed, handling: stats.handling, acceleration: stats.acceleration, traction: stats.traction },
-    cups: CUPS.map((cup, index) => ({ index, name: cup.name, circuits: cup.tracks.map((track) => track.name) })),
+    cups: CUPS.map((cup, index) => ({ index, name: cup.name, season: cup.season, circuits: cup.tracks.map((track) => track.name) })),
     selectedCup: state.selectedCup,
+    // A saved season, to resume (with its own driver and settings).
+    savedSeason: (() => {
+      const saved = getSelectedCup().season ? loadSavedSeason() : null;
+      if (!saved) return null;
+      const driver = DRIVERS.find((d) => d.id === saved.driverId);
+      const difficulty = DIFFICULTIES.find((d) => d.id === saved.difficulty);
+      return { nextRace: saved.nextRace + 1, races: saved.trackIds.length, driver: driver ? driver.name : "", difficulty: difficulty ? difficulty.name : "", confirming: Boolean(state.confirmNewSeason) };
+    })(),
     difficulties: DIFFICULTIES.map((d, index) => ({ index, name: d.name })),
     selectedDifficulty: state.difficulty,
     gridModes: GRID_MODES,
@@ -834,7 +875,26 @@ function loadDriverPreference() {
 function selectCup(index) {
   if (state.phase !== "garage") return;
   state.selectedCup = clamp(index, 0, CUPS.length - 1);
+  state.confirmNewSeason = false;
+  // Remembered by id, never by index (season.js resolveCup).
+  try {
+    window.localStorage.setItem("f1pixelcup.cup", CUPS[state.selectedCup].id);
+  } catch (err) {
+    // Preference just will not persist.
+  }
   renderGarage();
+}
+
+function loadCupPreference() {
+  let stored = null;
+  try {
+    stored = window.localStorage.getItem("f1pixelcup.cup");
+  } catch (err) {
+    // Keep the first cup.
+  }
+  const id = Season.resolveCup(stored, [...CUP_DEFS, SEASON]);
+  state.selectedCup = Math.max(0, CUPS.findIndex((cup) => cup.id === id));
+  state.track = getSelectedCup().tracks[0];
 }
 
 function selectDifficulty(index) {
@@ -1269,24 +1329,87 @@ function toggleFullscreen() {
 function startCup() {
   // Enter on a focused Start button fires both the key and the click.
   if (state.phase !== "garage") return;
+  if (getSelectedCup().season) {
+    startSeason(loadSavedSeason());
+    return;
+  }
+  state.season = null;
+  // One id per cup attempt ties its races to its cup bonus (see career.js).
+  beginCup({
+    runId: window.Career ? window.Career.startCupRun() : null,
+    difficulty: state.difficulty, gridMode: state.gridMode, weatherMode: state.weatherMode, raceIndex: 0,
+  });
+}
+
+// The pit lane's "New season": asks once more on the button itself, then
+// starts over (the saved season is thrown away only when the new one starts).
+function newSeason() {
+  if (state.phase !== "garage" || !getSelectedCup().season) return;
+  if (loadSavedSeason() && !state.confirmNewSeason) {
+    state.confirmNewSeason = true;
+    renderGarage();
+    return;
+  }
+  startSeason(null);
+}
+
+// A season: the saved one resumed with its own driver and settings, or a new
+// one with the pit lane's.
+function startSeason(saved) {
+  state.confirmNewSeason = false;
+  let season = saved;
+  if (season) {
+    setSelectedDriver(DRIVERS.findIndex((d) => d.id === season.driverId));
+  } else {
+    season = Season.start({
+      runId: window.Career ? window.Career.startCupRun() : `season-${Date.now()}`,
+      driverId: DRIVERS[state.selectedDriver].id,
+      difficulty: DIFFICULTIES[state.difficulty].id,
+      gridMode: state.gridMode,
+      weatherMode: state.weatherMode,
+      ...SEASON_CONTEXT,
+    });
+    saveSeason(season);
+  }
+  state.season = season;
+  beginCup({
+    runId: season.runId,
+    difficulty: DIFFICULTIES.findIndex((d) => d.id === season.difficulty),
+    gridMode: season.gridMode, weatherMode: season.weatherMode, raceIndex: season.nextRace,
+  });
+}
+
+function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex }) {
   initAudio();
   if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
   state.activeCupIndex = state.selectedCup;
-  state.raceIndex = 0;
+  state.raceIndex = raceIndex;
   buildCupEntries();
-  // One id per cup attempt ties its races to its cup bonus (see career.js).
-  state.cupRunId = window.Career ? window.Career.startCupRun() : null;
+  // A season resumed: the standings so far.
+  if (state.season) applySeasonStandings();
+  state.cupRunId = runId;
   state.cupRecordedFor = null;
-  state.cupDifficulty = state.difficulty;
+  state.cupDifficulty = difficulty;
   state.feed = [];
-  state.cupGridMode = state.gridMode;
-  state.cupWeatherMode = state.weatherMode;
+  state.cupGridMode = gridMode;
+  state.cupWeatherMode = weatherMode;
   state.qualifying = null;
+  if (state.season && raceIndex > 0) addFeed(`${getActiveCup().name} resumed: race ${raceIndex + 1} of ${getActiveCup().tracks.length}.`);
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
     : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
   enterFullscreenMode();
-  startRaceWeekend(0);
+  startRaceWeekend(raceIndex);
+}
+
+// The cup's table is the season's: its points, in its order (the countback
+// splits drivers level on points).
+function applySeasonStandings() {
+  const table = Season.driverStandings(state.season);
+  state.cupEntries.forEach((entry) => {
+    entry.points = (table.find((row) => row.driverId === entry.driver.id) || { points: 0 }).points;
+  });
+  state.cupEntries.sort((a, b) => table.findIndex((r) => r.driverId === a.driver.id) - table.findIndex((r) => r.driverId === b.driver.id));
 }
 
 // Each race of the cup: straight to the grid, or qualifying first.
@@ -2774,9 +2897,11 @@ function careerForRace(summary) {
 
 function careerForCup(cup, playerPlace) {
   if (!cup) return { lines: [], saved: true };
+  // The season counts in the career as a cup: the championship.
+  const what = getActiveCup().season ? "Championship" : "Cup";
   const lines = cup.bonus > 0
-    ? [`<strong>Cup ${escapeHtml(formatOrdinal(playerPlace))} bonus +${escapeHtml(Number(cup.careerPoints) || 0)}</strong> (${escapeHtml(Number(cup.bonus) || 0)} × ${escapeHtml(careerDifficultyName(getDifficulty().id))} ×${escapeHtml(Number(cup.multiplier) || 0)}) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`]
-    : [`Cup ${escapeHtml(formatOrdinal(playerPlace))}: no cup bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`];
+    ? [`<strong>${what} ${escapeHtml(formatOrdinal(playerPlace))} bonus +${escapeHtml(Number(cup.careerPoints) || 0)}</strong> (${escapeHtml(Number(cup.bonus) || 0)} × ${escapeHtml(careerDifficultyName(getDifficulty().id))} ×${escapeHtml(Number(cup.multiplier) || 0)}) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`]
+    : [`${what} ${escapeHtml(formatOrdinal(playerPlace))}: no ${what.toLowerCase()} bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`];
   const driver = state.cupEntries.find((entry) => entry.isPlayer);
   if (driver && lines.length) lines[0] = `${escapeHtml(surnameOf(driver.driver.name))}: ${lines[0]}`;
   return { lines, saved: cup.saved };
@@ -2821,6 +2946,16 @@ function finalizeRace() {
   }
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
+  if (state.season) {
+    // The season moves on and is saved: quit now and it resumes at the next race.
+    try {
+      state.season = Season.addRace(state.season, { order: finishers.map((r) => r.driver.id), fastest: fastest ? fastest.driver.id : null });
+      saveSeason(state.season);
+      applySeasonStandings();
+    } catch (error) {
+      console.warn("Season: race not added", error);
+    }
+  }
   if (state.raceIndex >= getActiveCup().tracks.length - 1) recordPlayerCup();
   showResults(finishers);
 }
@@ -2868,6 +3003,8 @@ function showResults(finishers) {
   }
   if (!window.Screens) return;
   window.Screens.showResults({
+    pointsLabel: activeCup.season ? "Season" : "Cup",
+    constructors: activeCup.season && state.season ? constructorRows() : null,
     kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
     title: state.track.name,
     nextLabel: state.raceIndex === activeCup.tracks.length - 1 ? "Show podium" : "Next race",
@@ -2892,6 +3029,15 @@ function showResults(finishers) {
   });
 }
 
+// The constructors' table of the season, for the results and the podium.
+function constructorRows() {
+  const playerTeam = getTeamForDriver(DRIVERS[state.selectedDriver]).id;
+  return Season.constructorStandings(state.season).map((row) => {
+    const team = TEAMS.find((t) => t.id === row.teamId) || {};
+    return { position: row.position, name: team.name || row.teamId, teamColor: team.body || "#888", points: row.points, isPlayer: row.teamId === playerTeam };
+  });
+}
+
 function showPodium() {
   const activeCup = getActiveCup();
   recordPlayerCup();
@@ -2907,9 +3053,10 @@ function showPodium() {
     points: entry.points,
     isPlayer: entry.isPlayer,
   }));
+  const constructors = activeCup.season && state.season ? constructorRows() : null;
   window.Screens.showPodium({
-    kicker: `${activeCup.name} complete`,
-    title: playerPlace === 1 ? "Cup winner" : `You finished ${formatOrdinal(playerPlace)}`,
+    kicker: constructors ? `${activeCup.name} complete · Constructors' champions: ${constructors[0].name}` : `${activeCup.name} complete`,
+    title: playerPlace === 1 ? (activeCup.season ? "World champion" : "Cup winner") : `You finished ${formatOrdinal(playerPlace)}`,
     podium,
     career: careerForCup(state.lastCupCareer, playerPlace),
   });
@@ -5729,6 +5876,7 @@ window.Game = {
   startRaceFromQualifying,
   nextRace,
   backToPitLane: quitToPitLane,
+  newSeason,
   setSound(on) {
     initAudio();
     if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
@@ -5752,6 +5900,7 @@ window.Game = {
 };
 
 loadAudioPreference();
+loadCupPreference();
 loadDifficultyPreference();
 loadDriverPreference();
 if (window.Screens) {

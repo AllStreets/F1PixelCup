@@ -47,6 +47,8 @@
           <div class="choice-row"><span class="choice-label" id="weather-label">Weather</span><span id="weather-pills" role="group" aria-labelledby="weather-label" aria-describedby="weather-hint"></span></div>
           <p id="weather-hint" class="choice-hint"></p>
           <ol id="cup-circuits" class="cup-circuits"></ol>
+          <p id="season-hint" class="choice-hint hidden"></p>
+          <button id="new-season" class="ghost-btn new-season hidden" data-action="newSeason" type="button">New season</button>
         </div>
         <div class="pitlane-driver">
           <p id="driver-kicker" class="kicker"></p>
@@ -68,6 +70,7 @@
           <h2 id="results-title" class="it-title overlay-title"></h2>
           <div id="results-career" class="career-strip hidden"></div>
           <div id="results-table" class="results-table"></div>
+          <div id="results-constructors" class="results-table constructors hidden"></div>
           <div class="overlay-actions">
             <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
             <button id="results-replay" class="ghost-btn replay-btn" data-action="replay" type="button">Watch the replay</button>
@@ -208,6 +211,7 @@
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
       else if (action === "next") Game.nextRace();
+      else if (action === "newSeason") Game.newSeason();
       else if (action === "replay") Game.replay.open();
       else if (action === "race") Game.startRaceFromQualifying();
       else if (action === "pitlane") Game.backToPitLane();
@@ -297,7 +301,17 @@
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
         type="button" role="option" aria-selected="${d.index === s.selectedDriver}" title="${esc(d.name)}"><b>${num(d.number)}</b><span>${esc(d.code)}</span></button>`).join("");
-    $("start-cup").innerHTML = `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
+    // The season: resume the saved one (its own driver and settings), or start over.
+    const saved = s.savedSeason;
+    $("start-cup").innerHTML = saved
+      ? `<span>Resume season · Race ${num(saved.nextRace)} of ${num(saved.races)} ›</span>`
+      : `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
+    $("season-hint").textContent = saved
+      ? `Saved: ${saved.driver} on ${saved.difficulty}. Resuming keeps its driver and settings.`
+      : s.cups[s.selectedCup].season ? "All 24 races in calendar order, for the drivers' and constructors' titles. Saved after every race." : "";
+    $("season-hint").classList.toggle("hidden", !s.cups[s.selectedCup].season);
+    $("new-season").classList.toggle("hidden", !saved);
+    $("new-season").textContent = saved && saved.confirming ? "Throw away the saved season? Click again" : "New season";
     refreshCareerChip();
     restoreFocus(was);
   }
@@ -392,7 +406,7 @@
     $("results-title").textContent = summary.title;
     $("results-next").innerHTML = `<span>${esc(summary.nextLabel)} ›</span>`;
     $("results-table").innerHTML = `
-      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
+      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>${esc(summary.pointsLabel || "Cup")}</span></div>
       ${summary.rows.map((r) => `
         <div class="result-row ${r.isPlayer ? "is-player" : ""}">
           <b>${esc(ordinal(num(r.place)))}</b><i style="background:${esc(r.teamColor)}"></i>
@@ -401,6 +415,16 @@
           <span class="${r.fastest ? "is-fastest" : ""}">${esc(r.bestLap)}</span>
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
         </div>`).join("")}`;
+    // The season's constructors' table, beneath.
+    const teams = summary.constructors || [];
+    $("results-constructors").innerHTML = teams.length ? `
+      <div class="result-head"><span>Pos</span><span></span><span>Constructors</span><span>Points</span></div>
+      ${teams.map((t) => `
+        <div class="result-row ${t.isPlayer ? "is-player" : ""}">
+          <b>${esc(ordinal(num(t.position)))}</b><i style="background:${esc(t.teamColor)}"></i>
+          <span>${esc(t.name)}</span><span>${num(t.points)}</span>
+        </div>`).join("")}` : "";
+    $("results-constructors").classList.toggle("hidden", !teams.length);
     renderStrip($("results-career"), summary.career);
     $("results-replay").hidden = !(window.Game && Game.replay && Game.replay.available());
     show("results-screen");

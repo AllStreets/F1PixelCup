@@ -115,7 +115,12 @@
 
   // Each cup's colour, for the steps' faces; a cup without one of its own
   // takes one from the palette, always the same for the same cup.
-  const CUP_COLOURS = { trophyCup: "#b3122e", constructorCup: "#1d47c4" };
+  const CUP_COLOURS = {
+    openingCup: "#b3122e", springCup: "#1d47c4", summerCup: "#0f7a55",
+    classicsCup: "#7a2fb3", autumnCup: "#c4621d", finaleCup: "#13808f", season: "#a8861a",
+    // The two cups before the calendar, for an old replay or record.
+    trophyCup: "#b3122e", constructorCup: "#1d47c4",
+  };
   const PALETTE = ["#b3122e", "#1d47c4", "#0f7a55", "#7a2fb3", "#c4621d", "#13808f"];
   function cupColour(cupId) {
     if (CUP_COLOURS[cupId]) return CUP_COLOURS[cupId];

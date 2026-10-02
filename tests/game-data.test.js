@@ -66,17 +66,23 @@ test("every circuit has a real outline, a country, a real length and its own wea
   assert.ok(chance("bahrain") < 0.05);
 });
 
-test("the circuits run in the order of the 2025 calendar", () => {
-  const ids = Data.CIRCUITS.map((c) => c.id);
-  assert.deepEqual(ids, CALENDAR_2025.filter((id) => ids.includes(id)));
-  assert.equal(new Set(ids).size, ids.length);
+test("all 24 circuits of 2025, in the order of the calendar", () => {
+  assert.deepEqual(Data.CIRCUITS.map((c) => c.id), CALENDAR_2025);
+});
+
+test("the six calendar cups are the only cups; the season races the whole calendar", () => {
+  assert.deepEqual(Data.CUP_DEFS.map((cup) => [cup.id, cup.name]), CALENDAR_CUPS);
+  assert.deepEqual(Data.CUP_DEFS.flatMap((cup) => cup.circuitIds), CALENDAR_2025);
+  assert.equal(Data.SEASON.id, "season");
+  assert.equal(Data.SEASON.name, "2025 Season");
+  assert.deepEqual(Data.SEASON.circuitIds, CALENDAR_2025);
+  assert.ok(!Data.CUP_DEFS.some((cup) => cup.id === Data.SEASON.id));
 });
 
 test("the calendar cups: four races each, in calendar order", () => {
   const built = CALENDAR_CUPS.map(([id]) => Data.CUP_DEFS.find((cup) => cup.id === id));
-  assert.ok(built[0], "the Opening Cup is built");
   built.forEach((cup, i) => {
-    if (!cup) return;
+    assert.ok(cup, CALENDAR_CUPS[i][0]);
     assert.equal(cup.name, CALENDAR_CUPS[i][1]);
     assert.deepEqual(cup.circuitIds, CALENDAR_2025.slice(i * 4, i * 4 + 4), cup.id);
   });

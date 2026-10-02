@@ -119,6 +119,14 @@ test("the field of view widens on narrow windows so the podium stays in frame", 
   assert.ok(Math.abs(half(narrow, 9 / 16) - half(30, 16 / 9)) < 1e-9);
 });
 
+test("every cup on the calendar, and the season, has a colour of its own", () => {
+  const Data = require("../game-data.js");
+  const ids = [...Data.CUP_DEFS.map((c) => c.id), Data.SEASON.id];
+  const colours = ids.map((id) => Ceremony.cupColour(id));
+  colours.forEach((c) => assert.match(c, /^#[0-9a-f]{6}$/));
+  assert.equal(new Set(colours).size, ids.length, colours.join());
+});
+
 test("the cup's colour: one per cup, a valid colour for any cup", () => {
   assert.match(Ceremony.cupColour("trophyCup"), /^#[0-9a-f]{6}$/);
   assert.notEqual(Ceremony.cupColour("trophyCup"), Ceremony.cupColour("constructorCup"));

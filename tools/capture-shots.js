@@ -41,7 +41,7 @@ async (page) => {
   const SHOTS = await p.evaluate(() => SHOT_DRIVERS);
 
   // One shot per circuit, the player on autopilot a few seconds in.
-  const circuits = await p.evaluate(() => CUPS.flatMap((cup, ci) => cup.tracks.map((t, ti) => ({ ci, ti, id: t.id }))));
+  const circuits = await p.evaluate(() => CUPS.flatMap((cup, ci) => (cup.season ? [] : cup.tracks.map((t, ti) => ({ ci, ti, id: t.id })))));
   const drive = async (c, driverId) => {
     await p.evaluate(({ ci, ti, driverId }) => {
       state.selectedDriver = DRIVERS.findIndex((d) => d.id === driverId);
