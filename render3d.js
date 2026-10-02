@@ -987,8 +987,8 @@ function syncCars(world, racers, player, now, dt, alsoShow, cut = false) {
     const car = ensureCar(world, racer);
     seen.add(racer.id);
     // A finished car is parked out of the way, except the one in view (and,
-    // in a replay, the player's, as the race showed it).
-    const visible = !racer.finished || racer.id === player.id || racer.id === alsoShow;
+    // in a replay or split screen, the players', as the race showed them).
+    const visible = !racer.finished || racer.id === player.id || (Array.isArray(alsoShow) ? alsoShow.includes(racer.id) : racer.id === alsoShow);
     car.root.visible = visible;
     if (!visible) return;
     const spinning = racer.spinUntil > now;
