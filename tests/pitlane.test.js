@@ -183,3 +183,15 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   const left = Pit.lane({ side: -1, entry: -600, exit: 400 }, 6000, W);
   assert.equal(Pit.wayIn(left, 3000, false, 0).lat, -edge);
 });
+
+test("the lane's own ends are in it exactly, whatever the lap's length", () => {
+  // A lap of a fractional length: (440 + total) - total is not 440 in floats.
+  const total = 7962.291717719002;
+  const lane = Pit.lane({ side: 1, entry: -660, exit: 440 }, total, W);
+  assert.equal(lane.rel(440), 440);
+  assert.equal(lane.rel(-660), -660);
+  assert.ok(lane.inZone(440) && lane.inZone(-660) && lane.inZone(total - 660));
+  assert.notEqual(lane.outerAt(440), null);
+  assert.equal(lane.rel(total - 10), -10);
+  assert.equal(lane.inZone(450), false);
+});

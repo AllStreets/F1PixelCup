@@ -46,6 +46,12 @@ CIRCUITS = {
     "redbullring": ("at-1969", False),
     "hungaroring": ("hu-1986", False),
     "zandvoort": ("nl-1948", False),
+    "baku": ("az-2016", False),
+    "cota": ("us-2012", False),
+    "mexico": ("mx-1962", False),
+    "lasvegas": ("us-2023", False),
+    "losail": ("qa-2004", False),
+    "yasmarina": ("ae-2009", False),
     "monza": ("it-1922", False),
     "spa": ("be-1925", False),
     "silverstone": ("gb-1948", False),
@@ -315,7 +321,7 @@ PIT_BAYS = 11
 # street circuits, a barrier at +1) with room to spare.
 PIT_CLEAR = 46
 PIT_CLEAR_STREET = 22
-STREET = {"monaco", "singapore", "jeddah", "miami"}
+STREET = {"monaco", "singapore", "jeddah", "miami", "baku", "lasvegas"}
 
 
 class Lap:

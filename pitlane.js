@@ -50,9 +50,12 @@
     const { side, entry, exit } = pit;
     const W = halfWidth;
     // Signed distance from the line, in (-total/2, total/2].
+    // (A distance already in that range comes back exactly: the lane's own
+    // entry and exit are in it, never a rounding error outside.)
     const rel = (d) => {
-      let r = ((d % total) + total) % total;
+      let r = d % total;
       if (r > total / 2) r -= total;
+      else if (r <= -total / 2) r += total;
       return r;
     };
     const inZone = (d) => {

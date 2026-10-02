@@ -152,6 +152,63 @@ export const VENUES = {
     extras: ["coast"],
     landmarks: ["dunes"],
   },
+  baku: {
+    // Through the old city and along the Caspian boulevard: stone, sea,
+    // towers on the hill.
+    ground: "city", standColor: "#00b5e2", runoffTint: "#b3a98f",
+    trees: [{ kind: "palm", count: 90, tint: "#56803e", near: 50 }, { kind: "broadleaf", count: 140, tint: "#4a7340", near: 60, seed: 3 }],
+    coast: { bearing: Math.PI * 0.38, tint: "#2f6d8c", sand: "#c8bfa4" },
+    skyline: { arc: [Math.PI * 0.9, Math.PI * 1.45], count: 110, height: [70, 260] },
+    extras: ["coast", "bakuCity", "skylineArc"],
+    landmarks: ["flameTowers", "oldCityWalls", "maidenTower"],
+  },
+  cota: {
+    // Texas hill country outside Austin: dry grass, live oaks, big skies.
+    ground: "grass", groundTint: "#a9a964", standColor: "#bf0a30", runoffTint: "#c4b394",
+    trees: [{ kind: "broadleaf", count: 700, tint: "#566f3a" }, { kind: "broadleaf", count: 160, tint: "#61783f", near: 140, seed: 5 }],
+    hills: { tint: "#9a9a62", count: 14, height: [90, 200], flat: true },
+    skyline: { arc: [Math.PI * 1.15, Math.PI * 1.4], count: 40, height: [80, 260] },
+    extras: ["skylineArc"],
+    landmarks: ["observationTower"],
+  },
+  mexico: {
+    // A sports park in the middle of the city: towers all round, the stadium
+    // the last corners run through.
+    ground: "grass", groundTint: "#8dab5c", standColor: "#006847", runoffTint: "#bdb39a",
+    trees: [{ kind: "broadleaf", count: 600, tint: "#4a7a3c" }, { kind: "palm", count: 60, tint: "#58803e", near: 90, seed: 7 }],
+    skyline: { arc: [0, Math.PI * 2], count: 150, height: [50, 210] },
+    extras: ["skylineArc"],
+    landmarks: ["foroSol"],
+  },
+  lasvegas: {
+    // Saturday night on the Strip: the resorts lit up along the west side,
+    // the city's towers all round.
+    ground: "city", night: true, standColor: "#7a3cff", runoffTint: "#8c8896",
+    trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
+    skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] },
+    extras: ["vegasStrip", "skylineArc", "floodlights"],
+    landmarks: ["sphere", "stripResorts"],
+  },
+  losail: {
+    // Under the lights in the desert north of Doha, Lusail's towers to the south.
+    ground: "sand", night: true, standColor: "#8a1538", runoffTint: "#a89a80", gravelTint: "#c8b48a",
+    trees: [{ kind: "palm", count: 110, tint: "#4e7234", near: 80 }],
+    hills: { tint: "#a08a64", count: 14, height: [30, 80], flat: true },
+    skyline: { arc: [Math.PI * 0.3, Math.PI * 0.7], count: 70, height: [80, 300] },
+    extras: ["skylineArc", "floodlights"],
+    landmarks: ["litGrandstand"],
+  },
+  yasmarina: {
+    // Night at the marina on Yas Island: water and yachts beside the track,
+    // the open water to the west.
+    ground: "city", night: true, standColor: "#00732f", runoffTint: "#8f8a80",
+    trees: [{ kind: "palm", count: 220, tint: "#4e7a3a", near: 70 }],
+    lake: { tint: "#123a5a", count: 40 },
+    coast: { bearing: Math.PI * 0.85, tint: "#0f3352", sand: "#a89c80" },
+    skyline: { arc: [Math.PI * 1.6, Math.PI * 2.1], count: 60, height: [70, 220] },
+    extras: ["infieldLake", "lakeYachts", "coast", "skylineArc", "floodlights"],
+    landmarks: ["yasHotel"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -815,6 +872,55 @@ const EXTRAS = {
     group.add(mesh);
   },
 
+  // Baku's old city and boulevard: low stone-coloured blocks close along the
+  // walls.
+  bakuCity(course, group, venue, rand) {
+    streetBlocks(course, group, rand, {
+      rows: 2, height: [18, 52], depth: [30, 56], width: [26, 52], maxCount: 520, spacing: 7, setback: 8,
+      palette: ["#d9c9a6", "#cdb995", "#e3d6b8", "#bfae8a", "#d4c3a0", "#c9b48c"],
+      night: false, glass: "#5d7486",
+    });
+  },
+
+  // The Strip: tall resorts, lit, close along the circuit.
+  vegasStrip(course, group, venue, rand) {
+    streetBlocks(course, group, rand, {
+      rows: 2, height: [60, 200], depth: [40, 80], width: [40, 80], maxCount: 360, spacing: 10, setback: 14,
+      palette: ["#d8c79a", "#c9a46a", "#e6dccb", "#9fb3c8", "#c48a9a", "#b9a2d6", "#f0e0b0"],
+      night: true, glass: "#2a2440", lit: 0.7,
+    });
+  },
+
+  // Moored yachts on the infield's water (Yas Marina's harbour).
+  lakeYachts(course, group, venue, rand) {
+    const water = course.lakes || [];
+    if (!water.length) return;
+    const count = 40;
+    const hulls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff, { roughness: 0.3, emissive: venue.night ? 0x222222 : 0x000000 }), count);
+    const cabins = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0x2a3a4a, { roughness: 0.2, metalness: 0.4, emissive: venue.night ? 0x664422 : 0x000000 }), count);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const placed = [];
+    for (let t = 0; t < 2000 && placed.length < count; t += 1) {
+      const disc = water[Math.floor(rand() * water.length)];
+      const a = rand() * Math.PI * 2;
+      const r = Math.sqrt(rand()) * (disc.r - 30);
+      const x = disc.x + Math.cos(a) * r;
+      const z = disc.z + Math.sin(a) * r;
+      if (course.clearance(x, z, 120) < 45 || placed.some((p) => Math.hypot(p.x - x, p.z - z) < 30)) continue;
+      const len = 18 + rand() * 26;
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
+      m.compose(new THREE.Vector3(x, 2.2, z), q, new THREE.Vector3(len, 4.5, len * 0.28));
+      hulls.setMatrixAt(placed.length, m);
+      m.compose(new THREE.Vector3(x, 6, z), q, new THREE.Vector3(len * 0.5, 3.5, len * 0.2));
+      cabins.setMatrixAt(placed.length, m);
+      placed.push({ x, z });
+    }
+    hulls.count = cabins.count = placed.length;
+    hulls.castShadow = true;
+    group.add(hulls, cabins);
+  },
+
   // A lake filling the circuit's infield (Albert Park): overlapping discs,
   // the largest that fit first, each clear of the barriers, so the water
   // takes the infield's shape.
@@ -851,8 +957,9 @@ const EXTRAS = {
     lake.name = "lake";
     group.add(lake);
     // Nothing else stands in the water. (Claimed once all the discs are
-    // placed: they overlap each other.)
+    // placed: they overlap each other.) The boats know where it is.
     parts.forEach((q) => course.occupied.add(q.x, q.z, q.r));
+    course.lakes = parts;
   },
 
   // The sea (venue.coast: coastline's settings), on one side or several (an

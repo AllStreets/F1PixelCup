@@ -16,8 +16,8 @@ Ways, by game circuit (ids from OpenStreetMap):
   pit lanes: the raceway tagged as the pit lane beside each start/finish
   straight (several ways, end to end, where it is mapped in parts); the Monaco tunnel is Boulevard Louis II's tunnel section; the
   signature corners are the raceway ways named for them.
-Monza, Suzuka and Albert Park (whose pit building goes up each year) have no
-pit lane mapped as a raceway there; build_tracks.py finds theirs from the
+Monza, Suzuka, Albert Park (whose pit building goes up each year) and Las
+Vegas have no pit lane mapped as a raceway there; build_tracks.py finds theirs from the
 circuit's shape alone.
 """
 import json
@@ -46,6 +46,13 @@ PIT_LANES = {
     "redbullring": 289111668,
     "hungaroring": 231417580,
     "zandvoort": 38144527,
+    "baku": 1513267145,
+    "cota": 514836373,
+    "mexico": (638504647, 772763791),
+    # Lusail's: the way in from the last corner, then the lane.
+    "losail": (1037707300, 196193732),
+    # Yas Marina's runs beside the straight and under the track to turn 2.
+    "yasmarina": (176695254, 176695255, 176695253),
     "spa": 323851541,
     "silverstone": 227902927,  # the International (Wing) pit lane
     "monaco": 850261588,       # Voie des stands

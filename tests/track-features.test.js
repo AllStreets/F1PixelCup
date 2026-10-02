@@ -42,7 +42,7 @@ test("where the source's first vertex isn't the real line, the line is level wit
     assert.ok(Math.abs(real.from + real.to) <= 0.1 * (real.to - real.from), `${id}: not centred, ${real.from}..${real.to}`);
   });
   // The others keep the source's line: their real pit lanes still sit round it.
-  ["spa", "singapore", "bahrain", "interlagos", "shanghai", "jeddah", "miami", "imola", "barcelona", "montreal", "redbullring", "hungaroring", "zandvoort"].forEach((id) => {
+  ["spa", "singapore", "bahrain", "interlagos", "shanghai", "jeddah", "miami", "imola", "barcelona", "montreal", "redbullring", "hungaroring", "zandvoort", "baku", "cota", "mexico", "losail", "yasmarina"].forEach((id) => {
     const real = SHAPES[id].pit.real;
     assert.ok(real.from < 0 && real.to > 0, `${id}: ${real.from}..${real.to}`);
   });

@@ -96,8 +96,14 @@ const CIRCUITS = [
   { id: "hungaroring", name: "Hungaroring", country: "Hungary", theme: "Twisting bowl in the hills", lengthM: 4381, laps: 5, roadWidth: 33, rainChance: 0.2, bg: { sky: "#88bfe8", grass: "#86a050", accent: "#ffe6a6", road: "#4a4a50", shoulder: "#c6bc9e", horizonA: "#4a6a34", horizonB: "#7a9a54", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c0" } },
   { id: "zandvoort", name: "Circuit Zandvoort", country: "Netherlands", theme: "Seaside rollercoaster in the dunes", lengthM: 4259, laps: 5, roadWidth: 33, rainChance: 0.3, bg: { sky: "#9cc6e4", grass: "#a8b07a", accent: "#ffd9a0", road: "#4a4a52", shoulder: "#d6c9a4", horizonA: "#6a7a5a", horizonB: "#a8a878", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff2d0" } },
   { id: "monza", name: "Autodromo di Monza", country: "Italy", theme: "Italian speed temple", lengthM: 5793, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" } },
+  { id: "baku", name: "Baku City Circuit", country: "Azerbaijan", theme: "Castle walls and the longest flat-out run", lengthM: 6003, laps: 5, roadWidth: 33, rainChance: 0.05, bg: { sky: "#86b8e0", grass: "#8a9a6a", accent: "#ffe2a8", road: "#4a4a52", shoulder: "#c8bea4", horizonA: "#5a6a62", horizonB: "#8a9a88", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0cc" } },
   { id: "singapore", name: "Marina Bay Street Circuit", country: "Singapore", theme: "Night city circuit", lengthM: 4928, laps: 5, roadWidth: 33, rainChance: 0.25, bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" } },
+  { id: "cota", name: "Circuit of the Americas", country: "United States", theme: "Up the hill to Turn 1 in Texas", lengthM: 5514, laps: 5, roadWidth: 33, rainChance: 0.1, bg: { sky: "#7cb8ea", grass: "#9a9e5a", accent: "#ffdca0", road: "#4a4850", shoulder: "#c9bb98", horizonA: "#5a6a3a", horizonB: "#8a945a", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c4" } },
+  { id: "mexico", name: "Autódromo Hermanos Rodríguez", country: "Mexico", theme: "High-altitude stadium finale", lengthM: 4304, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#8cbde4", grass: "#7a9a50", accent: "#ffe0a0", road: "#48484f", shoulder: "#c2b8a0", horizonA: "#4a6040", horizonB: "#7a8f62", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff2cc" } },
   { id: "interlagos", name: "Autódromo José Carlos Pace", country: "Brazil", theme: "Brazilian passion circuit", lengthM: 4309, laps: 5, roadWidth: 33, rainChance: 0.4, bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" } },
+  { id: "lasvegas", name: "Las Vegas Strip Circuit", country: "United States", theme: "Saturday night down the Strip", lengthM: 6201, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0c0a24", grass: "#2a2836", accent: "#ff5ad0", road: "#3a3846", shoulder: "#58545e", horizonA: "#140f30", horizonB: "#2a1f50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffd2f0" } },
+  { id: "losail", name: "Lusail International Circuit", country: "Qatar", theme: "Floodlit curves in the desert", lengthM: 5380, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0a0e22", grass: "#3a3226", accent: "#ffd9a0", road: "#3a3846", shoulder: "#5e564a", horizonA: "#100c1e", horizonB: "#2a2234", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcf90" } },
+  { id: "yasmarina", name: "Yas Marina Circuit", country: "United Arab Emirates", theme: "Night race at the marina", lengthM: 5281, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0d1230", grass: "#2a3040", accent: "#7fd0ff", road: "#3a3848", shoulder: "#565262", horizonA: "#101438", horizonB: "#2a2f60", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffb070" } },
 ];
 
 const CUP_DEFS = [
@@ -107,6 +113,8 @@ const CUP_DEFS = [
   { id: "springCup", name: "Spring Cup", icon: "Spring Cup", circuitIds: ["jeddah", "miami", "imola", "monaco"] },
   { id: "summerCup", name: "Summer Cup", icon: "Summer Cup", circuitIds: ["barcelona", "montreal", "redbullring", "silverstone"] },
   { id: "classicsCup", name: "Classics Cup", icon: "Classics Cup", circuitIds: ["spa", "hungaroring", "zandvoort", "monza"] },
+  { id: "autumnCup", name: "Autumn Cup", icon: "Autumn Cup", circuitIds: ["baku", "singapore", "cota", "mexico"] },
+  { id: "finaleCup", name: "Finale Cup", icon: "Finale Cup", circuitIds: ["interlagos", "lasvegas", "losail", "yasmarina"] },
 ];
 
 // The eight power-ups, common to rare (the same order as PowerUps.ITEM_ORDER).
@@ -151,6 +159,7 @@ const SHOT_DRIVERS = {
   circuits: {
     albertpark: "leclerc", shanghai: "hamilton", jeddah: "alonso", miami: "antonelli", imola: "lawson",
     barcelona: "sainz", montreal: "stroll", redbullring: "hadjar", hungaroring: "piastri", zandvoort: "bearman",
+    baku: "albon", cota: "ocon", mexico: "bortoleto", lasvegas: "doohan", losail: "norris", yasmarina: "russell",
     monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
     monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
   },
