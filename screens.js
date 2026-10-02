@@ -46,6 +46,16 @@
           <p id="grid-hint" class="choice-hint"></p>
           <div class="choice-row"><span class="choice-label" id="weather-label">Weather</span><span id="weather-pills" role="group" aria-labelledby="weather-label" aria-describedby="weather-hint"></span></div>
           <p id="weather-hint" class="choice-hint"></p>
+          <div class="choice-row"><span class="choice-label" id="players-label">Players</span><span id="players-pills" role="group" aria-labelledby="players-label" aria-describedby="players-hint"></span></div>
+          <div id="second-driver" class="choice-row second-driver" hidden>
+            <span class="choice-label" id="second-label">2P driver</span>
+            <span class="second-pick" role="group" aria-labelledby="second-label">
+              <button class="pill" data-second="-1" type="button" aria-label="Previous driver for player 2">‹</button>
+              <span id="second-name" class="second-name" aria-live="polite"></span>
+              <button class="pill" data-second="1" type="button" aria-label="Next driver for player 2">›</button>
+            </span>
+          </div>
+          <p id="players-hint" class="choice-hint"></p>
           <ol id="cup-circuits" class="cup-circuits"></ol>
         </div>
         <div class="pitlane-driver">
@@ -115,7 +125,7 @@
         <div class="overlay-card wide">
           <p id="qualifying-kicker" class="kicker"></p>
           <h2 id="qualifying-title" class="it-title overlay-title"></h2>
-          <p class="muted quali-lede">Qualifying classification — this is the starting grid. Qualifying points count when you finish the race.</p>
+          <p class="muted quali-lede">Qualifying classification: this is the starting grid. Qualifying points count when you finish the race.</p>
           <p id="qualifying-note" class="quali-note"></p>
           <div id="qualifying-table" class="results-table quali-table"></div>
           <div class="overlay-actions">
@@ -184,7 +194,7 @@
   }
 
   function onClick(event) {
-    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather], [data-replay]");
+    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather], [data-players], [data-second], [data-replay]");
     if (!target || !window.Game) return;
     if (target.dataset.replay !== undefined) {
       onReplayControl(target.dataset.replay, target.dataset.value);
@@ -204,6 +214,8 @@
     else if (target.dataset.difficulty !== undefined) Game.selectDifficulty(Number(target.dataset.difficulty));
     else if (target.dataset.grid !== undefined) Game.selectGridMode(target.dataset.grid);
     else if (target.dataset.weather !== undefined) Game.selectWeatherMode(target.dataset.weather);
+    else if (target.dataset.players !== undefined) Game.selectPlayers(Number(target.dataset.players));
+    else if (target.dataset.second !== undefined) Game.stepSecondDriver(Number(target.dataset.second));
     else {
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
@@ -246,7 +258,7 @@
 
   // The pit lane is redrawn on every pick; keep focus on the control that was
   // picked (its replacement) instead of dropping it on the page.
-  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "weather", "action"];
+  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "weather", "players", "second", "action"];
   function focusedControl() {
     const el = document.activeElement;
     if (!el || !$("pitlane").contains(el)) return null;
@@ -283,9 +295,13 @@
       <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button" aria-pressed="${d.index === s.selectedDifficulty}">${esc(d.name)}</button>`).join("");
     $("grid-pills").innerHTML = s.gridModes.map((m) => `
       <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button" aria-pressed="${m.id === s.gridMode}">${esc(m.name)}</button>`).join("");
-    $("grid-hint").textContent = s.gridMode === "qualifying"
-      ? "Before every race: one flying lap sets your grid, and pays career points."
-      : "You start every race last and fight through the field.";
+    $("grid-hint").textContent = s.players === 2
+      ? (s.gridMode === "qualifying"
+        ? "Before every race: one flying lap each, both at once, sets your grid and pays career points."
+        : "1P and 2P start every race side by side on the last row and fight through the field.")
+      : s.gridMode === "qualifying"
+        ? "Before every race: one flying lap sets your grid, and pays career points."
+        : "You start every race last and fight through the field.";
     $("weather-pills").innerHTML = s.weatherModes.map((m) => `
       <button class="pill ${m.id === s.weatherMode ? "is-on" : ""}" data-weather="${esc(m.id)}" type="button" aria-pressed="${m.id === s.weatherMode}">${esc(m.name)}</button>`).join("");
     $("weather-hint").textContent = s.weatherMode === "wet"
@@ -294,6 +310,15 @@
         ? "Each race has a one-in-three chance of rain."
         : "Dry races all cup.";
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
+    // One player or two (split screen); player 2's driver and both key sets.
+    $("players-pills").innerHTML = [[1, "1 player"], [2, "2 players"]].map(([n, label]) => `
+      <button class="pill ${n === s.players ? "is-on" : ""}" data-players="${n}" type="button" aria-pressed="${n === s.players}">${label}</button>`).join("");
+    $("second-driver").hidden = s.players !== 2;
+    $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
+    $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
+    $("players-hint").textContent = s.players === 2
+      ? `Split screen. 1P: ${s.keys.p1}, Left Shift to drift, Space for power-ups. 2P: the arrows, Right Shift to drift, and ${s.keys.p2Item} (left of Right Shift) for power-ups. Gamepads work too: the first is 1P's, the second 2P's.`
+      : "One player, the whole screen.";
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
         type="button" role="option" aria-selected="${d.index === s.selectedDriver}" title="${esc(d.name)}"><b>${num(d.number)}</b><span>${esc(d.code)}</span></button>`).join("");
@@ -351,12 +376,20 @@
   function updateTower(rows) {
     if (!rows || !rows.length) return;
     const top = rows.slice(0, 10);
-    const player = rows.find((row) => row.isPlayer);
-    const extra = player && !top.includes(player) ? [player] : [];
+    // The players are always on the tower (two, in a two-player race).
+    const extra = rows.filter((row) => row.isPlayer && !top.includes(row));
     // A position can be a number, or a dash for a car still on its qualifying lap.
     const place = (p) => (typeof p === "number" ? num(p) : esc(p));
-    const row = (r) => `<div class="tower-row ${r.isPlayer ? "is-player" : ""}"><b>${place(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
+    const row = (r) => `<div class="tower-row ${r.isPlayer ? "is-player" : ""}${tagClass(r)}"><b>${place(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}${tagHtml(r)}</span><em>${esc(r.gap)}</em></div>`;
     $("tower").innerHTML = top.map(row).join("") + (extra.length ? `<div class="tower-gap"></div>${extra.map(row).join("")}` : "");
+  }
+
+  // A two-player race's 1P and 2P tags, in each player's colour.
+  function tagHtml(r) {
+    return r.tag === "1P" || r.tag === "2P" ? ` <small class="ptag">${r.tag}</small>` : "";
+  }
+  function tagClass(r) {
+    return r.tag === "2P" ? " is-p2" : r.tag === "1P" ? " is-p1" : "";
   }
 
   function pushFeed(message) {
@@ -394,9 +427,9 @@
     $("results-table").innerHTML = `
       <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
       ${summary.rows.map((r) => `
-        <div class="result-row ${r.isPlayer ? "is-player" : ""}">
+        <div class="result-row ${r.isPlayer ? "is-player" : ""}${tagClass(r)}">
           <b>${esc(ordinal(num(r.place)))}</b><i style="background:${esc(r.teamColor)}"></i>
-          <span>${esc(r.name)}</span>
+          <span>${esc(r.name)}${tagHtml(r)}</span>
           <span class="r-time">${esc(r.time)}</span><span class="r-gap">${esc(r.gap)}</span>
           <span class="${r.fastest ? "is-fastest" : ""}">${esc(r.bestLap)}</span>
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
@@ -470,7 +503,7 @@
     const wall = performance.now();
     const towerDue = order !== towerOrder || wall - towerAt >= 250;
     if (towerDue) { towerOrder = order; towerAt = wall; }
-    const row = (r) => `<div class="bc-row ${r.isFocus ? "is-focus" : ""} ${r.isPlayer ? "is-player" : ""}"><b>${num(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
+    const row = (r) => `<div class="bc-row ${r.isFocus ? "is-focus" : ""} ${r.isPlayer ? "is-player" : ""}${tagClass(r)}"><b>${num(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}${tagHtml(r)}</span><em>${esc(r.gap)}</em></div>`;
     if (towerDue) put("rows", $("bc-rows"), top.map(row).join("") + (extra.length ? `<div class="bc-row-gap"></div>${extra.map(row).join("")}` : ""));
     const f = info.focus;
     const parts = String(f.name).trim().split(/\s+/);
@@ -481,7 +514,7 @@
       <div class="bc-third-card" style="--team:${esc(f.color)}" data-car="${esc(f.id)}">
         <b class="bc-third-pos" id="bc-pos"></b>
         <span class="bc-third-num">${num(f.number)}</span>
-        <div class="bc-third-name"><strong>${esc(parts.join(" "))} <em>${esc(last.toUpperCase())}</em></strong><small>${esc(f.team)}${f.isPlayer ? " · You" : ""}</small></div>
+        <div class="bc-third-name"><strong>${esc(parts.join(" "))} <em>${esc(last.toUpperCase())}</em></strong><small>${esc(f.team)}${f.tag ? ` · ${esc(f.tag)}` : f.isPlayer ? " · You" : ""}</small></div>
         <span class="bc-third-int" id="bc-int"></span>
       </div>`);
     if (newCard) {
@@ -520,7 +553,7 @@
   // The onboard input trace: throttle and brake now, four seconds of both,
   // and the steering.
   function drawTrace(trace, focus) {
-    put("traceLabel", $("bc-trace-label"), focus.isPlayer ? "Your inputs" : esc(`${focus.code} controls`));
+    put("traceLabel", $("bc-trace-label"), focus.tag ? esc(`${focus.tag} inputs`) : focus.isPlayer ? "Your inputs" : esc(`${focus.code} controls`));
     put("kph", $("bc-kph"), `${num(focus.kph)}<small> KM/H</small>`);
     $("bc-thr").style.height = `${Math.round(trace.throttle * 100)}%`;
     $("bc-brk").style.height = `${Math.round(trace.brake * 100)}%`;
@@ -559,9 +592,9 @@
     $("qualifying-table").innerHTML = `
       <div class="result-head quali-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span></div>
       ${summary.rows.map((r) => `
-        <div class="result-row quali-row ${r.isPlayer ? "is-player" : ""} ${r.position === 1 ? "is-pole" : ""}" data-id="${esc(r.id)}">
+        <div class="result-row quali-row ${r.isPlayer ? "is-player" : ""}${tagClass(r)} ${r.position === 1 ? "is-pole" : ""}" data-id="${esc(r.id)}">
           <b>${esc(ordinal(num(r.position)))}</b><i style="background:${esc(r.teamColor)}"></i>
-          <span>${esc(r.name)}</span>
+          <span>${esc(r.name)}${tagHtml(r)}</span>
           <span class="r-time">${esc(r.time)}</span><span class="r-gap">${esc(r.gap)}</span>
         </div>`).join("")}`;
     $("qualifying-note").textContent = summary.note || "";
@@ -761,7 +794,7 @@
             : esc(driverName(d.driverId));
           return `<tr class="${current ? "is-current" : ""}"${current ? ' aria-current="true"' : ""}><td>${label}</td><td>${esc(d.tier)}</td><td>${num(d.rating)}</td>
             <td>${num(d.careerPoints).toLocaleString()}</td><td>${num(d.races)}</td><td>${num(d.wins)}</td></tr>`;
-        }).join("")}</tbody></table>` : `<p class="muted">No careers yet — pick any driver and race to start theirs.</p>`}
+        }).join("")}</tbody></table>` : `<p class="muted">No careers yet. Pick any driver and race to start theirs.</p>`}
       <div class="overlay-actions"><button class="ghost-btn" data-action="close" data-autofocus type="button">Back (Esc)</button></div>`;
   }
 

@@ -156,6 +156,9 @@ export function createRain(scene) {
   let time = 0;
   const lastCamera = new THREE.Vector3();
   const camVel = new THREE.Vector3();
+  // Split screen: the second view's camera, tracked the same way.
+  const second = { last: new THREE.Vector3(), vel: new THREE.Vector3(), live: false };
+  const first = { last: lastCamera, vel: camVel };
   const wheelAt = new THREE.Vector3();
   let sprayLive = 0;
 
@@ -205,8 +208,12 @@ export function createRain(scene) {
 
   // Each frame: the rain round the camera, and the spray behind every car
   // near it that is going forward fast enough to throw any (none under the
-  // tunnel's roof, where the road is dry).
-  function update({ camera, world, racers, dt, isWet }) {
+  // tunnel's roof, where the road is dry). Split screen calls it once per
+  // view: view 1 only aims the rain at its own camera; view 0 also moves the
+  // spray, for the cars near either camera.
+  function update({ camera, world, racers, dt, isWet, view = 0 }) {
+    const own = view ? second : first;
+    if (view) second.live = true;
     wet = isWet;
     streaks.visible = wet;
     const sprayOn = wet && SPRAY[tier] > 0;
@@ -221,20 +228,24 @@ export function createRain(scene) {
       }
     }
     if (!wet) {
-      lastCamera.copy(camera.position);
+      own.last.copy(camera.position);
       return;
     }
-    time += dt;
-    if (dt > 0) camVel.copy(camera.position).sub(lastCamera).divideScalar(dt);
+    if (!view) time += dt;
+    if (dt > 0) own.vel.copy(camera.position).sub(own.last).divideScalar(dt);
     // A jump (a new camera, a new circuit) is not the camera driving; and a
     // bad value is never carried on.
-    if (!(camVel.length() <= 1500)) camVel.set(0, 0, 0);
-    lastCamera.copy(camera.position);
+    if (!(own.vel.length() <= 1500)) own.vel.set(0, 0, 0);
+    own.last.copy(camera.position);
     const u = streaks.material.uniforms;
     u.uTime.value = time;
     u.uCamera.value.copy(camera.position);
-    u.uCamVel.value.copy(camVel);
-    if (!sprayOn) return;
+    u.uCamVel.value.copy(own.vel);
+    if (!sprayOn || view) return;
+    // The second view's camera where it last was (the spray is for both).
+    const secondLive = second.live;
+    second.live = false;
+    const near = (p) => p.distanceTo(camera.position) <= SPRAY_NEAR || (secondLive && p.distanceTo(second.last) <= SPRAY_NEAR);
     if (next >= cap) next = 0;
 
     if (world) {
@@ -244,7 +255,7 @@ export function createRain(scene) {
         if (!car || !car.root.visible || racer.underRoof) continue;
         const speed = racer.speed || 0;
         if (speed < SPRAY_FROM) continue;
-        if (car.root.position.distanceTo(camera.position) > SPRAY_NEAR) continue;
+        if (!near(car.root.position)) continue;
         const share = Math.min(1, (speed - SPRAY_FROM) / 150);
         const heading = racer.heading || 0;
         const fx = Math.cos(heading);
@@ -301,6 +312,8 @@ export function createRain(scene) {
     apply,
     setTier,
     update,
+    // Back to one view: the second camera is forgotten.
+    dropViews() { second.live = false; },
     inspect: () => ({
       wet,
       streaks: streaks.visible ? streaks.geometry.drawRange.count / 2 : 0,

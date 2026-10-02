@@ -53,6 +53,8 @@ const CROWD_KINDS = ["crowd_a", "crowd_b", "crowd_c", "crowd_d"];
 // Shared by every person material: where the player is, and the time.
 const shared = {
   uPlayer: { value: new THREE.Vector3(1e7, 0, 1e7) },
+  // Split screen's second player (far away when there is none).
+  uPlayer2: { value: new THREE.Vector3(1e7, 0, 1e7) },
   uTime: { value: 0 },
   uNear: { value: CHEER_NEAR },
   uFar: { value: CHEER_FAR },
@@ -119,7 +121,7 @@ function personMaterial(joints, { animated }) {
         attribute float aRole; attribute float aPart;
         attribute vec3 aSkin; attribute vec3 aHair; attribute vec3 aShirt; attribute vec3 aTrousers; attribute vec3 aTrim;
         attribute vec4 aPose;
-        uniform vec3 uPlayer; uniform float uTime; uniform float uNear; uniform float uFar;
+        uniform vec3 uPlayer; uniform vec3 uPlayer2; uniform float uTime; uniform float uNear; uniform float uFar;
         uniform vec3 uHipL; uniform vec3 uKneeL; uniform vec3 uHipR; uniform vec3 uKneeR;
         uniform vec3 uShL; uniform vec3 uElL; uniform vec3 uShR; uniform vec3 uElR;
         varying vec3 vTint;
@@ -132,7 +134,7 @@ function personMaterial(joints, { animated }) {
         // How excited: the player near (each spectator's own distances).
         vec3 home = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float eager = ${EAGER_BASE.toFixed(2)} + ${EAGER_SPAN.toFixed(2)} * aPose.w;
-        float excite = 1.0 - smoothstep(uNear * eager, uFar * eager, distance(home.xz, uPlayer.xz));
+        float excite = 1.0 - smoothstep(uNear * eager, uFar * eager, min(distance(home.xz, uPlayer.xz), distance(home.xz, uPlayer2.xz)));
         float sit = aPose.x * (1.0 - excite);
         float a = sit * 1.5708;
         float part = aPart;
@@ -462,16 +464,13 @@ const m4 = new THREE.Matrix4();
 const UP = new THREE.Vector3(0, 1, 0);
 const WATCH_RANGE = 320;
 
-export function updatePeople(group, { camera, player, racers, tier, t, dt }) {
+export function updatePeople(group, { players, racers, t, dt }) {
   if (!group || !group.userData.stands) return;
-  if (player) shared.uPlayer.value.set(player.x, 0, player.y);
+  const [one, two] = players || [];
+  if (one) shared.uPlayer.value.set(one.x, 0, one.y);
+  if (two) shared.uPlayer2.value.set(two.x, 0, two.y);
+  else shared.uPlayer2.value.set(1e7, 0, 1e7);
   shared.uTime.value = t;
-  const reach = CROWD_NEAR[tier] ?? CROWD_NEAR.high;
-  group.userData.stands.forEach((st) => {
-    const near = camera.position.distanceTo(st.centre) < reach;
-    st.meshes.forEach((m) => { m.visible = near; });
-    if (st.planes) st.planes.visible = !near;
-  });
   const ease = 1 - Math.exp(-(dt || 0) * 4);
   group.userData.watchers.forEach((mesh) => {
     let changed = false;
@@ -501,8 +500,20 @@ export function updatePeople(group, { camera, player, racers, tier, t, dt }) {
   });
 }
 
+// Per view (split screen draws two): the stands near this view's camera
+// show their crowd in 3D (not on Low), the rest their painted crowd.
+export function showCrowdFor(group, camera, tier) {
+  if (!group || !group.userData.stands) return;
+  const reach = CROWD_NEAR[tier] ?? CROWD_NEAR.high;
+  group.userData.stands.forEach((st) => {
+    const near = camera.position.distanceTo(st.centre) < reach;
+    st.meshes.forEach((m) => { m.visible = near; });
+    if (st.planes) st.planes.visible = !near;
+  });
+}
+
 // For the checks: what is drawn, and how the crowd near the player stands.
-export function inspectPeople(group, player) {
+export function inspectPeople(group, players) {
   if (!group || !group.userData.stands) return null;
   const { stands, watchers, figures } = group.userData;
   const byKind = {};
@@ -516,9 +527,9 @@ export function inspectPeople(group, player) {
   const cheer = { near: { count: 0, excited: 0 }, far: { count: 0, excited: 0 } };
   const nearBy = CHEER_NEAR * EAGER_BASE;
   const farOff = CHEER_FAR * (EAGER_BASE + EAGER_SPAN);
-  if (player) {
+  if (players && players.length) {
     stands.forEach((st) => st.meshes.forEach((m) => m.userData.figures.forEach((f) => {
-      const d = Math.hypot(f.position.x - player.x, f.position.z - player.y);
+      const d = Math.min(...players.map((pl) => Math.hypot(f.position.x - pl.x, f.position.z - pl.y)));
       const group = d < nearBy ? cheer.near : d > farOff ? cheer.far : null;
       if (!group) return;
       group.count += 1;
