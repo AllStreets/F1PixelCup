@@ -9,15 +9,18 @@
 // `true` but plain values (counts, strings) in play, landing, career and
 // race-sim are informational, compared by eye; a real failure says so.
 async (page) => {
-  const names = (globalThis.CHECKS || "play,keys,landing,loading,minors,helmet,career,grid,powerups,race-clock,race-sim,postfx,trackside,rain,motion,car").split(",");
+  const names = (globalThis.CHECKS || "play,keys,landing,loading,minors,helmet,career,grid,powerups,race-clock,race-sim,postfx,trackside,rain,motion,car,replay,podium").split(",");
   const out = {};
   for (const n of names) {
     const file = n === "race-sim" ? "race-sim.js" : `${n}-check.js`;
     const t0 = Date.now();
     try {
-      // (A headless runner on another port sets globalThis.HOST; every check is pointed at it.)
-      const host = globalThis.HOST || "localhost:8765";
-      const src = (await (await page.request.get(`http://${host}/tools/checks/${file}?${Date.now()}`)).text()).replaceAll("localhost:8765", host);
+      // (A headless runner on another port sets globalThis.HOST; every check is pointed at it.
+      // The default address is spelt in pieces: a runner that rewrites this file's own
+      // text must not turn the search below into a search for the new address.)
+      const usual = ["localhost", "8765"].join(":");
+      const host = globalThis.HOST || usual;
+      const src = (await (await page.request.get(`http://${host}/tools/checks/${file}?${Date.now()}`)).text()).replaceAll(usual, host);
       const r = await eval(src)(page);
       const bad = Object.entries(r.results || {}).filter(([, v]) => v !== true);
       // Informational values (counts, strings) are compared by eye; list them short.

@@ -70,8 +70,44 @@
           <div id="results-table" class="results-table"></div>
           <div class="overlay-actions">
             <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
+            <button id="results-replay" class="ghost-btn replay-btn" data-action="replay" type="button">Watch the replay</button>
             <button id="results-next" class="go-btn" data-action="next" type="button"><span>Next race ›</span></button>
           </div>
+        </div>
+      </section>
+
+      <section id="replay-screen" class="screen replay hidden" aria-label="Replay">
+        <div class="bc-tag" aria-hidden="true"><b>REPLAY</b><em id="bc-speed"></em></div>
+        <aside class="bc-tower" aria-label="Timing">
+          <header class="bc-tower-head"><span id="bc-track"></span><strong id="bc-lap"></strong></header>
+          <div id="bc-rows"></div>
+        </aside>
+        <div id="bc-third" class="bc-third"></div>
+        <p id="bc-announce" class="visually-hidden" aria-live="polite"></p>
+        <div id="bc-trace" class="bc-trace hidden" aria-hidden="true">
+          <div class="bc-trace-head"><span id="bc-trace-label"></span><b id="bc-kph"></b></div>
+          <div class="bc-trace-body">
+            <div class="bc-bar is-throttle"><i id="bc-thr"></i></div>
+            <div class="bc-bar is-brake"><i id="bc-brk"></i></div>
+            <canvas id="bc-graph" width="300" height="90"></canvas>
+          </div>
+          <div class="bc-steer"><i id="bc-steer"></i></div>
+        </div>
+        <div class="bc-controls" role="toolbar" aria-label="Replay controls">
+          <button id="bc-play" class="bc-btn bc-play" data-replay="play" type="button" aria-label="Pause"></button>
+          <div class="bc-group" role="group" aria-label="Speed">
+            ${[0.25, 0.5, 1, 2, 4].map((v) => `<button class="bc-btn" data-replay="speed" data-value="${v}" type="button" aria-pressed="false">${v}x</button>`).join("")}
+          </div>
+          <label class="bc-seek"><span class="visually-hidden">Seek</span><input id="bc-seek" type="range" min="0" max="1000" step="1" value="0" aria-label="Seek"><span id="bc-time" class="bc-time"></span></label>
+          <div class="bc-group" role="group" aria-label="Camera">
+            ${[["director", "Director"], ["trackside", "Trackside"], ["onboard", "Onboard"], ["helicopter", "Helicopter"]].map(([id, label]) => `<button class="bc-btn" data-replay="camera" data-value="${id}" type="button" aria-pressed="false">${label}</button>`).join("")}
+          </div>
+          <div class="bc-group bc-focus" role="group" aria-label="Car">
+            <button class="bc-btn" data-replay="prev" type="button" aria-label="Previous car">‹</button>
+            <span id="bc-focus"></span>
+            <button class="bc-btn" data-replay="next" type="button" aria-label="Next car">›</button>
+          </div>
+          <button class="bc-btn bc-exit" data-replay="exit" type="button">Exit</button>
         </div>
       </section>
 
@@ -91,12 +127,17 @@
 
       <section id="podium-screen" class="screen overlay hidden" aria-live="polite">
         <div class="overlay-card">
-          <p id="podium-kicker" class="kicker"></p>
-          <h2 id="podium-title" class="it-title overlay-title"></h2>
+          <div class="podium-head">
+            <p id="podium-kicker" class="kicker"></p>
+            <h2 id="podium-title" class="it-title overlay-title"></h2>
+            <div id="podium-career" class="career-strip hidden"></div>
+          </div>
           <div id="podium-scene" class="podium"></div>
-          <div id="podium-career" class="career-strip hidden"></div>
-          <div class="overlay-actions">
-            <button class="go-btn" data-action="pitlane" type="button"><span>Back to pit lane ›</span></button>
+          <div id="podium-plates" class="podium-plates" aria-hidden="true"></div>
+          <div class="podium-foot">
+            <div class="overlay-actions">
+              <button class="go-btn" data-action="pitlane" type="button"><span>Back to pit lane ›</span></button>
+            </div>
           </div>
         </div>
       </section>
@@ -132,12 +173,25 @@
         </div>
       </section>`;
     $("screens").addEventListener("click", onClick);
+    const seek = $("bc-seek");
+    seek.addEventListener("pointerdown", () => { seeking = true; });
+    // (A cancelled touch, or a lost capture, ends the drag too.)
+    ["pointerup", "pointercancel"].forEach((type) => window.addEventListener(type, () => { seeking = false; }));
+    seek.addEventListener("lostpointercapture", () => { seeking = false; });
+    seek.addEventListener("input", () => {
+      if (window.Game && Game.replay && replayDuration) Game.replay.seek((Number(seek.value) / 1000) * replayDuration);
+    });
   }
 
   function onClick(event) {
-    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather]");
+    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather], [data-replay]");
     if (!target || !window.Game) return;
-    if (target.dataset.driver !== undefined) {
+    if (target.dataset.replay !== undefined) {
+      onReplayControl(target.dataset.replay, target.dataset.value);
+      // Clicked with the mouse, the button lets focus go, so Space stays
+      // play/pause (a keyboard press keeps it, for Tab and Enter).
+      if (event.detail > 0 && target.blur) target.blur();
+    } else if (target.dataset.driver !== undefined) {
       Game.selectDriver(Number(target.dataset.driver));
       if (target.dataset.actionClose) {
         closeOverlay();
@@ -154,6 +208,7 @@
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
       else if (action === "next") Game.nextRace();
+      else if (action === "replay") Game.replay.open();
       else if (action === "race") Game.startRaceFromQualifying();
       else if (action === "pitlane") Game.backToPitLane();
       else if (action === "career") showCareer();
@@ -167,7 +222,7 @@
 
   function show(id) { $(id).classList.remove("hidden"); }
   function hide(id) { $(id).classList.add("hidden"); }
-  function hideMain() { ["pitlane", "tower", "ticker", "results-screen", "qualifying-screen", "podium-screen"].forEach(hide); }
+  function hideMain() { ["pitlane", "tower", "ticker", "results-screen", "qualifying-screen", "podium-screen", "replay-screen"].forEach(hide); }
 
   // ---- Pit lane ----
   // Keyboard users always have somewhere to be: when focus is stranded on a
@@ -331,6 +386,7 @@
   }
 
   function showResults(summary) {
+    lastResults = summary;
     hideMain();
     $("results-kicker").textContent = summary.kicker;
     $("results-title").textContent = summary.title;
@@ -346,8 +402,154 @@
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
         </div>`).join("")}`;
     renderStrip($("results-career"), summary.career);
+    $("results-replay").hidden = !(window.Game && Game.replay && Game.replay.available());
     show("results-screen");
     $("results-next").focus();
+  }
+
+  // Back from the replay: the same results, focus on the replay button.
+  function showResultsAgain() {
+    if (!lastResults) return;
+    showResults(lastResults);
+    $("results-replay").focus();
+  }
+
+  // ---- Replay: the broadcast graphics and the controls ----
+  let lastResults = null;
+  let seeking = false;
+  let replayDuration = 0;
+  let replayButtons = null;
+  let towerOrder = "";
+  let towerAt = 0;
+  const replayShown = {};
+
+  function onReplayControl(what, value) {
+    const R = Game.replay;
+    if (what === "play") R.togglePlay();
+    else if (what === "speed") R.setSpeed(Number(value));
+    else if (what === "camera") R.setCamera(value);
+    else if (what === "prev") R.focusStep(-1);
+    else if (what === "next") R.focusStep(1);
+    else if (what === "exit") R.exit();
+  }
+
+  function showReplay() {
+    hideMain();
+    closeOverlay();
+    Object.keys(replayShown).forEach((k) => { delete replayShown[k]; });
+    towerOrder = "";
+    show("replay-screen");
+    $("bc-play").focus({ preventScroll: true });
+  }
+
+  // Writes only what changed (this runs every frame).
+  function put(key, node, html) {
+    if (replayShown[key] === html) return false;
+    replayShown[key] = html;
+    node.innerHTML = html;
+    return true;
+  }
+
+  function clock(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
+  function updateReplay(info) {
+    replayDuration = info.duration;
+    put("speed", $("bc-speed"), info.playing ? (info.speed === 1 ? "" : esc(`${info.speed}x`)) : "PAUSED");
+    put("track", $("bc-track"), esc(info.track));
+    put("lap", $("bc-lap"), esc(info.lap));
+    // The tower refreshes four times a second, as the race's own does (its
+    // gaps move every frame between samples), and at once on a change of
+    // order or of the car in view.
+    const top = info.tower.slice(0, 10);
+    const focus = info.tower.find((r) => r.isFocus);
+    const extra = focus && !top.includes(focus) ? [focus] : [];
+    const order = top.concat(extra).map((r) => `${r.code}${r.isFocus ? "*" : ""}`).join();
+    const wall = performance.now();
+    const towerDue = order !== towerOrder || wall - towerAt >= 250;
+    if (towerDue) { towerOrder = order; towerAt = wall; }
+    const row = (r) => `<div class="bc-row ${r.isFocus ? "is-focus" : ""} ${r.isPlayer ? "is-player" : ""}"><b>${num(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
+    if (towerDue) put("rows", $("bc-rows"), top.map(row).join("") + (extra.length ? `<div class="bc-row-gap"></div>${extra.map(row).join("")}` : ""));
+    const f = info.focus;
+    const parts = String(f.name).trim().split(/\s+/);
+    const last = parts.pop() || "";
+    // The card slides in when the camera changes car; its position and
+    // interval update in place.
+    const newCard = put("third", $("bc-third"), `
+      <div class="bc-third-card" style="--team:${esc(f.color)}" data-car="${esc(f.id)}">
+        <b class="bc-third-pos" id="bc-pos"></b>
+        <span class="bc-third-num">${num(f.number)}</span>
+        <div class="bc-third-name"><strong>${esc(parts.join(" "))} <em>${esc(last.toUpperCase())}</em></strong><small>${esc(f.team)}${f.isPlayer ? " · You" : ""}</small></div>
+        <span class="bc-third-int" id="bc-int"></span>
+      </div>`);
+    if (newCard) {
+      delete replayShown.pos; delete replayShown.int;
+      // Said once when the camera changes car (the card itself changes every frame).
+      $("bc-announce").textContent = `On camera: ${f.name}, ${f.team}`;
+    }
+    put("pos", $("bc-pos"), f.finished ? "FIN" : `P${num(f.place)}`);
+    put("int", $("bc-int"), esc(f.interval));
+    const onboard = info.mode === "onboard";
+    $("bc-trace").classList.toggle("hidden", !onboard);
+    if (onboard) drawTrace(info.trace, f);
+    put("play", $("bc-play"), info.playing ? "<span class=\"bc-icon-pause\"></span>" : "<span class=\"bc-icon-play\"></span>");
+    $("bc-play").setAttribute("aria-label", info.playing ? "Pause" : "Play");
+    const buttons = replayButtons || (replayButtons = {
+      speed: [...document.querySelectorAll("#replay-screen [data-replay=speed]")],
+      camera: [...document.querySelectorAll("#replay-screen [data-replay=camera]")],
+    });
+    buttons.speed.forEach((b) => {
+      const on = Number(b.dataset.value) === info.speed;
+      if (b.getAttribute("aria-pressed") !== String(on)) b.setAttribute("aria-pressed", String(on));
+    });
+    buttons.camera.forEach((b) => {
+      const on = b.dataset.value === info.camera;
+      if (b.getAttribute("aria-pressed") !== String(on)) b.setAttribute("aria-pressed", String(on));
+      // Under the director, the camera it has cut to is marked live.
+      b.classList.toggle("is-live", info.director && b.dataset.value === info.mode);
+    });
+    put("focus", $("bc-focus"), esc(f.code));
+    if (!seeking) $("bc-seek").value = String(info.duration ? Math.round((info.time / info.duration) * 1000) : 0);
+    if (put("time", $("bc-time"), `${clock(info.time)} / ${clock(info.duration)}`)) {
+      $("bc-seek").setAttribute("aria-valuetext", `${clock(info.time)} of ${clock(info.duration)}`);
+    }
+  }
+
+  // The onboard input trace: throttle and brake now, four seconds of both,
+  // and the steering.
+  function drawTrace(trace, focus) {
+    put("traceLabel", $("bc-trace-label"), focus.isPlayer ? "Your inputs" : esc(`${focus.code} controls`));
+    put("kph", $("bc-kph"), `${num(focus.kph)}<small> KM/H</small>`);
+    $("bc-thr").style.height = `${Math.round(trace.throttle * 100)}%`;
+    $("bc-brk").style.height = `${Math.round(trace.brake * 100)}%`;
+    // Full lock puts the marker at the bar's end (the percentage is of the bar).
+    $("bc-steer").style.left = `calc(${(50 + Math.max(-1, Math.min(1, trace.steer)) * 50).toFixed(1)}% - 0.5em)`;
+    const canvas = $("bc-graph");
+    const g = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    g.clearRect(0, 0, w, h);
+    g.strokeStyle = "rgba(255, 255, 255, 0.12)";
+    g.lineWidth = 1;
+    [0.25, 0.5, 0.75].forEach((y) => { g.beginPath(); g.moveTo(0, h * y); g.lineTo(w, h * y); g.stroke(); });
+    const list = trace.history;
+    const line = (key, color) => {
+      if (list.length < 2) return;
+      g.strokeStyle = color;
+      g.lineWidth = 3;
+      g.lineJoin = "round";
+      g.beginPath();
+      list.forEach((p, i) => {
+        const x = (i / (list.length - 1)) * (w - 2) + 1;
+        const y = h - 4 - p[key] * (h - 8);
+        if (i) g.lineTo(x, y); else g.moveTo(x, y);
+      });
+      g.stroke();
+    };
+    line("throttle", "#39d98a");
+    line("brake", "#ff3b30");
   }
 
   function showQualifying(summary) {
@@ -378,8 +580,121 @@
         <strong>${esc(p.name)}</strong><span>${esc(p.team)} · ${num(p.points)} pts</span>
         <div class="block">${num(p.place)}</div>
       </div>`).join("");
+    // The same three as name plates, for when the ceremony draws in 3D
+    // (placePodium puts each under its driver).
+    $("podium-plates").innerHTML = summary.podium.map((p) => `
+      <div class="podium-plate p${num(p.place)} ${p.isPlayer ? "is-player" : ""}" data-place="${num(p.place)}" style="--team:${esc(p.teamColor)}">
+        <b>${esc(ordinal(num(p.place)))}</b><strong>${esc(p.name)}</strong><span>${esc(p.team)}</span><em>${num(p.points)} pts</em>
+      </div>`).join("");
+    placePodium(null);
     renderStrip($("podium-career"), summary.career);
+    podiumLayout = null;
+    podiumHead = null;
     show("podium-screen");
+  }
+
+  // anchors: [{ place, x, y }] in the window's pixels, from the 3D scene; null
+  // goes back to the 2D steps. platesIn: whether the plates are showing yet. Each plate is centred on its point and kept on
+  // screen, clear of the title above and the buttons below.
+  // What placePodium measures (the title's foot, the buttons, each plate's
+  // size), read once per window size and content rather than every frame.
+  let podiumLayout = null;
+  function measurePodium(screen) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const key = `${W}x${H}`;
+    if (podiumLayout && podiumLayout.key === key) return podiumLayout;
+    const plates = {};
+    screen.querySelectorAll(".podium-plate").forEach((plate) => {
+      const { width: w, height: h } = plate.getBoundingClientRect();
+      plates[plate.dataset.place] = { plate, w, h };
+    });
+    podiumLayout = {
+      key, W, H, plates,
+      head: $("podium-title").getBoundingClientRect().bottom,
+      actions: screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect(),
+    };
+    return podiumLayout;
+  }
+
+  // The title's box as drawn over the 3D scene (kicker and title as far as
+  // their text runs, the career strip as a panel), for the ceremony to keep
+  // the wall's title clear of. Measured in the 3D layout, once per size.
+  let podiumHead = null;
+  function podiumReserve() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    // (Measured again once the web fonts are in: the text's width changes.)
+    const key = `${W}x${H}:${document.fonts ? document.fonts.status : ""}`;
+    if (podiumHead && podiumHead.key === key) return podiumHead.box;
+    const screen = $("podium-screen");
+    const was = screen.classList.contains("is-3d");
+    screen.classList.add("is-3d");
+    const boxes = ["podium-kicker", "podium-title", "podium-career"].map((id) => $(id))
+      .filter((el) => el && !el.classList.contains("hidden") && el.getClientRects().length)
+      .map((el) => {
+        if (el.id === "podium-career") return el.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return range.getBoundingClientRect();
+      });
+    if (!was) screen.classList.remove("is-3d");
+    const box = boxes.length ? {
+      left: Math.min(...boxes.map((b) => b.left)),
+      top: Math.min(...boxes.map((b) => b.top)),
+      right: Math.max(...boxes.map((b) => b.right)),
+      bottom: Math.max(...boxes.map((b) => b.bottom)),
+    } : null;
+    podiumHead = { key, box };
+    return box;
+  }
+
+  function placePodium(anchors, platesIn = true) {
+    const screen = $("podium-screen");
+    const on = Boolean(anchors && anchors.length);
+    if (on !== screen.classList.contains("is-3d")) podiumLayout = null;
+    screen.classList.toggle("is-3d", on);
+    screen.classList.toggle("plates-in", on && platesIn);
+    if (!on) return;
+    const { W, H, head, actions, plates } = measurePodium(screen);
+    const margin = 12;
+    const placed = anchors.map((a) => {
+      const m = plates[a.place];
+      if (!m) return null;
+      return { plate: m.plate, place: a.place, w: m.w, h: m.h, x: a.x, y: a.y };
+    }).filter(Boolean).sort((a, b) => a.x - b.x);
+    // Side by side with a gap: pushed apart where they would touch, and kept
+    // inside the window. If the window is too narrow for all three in a row,
+    // the winner's drops below the other two.
+    const gap = 8;
+    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
+    if (room) {
+      for (let i = 1; i < placed.length; i += 1) {
+        const l = placed[i - 1];
+        const r = placed[i];
+        r.x = Math.max(r.x, l.x + l.w / 2 + gap + r.w / 2);
+      }
+      const last = placed[placed.length - 1];
+      last.x = Math.min(last.x, W - margin - last.w / 2);
+      for (let i = placed.length - 2; i >= 0; i -= 1) {
+        const l = placed[i];
+        const r = placed[i + 1];
+        l.x = Math.min(l.x, r.x - r.w / 2 - gap - l.w / 2);
+      }
+      placed[0].x = Math.max(placed[0].x, margin + placed[0].w / 2);
+    } else {
+      placed.forEach((p) => { p.x = Math.max(margin + p.w / 2, Math.min(W - margin - p.w / 2, p.x)); });
+      const winner = placed.find((p) => p.place === 1);
+      const others = placed.filter((p) => p !== winner);
+      if (winner) winner.y = Math.max(...others.map((p) => p.y + p.h + gap));
+    }
+    placed.forEach((p) => {
+      // Clear of the buttons when it would sit over them.
+      const overButtons = p.x + p.w / 2 > actions.left - 8 && p.x - p.w / 2 < actions.right + 8;
+      const floor = (overButtons ? actions.top : H) - 8;
+      const y = Math.max(head + 8, Math.min(floor - p.h, p.y));
+      p.plate.style.transform = `translate(${Math.round(p.x - p.w / 2)}px, ${Math.round(y)}px)`;
+    });
   }
 
   // ---- Career ----
@@ -598,7 +913,8 @@
 
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
-    showResults, showQualifying, showPodium, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showResults, showResultsAgain, showReplay, updateReplay,
+    showQualifying, showPodium, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

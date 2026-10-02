@@ -115,7 +115,7 @@ export function updateMarshalPosts(group, flags, t) {
 // ---------------------------------------------------------------------------
 
 export const HELI_HEIGHT = 260;
-const HELI_ASIDE = 220;
+export const HELI_ASIDE = 220;
 
 export function buildHelicopter() {
   const g = new THREE.Group();

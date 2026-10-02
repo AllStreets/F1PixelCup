@@ -483,7 +483,8 @@ export function buildCircuit(course, venue) {
     fenceTex.repeat.set(1, 3);
     [[(p) => -p.outerL - 1, -1], [(p) => p.outerR + 1, 1]].forEach(([off, sign]) => {
       const onPitSide = pitLane && pitLane.side === sign;
-      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, (p) => !inTunnel(p) && !(onPitSide && atGarages(p))), fence);
+      // (Marked: the replay's TV cameras stand high enough to see over it.)
+      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, (p) => !inTunnel(p) && !(onPitSide && atGarages(p))), fence).userData.catchFence = true;
     });
   }
   if (track.tunnel) group.add(buildTunnel(course, track.tunnel, occluders));
@@ -638,7 +639,7 @@ function buildPitLane(course, lane, occluders) {
   const stands = lane.garages.bays.filter((bay) => !bay.safetyCar && Math.abs(bay.rel) > 9 + 2);
   const atStand = (p) => stands.some((bay) => Math.abs(lane.rel(p.d) - bay.rel) <= 10);
   const fence = new THREE.MeshStandardMaterial({ map: fenceTex, transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.5, metalness: 0.6 });
-  add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, (p) => hasWall(p) && !atStand(p)), fence);
+  add(wall(samples, () => side * (wallIn + 1.5), () => wallH, () => wallH + 10, 24, (p) => hasWall(p) && !atStand(p)), fence).userData.catchFence = true;
   // The teams' stands on the wall, one opposite each team's garage: a desk
   // under a roof over the wall and the lane's edge, never the road. One mesh
   // per material for all ten.

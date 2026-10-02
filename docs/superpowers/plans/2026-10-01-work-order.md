@@ -53,6 +53,8 @@ Accounts and Supabase are last of all, and not part of this order.
   - Those renders show the raw model: a red default suit and a plain white helmet.
   - In the game, the suit takes the team colours and the helmet takes the driver's painted design.
 - [ ] Render the figure dressed for real before asking: Leclerc in Ferrari colours with his helmet, and Hamilton likewise, via a small three.js preview page or the podium prototype.
+- [x] Driver v2 (branch `driver-v2`): the mannequin rebuilt as one smooth skinned body with a suit painted by region, gloved hands and real boots; `r3d/driver.js` dresses it per driver; studio at `tools/preview/driver.html`. Review page published 2026-10-01.
+- [ ] **Faces (user, 2026-10-01):** "realistic faces that look at least slightly like the driver they are supposed to look like ... they will not be wearing helmets on the podium." A realistic head (CC0 MakeHuman base and morph targets, or sculpted to that standard), eyes, brows, hair and facial hair styles, and a `look` per driver in `game-data.js` (skin, hair, beard, eyes, face shape) so each of the 20 resembles the real driver, Leclerc and Hamilton best of all. No photos of the drivers in the game; public photos as reference only. `buildDriver(driver, team, { headwear: "none" | "helmet" })`; the podium is bareheaded. Branch `driver-faces`. Review with the driver figure.
 - [ ] Apply the user's notes to `tools/blender/build_driver.py`. For example: face or no face, helmet on or a team cap, proportions, suit detail, more sculpted limbs. Rebuild `assets/driver.glb` and keep the Node tests green.
 
 ## 1. Stage J: trackside monuments, buildings, stands and people (Blender) **[REVIEW]**
@@ -92,16 +94,16 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
 
 The spec is written: `docs/superpowers/specs/2026-09-30-podium-design.md`. It uses the driver figure from item 0 and the people from Stage J.
 
-- [ ] Plan, then build `r3d/podium.js`:
+- [x] Plan, then build `r3d/podium.js`:
   - the set: three steps, a backdrop with the game's own mark, banners in team colours;
   - the three real cup winners, dressed;
   - the timeline: stand, arms up, trophy, spray;
   - confetti and champagne spray;
   - an orbiting camera.
   - Hook it into `showPodium` (`game.js`) and the podium screen (`screens.js`), with name plates over the 3D scene. The 2D steps stay as the fallback.
-- [ ] `tools/checks/podium-check.js`, as the spec lists.
-- [ ] **[REVIEW]** the ceremony: screenshots at each beat, with Leclerc and Hamilton on the podium, and if possible a short screen recording. Wait for the user's yes.
-- [ ] A fresh reviewer, then fix everything. Merge and push.
+- [x] `tools/checks/podium-check.js`, as the spec lists.
+- [x] **[REVIEW]** the ceremony: screenshots at each beat, with Leclerc and Hamilton on the podium, and if possible a short screen recording. Approved by the user on 2026-10-02.
+- [x] A fresh reviewer, then fix everything. Merge and push.
 
 ## 3. Stage L: the full 2025 calendar, as 4-race cups
 
@@ -166,8 +168,8 @@ After everything else is planned, per the user's instruction.
 
 From the master to-do, unchanged.
 
-- [ ] Record the inputs and state on the fixed-step clock and play them back deterministically. Trackside, onboard and helicopter cameras, with broadcast graphics. A replay button on the results screen.
-- [ ] A Node test that a recording replays bit-identically; a browser check that the replay's positions match the race. Review, merge and push.
+- [x] Record the inputs and state on the fixed-step clock and play them back deterministically. Trackside, onboard and helicopter cameras, with broadcast graphics. A replay button on the results screen.
+- [x] A Node test that a recording replays bit-identically; a browser check that the replay's positions match the race. Review, merge and push.
 
 ## 7. Stage N: two-player split-screen
 
