@@ -21,7 +21,7 @@ import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/
 import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
-import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
+import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModelsState, tracksideTemplates } from "./r3d/models.js";
@@ -30,6 +30,8 @@ import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
 import { createRain, wettable, WET_GRASS, WET_RUNOFF } from "./r3d/rain.js";
+import { loadDriver, driverLoaded } from "./r3d/driver.js";
+import { createPodium } from "./r3d/podium.js";
 
 const MAX_PARTICLES = 256;
 
@@ -63,6 +65,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 2, 9000);
+const Replay = window.Replay;
 
 // ---------------------------------------------------------------------------
 // Graphics quality and post-processing (quality.js, r3d/postfx.js). The tier
@@ -119,7 +122,7 @@ function sampleFrame(racing) {
     const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
     if (next !== autoTier) {
       autoTier = next;
-      postfx.setTier(currentTier());
+      postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
   }
@@ -132,8 +135,9 @@ function setGraphics(choice) {
   } catch (error) {
     // The choice holds for this visit only.
   }
-  postfx.setTier(currentTier());
+  postfx.setTier(raceFxTier());
   rain.setTier(currentTier());
+  if (ceremony.fx) ceremony.fx.setTier(currentTier());
   return graphics();
 }
 
@@ -152,7 +156,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -615,7 +619,12 @@ function inspect() {
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
   const trackside = { memory, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayer) : null };
-  return { drawing, weather, cars, flaps, helmets, life, trackside, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // Where each car was drawn (game x, y), and whether it was.
+  const drawn = {};
+  if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
+  // The replay's camera, when one drew the last frame.
+  const view = viewInfo;
+  return { drawing, view, drawn, weather, cars, flaps, helmets, life, trackside, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -776,10 +785,19 @@ function updateTrackside(world, track, life, now, dt, { player, racers } = {}) {
   const t = (world.life.clock || 0) / 1000;
   // The show after the flag runs on real time (the race is fast-forwarded
   // then), held while paused: show.ms since the flag fell.
-  const show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
   const flag = life && life.flagOutAt ? life.flagOutAt : 0;
-  if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
-  else if (flag && !paused) show.ms += wallDt;
+  let show;
+  if (life && life.showMs !== undefined) {
+    // A replay runs the show on its own clock (a seek lands in it), in its
+    // own record: the race's show, behind the results, is left as it was.
+    show = world.life.replayShow || (world.life.replayShow = { flag: 0, ms: 0 });
+    show.flag = flag;
+    show.ms = flag ? life.showMs : 0;
+  } else {
+    show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
+    if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
+    else if (flag && !paused) show.ms += wallDt;
+  }
   crowdUniforms.uTime.value = t;
   // At the flag the crowd's wave runs along the stands.
   crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
@@ -996,16 +1014,19 @@ function ensureCar(world, racer) {
   return car;
 }
 
-function syncCars(world, racers, player, now, dt) {
+function syncCars(world, racers, player, now, dt, alsoShow, cut = false) {
   const { course } = world;
   const seen = new Set();
   racers.forEach((racer) => {
     const car = ensureCar(world, racer);
     seen.add(racer.id);
-    const visible = !racer.finished || racer.id === player.id;
+    // A finished car is parked out of the way, except the one in view (and,
+    // in a replay, the player's, as the race showed it).
+    const visible = !racer.finished || racer.id === player.id || racer.id === alsoShow;
     car.root.visible = visible;
     if (!visible) return;
     const spinning = racer.spinUntil > now;
+    if (cut) car.spin = 0;
     car.spin = spinning ? car.spin + dt * 14 : car.spin * Math.pow(0.001, dt);
     const d = racer.trackDistance || 0;
     const h = course.heightAt(d);
@@ -1027,7 +1048,7 @@ function syncCars(world, racers, player, now, dt) {
     if (car.flap) {
       const target = racer.drsUntil > now ? 1 : 0;
       const step = dt / 0.15;
-      car.flapOpen += Math.max(-step, Math.min(step, target - car.flapOpen));
+      car.flapOpen = cut ? target : car.flapOpen + Math.max(-step, Math.min(step, target - car.flapOpen));
       car.flap.rotation.z = -car.flapOpen * DRS_OPEN;
     }
     const boosting = racer.formationUntil > now || racer.boostUntil > now;
@@ -1104,6 +1125,7 @@ function render(frame) {
   if (!api.ready) return null;
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
   lastPlayer = player;
+  viewInfo = null;
   const dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
   lastNow = now;
   resize();
@@ -1122,7 +1144,10 @@ function render(frame) {
   world.group.visible = true;
   powerUpLayer.group.visible = particles.visible = true;
 
-  syncCars(world, racers, player, now, dt);
+  // A replay's cut (a seek, opening it): what eases from frame to frame
+  // starts from the moment itself, not from wherever the last frame was.
+  const cut = Boolean(frame.view && frame.view.cut);
+  syncCars(world, racers, player, now, dt, frame.view && frame.view.alsoShow, cut);
   if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
@@ -1131,7 +1156,7 @@ function render(frame) {
     const target = hidden ? 0 : 1;
     // Burst away fast when taken, grow back more slowly with a shimmer.
     const rate = hidden ? dt / 0.15 : dt / 0.3;
-    u.scale = (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
+    u.scale = cut ? target : (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
     b.scale.setScalar(Math.max(0.0001, u.scale));
     b.visible = u.scale > 0.001;
     // It glows brighter while it grows back.
@@ -1173,7 +1198,9 @@ function render(frame) {
   camera.up.set(0, 1, 0);
   camera.lookAt(lookTarget);
   camera.rotateZ(-(roll || 0) * 0.8 + jitter(t, 13) * r * 0.012);
-  if (photoCamera) {
+  if (frame.view) {
+    placeViewCamera(world, frame.view, player);
+  } else if (photoCamera) {
     const { from, at } = photoCamera;
     camera.position.set(from.x, course.heightAt(from.d) + from.h, from.y);
     lookTarget.set(at.x, course.heightAt(at.d) + at.h, at.y);
@@ -1183,6 +1210,7 @@ function render(frame) {
   } else {
     finishShot(world, frame.trackside, player);
   }
+  if (!frame.view) setNear(CAMERA_NEAR);
   // The "?" in each box keeps facing the camera (turning about the vertical
   // only), placed now the camera is: no frame's lag.
   world.boxes.forEach((b) => {
@@ -1201,6 +1229,8 @@ function render(frame) {
   setTyreCompound(frame.weather);
   updateTunnelLight(world, track, dt);
   updateTrackside(world, track, frame.trackside, now, dt, { player, racers });
+  // In the helicopter view the camera is in it.
+  if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet });
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
@@ -1214,14 +1244,205 @@ function render(frame) {
 
   // The frame, through the post-processing of the current tier.
   sampleFrame(Boolean(frame.racing));
+  // A replay's fixed cameras (trackside, the helicopter) do not move with the
+  // car: no speed blur or streaks there, only onboard.
+  const still = frame.view && frame.view.mode !== "onboard";
   postfx.render({
-    dt, now, trackId: track.id, speedFraction: sf, boosting, playerId: player.id,
+    dt, now, trackId: track.id, speedFraction: still ? 0 : sf, boosting: still ? false : boosting, playerId: player.id,
     // Drops on the lens, out of the tunnel.
     rain: wet ? 1 - world.tunnel.adapted : 0,
     sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
     occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
   });
   return surface;
+}
+
+// ---------------------------------------------------------------------------
+// Replay cameras (docs/superpowers/specs/2026-10-01-replays-design.md):
+// trackside TV cameras that pan and zoom after a car and cut to the next, the
+// onboard T-cam, and the helicopter. The maths is in replay.js.
+// ---------------------------------------------------------------------------
+
+const CAMERA_NEAR = 2;
+// The T-cam, in the car's own frame (x forward, y up): above and behind the
+// airbox, looking down the road over the nose.
+const TCAM = new THREE.Vector3(-0.95 * CAR_SCALE, 1.55 * CAR_SCALE, 0);
+const TCAM_AT = new THREE.Vector3(8 * CAR_SCALE, 0.3 * CAR_SCALE, 0);
+const TCAM_NEAR = 0.4;
+// The helicopter view: from the helicopter, trailing the car in view.
+const HELI_BEHIND = 250;
+const HELI_SUBJECT = 320;
+let viewInfo = null;
+
+function setNear(near) {
+  if (camera.near !== near) {
+    camera.near = near;
+    camera.updateProjectionMatrix();
+  }
+}
+
+// A point on the lap at any distance, between the course's samples (the
+// samples alone would step the helicopter along 6 at a time).
+function pointOnLap(course, d) {
+  const n = course.samples.length;
+  const L = course.track.totalLength;
+  const f = ((((d % L) + L) % L) / L) * n;
+  const a = course.samples[Math.floor(f) % n];
+  const b = course.samples[(Math.floor(f) + 1) % n];
+  const t = f - Math.floor(f);
+  const mix = (u, v) => u + (v - u) * t;
+  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny) };
+}
+
+// The TV cameras of a circuit, placed once, when a replay there first opens
+// (prepareReplay): off the track through the claim system, each where it sees
+// most of its stretch past the scenery, the landmarks and what of the circuit
+// stands up off the road (its bridges and gantry, as the sun's flare is
+// hidden by).
+// A TV camera's height over the road: the lowest of these that sees its
+// stretch (26 is about 4 m; 80, a crane over a street circuit's fences).
+const TV_HEIGHTS = [26, 40, 60, 80];
+function tvCameras(world) {
+  if (world.tvCams) return world.tvCams;
+  const { course } = world;
+  world.group.updateMatrixWorld(true);
+  // (And the catch fences: seen through from right behind, a fence fills the
+  // shot, so a camera rises until it looks over them.)
+  const fences = [];
+  world.circuit.traverse((o) => { if (o.userData.catchFence) fences.push(o); });
+  const blockers = [world.decor, world.landmarks, ...(world.circuit.userData.occluders || []), ...fences].filter(Boolean);
+  // Each blocker's box in the world (each instance's, for the trees and
+  // buildings drawn instanced): a ray is tested against the boxes first, and
+  // only a box it hits is looked at closely (a single mesh exactly; an
+  // instance by its box, near enough for scoring a view). Far cheaper than
+  // raycasting the whole scenery for every ray.
+  const boxes = [];
+  const m = new THREE.Matrix4();
+  blockers.forEach((root) => root.traverseVisible((o) => {
+    if (!o.isMesh || o.userData.ground) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    if (o.isInstancedMesh) {
+      for (let i = 0; i < o.count; i += 1) {
+        o.getMatrixAt(i, m);
+        boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(m.premultiply(o.matrixWorld)), mesh: null });
+      }
+    } else {
+      boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld), mesh: o });
+    }
+  }));
+  // The boxes filed on a grid over the ground, so a ray only meets those
+  // in the cells its stretch crosses.
+  const CELL = 200;
+  const grid = new Map();
+  const cell = (i, j) => `${i},${j}`;
+  boxes.forEach((item, n) => {
+    item.stamp = -1;
+    for (let i = Math.floor(item.box.min.x / CELL); i <= Math.floor(item.box.max.x / CELL); i += 1) {
+      for (let j = Math.floor(item.box.min.z / CELL); j <= Math.floor(item.box.max.z / CELL); j += 1) {
+        const key = cell(i, j);
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(n);
+      }
+    }
+  });
+  const ray = new THREE.Raycaster();
+  const from = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const hit = new THREE.Vector3();
+  let stamp = 0;
+  const visible = (a, b) => {
+    from.set(a.x, a.y, a.z);
+    dir.set(b.x - a.x, b.y - a.y, b.z - a.z);
+    const far = dir.length() - 2;
+    ray.set(from, dir.normalize());
+    ray.far = far;
+    stamp += 1;
+    for (let i = Math.floor(Math.min(a.x, b.x) / CELL); i <= Math.floor(Math.max(a.x, b.x) / CELL); i += 1) {
+      for (let j = Math.floor(Math.min(a.z, b.z) / CELL); j <= Math.floor(Math.max(a.z, b.z) / CELL); j += 1) {
+        const list = grid.get(cell(i, j));
+        if (!list) continue;
+        for (const n of list) {
+          const item = boxes[n];
+          if (item.stamp === stamp) continue;
+          item.stamp = stamp;
+          if (!ray.ray.intersectBox(item.box, hit) || hit.distanceTo(from) > far) continue;
+          if (!item.mesh || ray.intersectObject(item.mesh, false).length > 0) return false;
+        }
+      }
+    }
+    return true;
+  };
+  const started = performance.now();
+  world.tvCams = window.Replay.placeTvCameras(course, { heights: TV_HEIGHTS, visible });
+  world.tvCamsMs = performance.now() - started;
+  // The nearest any of them stands to its barriers (for the checks).
+  world.tvCamsClearance = world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null;
+  return world.tvCams;
+}
+
+// Before a replay opens: its circuit's TV cameras, so no frame of it waits
+// on placing them.
+function prepareReplay(track) {
+  if (!api.ready || !track) return;
+  tvCameras(ensureWorld(track));
+}
+
+const viewTarget = new THREE.Vector3();
+function placeViewCamera(world, view, focus) {
+  const { course } = world;
+  const L = course.track.totalLength;
+  const car = world.cars.get(focus.id);
+  const road = course.heightAt(focus.trackDistance || 0);
+  let cam = -1;
+  if (view.mode === "onboard" && car) {
+    car.root.updateMatrixWorld(true);
+    camera.position.copy(TCAM).applyMatrix4(car.root.matrixWorld);
+    viewTarget.copy(TCAM_AT).applyMatrix4(car.root.matrixWorld);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(TCAM_NEAR);
+    setFov(64);
+  } else if (view.mode === "helicopter") {
+    // Behind and beside the car along the road's direction there (taken over
+    // 300 of road, so a corner turns the shot gently, never in a snap).
+    const d = focus.trackDistance || 0;
+    const here = pointOnLap(course, d);
+    const a = pointOnLap(course, d - 150);
+    const b = pointOnLap(course, d + 150);
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const tx = (b.x - a.x) / len;
+    const ty = (b.y - a.y) / len;
+    camera.position.set(focus.x - tx * HELI_BEHIND - ty * HELI_ASIDE, here.h + HELI_HEIGHT, focus.y - ty * HELI_BEHIND + tx * HELI_ASIDE);
+    viewTarget.set(focus.x, road + 2, focus.y);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(CAMERA_NEAR);
+    setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget), HELI_SUBJECT));
+  } else {
+    const cams = tvCameras(world);
+    cam = Replay.tvCameraFor(cams, focus.trackDistance || 0, L);
+    const c = cams[cam];
+    if (c) camera.position.set(c.x, c.y, c.z);
+    // Aimed a little ahead of the car, as an operator leads a moving subject.
+    const lead = 6 + Math.abs(focus.speed || 0) * 0.04;
+    viewTarget.set(focus.x + Math.cos(focus.heading) * lead, road + 3, focus.y + Math.sin(focus.heading) * lead);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(CAMERA_NEAR);
+    setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget)));
+  }
+  viewInfo = {
+    mode: view.mode, focusId: focus.id, cam,
+    x: camera.position.x, y: camera.position.y, z: camera.position.z, fov: camera.fov, near: camera.near,
+    clearance: course.clearance(camera.position.x, camera.position.z),
+    ground: course.heightAtPoint(camera.position.x, camera.position.z),
+    toCar: Math.hypot(camera.position.x - focus.x, camera.position.z - focus.y),
+    carY: car ? car.root.position.y : null,
+    cams: world.tvCams ? world.tvCams.length : 0,
+    // The nearest any TV camera of this circuit stands to its barriers.
+    camsClearance: world.tvCams ? world.tvCamsClearance : null,
+    camsMs: world.tvCamsMs || 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1376,6 +1597,7 @@ function renderGarage(kart, driver, now) {
   sun.color.set(0xffffff);
   renderer.toneMappingExposure = 1.1;
   setFov(BASE_FOV);
+  setNear(CAMERA_NEAR);
   const key = `${kart.id}|${driver.id || driver.name}`;
   if (garage.key !== key) {
     if (garage.car) garage.group.remove(garage.car.root);
@@ -1397,3 +1619,110 @@ function renderGarage(kart, driver, now) {
   renderer.render(scene, camera);
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// The podium ceremony (r3d/podium.js): its own scene, drawn while the podium
+// screen is up. begin() builds it and compiles it in the background; frame()
+// draws nothing (drawing: false, the page keeps its 2D steps) until it can
+// draw without a stall; end() frees it all.
+// ---------------------------------------------------------------------------
+
+const ceremony = { podium: null, fx: null, size: "", driverLoading: false, last: null };
+
+// The race's own effects hold full-size buffers; while the ceremony (with
+// effects of its own) has the screen, they are released.
+function raceFxTier() {
+  return ceremony.podium ? "low" : currentTier();
+}
+
+// The driver model, fetched ahead (the cup's last results screen asks).
+function podiumPreload() {
+  if (driverLoaded() || ceremony.driverLoading) return;
+  ceremony.driverLoading = true;
+  loadDriver(() => { ceremony.driverLoading = false; }, (error) => {
+    ceremony.driverLoading = false;
+    console.warn("Driver model failed to load; the podium stays 2D.", error);
+  });
+}
+
+// summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
+function podiumBegin(summary) {
+  const entries = summary.podium.map((p) => {
+    const driver = DRIVERS.find((d) => d.id === p.driverId);
+    return driver ? { place: p.place, driver, team: getTeamForDriver(driver), points: p.points } : null;
+  }).filter(Boolean);
+  if (!api.ready || entries.length !== 3) {
+    podiumEnd();
+    return false;
+  }
+  // A ceremony already up gives way; the race's effects stay released.
+  podiumEnd(false);
+  podiumPreload();
+  // The race's circuit is done with: free it now, as the pit lane would.
+  if (current) {
+    disposeWorld(current);
+    current = null;
+  }
+  const tier = currentTier();
+  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment });
+  const fx = createPostFx(renderer, podium.scene, podium.camera);
+  fx.setTier(tier);
+  podium.setFx(fx);
+  ceremony.podium = podium;
+  ceremony.fx = fx;
+  ceremony.size = "";
+  ceremony.last = podium;
+  postfx.setTier(raceFxTier());
+  return true;
+}
+
+// reserve: the page's title box over the picture (CSS px), kept clear of the wall's.
+function podiumFrame(now, reserve = null) {
+  const podium = ceremony.podium;
+  if (!podium || !api.ready) return { drawing: false };
+  podium.setReserve(reserve);
+  resize();
+  const w = canvas2d.clientWidth || canvas2d.width;
+  const h = canvas2d.clientHeight || canvas2d.height;
+  const dpr = renderer.getPixelRatio();
+  const size = `${w}x${h}@${dpr}`;
+  if (size !== ceremony.size) {
+    ceremony.size = size;
+    podium.setSize(w, h);
+    ceremony.fx.setSize(w, h, dpr);
+  }
+  if (!podium.prepare()) {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(0x06070b, 1);
+    renderer.clear();
+    return { drawing: false };
+  }
+  const t = podium.render(now);
+  ceremony.title = podium.titleRect(w, h);
+  return { drawing: true, t, anchors: podium.anchors(w, h), platesIn: podium.platesIn(t) };
+}
+
+// restore: give the race's effects back (not when a new ceremony follows).
+function podiumEnd(restore = true) {
+  const had = Boolean(ceremony.podium);
+  if (ceremony.podium) ceremony.podium.dispose();
+  if (ceremony.fx) ceremony.fx.dispose();
+  ceremony.podium = null;
+  ceremony.fx = null;
+  if (had && restore) postfx.setTier(raceFxTier());
+}
+
+function podiumInspect() {
+  const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
+  const racePostfx = postfx.inspect().frame;
+  if (!ceremony.podium) return { active: false, memory, racePostfx, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
+  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned(), title: ceremony.title || null };
+}
+
+// Where the wall's title would be on screen at time t, at this window's size.
+function podiumTitleAt(t) {
+  if (!ceremony.podium || !ceremony.podium.ready()) return null;
+  return ceremony.podium.titleRect(canvas2d.clientWidth || canvas2d.width, canvas2d.clientHeight || canvas2d.height, t);
+}
+
+api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };
