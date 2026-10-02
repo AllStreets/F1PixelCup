@@ -156,3 +156,10 @@ body.landing { overflow-x: hidden; }
 @media (max-width: 520px) {
   .driver-card { grid-template-columns: 96px 1fr; }
 }
+
+/* The trackside world (Stage J): six real screenshots with captions. */
+.trackside-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+.trackside-card { margin: 0; background: var(--panel); border-top: 3px solid var(--red); overflow: hidden; display: flex; flex-direction: column; }
+.trackside-card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; background: linear-gradient(135deg, var(--panel-2), #1d0706); }
+.trackside-card figcaption { padding: 12px 14px 14px; color: var(--muted); line-height: 1.45; }
+.trackside-card figcaption b { display: block; color: #fff; font-weight: 700; margin-bottom: 2px; }

@@ -1,7 +1,7 @@
 // Browser check for index.html (landing page). Run with the Playwright MCP
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
-// puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
+// puOddsCell true, tracksideShots true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
 // yourDrivers, latestByRace, v1Split, v1LeftAlone, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; errors [].
@@ -40,6 +40,15 @@ async (page) => {
   out.circuits = await p.locator("#circuits .circuit-card").count();
   out.maps = await p.locator("#circuits .circuit-card svg path.track").count();
   out.teams = await p.locator("#grid .team-card").count();
+  // The trackside world: six screenshots, every one loaded, each with its alt
+  // text and caption, linked from the top bar.
+  out.tracksideShots = await p.evaluate(async () => {
+    const imgs = [...document.querySelectorAll("#trackside .trackside-card img")];
+    imgs.forEach((i) => { i.loading = "eager"; });
+    await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; }))));
+    const ok = imgs.length === 6 && imgs.every((i) => i.naturalWidth > 0 && i.alt.length > 20 && i.closest("figure").querySelector("figcaption b"));
+    return ok && document.querySelectorAll('nav a[href="#trackside"]').length === 1 || imgs.map((i) => `${i.src.split("/").pop()}:${i.naturalWidth}`).join(",");
+  });
   out.newPlayer = (await p.locator("#career-summary").innerText()).toLowerCase().includes("starts");
   out.heroImage = await p.evaluate(() => { const i = document.querySelector("#hero img"); return Boolean(i) && i.complete && i.naturalWidth > 0; });
   out.playHref = await p.locator("#hero a.go-btn").getAttribute("href");
