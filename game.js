@@ -3586,8 +3586,12 @@ function splitLayout() {
 // is prepared, so its effects are sized for them before the first frame.
 let viewportsKey = "";
 function syncViewports() {
+  const layout = splitActive() ? splitLayout() : null;
+  const views = layout ? layout.views : null;
+  // Side by side, the feed ticker sits under the first view, not on the divider (play.css).
+  const arrangement = layout ? layout.arrangement : "";
+  if (document.body.dataset.split !== arrangement) document.body.dataset.split = arrangement;
   if (!window.Render3D || !window.Render3D.setViewports) return;
-  const views = splitActive() ? splitLayout().views : null;
   const key = views ? JSON.stringify(views) : "";
   if (key === viewportsKey) return;
   viewportsKey = key;

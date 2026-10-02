@@ -400,3 +400,5 @@ html, body { height: 100%; overflow: hidden; }
 .is-p2 .ptag { background: #ff7ac6; }
 .tower-row.is-p2 { background: rgba(255, 122, 198, 0.24); }
 .result-row.is-p2 { background: rgba(255, 122, 198, 0.16); }
+/* Side by side, the feed ticker sits under the first view, clear of the divider. */
+body[data-split="side"] .ticker { left: 25%; max-width: 44vw; }
