@@ -268,7 +268,8 @@ function pitCrews(landmarks, rand) {
     [-8.5, -3, 3, 8.5].forEach((x, k) => {
       const local = new THREE.Vector3(x + (rand() - 0.5) * 1.5, 0, -depth / 2 + (recess || 9) * (0.35 + 0.3 * rand()));
       const position = bay.localToWorld(local);
-      position.y = bay.position.y;
+      // On the bay's floor (0.3 units thick).
+      position.y = bay.position.y + 0.3;
       crew.push({
         kind: "crew", position, yaw, base: yaw, team: team ? team.id : null,
         skin: color(pick(rand, SKINS)), hair: color(pick(rand, HAIRS)),

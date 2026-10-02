@@ -149,7 +149,8 @@ function garages(course, group, venue) {
     parts.shell.push(box(30.4, GARAGE_HEIGHT, back, 0, GARAGE_HEIGHT / 2, GARAGE_RECESS / 2));
     [-1, 1].forEach((u) => parts.shell.push(box(3.2, GARAGE_HEIGHT, GARAGE_RECESS, u * 13.6, GARAGE_HEIGHT / 2, -depth / 2 + GARAGE_RECESS / 2)));
     parts.shell.push(box(24, GARAGE_HEIGHT - GARAGE_DOOR, GARAGE_RECESS, 0, (GARAGE_HEIGHT + GARAGE_DOOR) / 2, -depth / 2 + GARAGE_RECESS / 2));
-    parts.inside.push(box(24, GARAGE_DOOR, 0.6, 0, GARAGE_DOOR / 2, -depth / 2 + GARAGE_RECESS + 0.3));
+    // The back wall of the bay, just proud of the shell's face behind it.
+    parts.inside.push(box(24, GARAGE_DOOR, 0.6, 0, GARAGE_DOOR / 2, -depth / 2 + GARAGE_RECESS - 0.35));
     parts.inside.push(box(24, 0.3, GARAGE_RECESS, 0, 0.15, -depth / 2 + GARAGE_RECESS / 2));
     const colour = bay.safetyCar ? "#c9ced6" : TEAM_COLOURS[i % TEAM_COLOURS.length];
     if (!frames.has(colour)) frames.set(colour, []);
@@ -472,7 +473,7 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
     shader.uniforms.uLit = { value: lit };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vFacade;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFacade = uv;");
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\n// glTF flips v: back to metres up the wall.\nvFacade = vec2(uv.x, 1.0 - uv.y);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
         varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit;
@@ -489,7 +490,7 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         float on = step(1.0 - uLit, h) * (1.0 - frame) * step(5.0, vFacade.y);`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.76, 0.46), vec3(0.85, 0.9, 1.0), step(0.85, facadeHash(room * 1.7 + 3.1)));
-        totalEmissiveRadiance += roomLight * on * uNight * (0.45 + 0.5 * facadeHash(room + 9.3));`);
+        totalEmissiveRadiance += roomLight * on * uNight * (0.42 + 0.38 * facadeHash(room + 9.3));`);
   };
   m.customProgramCacheKey = () => `facade-${night ? 1 : 0}-${glass}-${lit}`;
   return m;
@@ -502,13 +503,16 @@ function dressLandmark(model, venue) {
   const dressed = (src) => {
     if (made.has(src.name)) return made.get(src.name);
     let out;
-    if (src.name === "facade") out = facadeMaterial(night);
+    // At night the glass reads dark and the rooms carry the tower.
+    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#1b283a", slab: "#4b535f", lit: 0.5 } : {});
     else {
       out = src.clone();
       if (src.name === "window_lit") Object.assign(out, { emissive: color(night ? "#ffe6c0" : "#000000"), emissiveIntensity: night ? 1.6 : 0 });
       if (src.name === "pool") Object.assign(out, { emissive: color("#3fb4e8"), emissiveIntensity: night ? 1.4 : 0.1 });
       if (src.name === "glass") Object.assign(out, { roughness: 0.12, metalness: 0.5, emissive: color("#ffcf8a"), emissiveIntensity: night ? 0.35 : 0 });
       if (src.name === "gold") Object.assign(out, { metalness: 0.9, roughness: 0.3 });
+      // The SkyPark's hull at night: dark, so its band of light reads.
+      if (src.name === "skypark" && night) out.color = color("#454b55");
     }
     out.name = src.name;
     made.set(src.name, out);
@@ -550,23 +554,30 @@ function rectPoints(rect, scale, x, z, yaw, step) {
 }
 
 // Place a model beside the circuit with its front (-z) to the track: tries
-// each lap distance, side and gap in turn until every rectangle's ground is
+// lap distances, sides and gaps in turn until every rectangle's ground is
 // clear of the circuit (by `margin`) and of everything placed; then claims it.
-function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14 }) {
+// With `forecourt`, the ground between the barrier and the model's front is
+// claimed too, so nothing else is built in front of it.
+// With `gapFirst`, nearest the barrier wins: each gap is tried at every
+// anchor before the next gap; otherwise the nearest anchor wins.
+function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14, forecourt = false, gapFirst = false }) {
   const total = course.track.totalLength;
   const front = Math.min(...rects.map((r) => r.z0)) * scale;
-  for (const { d, side } of anchors) {
+  const tries = gapFirst
+    ? gaps.flatMap((gap) => anchors.map((a) => ({ ...a, gap })))
+    : anchors.flatMap((a) => gaps.map((gap) => ({ ...a, gap })));
+  for (const { d, side, gap } of tries) {
     const p = course.sampleAt(((d % total) + total) % total);
-    for (const gap of gaps) {
-      const off = side * ((side > 0 ? p.outerR : p.outerL) + 2 + gap - front);
-      const x = p.x + p.nx * off;
-      const z = p.y + p.ny * off;
-      const yaw = Math.atan2(x - p.x, z - p.y);
-      const pts = rects.flatMap((r) => rectPoints(r, scale, x, z, yaw, step));
-      if (pts.some(([px, pz]) => course.clearance(px, pz) < margin || course.occupied.blocked(px, pz, step * 0.5))) continue;
-      pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
-      return { x, z, yaw, p, side };
-    }
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + 2 + gap - front);
+    const x = p.x + p.nx * off;
+    const z = p.y + p.ny * off;
+    const yaw = Math.atan2(x - p.x, z - p.y);
+    // Each part's own ground in front of it, out to the barrier's margin.
+    const court = forecourt ? rects.map((r) => ({ x0: r.x0, x1: r.x1, z0: (front - Math.max(0, gap - margin - 4)) / scale, z1: r.z0 })) : [];
+    const pts = [...rects, ...court].flatMap((r) => rectPoints(r, scale, x, z, yaw, step));
+    if (pts.some(([px, pz]) => course.clearance(px, pz) < margin || course.occupied.blocked(px, pz, step * 0.5))) continue;
+    pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
+    return { x, z, yaw, p, side };
   }
   return null;
 }
@@ -594,8 +605,8 @@ function casinoModel(course, group, venue) {
   if (!template) return false;
   const rects = partRects(template, ["casino", "hotel_de_paris"]);
   const spot = placeModel(course, {
-    rects, scale: LANDMARK_SCALE, gaps: [8, 20, 35, 55, 80, 110],
-    anchors: anchorsAround(course, 0.33, 40, (p) => (p.curve > 0 ? [-1, 1] : [1, -1])),
+    rects, scale: LANDMARK_SCALE, gaps: [8, 20, 35, 55, 80, 110], forecourt: true, gapFirst: true,
+    anchors: anchorsAround(course, 0.33, 60, (p) => (p.curve > 0 ? [-1, 1] : [1, -1])),
   });
   if (!spot) return false;
   const model = template.clone(true);

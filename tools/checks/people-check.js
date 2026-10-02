@@ -77,6 +77,37 @@ async (page) => {
   }
   results.landmarksFromModels = Object.values(built).every((b) => b.fromModel && b.stands >= 2 && b.crowd > 500 && !b.failed.length) || JSON.stringify(built);
 
+  // Marina Bay Sands is lit for the night race: seen from across the bay,
+  // the towers' rooms glow warm.
+  const towers = await step(() => {
+    const L = Render3D.inspect().trackside.landmarks.find((l) => l.name === "marinaBaySands");
+    if (!L) return null;
+    const f = { x: -Math.sin(L.yaw), z: -Math.cos(L.yaw) };
+    document.getElementById("game").style.visibility = "hidden";
+    Render3D.setPhotoCamera({ from: { x: L.x + f.x * 1000, y: L.z + f.z * 1000, d: 0, h: 250 }, at: { x: L.x, y: L.z, d: 0, h: 250 }, fov: 40 });
+    return { w: innerWidth, h: innerHeight };
+  });
+  if (towers && towers.w) {
+    await frames(10);
+    // The middle tower, in the middle of the picture.
+    const png = (await p.screenshot({ clip: { x: towers.w / 2 - 50, y: towers.h * 0.25, width: 100, height: towers.h * 0.35 } })).toString("base64");
+    const warm = await step(async (b64) => {
+      const im = await new Promise((resolve) => { const i = new Image(); i.onload = () => resolve(i); i.src = `data:image/png;base64,${b64}`; });
+      const c = document.createElement("canvas");
+      c.width = im.width; c.height = im.height;
+      const g = c.getContext("2d");
+      g.drawImage(im, 0, 0);
+      const d = g.getImageData(0, 0, c.width, c.height).data;
+      let n = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 110 && d[i] > d[i + 2] + 15) n += 1;
+      return n / (d.length / 4);
+    }, png);
+    results.marinaBaySandsLitAtNight = warm > 0.03 || `warm share ${JSON.stringify(warm)}`;
+    await step(() => { Render3D.setPhotoCamera(null); document.getElementById("game").style.visibility = ""; });
+  } else {
+    results.marinaBaySandsLitAtNight = "no Marina Bay Sands";
+  }
+
   // The crowd: the camera on a stand at Singapore, the race running, the
   // player (no throttle: parked) behind the stand, out of the picture, and
   // then far away. Near, the crowd is on its feet and waving: two moments

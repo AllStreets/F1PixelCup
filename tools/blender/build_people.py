@@ -131,9 +131,19 @@ class Figure:
         rb = rb if isinstance(rb, tuple) else (rb, rb)
         return self.loft([(a, *ra), (b, *rb)], role, part, segs, side, cap_end=cap_end)
 
-    def ellipsoid(self, centre, radii, role, part, useg=6, vseg=5, top_from=None, smooth=True):
-        """An ellipsoid (or only its part above latitude `top_from`, -1..1)."""
+    def ellipsoid(self, centre, radii, role, part, useg=6, vseg=5, top_from=None, smooth=True, keep=None):
+        """An ellipsoid (or only its part above latitude `top_from`, -1..1).
+        `keep` (optional) picks faces by their middle on the unit sphere: a
+        shell over the same facets as another ellipsoid, round the same centre."""
         c = Vector(centre)
+        vert = lambda v: self.bm.verts.new(c + v)
+        unit = lambda vs: sum(((v.co - c) for v in vs), Vector()) / len(vs)
+        face = self.face
+
+        def kept(vs, role, part, smooth):
+            if keep is None or keep(Vector(x / r for x, r in zip(unit(vs), radii))):
+                face(vs, role, part, smooth)
+        self_face = kept
         lo = -1.0 if top_from is None else top_from
         lats = [lo + (1 - lo) * k / vseg for k in range(vseg + 1)]
         rows = []
@@ -142,22 +152,22 @@ class Figure:
             if r < 1e-4:
                 rows.append(None)
                 continue
-            rows.append([self.bm.verts.new(c + Vector((radii[0] * r * math.cos(2 * math.pi * i / useg), radii[1] * r * math.sin(2 * math.pi * i / useg), radii[2] * s))) for i in range(useg)])
-        top = self.bm.verts.new(c + Vector((0, 0, radii[2])))
+            rows.append([vert(Vector((radii[0] * r * math.cos(2 * math.pi * i / useg), radii[1] * r * math.sin(2 * math.pi * i / useg), radii[2] * s))) for i in range(useg)])
+        top = vert(Vector((0, 0, radii[2])))
         for r0, r1 in zip(rows, rows[1:]):
             if r0 is None:
-                bottom = self.bm.verts.new(c + Vector((0, 0, -radii[2])))
+                bottom = vert(Vector((0, 0, -radii[2])))
                 for i in range(useg):
-                    self.face((bottom, r1[(i + 1) % useg], r1[i]), role, part, smooth)
+                    self_face((bottom, r1[(i + 1) % useg], r1[i]), role, part, smooth)
                 continue
             for i in range(useg):
                 j = (i + 1) % useg
-                self.face((r0[i], r0[j], r1[j], r1[i]), role, part, smooth)
+                self_face((r0[i], r0[j], r1[j], r1[i]), role, part, smooth)
         last = rows[-1]
         for i in range(useg):
-            self.face((last[i], last[(i + 1) % useg], top), role, part, smooth)
+            self_face((last[i], last[(i + 1) % useg], top), role, part, smooth)
         if top_from is not None and rows[0] is not None:
-            self.face(list(reversed(rows[0])), role, part, smooth)
+            self_face(list(reversed(rows[0])), role, part, smooth)
 
     def box(self, centre, size, role, part, rot=None):
         c = Vector(centre)
@@ -169,6 +179,8 @@ class Figure:
             self.face([vs[i] for i in q], role, part, smooth=False)
 
     def finish(self, extras=None):
+        # Points no face kept (a shell's facets left out) go.
+        bmesh.ops.delete(self.bm, geom=[v for v in self.bm.verts if not v.link_faces], context="VERTS")
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         me = bpy.data.meshes.new(self.name)
         self.bm.to_mesh(me)
@@ -213,7 +225,8 @@ def body(f, J, s, *, girth=1.0, chest=1.0, shoulder=0.19, hip=0.095, segs=6, lim
             (Vector((0.0, 0, 1.47 * s)), 0.075, 0.06)], top, "torso", segs, cap_end=True)
     f.limb(Vector((0.005, 0, 1.43 * s)), Vector((0.012, 0, 1.56 * s)), 0.05, 0.048, "skin", "torso", 5)
     hs, hv = head_segs
-    f.ellipsoid((0.012, 0, 1.635 * s), (0.098, 0.083, 0.112), "skin", "head", hs, hv)
+    (cx, cy, cz), radii = HEAD
+    f.ellipsoid((cx, cy, cz * s), radii, "skin", "head", hs, hv)
     for side, sg in (("L", 1), ("R", -1)):
         sh, el, wr = J[f"shoulder_{side}"], J[f"elbow_{side}"], J[f"wrist_{side}"]
         if arms_out:
@@ -231,8 +244,17 @@ def body(f, J, s, *, girth=1.0, chest=1.0, shoulder=0.19, hip=0.095, segs=6, lim
         f.box(Vector((an.x + 0.055, an.y, 0.045)), (0.27, 0.10, 0.09), "shoes", f"shin_{side}")
 
 
-def hair_short(f, s, segs=(6, 3)):
-    f.ellipsoid((0.0, 0, 1.645 * s), (0.106, 0.091, 0.112), "hair", "head", segs[0], segs[1], top_from=0.1)
+HEAD = ((0.012, 0, 1.635), (0.098, 0.083, 0.112))
+
+
+def hair_short(f, s, segs=(6, 5), tilt=0.6, cut=-0.15, role="hair", grow=1.07, crown=True):
+    """Short hair: a shell over the head's own facets, a little out from
+    them, over the crown and down the back to the nape. The hairline is
+    pitched: high at the brow, over the ears, low behind."""
+    (cx, cy, cz), radii = HEAD
+    up = Vector((-math.sin(tilt), 0, math.cos(tilt)))
+    f.ellipsoid((cx, cy, cz * s), tuple(r * grow for r in radii), role, "head", segs[0], segs[1],
+                keep=lambda n: n.normalized().dot(up) > cut and (crown or n.normalized().z < 0.45))
 
 
 CROWD_ROLES = ["skin", "hair", "shirt", "trousers", "shoes"]
@@ -265,7 +287,7 @@ def crowd_c():
     f = Figure("crowd_c", CROWD_ROLES)
     J = joints(s)
     body(f, J, s, girth=1.04)
-    f.ellipsoid((0.0, 0, 1.655 * s), (0.108, 0.094, 0.10), "hair", "head", 6, 1, top_from=-0.35)
+    hair_short(f, s, cut=-0.35, crown=False)
     f.ellipsoid((0.0, 0, 1.67 * s), (0.11, 0.096, 0.085), "shirt", "head", 6, 2, top_from=0.15)
     f.box(Vector((0.115, 0, 1.69 * s)), (0.11, 0.15, 0.012), "shirt", "head")
     return f, J
@@ -296,7 +318,7 @@ def crew():
     f = Figure("crew", ["skin", "hair", "shirt", "trousers", "shoes", "trim", "gear"])
     J = joints(s, shoulder=0.195)
     body(f, J, s, girth=1.06, shoulder=0.195, segs=12, limb_segs=8, head_segs=(10, 7), sleeves="long")
-    hair_short(f, s, (10, 3))
+    hair_short(f, s, (10, 7))
     headset(f, s)
     # Trim: a yoke over the shoulders, the belt, and a band round each arm and leg.
     f.loft([(Vector((0.0, 0, 1.335 * s)), 0.19 * 1.06 + 0.006, 0.124 * 1.06 + 0.004),
@@ -325,7 +347,7 @@ def photographer():
         "L": (J["shoulder_L"] + Vector((0.22, -0.02, -0.22)), Vector((0.36, 0.0, 1.53))),
     }
     body(f, J, s, segs=10, limb_segs=7, head_segs=(10, 7), sleeves="short", arms_out=arms)
-    hair_short(f, s, (10, 3))
+    hair_short(f, s, (10, 7))
     # The tabard over the shirt (the trim colour), front and back.
     for x in (0.115, -0.115):
         f.box(Vector((x, 0, 1.2)), (0.012, 0.3, 0.34), "trim", "torso")
@@ -351,7 +373,7 @@ def camera_operator():
         "L": (J["shoulder_L"] + Vector((0.2, 0.02, -0.18)), Vector((0.45, 0.12, 1.42))),
     }
     body(f, J, s, segs=10, limb_segs=7, head_segs=(10, 7), sleeves="long", arms_out=arms)
-    hair_short(f, s, (10, 3))
+    hair_short(f, s, (10, 7))
     headset(f, s)
     # The tripod: three legs from the head down to the ground, and the head.
     for k in range(3):
@@ -475,7 +497,8 @@ if PREVIEW:
     cam.data.lens = 50
     scene.collection.objects.link(cam)
     scene.camera = cam
-    for tag, loc, aim in (("lineup", (9.5, -3.5, 2.6), (0, -0.4, 1.2)), ("close", (3.4, 3.0, 1.6), (0, 2.3, 1.05))):
+    for tag, loc, aim in (("lineup", (9.5, -3.5, 2.6), (0, -0.4, 1.2)), ("close", (4.4, 3.4, 1.75), (0, 2.25, 1.2)),
+                          ("pros", (4.4, -0.6, 1.8), (0, -1.8, 1.2))):
         cam.location = loc
         cam.rotation_euler = (Vector(aim) - cam.location).to_track_quat("-Z", "Y").to_euler()
         scene.render.filepath = os.path.join(PREVIEW, f"people_{tag}.png")
