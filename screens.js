@@ -589,6 +589,7 @@
     placePodium(null);
     renderStrip($("podium-career"), summary.career);
     podiumLayout = null;
+    podiumHead = null;
     show("podium-screen");
   }
 
@@ -614,6 +615,38 @@
       actions: screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect(),
     };
     return podiumLayout;
+  }
+
+  // The title's box as drawn over the 3D scene (kicker and title as far as
+  // their text runs, the career strip as a panel), for the ceremony to keep
+  // the wall's title clear of. Measured in the 3D layout, once per size.
+  let podiumHead = null;
+  function podiumReserve() {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    // (Measured again once the web fonts are in: the text's width changes.)
+    const key = `${W}x${H}:${document.fonts ? document.fonts.status : ""}`;
+    if (podiumHead && podiumHead.key === key) return podiumHead.box;
+    const screen = $("podium-screen");
+    const was = screen.classList.contains("is-3d");
+    screen.classList.add("is-3d");
+    const boxes = ["podium-kicker", "podium-title", "podium-career"].map((id) => $(id))
+      .filter((el) => el && !el.classList.contains("hidden") && el.getClientRects().length)
+      .map((el) => {
+        if (el.id === "podium-career") return el.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        return range.getBoundingClientRect();
+      });
+    if (!was) screen.classList.remove("is-3d");
+    const box = boxes.length ? {
+      left: Math.min(...boxes.map((b) => b.left)),
+      top: Math.min(...boxes.map((b) => b.top)),
+      right: Math.max(...boxes.map((b) => b.right)),
+      bottom: Math.max(...boxes.map((b) => b.bottom)),
+    } : null;
+    podiumHead = { key, box };
+    return box;
   }
 
   function placePodium(anchors, platesIn = true) {
@@ -881,7 +914,7 @@
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
-    showQualifying, showPodium, placePodium, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showQualifying, showPodium, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

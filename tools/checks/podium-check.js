@@ -166,11 +166,36 @@ async (page) => {
     const names = await p.evaluate(() => state.cupEntries.slice(0, 3).map((e) => [e.driver.name, e.kart.name, String(e.points)]));
     results.platesSayWho = names.every((n, i) => { const pl = big.plates.find((x) => x.place === i + 1); return pl && n.every((bit) => pl.text.toLowerCase().includes(bit.toLowerCase())); });
     results.fillsWindow = big.canvas[0] === big.w && big.canvas[1] === big.h;
-    for (const [w, h] of [[700, 900], [1000, 600], [380, 800]]) {
+    // The page's title (kicker, title and career strip, as drawn) and the
+    // wall's own title never touch: at every moment of the ceremony (the
+    // camera is a function of time), at each window size; and the live frame
+    // agrees with where it says the wall's title is.
+    const titleClear = () => p.evaluate(() => {
+      const boxes = ["podium-kicker", "podium-title", "podium-career"].map((id) => document.getElementById(id))
+        .filter((el) => el && !el.classList.contains("hidden") && el.getClientRects().length)
+        .map((el) => {
+          if (el.id === "podium-career") return el.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          return range.getBoundingClientRect();
+        });
+      const touching = [];
+      for (let t = 0; t < 40; t += 0.05) {
+        const r = Render3D.podium.titleAt(t);
+        if (boxes.some((b) => r.left < b.right + 8 && r.right > b.left - 8 && r.top < b.bottom + 8 && r.bottom > b.top - 8)) touching.push(Number(t.toFixed(2)));
+      }
+      const live = Render3D.podium.inspect();
+      const said = Render3D.podium.titleAt(live.t);
+      const agrees = live.title && ["left", "top", "right", "bottom"].every((k) => Math.abs(live.title[k] - said[k]) < 4);
+      return (touching.length === 0 && agrees) || JSON.stringify({ touching: touching.length ? [touching[0], touching[touching.length - 1], touching.length] : [], agrees, live: live.title, said });
+    });
+    results.titlesApart1600x900 = await titleClear();
+    for (const [w, h] of [[700, 900], [1000, 600], [380, 800], [1600, 640], [1280, 1024]]) {
       await sizeTo(w, h);
       await p.waitForTimeout(700);
       const s = await plates();
       results[`plates${w}x${h}`] = (onScreen(s) && noOverlap(s) && s.canvas[0] === s.w && s.canvas[1] === s.h) || JSON.stringify(s.plates.map((x) => x.r)).slice(0, 300);
+      results[`titlesApart${w}x${h}`] = await titleClear();
     }
     await sizeTo(1600, 900);
 

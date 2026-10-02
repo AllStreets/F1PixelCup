@@ -83,8 +83,9 @@ test("the camera sweeps in, pushes in on P1 for the trophy, then orbits in front
   assert.ok(dist(at(0)) > dist(at(2.5)) * 1.3, "starts well back");
   // The trophy: closer to P1 than at any point of the arms-up beat.
   assert.ok(dist(at(8)) < dist(at(4)) * 0.8);
-  // Looking at P1's head height while the trophy goes up.
-  assert.ok(Math.abs(at(8).lookY - (Ceremony.stepFor(1).height + 1.6)) < 0.25);
+  // Looking between P1's head and the trophy held over it while it goes up.
+  const head = Ceremony.stepFor(1).height + 1.6;
+  assert.ok(at(8).lookY > head + 0.1 && at(8).lookY < head + 0.6);
   // No jumps anywhere: 1 ms apart, the camera moves less than 2 cm.
   for (let t = 0; t < 40; t += 0.001) {
     const a = at(t);

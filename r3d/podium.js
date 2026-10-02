@@ -224,9 +224,18 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
       x += gap;
       g.font = small;
       g.fillText(name, x, cy - pxPerM * 0.06);
+      // The lockup's extent on the wall, in metres (for titleRect).
+      g.font = big;
+      const m = g.measureText(word);
+      const left = (W - total) / 2;
+      lockup.x0 = left / pxPerM - WALL_W / 2;
+      lockup.x1 = (left + total) / pxPerM - WALL_W / 2;
+      lockup.y1 = WALL_H - (cy - Math.max(m.actualBoundingBoxAscent || pxPerM * 0.5, pxPerM * 0.5)) / pxPerM;
+      lockup.y0 = WALL_H - (cy + (m.actualBoundingBoxDescent || 0)) / pxPerM;
     }, { repeat: false });
   }
 
+  const lockup = { x0: 0, x1: 0, y0: 0, y1: 0 };
   const spaced = (s) => s.split("").join(String.fromCharCode(8202));
   function skewBar(g, x, y, w, h) {
     g.beginPath();
@@ -655,14 +664,38 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
     return [...found];
   }
 
-  function placeCamera(t, calm = still()) {
+  function placeCamera(t, calm = still(), cam = camera) {
     const c = Ceremony.cameraAt(calm ? Ceremony.BEATS.sweepEnd : t);
-    camera.position.set(c.x, c.y, c.z);
-    camera.up.set(0, 1, 0);
-    camera.lookAt(c.lookX, c.lookY, c.lookZ);
+    cam.position.set(c.x, c.y, c.z);
+    cam.up.set(0, 1, 0);
+    cam.lookAt(c.lookX, c.lookY, c.lookZ);
+    keepTitleClear(cam);
+  }
+
+  // The page's own title sits over the top left of the picture (reserve: its
+  // box in CSS px). Where the wall's title would run into it, the picture is
+  // lowered (a lens shift) just enough to keep a gap; eased in as the two
+  // come together across, so the shot never jumps.
+  const GAP = 14;
+  const EASE_PX = 60;
+  let view = { w: 0, h: 0 };
+  let reserve = null;
+  function keepTitleClear(cam) {
+    cam.clearViewOffset();
+    if (!reserve || !view.w || !view.h) return 0;
+    const r = projectLockup(cam, view.w, view.h);
+    const across = Math.min(
+      (reserve.right + GAP + EASE_PX - r.left) / EASE_PX,
+      (r.right - (reserve.left - GAP - EASE_PX)) / EASE_PX,
+    );
+    const weight = Math.max(0, Math.min(1, across));
+    const shift = Math.max(0, reserve.bottom + GAP - r.top) * weight;
+    if (shift > 0.5) cam.setViewOffset(view.w, view.h, 0, -shift, view.w, view.h);
+    return shift;
   }
 
   function setSize(w, h) {
+    view = { w, h };
     const aspect = w / Math.max(1, h);
     const fov = Ceremony.fitFov(BASE_FOV, aspect, FRAME_ASPECT);
     if (Math.abs(camera.aspect - aspect) > 1e-4 || Math.abs(camera.fov - fov) > 1e-4) {
@@ -732,6 +765,36 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
     return points;
   }
 
+  // The wall's title lockup on screen (CSS px) for the camera at time t (the
+  // live camera when t is omitted): { left, top, right, bottom }. The page
+  // keeps its own title clear of it.
+  const probe = new THREE.PerspectiveCamera();
+  const corner = new THREE.Vector3();
+  function titleRect(w, h, t) {
+    if (t === undefined) return projectLockup(camera, w, h);
+    probe.fov = Ceremony.fitFov(BASE_FOV, w / Math.max(1, h), FRAME_ASPECT);
+    probe.aspect = w / Math.max(1, h);
+    probe.near = camera.near;
+    probe.far = camera.far;
+    probe.updateProjectionMatrix();
+    placeCamera(t, still(), probe);
+    return projectLockup(probe, w, h);
+  }
+  function projectLockup(cam, w, h) {
+    cam.updateMatrixWorld();
+    const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    [[lockup.x0, lockup.y0], [lockup.x1, lockup.y0], [lockup.x0, lockup.y1], [lockup.x1, lockup.y1]].forEach(([x, y]) => {
+      corner.set(x, y, WALL_Z + 0.01).project(cam);
+      const sx = (corner.x * 0.5 + 0.5) * w;
+      const sy = (-corner.y * 0.5 + 0.5) * h;
+      r.left = Math.min(r.left, sx);
+      r.right = Math.max(r.right, sx);
+      r.top = Math.min(r.top, sy);
+      r.bottom = Math.max(r.bottom, sy);
+    });
+    return r;
+  }
+
   // Whether the name plates show at time t.
   const platesIn = (t) => Ceremony.platesShown(t, still());
 
@@ -784,5 +847,5 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
     scene.clear();
   }
 
-  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
+  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
 }

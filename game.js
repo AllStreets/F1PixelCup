@@ -2926,7 +2926,8 @@ function drawPodiumScene() {
   showViewLoading(null);
   let frame = null;
   if (worldView() === "3d" && window.Render3D.podium) {
-    const drawn = render3dSafely(() => window.Render3D.podium.frame(performance.now()));
+    const reserve = window.Screens && window.Screens.podiumReserve ? window.Screens.podiumReserve() : null;
+    const drawn = render3dSafely(() => window.Render3D.podium.frame(performance.now(), reserve));
     if (drawn.ok) frame = drawn.value;
   }
   const on = Boolean(frame && frame.drawing);

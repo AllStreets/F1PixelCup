@@ -32,6 +32,7 @@ With reduced motion asked for, the camera holds its settled view, nobody steps f
 ## In the page
 
 - The podium screen keeps its title, its "Continue" and the career strip.
+- The page's title (kicker, title, career strip) never touches the wall's own title: the camera frames the wall's title below it, and where a window's shape would still bring them together, the picture is lowered (a lens shift) just enough, eased so the shot never jumps.
 - With 3D, the 2D steps give way to name plates over the scene (place, driver, team, points). Without 3D (or while it loads), the 2D steps are the fallback, as now.
 - Leaving the screen stops the ceremony and frees its drivers.
 

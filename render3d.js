@@ -1613,9 +1613,11 @@ function podiumBegin(summary) {
   return true;
 }
 
-function podiumFrame(now) {
+// reserve: the page's title box over the picture (CSS px), kept clear of the wall's.
+function podiumFrame(now, reserve = null) {
   const podium = ceremony.podium;
   if (!podium || !api.ready) return { drawing: false };
+  podium.setReserve(reserve);
   resize();
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
@@ -1633,6 +1635,7 @@ function podiumFrame(now) {
     return { drawing: false };
   }
   const t = podium.render(now);
+  ceremony.title = podium.titleRect(w, h);
   return { drawing: true, t, anchors: podium.anchors(w, h), platesIn: podium.platesIn(t) };
 }
 
@@ -1650,7 +1653,13 @@ function podiumInspect() {
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
   const racePostfx = postfx.inspect().frame;
   if (!ceremony.podium) return { active: false, memory, racePostfx, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
-  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned() };
+  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned(), title: ceremony.title || null };
 }
 
-api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect };
+// Where the wall's title would be on screen at time t, at this window's size.
+function podiumTitleAt(t) {
+  if (!ceremony.podium || !ceremony.podium.ready()) return null;
+  return ceremony.podium.titleRect(canvas2d.clientWidth || canvas2d.width, canvas2d.clientHeight || canvas2d.height, t);
+}
+
+api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };
