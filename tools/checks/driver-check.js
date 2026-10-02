@@ -1,5 +1,6 @@
 // Browser check: the driver figure, dressed by the game's own code
-// (docs/superpowers/specs/2026-10-01-driver-v2-design.md). Loads the studio
+// (docs/superpowers/specs/2026-10-01-driver-v2-design.md, and bareheaded,
+// docs/superpowers/specs/2026-10-01-driver-faces-design.md). Loads the studio
 // (tools/preview/driver.html) with Leclerc, Hamilton and Russell. Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/driver-check.js, dev server on http://localhost:8765.
@@ -73,6 +74,73 @@ async (page) => {
     // At rest (an A-pose) the body tops out at the neck, about 1.65 m.
     return top > 1.85 || top;
   });
+
+  // Bareheaded (the default, as on the podium): each figure shows its own
+  // face, read off the figure itself and checked against its look.
+  const faces = await p.evaluate(() => window.preview.figures.map((f) => {
+    const l = f.looks();
+    const look = DRIVERS.find((d) => d.id === l.driverId).look;
+    if (!look || !l.face || !window.Faces) return { id: l.driverId, missing: true, shown: [] };
+    const want = window.Faces.morphWeights(look);
+    const keysMatch = Object.keys(want).every((k) => Math.abs((l.face.keys[k] || 0) - want[k]) < 1e-6)
+      && Object.keys(l.face.keys).every((k) => k in want);
+    return {
+      id: l.driverId,
+      headwear: l.headwear,
+      helmetShown: l.helmetShown,
+      shown: l.face.shown,
+      hair: l.face.hair,
+      wantHair: look.hair.style,
+      beard: l.face.beard,
+      wantBeard: ["short_beard", "full_beard", "moustache"].includes(look.facialHair) ? look.facialHair : null,
+      braids: look.hair.style === "braids",
+      skin: l.face.skin,
+      wantSkin: look.skin.toLowerCase(),
+      keysMatch,
+    };
+  }));
+  results.bareByDefault = faces.every((f) => f.headwear === "none" && !f.helmetShown && f.shown.includes("head_skin")) || JSON.stringify(faces.map((f) => [f.id, f.headwear, f.helmetShown]));
+  results.ownHairStyle = faces.every((f) => f.hair === f.wantHair) || JSON.stringify(faces.map((f) => [f.id, f.hair, f.wantHair]));
+  results.ownFacialHair = faces.every((f) => f.beard === f.wantBeard && f.shown.includes("beard") === Boolean(f.wantBeard)) || JSON.stringify(faces.map((f) => [f.id, f.beard, f.wantBeard]));
+  results.bunOnlyWithBraids = faces.every((f) => f.shown.includes("hair_bun") === f.braids) || JSON.stringify(faces.map((f) => [f.id, f.shown]));
+  results.ownSkin = faces.every((f) => !f.missing && f.skin === f.wantSkin) || JSON.stringify(faces.map((f) => [f.id, f.skin, f.wantSkin]));
+  results.ownFaceShape = faces.every((f) => f.keysMatch) || JSON.stringify(faces.map((f) => [f.id, f.keysMatch]));
+  // The hair, brows and beard really follow each face: drawn as stacked
+  // layers, from positions of each figure's own, moved off the shared shell
+  // by that driver's shape.
+  results.hairFollowsEachFace = await p.evaluate(() => {
+    const shells = window.preview.figures.map((f) => {
+      let hair = null;
+      f.model.traverse((n) => { if (n.isMesh && n.name === "hair") hair = n; });
+      return hair;
+    });
+    if (shells.some((h) => !h || !h.visible)) return "a figure without its hair";
+    if (!shells.every((h) => h.geometry.isInstancedBufferGeometry && h.geometry.instanceCount > 8)) return "the hair is not drawn in layers";
+    const a = shells[0].geometry.attributes.position, b = shells[1].geometry.attributes.position;
+    if (a === b) return "two figures share their hair's positions";
+    let most = 0;
+    for (let i = 0; i < a.count; i += 1) most = Math.max(most, Math.hypot(a.getX(i) - b.getX(i), a.getY(i) - b.getY(i), a.getZ(i) - b.getZ(i)));
+    // Different faces, hair moved by millimetres to centimetres.
+    return (most > 0.002 && most < 0.05) || most;
+  });
+  // With the helmet on, as in the car: the helmet in the driver's own design,
+  // and nothing of the face.
+  const helmeted = await p.evaluate(async () => {
+    const { buildDriver } = await import("../../r3d/driver.js");
+    const car = await import("../../r3d/car.js");
+    const d = DRIVERS.find((x) => x.id === "leclerc");
+    const fig = buildDriver(d, getTeamForDriver(d), { headwear: "helmet" });
+    const l = fig.looks();
+    const out = { headwear: l.headwear, helmetShown: l.helmetShown, shown: l.face ? l.face.shown : null, ownHelmet: l.helmetTexture === car.helmetTexture(d).uuid };
+    fig.dispose();
+    return out;
+  });
+  results.helmetHidesTheFace = (helmeted.headwear === "helmet" && helmeted.helmetShown && helmeted.ownHelmet && Array.isArray(helmeted.shown) && helmeted.shown.length === 0) || JSON.stringify(helmeted);
+
+  // Every driver's head, in the studio's grid: twenty figures, no errors.
+  await p.goto(`http://localhost:8765/tools/preview/driver.html?grid=1&t=0.5&${Date.now()}`);
+  await p.waitForFunction(() => window.preview && (window.preview.ready || window.preview.error), null, { timeout: 60000 });
+  results.gridOfTwenty = await p.evaluate(() => (window.preview.ready && window.preview.figures.length === 20 && new Set(window.preview.looks().map((l) => l.face && l.face.hair)).size >= 6) || window.preview.error || window.preview.figures.length);
 
   await context.close();
   return { results, errors };

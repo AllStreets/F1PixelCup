@@ -460,7 +460,11 @@ part(sp, "head")
 # The bare head (shown when the helmet is off): the head and neck are skinned,
 # the head bone above the jaw blending into the chest down the neck; the eyes,
 # lashes, brows, hair and beards ride on the head bone.
-head_skin, head_parts = driver_head.build(MATS)
+# The neck is fitted to the collar's real outline, the top edge of its band.
+collar = [(v.co.x, v.co.y) for v in body.data.vertices if abs(v.co.z - 1.478) < 0.0008 and abs(v.co.y) < 0.12]
+if len(collar) < 12:
+    raise RuntimeError(f"the collar's edge has {len(collar)} points")
+head_skin, head_parts = driver_head.build(MATS, collar)
 hg = head_skin.vertex_groups.new(name="head")
 cg = head_skin.vertex_groups.new(name="chest")
 for v in head_skin.data.vertices:
@@ -752,5 +756,5 @@ if OUT:
                               export_animations=True, export_animation_mode="NLA_TRACKS",
                               export_morph=True, export_morph_normal=False, export_try_sparse_sk=True,
                               export_vertex_color="NONE",
-                              export_attributes=True)
+                              export_attributes=True, export_extras=True)
     print("exported", OUT)

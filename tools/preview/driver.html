@@ -21,6 +21,7 @@
     body.grid .plate { bottom: auto; }
     body.grid .plate b { font-size: clamp(12px, 1.2vw, 18px); }
     body.grid .plate span { font-size: clamp(9px, 0.75vw, 12px); }
+    body.grid .plate i { display: none; }
     #poses { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
     #poses button { background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.18); border-radius: 18px; padding: 6px 14px; cursor: pointer; font: inherit; }
     #poses button.on { background: #e10600; border-color: #e10600; }
@@ -102,8 +103,12 @@
       face: { pos: [1.05, 1.665, 0], at: [0, 1.635, 0], fov: 22 },
       face3: { pos: [0.86, 1.68, 0.6], at: [0, 1.635, 0], fov: 22 },
       side: { pos: [0.02, 1.6, 1.25], at: [0.02, 1.58, 0], fov: 22 },
+      // The grid's cells: each head turned a little, its name below the chin.
+      grid: { pos: [1.0, 1.665, 0.22], at: [0.02, 1.645, 0], fov: 21 },
     };
-    const cam = CAMS[q.get("cam")] || (grid ? CAMS.face : CAMS.front);
+    // (&pos=x,y,z&at=x,y,z&fov=n sets a camera of one's own.)
+    if (q.has("pos")) CAMS.own = { pos: q.get("pos").split(",").map(Number), at: (q.get("at") || "0,1.6,0").split(",").map(Number), fov: Number(q.get("fov") || 22) };
+    const cam = CAMS[q.has("pos") ? "own" : q.get("cam")] || (grid ? CAMS.grid : CAMS.front);
     // (In the grid every figure stands on the same spot, drawn one at a time.)
     const slot = (i) => (grid ? 0 : (i - (ids.length - 1) / 2) * -0.95);
     // The face cameras follow the figure they look at.
@@ -112,7 +117,19 @@
       camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2] + z);
       camera.lookAt(new THREE.Vector3(cam.at[0], cam.at[1], cam.at[2] + z));
     }
-    if (cam.fov) camera.fov = cam.fov;
+    if (cam.fov) {
+      camera.fov = cam.fov;
+      // A portrait's light for the close cameras: the key high and to the
+      // figure's left, so the face is modelled rather than flat; the rim
+      // behind the other shoulder.
+      key.position.set(2.6, 3.6, -2.4);
+      key.intensity = 2.8;
+      rim.position.set(-3, 2.4, 3);
+      rim.color.set("#ffe2c8");
+      rim.intensity = 1.1;
+      scene.environmentIntensity = 0.4;
+      renderer.toneMappingExposure = 0.85;
+    }
     aimCamera(shift);
 
     const figures = [];
@@ -122,7 +139,7 @@
       if (grid) {
         figures.forEach((f, i) => {
           f.plate.style.left = `${((i % 5) + 0.5) * 20}%`;
-          f.plate.style.top = `${(Math.floor(i / 5) + 1) * 25 - 6.5}%`;
+          f.plate.style.top = `${(Math.floor(i / 5) + 1) * 25 - 5.6}%`;
         });
         return;
       }
@@ -141,7 +158,7 @@
     addEventListener("resize", resize);
     resize();
 
-    window.preview = { ready: false, figures, looks: () => figures.map((f) => f.looks()) };
+    window.preview = { ready: false, figures, looks: () => figures.map((f) => f.looks()), redraw: () => draw() };
 
     // One frame: the whole view, or in the grid, each head in its own cell.
     function draw() {

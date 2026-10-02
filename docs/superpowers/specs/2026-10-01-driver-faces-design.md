@@ -9,40 +9,43 @@ So the figure gets a head. On the podium the drivers stand bareheaded and each o
 **The MakeHuman base mesh and its targets** (makehumancommunity/makehuman, `makehuman/data/3dobjs/base.obj` and `makehuman/data/targets/**`), pinned to commit `a8bc2d54ff0ac92e78ff71431b1023eda42bf482`. MakeHuman's assets (the base mesh, proxies, targets and modifiers) are released under **CC0 1.0** (the repository's `LICENSE.md` section C and `LICENSE.ASSETS.md`, and the header of every file used). MakeHuman's program code is AGPL; none of it is used, only the data files, read by our own parser.
 
 - `tools/blender/makehuman/fetch.py` downloads exactly the files used, at that commit, and `extract.py` cuts out the head and neck and writes `tools/blender/makehuman/head.json`: the vertices, quads, UVs, the helper geometry for the eyes and lashes, and every shape key as sparse deltas. That file is committed (CC0, derived); the build reads it, so it never needs the network.
+- The keys that move or scale the whole head (the ethnic blend, which changes MakeHuman's figure's height by up to 8 cm; the face's length and depth) are held at the neck's foot, so a key reshapes the head without lifting it out of the collar.
 - No photo textures of real people anywhere. The skin, eyes, hair and beards are shaded procedurally.
 
-## The head (`tools/blender/build_driver.py` → `assets/driver.glb`)
+## The head (`tools/blender/driver_head.py`, called by `build_driver.py` → `assets/driver.glb`)
 
-- **Base shape:** MakeHuman's young adult male, a little more muscular than average (racing drivers are lean and have thick necks), the three ethnic blend targets at a third each.
-- **The head and neck** are cut from the base mesh above the collar: about 4,000 quads (about 8,000 triangles), MakeHuman's own topology, enough for a podium close-up. Scaled so the whole MakeHuman figure would stand 1.78 m, like ours, and placed so its neck rises out of the suit's collar.
-- **Skinned** to the same rig as the body: the head bone above the jaw, blended into the chest bone down the neck, so the head turns with the head bone and the neck stays one surface into the collar.
+- **Base shape:** MakeHuman's young adult male, a little more muscular than average (racing drivers are lean and have thick necks), the three ethnic blend targets at a third each, the eyes a little more open and the corners of the mouth a little up (MakeHuman's default reads tired and glum).
+- **The head and neck** are cut from the base mesh above the shoulders: about 4,400 quads (8,800 triangles), MakeHuman's own topology. Scaled so the whole MakeHuman figure would stand 1.78 m, like ours.
+- **The neck fits the collar:** the build measures the collar's real outline off the body (the top edge of its band) and fits the lower neck to it: every point further out than the collar is drawn in to it and down into the suit (further out, further down, so the surface never folds), and the neck's foot is eased out to meet the collar's edge, a gap of about 2 mm all round.
+- **Skinned** to the same rig as the body: the head bone above the jaw, blended into the chest bone down the neck.
 - **Shape keys** (glTF morph targets), each from MakeHuman targets. Bipolar ones are a pair (`_incr`, `_decr`), so a slider runs -1 to 1:
-  - head: width, face length, depth, the square, oval, round, triangular and inverted triangular shapes, age;
-  - jaw and chin: jaw width (chin bones), chin width, chin prominence, chin height;
+  - head: width, face length, depth, age, fat, the square, oval, round, triangular, inverted triangular, rectangular and diamond shapes;
+  - jaw and chin: jaw width (chin bones), chin width, chin prominence, chin height, chin cleft;
   - cheeks: cheekbones, cheek volume;
-  - nose: length, width, projection, bridge (hump), tip up/down, nostril flare;
-  - brow: forward, up/down, angle; forehead height;
-  - lips: volume, mouth width;
-  - eyes: size, the corner angle, the fold, eye bag;
+  - nose: length, width, projection, hump, tip up/down, nostril flare, volume;
+  - brow: forward, up/down, angle; forehead height and slope;
+  - lips: volume, mouth width, the corners up/down;
+  - eyes: size, the corner angle, how open, eye bag, spacing;
   - ears: size, how far they stand out;
   - neck: thickness;
   - the three ethnic blend targets as differences from the even mix, so a driver's own mix (summing to 1) reproduces MakeHuman's blend exactly.
-- **Eyes:** real eyeballs on MakeHuman's eye helper (its centre and size follow the shape keys): a white sclera with faint warmth at the edges, an iris disc with radial fibres in the driver's colour, a black pupil, and a clear glossy cornea over them.
-- **Eyelashes** on MakeHuman's lash helpers, and **eyebrows** as thin strips over the brow ridge, both shaded as fine strands with alpha.
-- **The skin:** one `skin` material, per-vertex masks (`_MASKS`) baked from where MakeHuman's targets act: the lips, the beard area, the warm areas (cheeks, nose, ears) and the eye sockets. In three.js the shader uses them for a slightly darker, redder lip tone, a warm flush, a little darkness round the eyes, stubble (a fine shaded skin layer, not geometry) and fine pore detail. Roughness about 0.5, with a warm wrap at the light's edge to fake light through skin.
+- **The skin:** one `skin` material with per-vertex masks (`_MASKS`, baked from where MakeHuman's targets act: the lips, the beard area, the warm areas of cheeks, nose and ears, and the eye sockets), `_SCALP` (where hair grows) and `_AO` (how open the sky is over each point: rays against the head itself, so the sockets, the corners of the nose and mouth and under the chin are shaded). In three.js the shader uses them for the lips' tone, a warm flush, the sockets, a beard's shadow even when clean shaven (stubble a fine shaded layer, not geometry), the roots at the hairline, mottling and a fine pore bump; the shade of the folds is redder (light that has passed through skin), and a warm wrap at the light's edge fakes light through skin.
+- **Eyes:** an eyeball on MakeHuman's eye helper (its front where the helper's is; the helper is roomier than an eye, so ours is 29 mm across, sitting back in the socket's corners): a sclera, an iris disc with fibres, crypts and a limbal ring in the driver's colour, a black pupil, and a clear glossy cornea. Shaded where the lids hang over it (`_AO`). How each shape key moves and scales the eye is a handful of numbers in the node's extras (`eye_keys`: `[dx, dy, dz, scale - 1]` per key, about `eye_centre`), from the helper, or for the eye's own size from the lids round it; `r3d/driver.js` applies them.
+- **Eyelashes:** generated along the edge of each lid, found from the front (round the eye, the furthest out a ray from straight ahead still reaches the eyeball before the skin): a curling strip out and forward, the upper lid's long and full, the lower lid's short and sparse, drawn as fine strands (alpha to coverage). Bound to the lid, so they open and close with it.
 
-## Hair and facial hair
+## Hair, facial hair and brows: fur shells
 
-Meshes, built on the scalp and on the jaw, each on the head bone. Every one is bound to the head's surface, so the same shape keys reshape it with the head (a wide head gets wide hair).
+Each is a thin shell laid on the skin, bound to the head's surface (`_BIND`: three head vertex ids; `_BARY`: their weights), so the same shape keys reshape it with the head (a wide head gets wide hair). Each vertex also carries what the shader needs to grow strands from it: `_TIP` (the offset from the skin to the hair's outer surface), `_FLOW` (the way the strands lie) and `_HAIR` (how far inside the hair's edge, 0 at the edge and 1 well inside; the strand coordinates across and along, in metres).
 
-- **Styles:** `crop` (short crop), `swept` (swept up and back), `textured` (short, textured, a fringe forward), `curly`, `long_back` (longer, swept back), `braids` (braids along the scalp, tied back into a bun), `buzz` (a buzz cut: scalp shading, barely any volume).
-- **Facial hair:** `stubble` (shaded on the skin), `short_beard`, `full_beard`, `moustache` (with a chin beard; Hamilton's).
-- **Strand detail:** the volume carries a strand-flow direction; the shader draws fine strands along it with an anisotropic highlight, and clumps of tapered locks break the outline at the hairline and the crown, so it never reads as a helmet of plastic.
-- Colours per driver.
+- **Hair:** one shell over the scalp (`hair`, the head's own faces where any style grows hair, subdivided once and rounded), carrying every style's strands as its own attributes (`_TIP_<STYLE>`, `_FLOW_<STYLE>`, `_HAIR_<STYLE>`); a figure draws its own. The hairline is a smooth line round the head (across the forehead, back at the temples, down the sideburns, over the ears, down to the nape), lowered by some styles; the ears are never under hair. Each style thins out at its edge and is thinner near it (it grows out of the hairline rather than standing up from it), and lies in locks of different fullness.
+  - `buzz` (a few millimetres all over), `crop` (short, a little longer on top), `swept` (up and back off the forehead, centimetres deep at the front, short at the sides), `textured` (a fringe brushed forward and over to one side), `curly` (a deeper layer of tight curls), `long_back` (longer, swept back, down over the collar), `braids` (rows from the hairline straight back, tied into a bun at the back of the crown: `hair_bun`).
+- **Facial hair:** one shell over the lower face (`beard`) with `short_beard`, `full_beard` (trimmed) and `moustache` (a moustache joined at the corners of the mouth to a beard on the chin, and a short beard along the jaw; Hamilton's). `stubble` is shaded on the skin.
+- **Brows:** a patch over each brow ridge (`brows`), the brow's shape in `_HAIR`'s edge: nearly straight, fullest a third of the way out, the hairs standing up near the nose and lying outward along the arch.
+- **In three.js** each shell is drawn as stacked layers (an instanced draw: 22 for hair, 12 for a beard, 6 for brows), from the skin out to the outer surface (the lean along the skin growing toward the tip). Each layer keeps fewer strands than the one under it: strands drawn along the flow, in clumps (the furthest reaching), thinning out at the edge; braids as rows of crossing locks, curls as coils. Inner layers are darker (the hair shades itself); light wraps softly through hair, with the two shifted highlights of real hair (Kajiya-Kay) running across the strands. Smaller than a pixel, strands blur to their average and the edge becomes a soft band.
 
 ## Each driver's look (`game-data.js`)
 
-`look` on every driver:
+`LOOKS`, one per driver, assigned as `driver.look`:
 
 ```js
 look: {
@@ -53,31 +56,32 @@ look: {
   brow: "#24180f",
   eyes: "#4f6b4a",          // iris
   heritage: { african: 0, asian: 0, caucasian: 1 },   // MakeHuman's ethnic blend, summing to 1
-  shape: { jawWidth: 0.3, noseLength: 0.2, ... },     // each -1..1 (unipolar ones 0..1)
+  shape: { jaw_width: 0.3, nose_length: 0.2, ... },     // each -1..1 (unipolar ones 0..1)
 }
 ```
 
-Worked out from each driver's public appearance in 2025 (public photos as reference only, nothing private). Leclerc and Hamilton get the most care: Leclerc's dark brown swept hair, clean shaven, green eyes, long narrow face and straight nose; Hamilton's braids tied back, his beard and moustache, his skin tone and his face shape.
+Worked out from each driver's public appearance in 2025 (public photos as reference only, nothing private), each with a line saying what it is drawn from. Leclerc and Hamilton get the most care: Leclerc's dark brown hair swept up and back, clean shaven, green eyes, a long lean face with a defined jaw, a long straight nose, thick straight brows set low and ears that stand out a little; Hamilton's braids tied back into a bun, his moustache joined to a short beard on the chin and along the jaw, his skin tone, high cheekbones, broad nose and full lips. `faces.js` (pure, UMD) holds the vocabulary, checks a look and turns its shape into the morph weights.
 
 ## In three.js (`r3d/driver.js`)
 
-`buildDriver(driver, team, { headwear })`, `headwear` = `"none"` (default; the podium) or `"helmet"`. The two-argument call is unchanged in shape, so the podium branch's code keeps working.
+`buildDriver(driver, team, { headwear })`, `headwear` = `"none"` (default; the podium) or `"helmet"`. The two-argument call is unchanged in shape.
 
 - **"none":** the face, hair, brows, lashes and beard show; the balaclava part of the body is hidden and the neck is skin above the collar. The helmet is hidden.
 - **"helmet":** exactly as before: helmet and balaclava, the head and everything on it hidden.
-- Per driver: the morph target influences from `look.shape` and `look.heritage` on the head and every bound part; the skin, lips, iris, brow, hair and beard colours; only that driver's hair style and facial hair visible.
-- Shared geometry; only materials are per figure, as now.
-- `looks()` also reports `headwear` and a `face` record: skin, hair style and colour, facial hair, eyes, and the shape keys really applied (read off the head mesh), for the checks.
+- Per driver: the morph target influences from `look.shape` and `look.heritage` on the head; each bound part moved by the head's own morph at its triangle, the eyes by their keys, into positions of the figure's own; the skin, lips, iris, brow, hair and beard colours; only that driver's hair style and facial hair drawn.
+- Shared geometry otherwise; materials and those positions are per figure, and freed with it.
+- `looks()` also reports `headwear`, `helmetShown` and a `face` record: what shows, the hair style and facial hair really drawn, the skin, hair and iris colours, and the shape keys really applied (read off the head mesh), for the checks.
 
 ## The studio (`tools/preview/driver.html`)
 
-Adds `head=none|helmet` (default none) and the cameras `face` (front close-up of one head) and `face3` (three quarter), and `grid=1` for the 20 heads in a 5 by 4 grid with names. Review images at 1600x900, headless, committed as `docs/review/2026-10-01/faces-*.jpg`.
+Adds `head=none|helmet` (default none), the cameras `face` (front close-up of one head), `face3` (three quarters) and `side`, `grid=1` for the 20 heads in a 5 by 4 grid with names, and `pos=&at=&fov=` for a camera of one's own. The close cameras use a portrait's light (the key high and to one side, a warm rim). Review images at 1600x900, headless, committed as `docs/review/2026-10-01/faces-*.jpg`.
 
 ## Checks
 
-- **Node** (`tests/driver-model.test.js`, `tests/driver-looks.test.js`):
-  - the GLB has the head (skinned, with shape keys, about 5,000 to 12,000 triangles), two eyeballs with iris and cornea, brows, lashes, every hair style and facial hair mesh, each bound (with the head's cranium keys);
-  - the head sits on the neck: its lowest ring is inside the collar, with no gap between it and the suit;
+- **Node** (`tests/driver-faces.test.js`, `tests/driver-looks.test.js`):
+  - the GLB has the head (skinned, every shape key, its masks and baked shade), two eyeballs with iris and cornea and their key extras (an eye's size really scales it), lashes on both lids, bound; brows, bound, growing strands; the hair shell with every style's strands and the bun; the beard shell with every shelled facial hair; each bound;
+  - each style is its own depth (a buzz under 4 mm, swept hair over 2.5 cm, curls deeper than a crop), on the forehead only above the brows, down to the nape at the back;
+  - the neck stands in the collar: its foot inside the suit, and at the collar's top edge a gap of under 5 mm all round, never floating;
   - the figure's height and the existing tests still hold; the file stays under 4 MB;
-  - every driver has a complete `look`, colours are valid, styles exist, `heritage` sums to 1, every shape value is a known key and in range.
-- **Browser** (`tools/checks/driver-check.js`): bareheaded figures show their own look (the hair style, the facial hair, the skin colour, the morph influences match the data); the helmet option still shows the helmet with the driver's own texture and hides the face; no errors.
+  - every driver has a complete `look`, colours are valid, styles exist, `heritage` sums to 1, every shape value is a known key and in range; every style and facial hair is worn by somebody; the showcase pair's looks.
+- **Browser** (`tools/checks/driver-check.js`): bareheaded figures show their own look (the hair style and facial hair drawn, the bun only with braids, the skin colour, the morph influences match the data); the hair is drawn in layers and follows each face (two figures' hair positions differ by millimetres); the helmet option shows the helmet with the driver's own texture and hides the face; the grid of twenty loads; no errors.

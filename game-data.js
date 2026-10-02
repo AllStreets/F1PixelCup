@@ -25,8 +25,8 @@ function getTeamForDriver(driver) {
 const DRIVERS = [
   { id: "verstappen", name: "Max Verstappen", code: "VER", number: 1, teamId: "redBull", title: "Four-Time Champion", color: "#1e41b2", accent: "#e8bf00", stats: { speed: 0.96, acceleration: 0.80, handling: 0.88, weight: 0.70, traction: 0.86, drift: 0.82 }, helmet: { base: "#0f1a3c", crown: "#ff6a13", stripe: "#e10600", visor: "#10141c", motif: "flash" } },
   { id: "lawson", name: "Liam Lawson", code: "LAW", number: 30, teamId: "redBull", title: "Rising Kiwi", color: "#1e41b2", accent: "#ffffff", stats: { speed: 0.80, acceleration: 0.78, handling: 0.78, weight: 0.62, traction: 0.76, drift: 0.75 }, helmet: { base: "#111111", crown: "#ffffff", stripe: "#1e41b2", visor: "#10141c", motif: "crown" } },
-  { id: "leclerc", name: "Charles Leclerc", code: "LEC", number: 16, teamId: "ferrari", title: "Monaco Maestro", color: "#dc0000", accent: "#ffed00", stats: { speed: 0.90, acceleration: 0.84, handling: 0.88, weight: 0.62, traction: 0.82, drift: 0.87 }, helmet: { base: "#ffffff", crown: "#d40000", stripe: "#0b1e4d", visor: "#10141c", motif: "band" }, look: { skin: "#d9a98c", hair: { style: "swept", color: "#2b1d14" }, facialHair: "none", beardColor: "#2b1d14", brow: "#2a1c12", eyes: "#5d7a4e", heritage: { african: 0, asian: 0, caucasian: 1 }, shape: {} } },
-  { id: "hamilton", name: "Lewis Hamilton", code: "HAM", number: 44, teamId: "ferrari", title: "Seven-Time Legend", color: "#dc0000", accent: "#ffffff", stats: { speed: 0.92, acceleration: 0.82, handling: 0.90, weight: 0.65, traction: 0.84, drift: 0.88 }, helmet: { base: "#ffd400", crown: "#d40000", stripe: "#111111", visor: "#3a2a0a", motif: "crown" }, look: { skin: "#8d5a3b", hair: { style: "braids", color: "#1a1410" }, facialHair: "moustache", beardColor: "#1c1612", brow: "#1a1410", eyes: "#3b2416", heritage: { african: 0.6, asian: 0, caucasian: 0.4 }, shape: {} } },
+  { id: "leclerc", name: "Charles Leclerc", code: "LEC", number: 16, teamId: "ferrari", title: "Monaco Maestro", color: "#dc0000", accent: "#ffed00", stats: { speed: 0.90, acceleration: 0.84, handling: 0.88, weight: 0.62, traction: 0.82, drift: 0.87 }, helmet: { base: "#ffffff", crown: "#d40000", stripe: "#0b1e4d", visor: "#10141c", motif: "band" } },
+  { id: "hamilton", name: "Lewis Hamilton", code: "HAM", number: 44, teamId: "ferrari", title: "Seven-Time Legend", color: "#dc0000", accent: "#ffffff", stats: { speed: 0.92, acceleration: 0.82, handling: 0.90, weight: 0.65, traction: 0.84, drift: 0.88 }, helmet: { base: "#ffd400", crown: "#d40000", stripe: "#111111", visor: "#3a2a0a", motif: "crown" } },
   { id: "norris", name: "Lando Norris", code: "NOR", number: 4, teamId: "mclaren", title: "Speed and Flair", color: "#ff8000", accent: "#0093cc", stats: { speed: 0.88, acceleration: 0.86, handling: 0.87, weight: 0.58, traction: 0.84, drift: 0.84 }, helmet: { base: "#e4ff1a", crown: "#1c1c1c", stripe: "#00a3e0", visor: "#1b3a5c", motif: "flash" } },
   { id: "piastri", name: "Oscar Piastri", code: "PIA", number: 81, teamId: "mclaren", title: "Clinical Contender", color: "#ff8000", accent: "#ffffff", stats: { speed: 0.86, acceleration: 0.84, handling: 0.84, weight: 0.56, traction: 0.82, drift: 0.81 }, helmet: { base: "#ff8000", crown: "#0b1e4d", stripe: "#ffffff", visor: "#10141c", motif: "band" } },
   { id: "russell", name: "George Russell", code: "RUS", number: 63, teamId: "mercedes", title: "Mr. Saturday", color: "#00d2be", accent: "#c0c0c0", stats: { speed: 0.86, acceleration: 0.82, handling: 0.85, weight: 0.62, traction: 0.83, drift: 0.82 }, helmet: { base: "#111111", crown: "#00c5b5", stripe: "#ffffff", visor: "#10141c", motif: "split" } },
@@ -44,6 +44,82 @@ const DRIVERS = [
   { id: "hulkenberg", name: "Nico Hülkenberg", code: "HUL", number: 27, teamId: "sauber", title: "The Hulk Returns", color: "#39ff14", accent: "#000000", stats: { speed: 0.76, acceleration: 0.77, handling: 0.78, weight: 0.64, traction: 0.76, drift: 0.75 }, helmet: { base: "#ffffff", crown: "#ffcc00", stripe: "#111111", visor: "#10141c", motif: "flash" } },
   { id: "bortoleto", name: "Gabriel Bortoleto", code: "BOR", number: 5, teamId: "sauber", title: "F2 Champion", color: "#39ff14", accent: "#ffffff", stats: { speed: 0.72, acceleration: 0.78, handling: 0.76, weight: 0.55, traction: 0.73, drift: 0.76 }, helmet: { base: "#009c3b", crown: "#ffdf00", stripe: "#002776", visor: "#10141c", motif: "crown" } },
 ];
+
+// Each driver's face, for the podium, where they stand bareheaded
+// (docs/superpowers/specs/2026-10-01-driver-faces-design.md): skin, hair and
+// beard, eyes, MakeHuman's ethnic blend, and the face's shape sliders
+// (faces.js), worked out from public photos of each driver in 2025, used as
+// reference only.
+const LOOKS = {
+  // Dark blond hair cropped short and pushed up at the front, a light stubble;
+  // blue eyes; a broad face with a strong, wide jaw.
+  verstappen: { skin: "#dcae93", hair: { style: "crop", color: "#5e4632" }, facialHair: "stubble", beardColor: "#6a4e38", brow: "#5a4330", eyes: "#5d7fa3", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_width: 0.36, jaw_width: 0.63, face_length: -0.18, cheek_volume: 0.27, chin_prominent: 0.27, nose_width: 0.27, nose_length: -0.18, eye_size: -0.27, eye_open: -0.18, brow_height: -0.27, lips_volume: -0.27, head_age: -0.18, neck_width: 0.4 } },
+  // Light brown hair, textured with a fringe; clean shaven; a young face.
+  lawson: { skin: "#e0b298", hair: { style: "textured", color: "#5c4231" }, facialHair: "none", beardColor: "#5c4231", brow: "#4f3a2b", eyes: "#6b7f8c", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_age: -0.9, face_length: 0.09, jaw_width: 0.27, nose_length: 0.18, nose_tip: 0.18, eye_size: 0.18, cheek_volume: 0.18, mouth_width: 0.18, neck_width: 0.3 } },
+  // Dark brown hair swept up and back; clean shaven; green eyes; a long,
+  // lean face, a defined jaw, a long straight nose, thick straight brows set
+  // low, ears that stand out a little.
+  leclerc: { skin: "#d39f82", hair: { style: "swept", color: "#2b1d14" }, facialHair: "none", beardColor: "#2b1d14", brow: "#4a3424", eyes: "#6b8a5a", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.3, head_width: -0.15, jaw_width: 0.45, chin_width: 0.15, chin_prominent: 0.15, cheekbones: 0.5, cheek_volume: -0.4, head_fat: -0.4, nose_length: 0.3, nose_width: -0.05, nose_depth: 0.2, nose_tip: -0.1, brow_height: -0.45, brow_forward: 0.45, eye_size: 0.45, eye_open: 0.1, eye_angle: -0.35, mouth_width: 0.4, mouth_corners: 0.15, lips_volume: -0.1, ear_out: 0.45, neck_width: 0.4 } },
+  // Braids tied back into a bun; a moustache joined to a short beard on the
+  // chin and along the jaw; high cheekbones, a broad nose, full lips.
+  hamilton: { skin: "#80583f", hair: { style: "braids", color: "#1a1410" }, facialHair: "moustache", beardColor: "#221a15", brow: "#1c1410", eyes: "#3b2416", heritage: { african: 0.6, asian: 0, caucasian: 0.4 },
+    shape: { face_length: 0.36, head_width: -0.18, cheekbones: 0.9, cheek_volume: -0.54, jaw_width: 0.27, chin_prominent: 0.18, head_fat: -0.36, nose_width: 0.81, nose_flare: 0.54, nose_length: -0.18, nose_tip: 0.18, nose_depth: -0.18, lips_volume: 0.9, mouth_width: 0.18, eye_open: -0.18, eye_angle: 0.18, brow_height: -0.18, brow_forward: 0.36, head_age: 0.45, neck_width: 0.4 } },
+  // Wavy brown hair, curly on top; a light stubble; a round, open face.
+  norris: { skin: "#dfb196", hair: { style: "curly", color: "#4e3727" }, facialHair: "stubble", beardColor: "#5a4030", brow: "#4a3426", eyes: "#6e5a42", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_width: 0.18, face_length: -0.18, cheek_volume: 0.36, head_round: 0.54, nose_length: -0.27, nose_tip: 0.36, eye_size: 0.18, mouth_width: 0.45, lips_volume: 0.18, jaw_width: 0.09, head_age: -0.54, neck_width: 0.3 } },
+  // Dark brown hair with a fringe brushed to the side; clean shaven; a long,
+  // narrow face.
+  piastri: { skin: "#ddb093", hair: { style: "textured", color: "#2e2119" }, facialHair: "none", beardColor: "#2e2119", brow: "#33261c", eyes: "#5a4632", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.54, head_width: -0.45, cheek_volume: -0.36, jaw_width: 0.18, chin_width: -0.18, nose_length: 0.36, nose_width: -0.18, eye_size: -0.09, eye_angle: -0.18, mouth_width: -0.09, head_age: -0.54, neck_width: 0.3 } },
+  // Brown hair neatly swept up; clean shaven; a tall face, a strong chin.
+  russell: { skin: "#dfb59b", hair: { style: "swept", color: "#4a3424" }, facialHair: "none", beardColor: "#4a3424", brow: "#45322a", eyes: "#5f7d97", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.63, jaw_width: 0.36, chin_prominent: 0.63, chin_height: 0.27, nose_length: 0.27, nose_depth: 0.18, cheek_volume: -0.18, eye_size: -0.09, brow_height: 0.18, mouth_width: 0.18, neck_width: 0.3 } },
+  // Thick dark hair with a fringe; clean shaven; a young, rounder face.
+  antonelli: { skin: "#d9a989", hair: { style: "textured", color: "#24180f" }, facialHair: "none", beardColor: "#24180f", brow: "#2a1d14", eyes: "#4a3524", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_age: -1.0, cheek_volume: 0.45, head_round: 0.36, face_length: -0.09, nose_length: 0.18, nose_width: 0.18, eye_size: 0.27, lips_volume: 0.27, jaw_width: -0.18, neck_width: 0.2 } },
+  // Dark hair cropped short, a dark stubble; a strong, curved nose,
+  // deep-set eyes under heavy brows; the grid's veteran.
+  alonso: { skin: "#c99877", hair: { style: "crop", color: "#2a221d" }, facialHair: "stubble", beardColor: "#33291f", brow: "#221a14", eyes: "#3e2a1c", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_age: 1.0, nose_hump: 1.0, nose_length: 0.63, nose_depth: 0.63, nose_tip: -0.36, brow_forward: 0.81, brow_height: -0.45, eye_size: -0.36, eye_open: -0.27, cheek_volume: -0.45, cheekbones: 0.36, jaw_width: 0.36, face_length: 0.18, lips_volume: -0.27, neck_width: 0.4 } },
+  // Dark hair swept up at the front; a light stubble; a long face.
+  stroll: { skin: "#dcac8f", hair: { style: "swept", color: "#33251b" }, facialHair: "stubble", beardColor: "#3a2a1e", brow: "#30231a", eyes: "#4c3a2a", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.45, head_width: -0.18, nose_length: 0.45, nose_depth: 0.27, jaw_width: 0.18, eye_size: -0.18, eye_angle: -0.27, cheek_volume: -0.18, mouth_width: 0.09, neck_width: 0.3 } },
+  // Dark hair swept back, a trimmed beard; olive skin, high cheekbones.
+  gasly: { skin: "#cf9f80", hair: { style: "long_back", color: "#2a1e16" }, facialHair: "full_beard", beardColor: "#33251b", brow: "#271b13", eyes: "#4a3424", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { cheekbones: 0.54, jaw_width: 0.36, face_length: 0.18, cheek_volume: -0.27, nose_length: 0.18, eye_size: -0.09, brow_height: -0.27, brow_forward: 0.27, neck_width: 0.4 } },
+  // Light brown hair cropped short; clean shaven; a young, open face.
+  doohan: { skin: "#e3b89e", hair: { style: "crop", color: "#7a5a3e" }, facialHair: "none", beardColor: "#7a5a3e", brow: "#6a4e36", eyes: "#5f86a6", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_age: -0.9, cheek_volume: 0.27, jaw_width: 0.27, face_length: 0.09, nose_width: 0.09, eye_size: 0.09, mouth_width: 0.27, neck_width: 0.3 } },
+  // Black hair, textured with a fringe; clean shaven; Thai and British.
+  albon: { skin: "#d6a684", hair: { style: "textured", color: "#18120e" }, facialHair: "none", beardColor: "#18120e", brow: "#1d1611", eyes: "#3a2618", heritage: { african: 0, asian: 0.5, caucasian: 0.5 },
+    shape: { cheek_volume: 0.27, head_width: 0.09, nose_width: 0.18, nose_hump: -0.36, eye_size: -0.18, mouth_width: 0.27, jaw_width: 0.18, neck_width: 0.3 } },
+  // Dark brown hair, a short beard; olive skin, a broad jaw.
+  sainz: { skin: "#cc9b7b", hair: { style: "swept", color: "#2a1d15" }, facialHair: "short_beard", beardColor: "#3b2a1f", brow: "#251a12", eyes: "#4a3424", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { jaw_width: 0.54, head_width: 0.18, chin_width: 0.27, nose_length: 0.27, nose_width: 0.18, brow_forward: 0.36, brow_height: -0.36, eye_size: -0.18, cheek_volume: -0.09, neck_width: 0.4 } },
+  // Dark blond hair, textured, a fringe; clean shaven; the grid's youngest look.
+  bearman: { skin: "#e2b59a", hair: { style: "textured", color: "#6b5038" }, facialHair: "none", beardColor: "#6b5038", brow: "#5c4430", eyes: "#6a7f8a", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { head_age: -1.0, cheek_volume: 0.54, head_round: 0.45, face_length: -0.18, nose_length: -0.09, nose_tip: 0.27, eye_size: 0.18, lips_volume: 0.18, jaw_width: 0.09, neck_width: 0.2 } },
+  // Very short dark hair, a dark stubble; a long face and a long chin.
+  ocon: { skin: "#d2a283", hair: { style: "buzz", color: "#1e1612" }, facialHair: "stubble", beardColor: "#241a14", brow: "#211812", eyes: "#45301f", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.63, chin_height: 0.45, chin_prominent: 0.36, head_width: -0.27, nose_length: 0.36, nose_width: 0.18, eye_size: -0.09, cheek_volume: -0.36, cheekbones: 0.27, ear_out: 0.36, neck_width: 0.4 } },
+  // Black hair, textured on top; clean shaven; Japanese.
+  tsunoda: { skin: "#dcae8a", hair: { style: "textured", color: "#15100c" }, facialHair: "none", beardColor: "#15100c", brow: "#1a140f", eyes: "#2e2016", heritage: { african: 0, asian: 1, caucasian: 0 },
+    shape: { head_width: 0.18, cheek_volume: 0.36, face_length: -0.27, nose_width: 0.18, eye_size: -0.18, mouth_width: 0.18, jaw_width: 0.18, head_age: -0.36, neck_width: 0.3 } },
+  // Dark curls on top, a light stubble; olive skin; a young face.
+  hadjar: { skin: "#c99a7a", hair: { style: "curly", color: "#1c140f" }, facialHair: "stubble", beardColor: "#211812", brow: "#1d1510", eyes: "#3e2a1c", heritage: { african: 0.1, asian: 0, caucasian: 0.9 },
+    shape: { head_age: -0.9, face_length: 0.18, nose_length: 0.36, nose_width: 0.18, nose_depth: 0.27, lips_volume: 0.27, eye_size: 0.09, cheek_volume: 0.09, jaw_width: 0.09, neck_width: 0.3 } },
+  // Dark blond hair swept to the side, a short beard; blue eyes; a tall,
+  // long face.
+  hulkenberg: { skin: "#e0b39a", hair: { style: "swept", color: "#6a5038" }, facialHair: "short_beard", beardColor: "#6e533a", brow: "#5c4632", eyes: "#5d86a8", heritage: { african: 0, asian: 0, caucasian: 1 },
+    shape: { face_length: 0.63, chin_prominent: 0.45, head_age: 0.63, head_width: -0.09, jaw_width: 0.36, nose_length: 0.36, eye_size: -0.18, brow_height: -0.18, cheek_volume: -0.27, neck_width: 0.4 } },
+  // Dark brown hair, textured and wavy on top; clean shaven; a young face.
+  bortoleto: { skin: "#d4a385", hair: { style: "curly", color: "#2a1e16" }, facialHair: "none", beardColor: "#2a1e16", brow: "#2a1e16", eyes: "#4a3424", heritage: { african: 0.05, asian: 0, caucasian: 0.95 },
+    shape: { head_age: -1.0, face_length: 0.09, cheek_volume: 0.18, nose_length: 0.18, nose_width: 0.18, eye_size: 0.09, mouth_width: 0.18, jaw_width: 0.09, neck_width: 0.3 } },
+};
+DRIVERS.forEach((d) => { d.look = LOOKS[d.id]; });
 
 // Difficulty changes how well the AI drives, not what its cars are made of.
 // On Pro the rivals run exactly the player's physics (aiPace 1); Legend adds a 5% pace edge.
