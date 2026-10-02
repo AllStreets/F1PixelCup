@@ -1451,7 +1451,7 @@ function startCup() {
     ? `${getActiveCup().name}: qualifying sets every grid.`
     : state.cupPlayers === 2
       ? `Lights out soon. ${getActiveCup().name} grid is forming: 1P and 2P start from the back.`
-      : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
+      : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(0);
 }
@@ -3691,6 +3691,7 @@ function syncViewports() {
 // What each view drew last frame (for the checks): its rectangle, whose it
 // is, and every HUD panel's box in CSS px.
 const splitDrawn = { layout: null, views: [] };
+const viewsKept = [{ boxes: [] }, { boxes: [] }];
 let drawingView = null;
 
 // (Only while the checks ask: Game.probeHud.)
@@ -3709,13 +3710,16 @@ function drawSplit(track) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   splitDrawn.layout = layout;
-  splitDrawn.views = [];
+  splitDrawn.views.length = 0;
   layout.views.forEach((rect, slot) => {
     const fit = TwoPlayer.hudFit(rect.w, rect.h);
     view.width = fit.width;
     view.height = fit.height;
     view.scale = fit.scale * dpr;
-    drawingView = { slot, rect, playerId: state.humanIds[slot], fit: fit.scale, boxes: [], hud: hudProbe ? {} : null };
+    // (Kept from frame to frame; the HUD notes only while the checks probe.)
+    drawingView = viewsKept[slot];
+    Object.assign(drawingView, { slot, rect, playerId: state.humanIds[slot], fit: fit.scale, hud: hudProbe ? {} : null });
+    drawingView.boxes.length = 0;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.beginPath();
