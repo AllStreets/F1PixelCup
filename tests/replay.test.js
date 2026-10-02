@@ -43,7 +43,7 @@ function synthRace(samples, cars = 20, seed = 1) {
       list.push({
         x: 900 + Math.cos(d / 955) * 800 + r() * 1e-3, y: 550 + Math.sin(d / 955) * 500 - r() * 1e-3,
         d, heading: (r() - 0.5) * 2 * Math.PI, speed: r() * 260 - 20, lat: (r() - 0.5) * 120,
-        gap: c === 0 ? 0 : c * 0.731 + r(), steer: r() * 2 - 1, throttle: r(),
+        gap: c === 0 ? 0 : c * 0.731 + r(), steer: r() * 2 - 1, throttle: r(), brake: r() < 0.5 ? 0 : r(),
         lap: Math.floor(k / 900), place: ((c + k) % cars) + 1, item: ITEMS[Math.floor(r() * ITEMS.length)],
         spinning: r() < 0.1, drs: r() < 0.2, boosting: r() < 0.2, formation: r() < 0.05, protected: r() < 0.05,
         drifting: r() < 0.3, driftRight: r() < 0.5, finished: r() < 0.02, trailingOil: r() < 0.05,
@@ -102,6 +102,8 @@ test("quantisation stays inside the documented bounds", () => {
       assert.ok(Math.abs(g.lat - c.lat) <= 1 / 256 + 1e-12);
       assert.ok(Math.abs(g.steer - c.steer) <= 1 / 254 + 1e-12);
       assert.ok(Math.abs(g.throttle - c.throttle) <= 1 / 510 + 1e-12);
+      // The brake as applied (a fraction in traffic, full for a corner).
+      assert.ok(Math.abs(g.brake - c.brake) <= 1 / 510 + 1e-12, "brake");
       ["lap", "place", "item", "spinning", "drs", "boosting", "formation", "protected", "drifting", "driftRight", "finished", "trailingOil", "offroad", "underRoof", "braking", "roulette", "charge"]
         .forEach((f) => assert.equal(g[f], c[f], f));
     });
@@ -202,7 +204,7 @@ test("memory: a 20-car race is within budget", () => {
   synthRace(perMinute * 4).forEach((s) => { rec.push(s); if (s.mid) rec.pushMid(s.mid); });
   const total = rec.bytes() / 1e6;
   const mb = total / 4;
-  assert.ok(mb <= 1.45, `${mb.toFixed(3)} MB a minute`);
+  assert.ok(mb <= 1.5, `${mb.toFixed(3)} MB a minute`);
   // A typical race comfortably under 10 MB.
   assert.ok(total < 6, `${total.toFixed(2)} MB for four minutes`);
 });
@@ -279,6 +281,16 @@ test("a TV camera prefers the spot that can see its stretch", () => {
   assert.ok(cams.every((c) => Math.hypot(c.x, c.z) < 1000), "all on the inside, where they can see");
 });
 
+test("a TV camera goes only as high as it must to see its stretch (over a catch fence)", () => {
+  const course = fakeCourse();
+  // A fence: nothing is seen from below 50 up.
+  const cams = Replay.placeTvCameras(course, { heights: [26, 50, 70], visible: (from) => from.y >= 50 });
+  assert.ok(cams.length > 0 && cams.every((c) => c.y === 50), JSON.stringify(cams.map((c) => c.y)));
+  // With a clear view it stays at the lowest.
+  const low = Replay.placeTvCameras(fakeCourse(), { heights: [26, 50, 70], visible: () => true });
+  assert.ok(low.every((c) => c.y === 26));
+});
+
 test("the zoom keeps the car the same size in the frame", () => {
   const near = Replay.zoomFov(300);
   const far = Replay.zoomFov(600);
@@ -347,7 +359,7 @@ test("a car's controls read straight from the recording, as the full sample has 
     for (let i = 0; i < 6; i += 1) {
       const c = rec.controls(k, i);
       assert.equal(c.throttle, full.cars[i].throttle);
-      assert.equal(c.brake, full.cars[i].braking);
+      assert.equal(c.brake, full.cars[i].brake);
       assert.equal(c.steer, full.cars[i].steer);
       assert.deepEqual(c.keys, full.keys);
     }

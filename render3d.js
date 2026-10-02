@@ -151,7 +151,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -1239,29 +1239,95 @@ function pointOnLap(course, d) {
   return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny) };
 }
 
-// The TV cameras of a circuit, placed once, the first time a replay there
-// asks: off the track through the claim system, each where it sees most of
-// its stretch past the scenery, the landmarks and the circuit's own walls.
+// The TV cameras of a circuit, placed once, when a replay there first opens
+// (prepareReplay): off the track through the claim system, each where it sees
+// most of its stretch past the scenery, the landmarks and what of the circuit
+// stands up off the road (its bridges and gantry, as the sun's flare is
+// hidden by).
+// A TV camera's height over the road: the lowest of these that sees its
+// stretch (26 is about 4 m; 80, a crane over a street circuit's fences).
+const TV_HEIGHTS = [26, 40, 60, 80];
 function tvCameras(world) {
   if (world.tvCams) return world.tvCams;
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  const blockers = [world.decor, world.landmarks, world.circuit].filter(Boolean);
+  // (And the catch fences: seen through from right behind, a fence fills the
+  // shot, so a camera rises until it looks over them.)
+  const fences = [];
+  world.circuit.traverse((o) => { if (o.userData.catchFence) fences.push(o); });
+  const blockers = [world.decor, world.landmarks, ...(world.circuit.userData.occluders || []), ...fences].filter(Boolean);
+  // Each blocker's box in the world (each instance's, for the trees and
+  // buildings drawn instanced): a ray is tested against the boxes first, and
+  // only a box it hits is looked at closely (a single mesh exactly; an
+  // instance by its box, near enough for scoring a view). Far cheaper than
+  // raycasting the whole scenery for every ray.
+  const boxes = [];
+  const m = new THREE.Matrix4();
+  blockers.forEach((root) => root.traverseVisible((o) => {
+    if (!o.isMesh || o.userData.ground) return;
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    if (o.isInstancedMesh) {
+      for (let i = 0; i < o.count; i += 1) {
+        o.getMatrixAt(i, m);
+        boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(m.premultiply(o.matrixWorld)), mesh: null });
+      }
+    } else {
+      boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld), mesh: o });
+    }
+  }));
+  // The boxes filed on a grid over the ground, so a ray only meets those
+  // in the cells its stretch crosses.
+  const CELL = 200;
+  const grid = new Map();
+  const cell = (i, j) => `${i},${j}`;
+  boxes.forEach((item, n) => {
+    item.stamp = -1;
+    for (let i = Math.floor(item.box.min.x / CELL); i <= Math.floor(item.box.max.x / CELL); i += 1) {
+      for (let j = Math.floor(item.box.min.z / CELL); j <= Math.floor(item.box.max.z / CELL); j += 1) {
+        const key = cell(i, j);
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(n);
+      }
+    }
+  });
   const ray = new THREE.Raycaster();
   const from = new THREE.Vector3();
   const dir = new THREE.Vector3();
+  const hit = new THREE.Vector3();
+  let stamp = 0;
   const visible = (a, b) => {
     from.set(a.x, a.y, a.z);
     dir.set(b.x - a.x, b.y - a.y, b.z - a.z);
-    const far = dir.length();
+    const far = dir.length() - 2;
     ray.set(from, dir.normalize());
-    ray.far = far - 2;
-    return !ray.intersectObjects(blockers, true).some((h) => !h.object.userData.ground);
+    ray.far = far;
+    stamp += 1;
+    for (let i = Math.floor(Math.min(a.x, b.x) / CELL); i <= Math.floor(Math.max(a.x, b.x) / CELL); i += 1) {
+      for (let j = Math.floor(Math.min(a.z, b.z) / CELL); j <= Math.floor(Math.max(a.z, b.z) / CELL); j += 1) {
+        const list = grid.get(cell(i, j));
+        if (!list) continue;
+        for (const n of list) {
+          const item = boxes[n];
+          if (item.stamp === stamp) continue;
+          item.stamp = stamp;
+          if (!ray.ray.intersectBox(item.box, hit) || hit.distanceTo(from) > far) continue;
+          if (!item.mesh || ray.intersectObject(item.mesh, false).length > 0) return false;
+        }
+      }
+    }
+    return true;
   };
   const started = performance.now();
-  world.tvCams = window.Replay.placeTvCameras(course, { height: course.street ? 40 : 26, visible });
+  world.tvCams = window.Replay.placeTvCameras(course, { heights: TV_HEIGHTS, visible });
   world.tvCamsMs = performance.now() - started;
   return world.tvCams;
+}
+
+// Before a replay opens: its circuit's TV cameras, so no frame of it waits
+// on placing them.
+function prepareReplay(track) {
+  if (!api.ready || !track) return;
+  tvCameras(ensureWorld(track));
 }
 
 const viewTarget = new THREE.Vector3();

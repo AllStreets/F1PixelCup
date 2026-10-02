@@ -246,12 +246,12 @@ html, body { height: 100%; overflow: hidden; }
   font-weight: 700;
 }
 .bc-tower-head {
-  display: flex; justify-content: space-between; align-items: baseline; gap: 0.6em;
-  padding: 0.5em 0.7em 0.45em; background: linear-gradient(90deg, var(--red), #9d0400);
-  font: italic 900 1.05em/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase;
+  display: flex; flex-direction: column; gap: 0.35em;
+  padding: 0.5em 0.7em 0.5em; background: linear-gradient(90deg, var(--red), #9d0400);
+  font: italic 900 1.15em/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase;
 }
-.bc-tower-head strong { white-space: nowrap; flex: none; }
-.bc-tower-head span { min-width: 0; font: 700 0.62em/1 var(--font); letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bc-tower-head strong { white-space: nowrap; }
+.bc-tower-head span { order: -1; min-width: 0; font: 700 0.56em/1 var(--font); letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bc-row {
   display: grid; grid-template-columns: 1.9em 0.28em 1fr auto; align-items: center; gap: 0.55em;
   height: 1.75em; padding-right: 0.6em; border-top: 1px solid rgba(255, 255, 255, 0.06);

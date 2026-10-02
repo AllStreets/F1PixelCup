@@ -30,9 +30,8 @@ Replays are of the race just run. Nothing is saved to disk in this stage: the re
 
 A recording starts at lights out and takes a **sample every second physics step (30 Hz on the race clock)**. The race steps at a fixed 60 Hz (`PHYSICS_STEP_MS`), so sample `k` is exactly step `2k`, at race time `t0 + 2k · PHYSICS_STEP_MS` where `t0` is lights out (`state.raceStart`). Steps happen only when the race moves (never while paused, and seven per frame after the flag, each on its own tick), so the recording is on the race clock, not the wall clock.
 
-**Why 30 Hz and not every step.** It halves the memory, and costs nothing visible:
-- Drawing interpolates between samples (below), as the live game already interpolates between steps (`placeForDrawing`).
-- The worst a straight line between two samples 1/30 s apart can miss a car on a curve by is the chord sag `v² · Δt² / (8R)`. At the cars' top speed (238 units/s, about 40 m/s) round a 100-unit radius corner that is 0.08 units, about 1.3 cm, on a car 33 units long. A spin is drawn by the renderer from the "spinning" bit, so it is never undersampled.
+**Positions every step, the rest every second step.** Each car's x, y and heading are also kept at the step between two samples (the odd steps), so every step the race drew is in the replay exactly: a contact can shove a car in a single step, and a straight line between samples would smooth that over. Everything else (speed, gaps, controls, on/off states, the road's objects) changes smoothly or only matters at a frame's resolution, so it is kept every second step:
+- Drawing goes straight between two steps, as the live game draws between steps (`placeForDrawing`).
 - On/off states (DRS, a spin starting) can appear up to 1/60 s late; a frame at 60 Hz.
 
 ### Per car, per sample
@@ -44,14 +43,15 @@ A recording starts at lights out and takes a **sample every second physics step 
 | heading | Int16 | 2π/65536 ≈ 0.0001 rad |
 | speed | Int16, 1/64 unit/s | 0.016 units/s |
 | lateral offset `lat` (shots, oil trails) | Int16, 1/128 unit | 0.008 units |
-| gap to the leader (s), as the tower computes it | Float32 | exact to 7 digits |
-| steer, throttle (applied controls) | Int8 · /127, Uint8 · /255 | 0.008 |
+| gap to the leader (s), as the tower computes it | Uint16, 1/50 s (to 21 minutes) | 0.02 s (the tower shows tenths) |
+| steer, throttle, brake (applied controls) | Int8 · /127, Uint8 · /255, Uint8 · /255 | 0.008 |
 | lap, place in the running order, item held | Uint8 each | exact |
 | state bits | Uint16 | exact |
+| x, y, heading at the odd step after the sample | Float32, Float32, Int16 | as above |
 
 State bits: spinning, DRS open, boosting, Formation Lap, Overtake Mode, drifting, drift to the right, finished, trailing oil, off the road, under a roof, braking, item roulette spinning, and the drift's charge (two bits: none, blue, orange, as the smoke colours it).
 
-That is 28 bytes per car per sample. Quantisation is honest: every field keeps more precision than anything it is drawn or shown with (the tower shows tenths of a second; the input trace is 60 px tall).
+That is 38 bytes per car per sample (28 for the sample, 10 for the step after it). Quantisation is honest: every field keeps more precision than anything it is drawn or shown with (the tower shows tenths of a second; the input trace is 60 px tall).
 
 ### Per sample, the rest of the race
 
@@ -65,11 +65,11 @@ That is 28 bytes per car per sample. Quantisation is honest: every field keeps m
 
 ### Storage
 
-Typed arrays in chunks of 512 samples, allocated as the race goes (never a reallocation of everything). The budget: **under 10 MB for a race; a typical race of 3 to 4 minutes is about 4 MB** (20 cars × 30 samples/s × 28 bytes ≈ 1 MB a minute, plus the small extras). The Node test measures bytes per minute; the browser check measures a real race.
+Typed arrays in chunks of 128 samples, allocated as the race goes (never a reallocation of everything). The budget: **at most 1.5 MB a minute; a typical race of 3 to 4 minutes is about 5.5 MB** (20 cars × 30 samples/s × 38 bytes ≈ 1.37 MB a minute, plus the small extras and the last chunk's slack). The Node test measures bytes per minute; the browser check measures a real race.
 
 ### Cost
 
-Recording runs during every race. Its cost per step is measured (the recorder times itself) and must stay negligible: well under 2% of a physics step's own time. The browser check reports it.
+Recording runs during every race. Its cost per step is measured (the browser check times a batch of samples against the race's own steps) and must stay negligible: well under 2% of a physics step's own time. The browser check reports it.
 
 ### Playback
 
@@ -88,7 +88,7 @@ All three are computed in the renderer from the replay frame and the circuit; th
   - anchors every ~450 units round the lap, adjusted to divide the lap evenly;
   - candidates on both sides of the road at each anchor, beyond the barrier;
   - each candidate is moved to the nearest spot the claim system allows (clearance from the barriers of at least its radius plus a margin, not blocked by anything placed), scored by how much of its stretch it can see (rays from the camera to the car's height along the stretch, against the scenery, landmarks and the circuit's own walls and stands), and the best is claimed.
-  - Camera height above the ground: 26 units (about 4 m), 40 on the street circuits (over the catch fences).
+  - Camera height above the road: the lowest of 26, 40, 60 and 80 units (about 4 m up to a 13 m crane) from which it sees its whole stretch, with the catch fences counted as in the way (seen through from right behind, a fence fills the shot; the street circuits' fences stand 32 high). Failing that, the height that sees most of it.
 - **Coverage:** camera `k` covers the lap from 35% of the way after the previous camera to 35% of the way to the next. It sees the car coming, follows it past, and the broadcast cuts to the next camera.
 - **Pan and zoom:** the camera aims at the car (a little ahead of it), and its field of view keeps the car the same size in the frame (a subject ~110 units wide), between 4° and 40°.
 
@@ -134,7 +134,7 @@ The canvas HUD (speed panel, minimap, item badge) is not drawn during the replay
 - Quantisation stays inside the table's bounds.
 - Interpolation between samples: halfway is halfway, headings go the short way round across ±π, a jump is not smeared, discrete states come from the earlier sample, shots match by id.
 - Seeking lands on the right sample, before the start and after the end included.
-- Memory: bytes per minute of a 20-car recording are within budget (≤ 1.2 MB a minute; a ten-minute race < 12 MB is the hard ceiling, a typical race well under 10 MB).
+- Memory: bytes per minute of a 20-car recording are within budget (≤ 1.5 MB a minute; a typical four-minute race under 6 MB).
 - Camera maths: TV camera placement never places a camera inside the barriers or on a claimed spot, covers the lap without gaps, and the coverage cut goes to the next camera; the zoom keeps the subject's size; the director's shots are deterministic, cover the race and follow the closest battle.
 
 **Browser (`tools/checks/replay-check.js`, in `run-all`):**

@@ -28,7 +28,11 @@
   // ---- Quantisation (the same arithmetic stores and reads every field) ----
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
   // (+ 0 turns -0 into 0, as a typed array does.)
-  const int = (v, lo, hi) => clamp(Math.round(Number(v) || 0), lo, hi) + 0;
+  // (Written out, not with clamp(): this runs for every field of every car.)
+  const int = (v, lo, hi) => {
+    const r = Math.round(+v || 0);
+    return (r < lo ? lo : r > hi ? hi : r) + 0;
+  };
   const wrapAngle = (h) => {
     let a = (Number(h) || 0) % TAU;
     if (a >= Math.PI) a -= TAU;
@@ -58,9 +62,11 @@
   };
   const f32 = (v) => Math.fround(Number(v) || 0);
 
+  const itemIndexes = new WeakMap();
   function itemIndex(header, item) {
-    const i = header.items.indexOf(item);
-    return i < 0 ? 0 : i;
+    let index = itemIndexes.get(header.items);
+    if (!index) itemIndexes.set(header.items, index = new Map(header.items.map((name, i) => [name, i])));
+    return index.get(item) || 0;
   }
 
   // (Unrolled: this runs for every car at every sample. Same order as BITS.)
@@ -75,7 +81,7 @@
     const out = {
       x: f32(c.x), y: f32(c.y), d: f32(c.d), gap: D.gap(Q.gap(c.gap)),
       heading: D.heading(Q.heading(c.heading)), speed: D.speed(Q.speed(c.speed)), lat: D.lat(Q.lat(c.lat)),
-      steer: D.steer(Q.steer(c.steer)), throttle: D.throttle(Q.throttle(c.throttle)),
+      steer: D.steer(Q.steer(c.steer)), throttle: D.throttle(Q.throttle(c.throttle)), brake: D.throttle(Q.throttle(c.brake)),
       lap: Q.byte(c.lap), place: Q.byte(c.place), item: header.items[itemIndex(header, c.item)],
     };
     const bits = carBits(c);
@@ -127,7 +133,7 @@
       return {
         x: new Float32Array(c), y: new Float32Array(c), d: new Float32Array(c), gap: new Uint16Array(c),
         heading: new Int16Array(c), speed: new Int16Array(c), lat: new Int16Array(c),
-        steer: new Int8Array(c), throttle: new Uint8Array(c), lap: new Uint8Array(c), place: new Uint8Array(c), item: new Uint8Array(c),
+        steer: new Int8Array(c), throttle: new Uint8Array(c), brake: new Uint8Array(c), lap: new Uint8Array(c), place: new Uint8Array(c), item: new Uint8Array(c),
         bits: new Uint16Array(c),
         // Where each car was at the step between this sample and the next.
         midX: new Float32Array(c), midY: new Float32Array(c), midHeading: new Int16Array(c),
@@ -161,7 +167,7 @@
           const at = j * n + i;
           ch.x[at] = c.x || 0; ch.y[at] = c.y || 0; ch.d[at] = c.d || 0; ch.gap[at] = Q.gap(c.gap);
           ch.heading[at] = Q.heading(c.heading); ch.speed[at] = Q.speed(c.speed); ch.lat[at] = Q.lat(c.lat);
-          ch.steer[at] = Q.steer(c.steer); ch.throttle[at] = Q.throttle(c.throttle);
+          ch.steer[at] = Q.steer(c.steer); ch.throttle[at] = Q.throttle(c.throttle); ch.brake[at] = Q.throttle(c.brake);
           ch.lap[at] = Q.byte(c.lap); ch.place[at] = Q.byte(c.place); ch.item[at] = itemIndex(header, c.item);
           ch.bits[at] = carBits(c);
         }
@@ -189,7 +195,7 @@
         }
         for (let p = 0; p < header.posts; p += 1) ch.flags[j * header.posts + p] = Math.max(0, FLAGS.indexOf(s.flags && s.flags[p]));
         let keys = 0;
-        KEYS.forEach((k, b) => { if (s.keys && s.keys[k]) keys |= 1 << b; });
+        if (s.keys) for (let b = 0; b < KEYS.length; b += 1) if (s.keys[KEYS[b]]) keys |= 1 << b;
         ch.keys[j] = keys;
         count += 1;
         if (s.mid) rec.pushMid(s.mid);
@@ -232,7 +238,7 @@
           const car = {
             x: ch.x[at], y: ch.y[at], d: ch.d[at], gap: D.gap(ch.gap[at]),
             heading: D.heading(ch.heading[at]), speed: D.speed(ch.speed[at]), lat: D.lat(ch.lat[at]),
-            steer: D.steer(ch.steer[at]), throttle: D.throttle(ch.throttle[at]),
+            steer: D.steer(ch.steer[at]), throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]),
             lap: ch.lap[at], place: ch.place[at], item: header.items[ch.item[at]],
           };
           BITS.forEach((name, b) => { car[name] = Boolean(bits & (1 << b)); });
@@ -275,19 +281,23 @@
         const at = j * n + i;
         const keys = {};
         KEYS.forEach((name, b) => { keys[name] = Boolean(ch.keys[j] & (1 << b)); });
-        return { throttle: D.throttle(ch.throttle[at]), brake: Boolean(ch.bits[at] & (1 << BITS.indexOf("braking"))), steer: D.steer(ch.steer[at]), keys };
+        return { throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]), steer: D.steer(ch.steer[at]), keys };
       },
 
       // The race at any time t. Positions go step by step (from each sample
       // to the step after it, then to the next sample), straight between two
       // steps as the race itself draws them; the rest goes between samples.
       frameAt(t) {
-        const k = rec.indexAt(t);
+        const time = count ? clamp(t, header.t0, rec.timeOf(count - 1)) : t;
+        // Where the moment is in physics steps, snapped onto a step when it is
+        // one (so a frame on a step is that step exactly, not a rounding off it).
+        const raw = (time - header.t0) / header.stepMs;
+        const steps = Math.abs(raw - Math.round(raw)) < 1e-6 ? Math.round(raw) : raw;
+        const k = count ? clamp(Math.floor(steps / SAMPLE_EVERY), 0, count - 1) : 0;
         const a = rec.sampleAt(k);
         const last = k >= count - 1;
-        let alpha = !last ? clamp((t - rec.timeOf(k)) / sampleMs, 0, 1) : 0;
-        if (alpha < 1e-9) alpha = 0;
-        const time = count ? clamp(t, header.t0, rec.timeOf(count - 1)) : t;
+        const into = last ? 0 : clamp(steps - k * SAMPLE_EVERY, 0, SAMPLE_EVERY);
+        const alpha = into / SAMPLE_EVERY;
         const flashes = rec.flashes.filter((f) => f.at <= time && time < f.until)
           .map((f) => ({ ...f, t: (time - f.at) / (f.until - f.at) }));
         const frame = { t: time, k, alpha, ...a, flashes };
@@ -298,12 +308,12 @@
         const along = (from, to) => ((to - from) % L + L * 1.5) % L - L / 2;
         const mix = (u, v, f = alpha) => u + (v - u) * f;
         // Which two steps the moment is between, and how far.
-        const second = alpha * SAMPLE_EVERY >= 1;
-        const f = second ? alpha * SAMPLE_EVERY - 1 : alpha * SAMPLE_EVERY;
+        const second = into >= 1;
+        const f = second ? into - 1 : into;
         frame.cars = a.cars.map((ca, i) => {
           const cb = b.cars[i];
           const out = { ...ca };
-          ["speed", "lat", "gap", "steer", "throttle"].forEach((field) => { out[field] = mix(ca[field], cb[field]); });
+          ["speed", "lat", "gap", "steer", "throttle", "brake"].forEach((field) => { out[field] = mix(ca[field], cb[field]); });
           out.d = Math.abs(along(ca.d, cb.d)) > JUMP * 2 ? (alpha < 0.5 ? ca.d : cb.d) : wrap(ca.d + along(ca.d, cb.d) * alpha);
           // The step between: recorded, or (none recorded) halfway, unless
           // the car jumped (then it is where it was until the jump).
@@ -375,13 +385,16 @@
 
   // Cameras round the lap, off the track: at each anchor, on whichever side
   // sees its stretch best (visible(from, to) answers line of sight), claimed
-  // through the course's occupancy so nothing else is ever put there.
-  function placeTvCameras(course, { height = 26, visible = null } = {}) {
+  // through the course's occupancy so nothing else is ever put there. Each
+  // stands at the lowest of `heights` that sees its whole stretch (over a
+  // catch fence, say), or failing that the one that sees most of it.
+  function placeTvCameras(course, { height = 26, heights = [height], visible = null } = {}) {
     const C = TV_CAM;
     const L = course.track.totalLength;
     const count = Math.max(3, Math.round(L / C.spacing));
     const seg = L / count;
     const cams = [];
+    const RAYS = 7;
     for (let k = 0; k < count; k += 1) {
       const d = (k + 0.5) * seg;
       const p = course.sampleAt(d);
@@ -390,16 +403,22 @@
         const reach = (side > 0 ? p.outerR : p.outerL) + off;
         const spot = nearestClearSpot(course, p.x + p.nx * side * reach, p.y + p.ny * side * reach, C.radius, C.margin, C.search);
         if (!spot) return;
-        const from = { x: spot.x, y: (p.h || 0) + height, z: spot.z };
-        let seen = 0;
-        if (visible) {
-          for (let j = 0; j <= 7; j += 1) {
-            const q = course.sampleAt(wrapLap(d - C.before * seg + (j / 7) * seg, L));
-            if (visible(from, { x: q.x, y: (q.h || 0) + 4, z: q.y })) seen += 1;
-          }
+        let pick = null;
+        for (let hi = 0; hi < heights.length; hi += 1) {
+          const from = { x: spot.x, y: (p.h || 0) + heights[hi], z: spot.z };
+          let seen = 0;
+          if (visible) {
+            for (let j = 0; j <= RAYS; j += 1) {
+              const q = course.sampleAt(wrapLap(d - C.before * seg + (j / RAYS) * seg, L));
+              if (visible(from, { x: q.x, y: (q.h || 0) + 4, z: q.y })) seen += 1;
+            }
+          } else seen = RAYS + 1;
+          if (!pick || seen > pick.seen) pick = { from, seen, hi };
+          if (seen > RAYS) break;
         }
-        const score = seen * 1e6 - Math.hypot(spot.x - p.x, spot.z - p.y);
-        if (!best || score > best.score) best = { score, ...from, d, side };
+        // Most seen first; then the lower; then the nearer the road.
+        const score = pick.seen * 1e6 - pick.hi * 1e3 - Math.hypot(spot.x - p.x, spot.z - p.y);
+        if (!best || score > best.score) best = { score, ...pick.from, d, side };
       }));
       if (!best) continue;
       course.occupied.add(best.x, best.z, C.radius);

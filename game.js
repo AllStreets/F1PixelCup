@@ -2024,6 +2024,7 @@ function updateRacer(racer, dt, now) {
   // steering, and the replay's input trace reads them.
   racer.steer = clamp(steerInput, -1, 1);
   racer.throttleIn = throttle;
+  racer.brakeIn = brake;
   racer.braking = brake > 0 || (reverse > 0 && racer.speed > 0);
   racer.offroad = offroad;
 
@@ -2532,6 +2533,9 @@ function recordStep(tick) {
   keys.item = keys.item || input.space;
   state.recordSteps += 1;
   if (state.recordSteps % Replay.SAMPLE_EVERY === 0) recordSample(tick);
+  // Between samples the cars' positions alone (a contact can shove a car in
+  // one step), so every step the race drew is in the replay exactly.
+  else rec.pushMid(state.racers);
 }
 
 function recordId(object) {
@@ -2547,27 +2551,36 @@ function recordId(object) {
 function recordSample(now) {
   const rec = state.recording;
   const track = state.track;
+  const racers = state.racers;
   // The running order, as getSortedRacers has it (each car's progress worked
-  // out once; the sort is stable, so ties fall the same way).
-  const sorted = state.racers.map((racer) => [racer, getRaceProgress(racer)])
-    .sort((a, b) => b[1] - a[1]).map(([racer]) => racer);
-  const leader = sorted[0];
-  const place = new Map(sorted.map((racer, index) => [racer, index + 1]));
-  const cars = state.racers.map((racer) => {
+  // out once; the sort is stable, so ties fall the same way). The arrays and
+  // the cars' records are kept from sample to sample: this runs 30 times a
+  // second, all race.
+  const pool = state.recordPool || (state.recordPool = { order: [], progress: [], cars: [] });
+  const { order, progress, cars } = pool;
+  order.length = progress.length = cars.length = racers.length;
+  for (let i = 0; i < racers.length; i += 1) {
+    order[i] = i;
+    progress[i] = getRaceProgress(racers[i]);
+    if (!cars[i]) cars[i] = {};
+  }
+  order.sort((a, b) => progress[b] - progress[a]);
+  const leader = racers[order[0]];
+  order.forEach((index, place) => { cars[index].place = place + 1; });
+  racers.forEach((racer, i) => {
+    const car = cars[i];
     const charge = racer.driftCharge || 0;
-    return {
-      x: racer.x, y: racer.y, d: racer.trackDistance || 0, heading: racer.heading, speed: racer.speed, lat: racer.lat || 0,
-      // The tower's own gap: seconds behind the leader, as getRaceStandings has it.
-      gap: racer === leader ? 0 : gapSeconds(racer, leader),
-      steer: racer.steer || 0, throttle: racer.throttleIn || 0,
-      lap: racer.lap, place: place.get(racer), item: racer.currentItem,
-      spinning: racer.spinUntil > now, drs: racer.drsUntil > now, boosting: racer.boostUntil > now,
-      formation: racer.formationUntil > now, protected: racer.protectedUntil > now,
-      drifting: racer.drifting, driftRight: racer.driftSide > 0, finished: racer.finished,
-      trailingOil: racer.trailingOil, offroad: Boolean(racer.offroad), underRoof: Boolean(racer.underRoof),
-      braking: Boolean(racer.braking), roulette: racer.rouletteUntil > now,
-      charge: charge > 1.6 ? 2 : charge > 0.9 ? 1 : 0,
-    };
+    car.x = racer.x; car.y = racer.y; car.d = racer.trackDistance || 0; car.heading = racer.heading; car.speed = racer.speed; car.lat = racer.lat || 0;
+    // The tower's own gap: seconds behind the leader, as getRaceStandings has it.
+    car.gap = racer === leader ? 0 : gapSeconds(racer, leader);
+    car.steer = racer.steer || 0; car.throttle = racer.throttleIn || 0; car.brake = racer.brakeIn || 0;
+    car.lap = racer.lap; car.item = racer.currentItem;
+    car.spinning = racer.spinUntil > now; car.drs = racer.drsUntil > now; car.boosting = racer.boostUntil > now;
+    car.formation = racer.formationUntil > now; car.protected = racer.protectedUntil > now;
+    car.drifting = racer.drifting; car.driftRight = racer.driftSide > 0; car.finished = racer.finished;
+    car.trailingOil = racer.trailingOil; car.offroad = Boolean(racer.offroad); car.underRoof = Boolean(racer.underRoof);
+    car.braking = Boolean(racer.braking); car.roulette = racer.rouletteUntil > now;
+    car.charge = charge > 1.6 ? 2 : charge > 0.9 ? 1 : 0;
   });
   const objects = [
     ...state.shots.map((shot) => ({ id: recordId(shot), type: shot.type, d: shot.d, lat: shot.lat, age: shot.age })),
@@ -2943,8 +2956,9 @@ const REPLAY_CAMERAS = ["director", "trackside", "onboard", "helicopter"];
 const REPLAY_SEEK_MS = 5000;
 const REPLAY_TRACE_MS = 4000;
 
+// The replay is drawn by the 3D renderer only (its cameras are 3D views).
 function replayAvailable() {
-  return Boolean(state.recording && state.recording.count > 1 && window.Replay);
+  return Boolean(state.recording && state.recording.count > 1 && window.Replay && worldView() === "3d");
 }
 
 function openReplay() {
@@ -2956,6 +2970,7 @@ function openReplay() {
   Object.assign(state.replay, { time: 0, playing: true, speed: 1, camera: "director", focusId: null, pendingDt: 0 });
   state.phase = "replay";
   state.particles = [];
+  if (worldView() === "3d" && window.Render3D && Render3D.prepareReplay) render3dSafely(() => Render3D.prepareReplay(state.track));
   if (window.Screens) window.Screens.showReplay();
   return true;
 }
@@ -3121,7 +3136,7 @@ function replayGraphics(frame, shot, focus) {
     const c = rec.controls(j, fc.index);
     history.push(fc.meta.isPlayer
       ? { throttle: c.keys.throttle ? 1 : 0, brake: c.keys.brake ? 1 : 0 }
-      : { throttle: c.throttle, brake: c.brake ? 1 : 0 });
+      : { throttle: c.throttle, brake: c.brake });
   }
   const now = rec.controls(k, fc.index);
   const steer = fc.meta.isPlayer ? (now.keys.right ? 1 : 0) - (now.keys.left ? 1 : 0) : fc.steer;
@@ -3153,6 +3168,11 @@ function replayGraphics(frame, shot, focus) {
 }
 
 function drawReplay() {
+  // (Should the 3D renderer fail, back to the results: there is no 2D replay.)
+  if (worldView() !== "3d") {
+    exitReplay();
+    return;
+  }
   const r = state.replay;
   const rec = r.rec;
   ctx.clearRect(0, 0, view.width, view.height);

@@ -86,18 +86,19 @@ async (page) => {
     const truth = [];
     const on = run(truth);
     window.__truth = truth;
-    // The cost of a sample, timed over a batch (a single sample is under the
+    // The recorder's cost per step (a sample every second step, the cars'
+    // positions on the others), timed over a batch (one step is under the
     // browser's clock resolution), into a scratch recording.
     const kept = state.recording;
     startRecording(state.lastTick);
-    const N = 2000;
+    const N = 4000;
     const t0 = performance.now();
-    for (let i = 0; i < N; i += 1) recordSample(state.lastTick);
-    const sampleUs = ((performance.now() - t0) / N) * 1000;
+    for (let i = 0; i < N; i += 1) recordStep(state.lastTick);
+    const recordUs = ((performance.now() - t0) / N) * 1000;
     state.recording = kept;
     return {
       sameRace: JSON.stringify(off.final) === JSON.stringify(on.final),
-      steps: on.steps, stepUs: (on.ms / on.steps) * 1000, sampleUs,
+      steps: on.steps, stepUs: (on.ms / on.steps) * 1000, recordUs,
       samples: kept.count, bytes: kept.bytes(), duration: kept.duration, sampleMs: kept.sampleMs,
       phase: state.phase,
     };
@@ -110,9 +111,9 @@ async (page) => {
   results.recordedEverySecondStep = (race && race.samples === Math.floor(race.steps / 2) + 1) || JSON.stringify(race);
   const mbPerMinute = race && race.bytes / 1e6 / (race.duration / 60000);
   info.mbPerMinute = mbPerMinute;
-  info.recordPercentOfStep = race && (race.sampleUs / 2 / race.stepUs) * 100;
-  results.memoryWithinBudget = (mbPerMinute > 0 && mbPerMinute < 1.3) || `${mbPerMinute} MB a minute`;
-  results.recordingCheap = (info.recordPercentOfStep < 3) || `${info.recordPercentOfStep}% of a step`;
+  info.recordPercentOfStep = race && (race.recordUs / race.stepUs) * 100;
+  results.memoryWithinBudget = (mbPerMinute > 0 && mbPerMinute <= 1.5) || `${mbPerMinute} MB a minute`;
+  results.recordingCheap = (info.recordPercentOfStep < 2) || `${info.recordPercentOfStep}% of a step`;
 
   // The results screen offers the replay; it opens from the button.
   results.replayButtonShown = await step(() => {
@@ -124,8 +125,8 @@ async (page) => {
   results.replayOpens = await step(() => (state.phase === "replay" && !document.getElementById("replay-screen").classList.contains("hidden")) || state.phase);
 
   // At sampled race times, the cars are drawn exactly where the race had them
-  // (the recording's Float32 positions: within a millimetre); between two
-  // samples, within a hair of where the race had them at that step.
+  // (the recording's Float32 positions: within a millimetre), and at the
+  // steps between samples too (positions are kept every step).
   const match = await step(async () => {
     const truth = window.__truth;
     Game.replay.setCamera("trackside");
@@ -155,7 +156,7 @@ async (page) => {
   });
   info.positions = match;
   results.replayPositionsMatchRace = (match && match.checked > 400 && match.sample < 0.01) || JSON.stringify(match);
-  results.betweenSamplesClose = (match && match.between < 0.5) || JSON.stringify(match);
+  results.betweenSamplesExact = (match && match.between < 0.01) || JSON.stringify(match);
   results.carsDrawnWhereReplayHasThem = (match && match.drawn < 0.01) || JSON.stringify(match);
 
   // Every camera renders, from where it should be: trackside cameras outside
@@ -180,9 +181,9 @@ async (page) => {
   });
   info.cameras = cams;
   const all = (mode, fn) => Array.isArray(cams && cams[mode]) && cams[mode].every((v) => v && v.mode === mode && v.drawing && fn(v));
-  results.tracksideCamerasOffTheTrack = all("trackside", (v) => v.cam >= 0 && v.clearance >= 0 && v.camsClearance >= 0 && v.cams >= 8 && v.up >= 20) || JSON.stringify(cams && cams.trackside);
-  results.onboardAboveItsCar = all("onboard", (v) => v.toCar < 10 && v.aboveCar > 6) || JSON.stringify(cams && cams.onboard);
-  results.helicopterHighAndWide = all("helicopter", (v) => v.up >= 200 && v.toCar > 150) || JSON.stringify(cams && cams.helicopter);
+  results.tracksideCamerasOffTheTrack = all("trackside", (v) => v.cam >= 0 && v.clearance >= 0 && v.camsClearance >= 0 && v.cams >= 8 && v.up >= 20) || `trackside: ${JSON.stringify(cams && cams.trackside)}`;
+  results.onboardAboveItsCar = all("onboard", (v) => v.toCar < 10 && v.aboveCar > 6) || `onboard: ${JSON.stringify(cams && cams.onboard)}`;
+  results.helicopterHighAndWide = all("helicopter", (v) => v.up >= 200 && v.toCar > 150) || `helicopter: ${JSON.stringify(cams && cams.helicopter)}`;
 
   // The director cuts between cameras and cars by itself.
   const director = await step(async () => {
@@ -212,7 +213,7 @@ async (page) => {
 
   // Speeds: the replay clock runs at the chosen speed (clicked on the bar).
   const advance = async (speed) => {
-    await p.click(`#replay-screen [data-replay=speed][data-value="${speed}"]`);
+    try { await p.click(`#replay-screen [data-replay=speed][data-value="${speed}"]`, { timeout: 3000 }); } catch (e) { return `no ${speed}x button`; }
     await step(() => { Game.replay.seek(state.replay.rec.duration * 0.2); if (!state.replay.playing) Game.replay.togglePlay(); });
     const a = await step(() => ({ t: state.replay.time, w: performance.now() }));
     await p.waitForTimeout(700);
@@ -221,7 +222,7 @@ async (page) => {
   };
   const rates = { 0.25: await advance(0.25), 1: await advance(1), 4: await advance(4) };
   info.rates = rates;
-  results.speedsWork = (rates[1] > 0.5 && rates[1] < 1.2 && rates[4] / rates[1] > 3 && rates[4] / rates[1] < 5 && rates[0.25] / rates[1] > 0.15 && rates[0.25] / rates[1] < 0.35) || JSON.stringify(rates);
+  results.speedsWork = (typeof rates[1] === "number" && rates[1] > 0.5 && rates[1] < 1.2 && rates[4] / rates[1] > 3 && rates[4] / rates[1] < 5 && rates[0.25] / rates[1] > 0.15 && rates[0.25] / rates[1] < 0.35) || JSON.stringify(rates);
 
   // Keys: Space pauses, the arrows seek five seconds and change car.
   results.keysWork = await step(() => {
@@ -236,7 +237,8 @@ async (page) => {
     Game.replay.seek(20000);
     key("ArrowRight");
     const seeked = Math.abs(r.time - 25000) < 1e-6;
-    const before = Render3D.inspect().view && Render3D.inspect().view.focusId;
+    // The car the director has at this moment (no frame drawn since the seek).
+    const before = replayShot().focusId;
     key("ArrowDown");
     const manual = r.camera !== "director" && r.focusId && r.focusId !== before;
     return (paused && seeked && manual) || JSON.stringify({ paused, seeked, manual, before, after: r.focusId, camera: r.camera });
