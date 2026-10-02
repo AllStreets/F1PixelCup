@@ -116,8 +116,12 @@ def setup(collar):
     this collar."""
     VERTS[:] = [fit(v, collar) for v in RAW]
     KEYS.clear()
+    # Where the neck meets the collar no key moves it: each key is fitted on
+    # its own, and several together could push the neck through the collar
+    # or open a gap round it. (The keys fade out over the centimetre above.)
+    hold = lambda v: smoothstep(COLLAR_TOP + 0.007, COLLAR_TOP + 0.018, v.z)
     for name, deltas in HEAD["keys"].items():
-        KEYS[name] = {int(i): fit(RAW[int(i)] + D(d), collar) - VERTS[int(i)] for i, d in deltas.items()}
+        KEYS[name] = {int(i): (fit(RAW[int(i)] + D(d), collar) - VERTS[int(i)]) * hold(VERTS[int(i)]) for i, d in deltas.items()}
 
 
 setup(default_collar())
@@ -302,8 +306,9 @@ IRIS_R = 0.0062   # the visible iris, about 12 mm across
 
 def ball(side):
     """The eyeball: MakeHuman's helper is a sphere 32 mm across, roomier than
-    an eye (about 25 mm); ours is a little smaller, its front where the
-    helper's is, so it sits back in the socket's corners."""
+    an eye (about 24 mm); ours is 29 mm, a little smaller than the helper,
+    its front where the helper's is, so it fills the socket's corners
+    without breaking through the lids round it."""
     _, c, r = eye_frame(side)
     R = r * 0.9
     return c + Vector((r * 0.94 - R, 0, 0)), R
@@ -343,8 +348,8 @@ def iris_image():
 
 def eye(side, mats):
     """An eyeball: the sclera, the iris disc set into it, and a clear cornea
-    over the iris. Shape keys move and scale it with the face: its helper
-    for the keys that move that, and the lids round it for the eye's size."""
+    over the iris. Shape keys move it with the face, as they move its helper;
+    only the eye's own size scales it, as much as the lids round it open."""
     idx, c0, r = eye_frame(side)
     c, R = ball(side)
     bm = bmesh.new()
@@ -418,7 +423,9 @@ def eye(side, mats):
     for name in KEY_NAMES:
         moved = [VERTS[i] + KEYS[name].get(i, Vector()) for i in idx]
         c2 = sum(moved, Vector()) / len(moved)
-        r2 = sum((p - c2).length for p in moved) / len(moved)
+        # (A key that stretches the head one way stretches the helper too;
+        # an eyeball stays round and its size, so only its centre moves.)
+        r2 = r
         if name.startswith("eye_size"):
             # The eye's own size: as much as the lids round it open or close.
             lc = sum((VERTS[i] for i in lids), Vector()) / len(lids)
@@ -832,9 +839,9 @@ def beard_area(v, L):
     # sideburn by the ear.
     top = (eye.z - 0.044) * (1 - side) + (ear.z + 0.006) * side
     upper = 1 - smoothstep(top - 0.012, top + 0.006, v.z)
-    # The lower edge: under the chin to the top of the throat, rising along
-    # the jaw to its angle under the ear.
-    low = (chin.z - 0.022) * (1 - side) + (ear.z - 0.07) * side
+    # The lower edge: trimmed close under the chin, rising along the jaw to
+    # its angle under the ear (never down the throat).
+    low = (chin.z - 0.01) * (1 - side) + (ear.z - 0.07) * side
     lower = smoothstep(low - 0.006, low + 0.004, v.z)
     # Not behind the ear's front.
     front = smoothstep(ear.x - 0.004, ear.x + 0.01, v.x)

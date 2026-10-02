@@ -1,7 +1,7 @@
 // The drivers' faces (docs/superpowers/specs/2026-10-01-driver-faces-design.md):
 // what a driver's `look` in game-data.js may say, how it is checked, and how
 // its shape sliders become the head's morph target weights (the shape keys
-// tools/blender/build_driver.py bakes from MakeHuman's targets). Pure; in the
+// tools/blender/driver_head.py bakes from MakeHuman's targets). Pure; in the
 // page it defines window.Faces (r3d/driver.js imports it for that); in Node it
 // is require()-able.
 (function attach(root, factory) {

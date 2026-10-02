@@ -340,9 +340,8 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
 
   function buildFigures() {
     figures = entries.map((e) => {
-      // Bareheaded on the podium (the user, 2026-10-01): the option takes
-      // effect with the driver faces (r3d/driver.js ignores it until then, and
-      // the drivers wear their helmets).
+      // Bareheaded on the podium (the user, 2026-10-01): each driver's own
+      // face, hair and beard (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
       const fig = buildDriver(e.driver, e.team, { headwear: "none" });
       const s = Ceremony.stepFor(e.place);
       // The figure faces +X; turned to face the camera (+Z).

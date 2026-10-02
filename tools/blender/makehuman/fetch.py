@@ -13,11 +13,10 @@ import os
 import sys
 import urllib.request
 
-COMMIT = "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
-BASE = f"https://raw.githubusercontent.com/makehumancommunity/makehuman/{COMMIT}/makehuman/data/"
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from extract import FILES  # noqa: E402
+from extract import COMMIT, FILES  # noqa: E402
+
+BASE = f"https://raw.githubusercontent.com/makehumancommunity/makehuman/{COMMIT}/makehuman/data/"
 
 
 def main(cache):

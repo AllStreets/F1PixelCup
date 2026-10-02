@@ -467,8 +467,13 @@ if len(collar) < 12:
 head_skin, head_parts = driver_head.build(MATS, collar)
 hg = head_skin.vertex_groups.new(name="head")
 cg = head_skin.vertex_groups.new(name="chest")
+# (The bend is all below the beard and the hair, which ride the head bone
+# rigidly: the skin under them must move exactly as they do.)
+LOWEST_HAIR = min(min((ob.matrix_world @ v.co).z for v in ob.data.vertices) for ob in head_parts if ob.name in ("hair", "beard"))
+if LOWEST_HAIR < 1.512:
+    raise RuntimeError(f"hair reaches down to {LOWEST_HAIR:.3f} m, into the neck's bend")
 for v in head_skin.data.vertices:
-    w = driver_head.smoothstep(1.47, 1.535, v.co.z)
+    w = driver_head.smoothstep(1.48, 1.51, v.co.z)
     hg.add([v.index], w, "REPLACE")
     if w < 1:
         cg.add([v.index], 1 - w, "REPLACE")

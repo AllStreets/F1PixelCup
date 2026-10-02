@@ -13,13 +13,15 @@ test("every driver has a complete look", () => {
   });
 });
 
-test("every driver's face is his own: no two looks alike, each shaped", () => {
+test("every driver's face is his own, and none pushed to an extreme", () => {
   const seen = new Set();
   DRIVERS.forEach((d) => {
-    const key = JSON.stringify(d.look);
-    assert.ok(!seen.has(key), `${d.id}'s look is somebody else's`);
+    const key = JSON.stringify(d.look.shape);
+    assert.ok(!seen.has(key), `${d.id}'s face is somebody else's`);
     seen.add(key);
     assert.ok(Object.keys(d.look.shape).length >= 6, `${d.id}'s face has its own shape`);
+    // A likeness, never a caricature: no slider past 0.7.
+    Object.entries(d.look.shape).forEach(([k, v]) => assert.ok(Math.abs(v) <= 0.7, `${d.id}'s ${k} is ${v}`));
   });
 });
 

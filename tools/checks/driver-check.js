@@ -123,6 +123,57 @@ async (page) => {
     // Different faces, hair moved by millimetres to centimetres.
     return (most > 0.002 && most < 0.05) || most;
   });
+  // Exactly so: each hair vertex sits where its head triangle's morphed
+  // corners put it (the head's own morph targets and influences, blended by
+  // the binding), and each eye where its keys move and scale it.
+  results.hairOnTheMorphedHead = await p.evaluate(() => {
+    let worst = 0;
+    for (const f of window.preview.figures) {
+      let head = null, hair = null;
+      f.model.traverse((n) => { if (n.isMesh && n.name === "head_skin") head = n; if (n.isMesh && n.name === "hair") hair = n; });
+      const vid = head.geometry.attributes._vid, morphs = head.geometry.morphAttributes.position;
+      const row = new Map();
+      for (let i = 0; i < vid.count; i += 1) row.set(Math.round(vid.getX(i)), i);
+      const moved = (i, c) => head.morphTargetInfluences.reduce((n, w, k) => n + w * morphs[k].getComponent(i, c), 0);
+      const src = hair.userData.sharedGeometry, pos = hair.geometry.attributes.position;
+      for (let v = 0; v < src.attributes.position.count; v += 97) {
+        for (let c = 0; c < 3; c += 1) {
+          let want = src.attributes.position.getComponent(v, c);
+          for (let k = 0; k < 3; k += 1) want += src.attributes._bary.getComponent(v, k) * moved(row.get(Math.round(src.attributes._bind.getComponent(v, k))), c);
+          worst = Math.max(worst, Math.abs(want - pos.getComponent(v, c)));
+        }
+      }
+    }
+    return worst < 1e-5 || worst;
+  });
+  results.eyesFollowTheirKeys = await p.evaluate(() => {
+    let worst = 0;
+    for (const f of window.preview.figures) {
+      const look = DRIVERS.find((d) => d.id === f.looks().driverId).look;
+      const w = window.Faces.morphWeights(look);
+      f.model.traverse((n) => {
+        if (!n.isMesh || !n.parent || !n.parent.userData.eye_keys) return;
+        const { eye_keys: keys, eye_centre: c } = n.parent.userData;
+        const d = [0, 0, 0];
+        let s = 1;
+        Object.entries(keys).forEach(([k, v]) => { const x = w[k] || 0; d[0] += x * v[0]; d[1] += x * v[1]; d[2] += x * v[2]; s += x * v[3]; });
+        const src = n.userData.sharedGeometry.attributes.position, pos = n.geometry.attributes.position;
+        for (let i = 0; i < src.count; i += 13) {
+          for (let k = 0; k < 3; k += 1) worst = Math.max(worst, Math.abs(c[k] + (src.getComponent(i, k) - c[k]) * s + d[k] - pos.getComponent(i, k)));
+        }
+      });
+    }
+    // And a bigger eye really is bigger: Leclerc's (eye_size up) against the
+    // shared rest shape.
+    let lec = null;
+    window.preview.figures[0].model.traverse((n) => { if (n.isMesh && n.parent && n.parent.name === "eye_L" && n.material.name === "eye_sclera") lec = n; });
+    lec.geometry.computeBoundingBox();
+    const rest = lec.userData.sharedGeometry;
+    rest.computeBoundingBox();
+    const grew = (lec.geometry.boundingBox.max.z - lec.geometry.boundingBox.min.z) / (rest.boundingBox.max.z - rest.boundingBox.min.z);
+    return (worst < 1e-6 && grew > 1.01) || JSON.stringify({ worst, grew });
+  });
+
   // With the helmet on, as in the car: the helmet in the driver's own design,
   // and nothing of the face.
   const helmeted = await p.evaluate(async () => {

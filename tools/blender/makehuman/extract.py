@@ -13,11 +13,12 @@ head.json holds:
   more muscular than average, the three ethnic targets at a third each, the
   eyes a little more open and the mouth's corners a little up);
 - quads (or triangles) and their UVs, as MakeHuman maps them;
-- helpers: MakeHuman's eye and eyelash helper geometry, which every target
-  moves too (the eyeballs and the lashes follow the face);
+- helpers: MakeHuman's eye helper geometry, which every target moves too
+  (the eyeballs follow the face);
 - keys: each shape key as sparse deltas {vertex: [dx, dy, dz]} over the
-  vertices kept (body and helpers alike), less the movement of the neck's
-  foot, so a key reshapes the head without lifting it off the shoulders.
+  vertices kept (body and helpers alike); the ones that move the whole head
+  are held at the neck's foot, and the face's length at the chin (see
+  main()).
 """
 import json
 import os
@@ -25,8 +26,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CUT_Y = 5.6  # keep every body face wholly above this height (decimetres)
-HELPERS = ["helper-l-eye", "helper-r-eye", "helper-l-eyelashes-1", "helper-r-eyelashes-1",
-           "helper-l-eyelashes-2", "helper-r-eyelashes-2"]
+HELPERS = ["helper-l-eye", "helper-r-eye"]
+COMMIT = "a8bc2d54ff0ac92e78ff71431b1023eda42bf482"
 
 # The base shape: (target, weight).
 BASE = [
@@ -94,8 +95,9 @@ BIPOLAR = {
 # Unipolar keys (0..1).
 UNIPOLAR = {f"head_{s}": one(f"head/head-{s}") for s in ("square", "oval", "round", "triangular", "invertedtriangular", "rectangular", "diamond")}
 UNIPOLAR["chin_cleft"] = one("chin/chin-cleft-incr")
-# The keys that move the whole head, held at the neck's foot (see main()).
-ANCHORED = {"face_length", "head_depth"}
+# The keys that move the whole head, held still somewhere (see main()): at
+# the neck's foot, or for the face's length, at the chin.
+ANCHORED = {"face_length": "chin", "head_depth": "foot"}
 # The ethnic blend, as differences from the even mix in the base shape.
 ETHNIC = ("african", "asian", "caucasian")
 
@@ -161,19 +163,31 @@ def main(cache):
     uv_keep = sorted({t for k in faces for t in FT[k]} | {t for fs in helper_faces.values() for k in fs for t in FT[k]})
     uv_index = {t: n for n, t in enumerate(uv_keep)}
 
-    # The neck's foot: the lowest sixth of the body kept. The keys that scale
-    # or move the whole head (MakeHuman's ethnic targets change the figure's
-    # height, lifting the head several centimetres; the face's length and
-    # depth scale it about its middle) are moved so this stays put, and the
-    # neck always stands in the suit's collar. The local ones are left as
-    # MakeHuman made them.
-    ys = sorted(V[i][1] for k in faces for i in F[k])
-    foot = [i for i in {i for k in faces for i in F[k]} if V[i][1] <= ys[len(ys) // 6]]
+    # The keys that scale or move the whole head are moved so a part of it
+    # stays put. MakeHuman's ethnic targets change the figure's height,
+    # lifting the head several centimetres, and its depth scales it about its
+    # middle: those are held at the neck's foot (the lowest sixth of the body
+    # kept), so the neck always stands in the suit's collar. The face's length
+    # is held at the chin, so a long face grows up, never down into the
+    # collar. The local ones are left as MakeHuman made them.
+    body = {i for k in faces for i in F[k]}
+    ys = sorted(V[i][1] for i in body)
+    front = max(V[i][2] for i in body)
+    # (The chin: the lowest point of the face's middle, within 6 cm of the
+    # nose's tip front to back, not the throat behind it.)
+    tip = min(body, key=lambda j: abs(V[j][0]) + abs(V[j][2] - front))
+    jaw = [i for i in body if abs(V[i][0]) < 0.25 and V[i][2] > front - 0.6 and V[i][1] < V[tip][1]]
+    low = min(V[i][1] for i in jaw)
+    anchors = {
+        "foot": [i for i in body if V[i][1] <= ys[len(ys) // 6]],
+        "chin": [i for i in jaw if V[i][1] < low + 0.15],
+    }
 
-    def sparse(d, anchored=False):
+    def sparse(d, anchor=None):
         t = [0.0, 0.0, 0.0]
-        if anchored:
-            t = [sum(d.get(i, (0.0, 0.0, 0.0))[k] for i in foot) / len(foot) for k in range(3)]
+        if anchor:
+            held = anchors[anchor]
+            t = [sum(d.get(i, (0.0, 0.0, 0.0))[k] for i in held) / len(held) for k in range(3)]
         out = {}
         for i in keep:
             v = [x - y for x, y in zip(d.get(i, (0.0, 0.0, 0.0)), t)]
@@ -183,16 +197,16 @@ def main(cache):
 
     keys = {}
     for name, (plus, minus) in BIPOLAR.items():
-        keys[name + "_incr"] = sparse(mix(plus), name in ANCHORED)
-        keys[name + "_decr"] = sparse(mix(minus), name in ANCHORED)
+        keys[name + "_incr"] = sparse(mix(plus), ANCHORED.get(name))
+        keys[name + "_decr"] = sparse(mix(minus), ANCHORED.get(name))
     for name, parts in UNIPOLAR.items():
         keys[name] = sparse(mix(parts))
     for e in ETHNIC:
         parts = [(f"macrodetails/{e}-male-young", 1.0)] + [(f"macrodetails/{o}-male-young", -1 / 3) for o in ETHNIC]
-        keys[f"ethnic_{e}"] = sparse(mix(parts), True)
+        keys[f"ethnic_{e}"] = sparse(mix(parts), "foot")
 
     doc = {
-        "source": "MakeHuman base mesh hm08 and targets, makehumancommunity/makehuman@" + os.environ.get("MH_COMMIT", "a8bc2d54ff0ac92e78ff71431b1023eda42bf482") + ", CC0 1.0",
+        "source": "MakeHuman base mesh hm08 and targets, makehumancommunity/makehuman@" + COMMIT + ", CC0 1.0",
         "units": "decimetres, Y up, facing +Z, +X the figure's left",
         "verts": [[round(x, 5) for x in V[i]] for i in keep],
         "uvs": [[round(x, 5) for x in VT[t]] for t in uv_keep],

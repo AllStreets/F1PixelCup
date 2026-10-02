@@ -52,9 +52,11 @@ export function loadDriver(onReady, onError, url = "./assets/driver.glb") {
     clips = gltf.animations;
     template.traverse((node) => {
       if (node.isMesh) {
-        // (The lashes and brows are strands on cards and patches: as solid
-        // shapes their shadows would only smudge the eyes.)
-        node.castShadow = !/^(lashes|brows)$/.test(node.name);
+        // (The strand parts cast none: the shadow pass would draw each shell
+        // as a plain surface just off the skin, every layer of it, casting
+        // nothing a light would show; and the lashes' and brows' cards would
+        // only smudge the eyes.)
+        node.castShadow = !/^(lashes|brows|hair|hair_bun|beard)$/.test(node.name);
         node.receiveShadow = true;
         // The lashes' strands, clamped: their tips' row must never wrap
         // round to the roots'. (Shared by every figure.)
@@ -85,6 +87,9 @@ export function suitColours(team) {
 // pores and mottling are drawn in; a soft wrap of light at the shadow's
 // edge, redder than the rest, stands in for light travelling through skin.
 const WRAP_FROM = "reflectedLight.directDiffuse += irradiance * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );";
+// (The skin's and the hair's light replace that line of three.js's own; a
+// three.js whose line differs must fail loudly, not draw them flat.)
+if (!THREE.ShaderChunk.lights_physical_pars_fragment.includes(WRAP_FROM)) throw new Error("r3d/driver.js: three.js's direct light has changed; update WRAP_FROM");
 const NOISE = `
   // (A hash without sine: steady at the large lattice values fine detail
   // reaches, where sin() loses its precision and speckles.)
@@ -358,9 +363,11 @@ function ownGeometry(mesh, layers, variant) {
   const geo = layers ? new THREE.InstancedBufferGeometry() : new THREE.BufferGeometry();
   // A shell shared by several styles carries each one's strands
   // (_tip_<style>, ...); this figure draws its own.
+  // (The binding is read here on the CPU, never by the GPU: left out.)
   const VARIANT = /^_(tip|flow|hair)_(.+)$/;
   Object.entries(src.attributes).forEach(([k, a]) => {
     const m = k.match(VARIANT);
+    if (k === "_bind" || k === "_bary") return;
     if (!m) geo.setAttribute(k, a);
     else if (m[2] === variant) geo.setAttribute(`_${m[1]}`, a);
   });
@@ -368,12 +375,10 @@ function ownGeometry(mesh, layers, variant) {
   src.groups.forEach((gr) => geo.addGroup(gr.start, gr.count, gr.materialIndex));
   if (layers) geo.instanceCount = layers;
   geo.userData.variant = variant || null;
-  if (!src.boundingSphere) src.computeBoundingSphere();
-  geo.boundingSphere = src.boundingSphere.clone();
-  // The hair reaches out past its shell.
-  if (layers) geo.boundingSphere.radius += 0.06;
   mesh.geometry = geo;
   mesh.userData.ownGeometry = geo;
+  // (The shared shape it came from, for the checks.)
+  mesh.userData.sharedGeometry = src;
   return geo;
 }
 
@@ -432,6 +437,9 @@ function shapeFace(model, weights, parts, look) {
       }
     }
     geo.setAttribute("position", pos);
+    // Bounds of the moved shape; the hair reaches out past its shell.
+    geo.computeBoundingSphere();
+    if (geo.isInstancedBufferGeometry) geo.boundingSphere.radius += 0.06;
   });
 }
 
@@ -491,6 +499,7 @@ export function buildDriver(driver, team, options = {}) {
   const headwear = options.headwear || "none";
   if (!HEADWEAR.includes(headwear)) throw new Error(`unknown headwear ${headwear}`);
   const look = driver.look || null;
+  if (look && Faces.checkLook(look).length) throw new Error(`${driver.id}'s look: ${Faces.checkLook(look).join(", ")}`);
   const bare = headwear === "none" && Boolean(look);
   const model = SkeletonUtils.clone(template);
   const materials = dress(model, driver, team, look);
