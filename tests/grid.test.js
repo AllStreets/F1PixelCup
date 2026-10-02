@@ -55,3 +55,16 @@ test("qualifying delta at a timing point", () => {
   assert.equal(Grid.qualifyingDelta([100, 1100], [100], 1), null);
   assert.equal(Grid.qualifyingDelta([100], [100, 900], 3), null);
 });
+
+test("from the back, two players: both humans on the last row, the higher in the standings first", () => {
+  const first = Grid.gridFromBack({ playerIds: ["p1", "p2"], aiIds: AI, standings: {}, rng: seeded(4) });
+  assert.equal(first.length, 7);
+  // First race (no points yet): player 1 first.
+  assert.deepEqual(first.slice(-2), ["p1", "p2"]);
+  assert.deepEqual([...first.slice(0, 5)].sort(), [...AI].sort());
+  const later = Grid.gridFromBack({ playerIds: ["p1", "p2"], aiIds: AI, standings: { p1: 10, p2: 18, a: 40 }, rng: seeded(4) });
+  assert.deepEqual(later.slice(-2), ["p2", "p1"]);
+  assert.equal(later[0], "a");
+  // A single player is given either way.
+  assert.deepEqual(Grid.gridFromBack({ playerIds: ["me"], aiIds: AI, rng: seeded(1) }), Grid.gridFromBack({ playerId: "me", aiIds: AI, rng: seeded(1) }));
+});

@@ -431,3 +431,40 @@ test("a car's controls read straight from the recording, as the full sample has 
     }
   }
 });
+
+test("a two-player race: player 2's keys are recorded and read back exactly, apart from player 1's", () => {
+  const h = header(6, { players: ["car3", "car5"] });
+  h.cars[5].isPlayer = true;
+  const rec = Replay.createRecording(h);
+  const race = synthRace(400, 6, 21);
+  const r = rng(7);
+  race.forEach((s) => { s.keys2 = { throttle: r() < 0.5, brake: r() < 0.3, left: r() < 0.3, right: r() < 0.3, drift: r() < 0.2, item: r() < 0.1 }; rec.push(s); });
+  let differ = 0;
+  race.forEach((want, k) => {
+    const got = rec.sampleAt(k);
+    assert.deepEqual(got.keys2, want.keys2, `sample ${k}`);
+    assert.deepEqual(got, Replay.quantizeSample(want, rec.header), `sample ${k}`);
+    assert.deepEqual(rec.controls(k, 5).keys2, want.keys2);
+    if (JSON.stringify(got.keys) !== JSON.stringify(got.keys2)) differ += 1;
+  });
+  assert.ok(differ > 300, String(differ));
+  // A single-player recording has no player 2: nothing pressed.
+  const solo = Replay.createRecording(header(2));
+  solo.push({ ...synthRace(1, 2)[0] });
+  assert.deepEqual(solo.sampleAt(0).keys2, { throttle: false, brake: false, left: false, right: false, drift: false, item: false });
+});
+
+test("with no battle at the front the director alternates between two players", () => {
+  const h = header(4, { playerId: "car1", players: ["car1", "car3"] });
+  const rec = Replay.createRecording(h);
+  for (let k = 0; k < 900; k += 1) {
+    rec.push({ cars: [0, 5, 11, 18].map((gap, i) => ({ x: i, y: 0, d: k, heading: 0, speed: 1, lat: 0, gap, steer: 0, throttle: 1, lap: 0, place: i + 1, item: "none", finished: i === 3 && k > 600 })), objects: [], safetyCar: null, boxes: [], flags: [], keys: {} });
+  }
+  const shots = Replay.directorShots(rec);
+  const early = shots.slice(1).filter((s) => s.start < 600 * rec.sampleMs - 6000);
+  assert.ok(early.some((s) => s.focusId === "car1") && early.some((s) => s.focusId === "car3"), JSON.stringify(early.map((s) => s.focusId)));
+  assert.ok(early.every((s) => s.focusId === "car1" || s.focusId === "car3"));
+  // Once a player has finished, the one still racing.
+  const late = shots.filter((s) => s.start > 601 * rec.sampleMs);
+  assert.ok(late.length > 0 && late.every((s) => s.focusId === "car1"), JSON.stringify(late.map((s) => s.focusId)));
+});
