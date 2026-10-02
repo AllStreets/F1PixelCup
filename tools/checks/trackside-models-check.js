@@ -47,13 +47,15 @@ async (page) => {
   }, WANT);
 
   // The yachts: Monaco's moored at the quays and anchored out, Singapore's in
-  // the bay; every hull past the quays (190 past the barrier at Monaco).
+  // the bay; every hull past the quays (190 past the barrier at Monaco), no
+  // two touching, Singapore's wholly inside Marina Bay.
   results.yachtsOnTheWater = await step(() => {
     const out = {};
     ["monaco", "singapore"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
-    return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && s && s.anchored >= 4 && s.leastClearance >= 40) || JSON.stringify(out);
+    return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && m.overlaps === 0
+      && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40) || JSON.stringify(out);
   });
 
   // Nothing over the track and nobody on the road, every circuit.
@@ -82,24 +84,31 @@ async (page) => {
     for (let i = 0; i < 1800 && (state.phase !== "race" || state.preparing); i += 1) await new Promise((r) => requestAnimationFrame(r));
     return state.phase;
   }, id);
-  // The median frame, and the median of what the frames drew (triangles)
-  // and how long drawing them took on the main thread (the frame itself is
-  // held to the display's refresh: the drawing time shows the headroom).
-  const median = () => step(() => new Promise((resolve) => {
-    const times = [];
+  // A tier's frames: how many of 120 ran long (over 25 ms: under 40 a
+  // second), and the median of what they drew (triangles) and how long the
+  // drawing took on the main thread. The frame is held to the display's
+  // refresh, so the long frames show stutter; the drawing time and the
+  // triangles show the headroom. Read cheaply (Render3D.frameStats), so the
+  // measuring adds nothing to what is measured.
+  const sample = () => step(() => new Promise((resolve) => {
+    let long = 0;
+    let n = 0;
     const tris = [];
     const cpu = [];
     let last = performance.now();
-    const mid = (a) => a.slice(10).sort((x, y) => x - y)[30];
     const tick = () => {
       const t = performance.now();
-      times.push(t - last);
+      if (n > 0 && t - last > 25) long += 1;
       last = t;
-      const s = Render3D.inspect().trackside.stats;
+      const s = Render3D.frameStats();
       tris.push(s.triangles);
       cpu.push(s.cpuMs);
-      if (times.length < 70) requestAnimationFrame(tick);
-      else resolve({ ms: mid(times), tris: mid(tris), cpu: mid(cpu) });
+      n += 1;
+      if (n < 121) requestAnimationFrame(tick);
+      else {
+        const mid = (a) => a.slice(10).sort((x, y) => x - y)[55];
+        resolve({ long, tris: mid(tris), cpu: mid(cpu) });
+      }
     };
     requestAnimationFrame(tick);
   }));
@@ -116,20 +125,24 @@ async (page) => {
       pl.x = by.x; pl.y = by.y; pl.speed = 0;
     });
     const got = { high: [], medium: [], low: [] };
+    const crowd = {};
     for (const tier of ["high", "medium", "low", "low", "medium", "high"]) {
       await step((t) => Render3D.setGraphics(t), tier);
-      got[tier].push(await median());
+      got[tier].push(await sample());
+      crowd[tier] = await step(() => Render3D.inspect().trackside.people.standsDrawn3d);
     }
     frames[c] = Object.fromEntries(Object.entries(got).map(([k, v]) => [k, {
-      ms: +((v[0].ms + v[1].ms) / 2).toFixed(1), cpu: +((v[0].cpu + v[1].cpu) / 2).toFixed(1), ktris: Math.round(Math.max(v[0].tris, v[1].tris) / 1000),
+      long: v[0].long + v[1].long, cpu: +((v[0].cpu + v[1].cpu) / 2).toFixed(1), ktris: Math.round(Math.max(v[0].tris, v[1].tris) / 1000), crowd3d: crowd[k],
     }]));
   }
   await step(() => Render3D.setGraphics("auto"));
-  // Smooth (under 22 ms a frame), the drawing well inside a frame (under
+  // Smooth (under 5 % of frames long), the drawing well inside a frame (under
   // 8 ms on the main thread), the triangles within budget: 2.5 million on
-  // High, 1.8 on Medium, 1.2 on Low.
+  // High, 1.8 on Medium, 1.2 on Low; on High the near stand's crowd drawn in
+  // 3D while measured, on Low none.
   const BUDGET = { high: 2500, medium: 1800, low: 1200 };
-  results.frameTimeHoldsEverywhere = Object.values(frames).every((f) => Object.entries(f).every(([tier, x]) => x.ms < 22 && x.cpu < 8 && x.ktris < BUDGET[tier])) || JSON.stringify(frames);
+  results.frameTimeHoldsEverywhere = Object.values(frames).every((f) => Object.entries(f).every(([tier, x]) => x.long <= 12 && x.cpu < 8 && x.ktris < BUDGET[tier])
+    && f.high.crowd3d >= 1 && f.low.crowd3d === 0) || JSON.stringify(frames);
 
   await context.close();
   return { results, errors };

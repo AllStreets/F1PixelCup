@@ -12,6 +12,11 @@
 
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
+// Landmarks (and the yachts) are drawn at the city's scale: its windows are
+// 8 units a storey (buildingMaterial), about 2.5 units a metre
+// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+export const LANDMARK_SCALE = 2.5;
+
 const FILES = {
   casino: "./assets/landmarks/casino.glb",
   marinaBaySands: "./assets/landmarks/marina_bay_sands.glb",
@@ -48,21 +53,37 @@ const loading = {};
 let settled = false;
 let loader = null;
 
+// A download that brings nothing for this long has stalled: the model counts
+// as failed (its stand-in is used) rather than holding the loading panel up.
+export const STALL_MS = 20000;
+
 function load(name, files) {
   if (loading[name]) return loading[name];
   loader = loader || new GLTFLoader();
-  // Each chunk that arrives is progress: a slow connection keeps the loader
-  // up (game.js) rather than calling the download stalled.
-  const progress = () => { if (window.Render3DBoot) window.Render3DBoot.progressAt = performance.now(); };
   loading[name] = new Promise((resolve) => {
-    loader.load(files[name], (gltf) => {
-      templates[name] = gltf.scene;
+    let done = false;
+    let lastProgress = performance.now();
+    const settle = (ok, scene, why) => {
+      if (done) return;
+      done = true;
+      clearInterval(watch);
+      if (ok) templates[name] = scene;
+      else {
+        console.warn(`Trackside model ${name} failed to load; using the stand-in.`, why);
+        failed.push(name);
+      }
       resolve();
-    }, progress, (error) => {
-      console.warn(`Trackside model ${name} failed to load; using the stand-in.`, error);
-      failed.push(name);
-      resolve();
-    });
+    };
+    // Each chunk that arrives is progress: a slow connection keeps the loader
+    // up (game.js) rather than calling the download stalled.
+    const progress = () => {
+      lastProgress = performance.now();
+      if (window.Render3DBoot) window.Render3DBoot.progressAt = lastProgress;
+    };
+    const watch = setInterval(() => {
+      if (performance.now() - lastProgress > STALL_MS) settle(false, null, "the download stalled");
+    }, 1000);
+    loader.load(files[name], (gltf) => settle(true, gltf.scene), progress, (error) => settle(false, null, error));
   });
   return loading[name];
 }

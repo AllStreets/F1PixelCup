@@ -427,9 +427,10 @@ function marshalFigures(marshals, rand) {
     const position = g.localToWorld(g.userData.post.standAt.clone());
     const yaw = yawOf(g.matrixWorld) + Math.PI / 2;
     return {
-      kind: "marshal", position, yaw, base: yaw,
+      // The roof's underside over their head (world height), for the checks.
+      kind: "marshal", position, yaw, base: yaw, roof: g.position.y + g.userData.post.roofAt,
       skin: color(pick(rand, SKINS)), hair: color(pick(rand, HAIRS)),
-      shirt: color("#ff6a00"), trousers: color("#ff6a00"), trim: color("#f2f2f2"), phase: rand(), eager: 1,
+      shirt: color("#ff6a00"), trousers: color("#ff6a00"), trim: color("#f2f2f2"), phase: rand(),
     };
   });
 }
@@ -468,7 +469,7 @@ export function buildPeople(course, { decor, landmarks, marshals }) {
     // Every figure placed, for the checks.
     figures: [
       ...stands.flatMap((s) => s.meshes.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.yaw, stand: true })))),
-      ...[...crew, ...snappers, ...tv, ...posts].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform) })),
+      ...[...crew, ...snappers, ...tv, ...posts].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform), roof: f.roof })),
     ],
   };
   return group;

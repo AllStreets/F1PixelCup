@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { load, part, node, at, triangles, groundBelow } = require("./glb-read.js");
+const { load, part, node, at, triangles, groundBelow, signedVolume } = require("./glb-read.js");
 
 const DIR = path.join(__dirname, "..", "assets", "landmarks");
 const file = (n) => path.join(DIR, `${n}.glb`);
@@ -160,4 +160,18 @@ test("the open terrace: rows of benches, no roof, the covered stand's footprint"
   assert.ok(rows >= 8, `${rows} rows`);
   assert.ok(node(glb, "row_0").extras.seats.length >= 30, "row 0 lists its places");
   assert.ok(all.tris <= 12000);
+});
+
+// Every mesh faces outward: the game draws only the fronts of faces, so a
+// face turned inward is a hole (Marina Bay Sands had them before its faces
+// were welded).
+test("every landmark's meshes face outward", () => {
+  const fs = require("node:fs");
+  fs.readdirSync(DIR).filter((f) => f.endsWith(".glb")).forEach((f) => {
+    const glb = load(path.join(DIR, f));
+    glb.doc.nodes.filter((n) => n.mesh !== undefined).forEach((n) => {
+      const v = signedVolume(glb, n.name);
+      assert.ok(v > 0, `${f}: ${n.name} encloses ${v.toFixed(1)} m3`);
+    });
+  });
 });

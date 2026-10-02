@@ -962,7 +962,7 @@ def build_spa_pits():
     roof behind a rail, and the old timing tower at one end."""
     clear()
     root = empty("spa_pits", (0, 0, 0))
-    m = Mesh("spa_pits")
+    m = Mesh("pit_building")
     L, D = 110.0, 12.0
     m.box((-L / 2, -D / 2, 0.0), (L / 2, D / 2, 7.2), "render")
     for k in range(18):
@@ -1052,7 +1052,7 @@ def build_sakhir_tower():
     glazed all round, crowned with white sail-like shades."""
     clear()
     root = empty("sakhir_tower", (0, 0, 0))
-    m = Mesh("sakhir_tower")
+    m = Mesh("tower")
     m.box((-16.0, -12.0, 0.0), (16.0, 12.0, 6.0), "stone")
     m.box((-16.2, 11.8, 1.0), (16.2, 12.2, 5.0), "glass")
     m.box((-4.5, -4.5, 6.0), (4.5, 4.5, 28.0), "stone")

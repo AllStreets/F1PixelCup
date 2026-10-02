@@ -7,7 +7,8 @@ Run headless, so it never touches an open Blender session:
 
 Set F1_YACHTS_PREVIEW=<dir> to also render them there for review.
 
-Real metres; the bow toward +X, Y to port, Z up, the waterline at z = 0.
+Real metres; the bow toward +X, Y to port, Z up, the waterline at z = 0,
+the origin midships (halfway along the length overall).
 Each yacht is one mesh per level of detail, named <kind>_lod0 (near) and
 <kind>_lod1 (far), with the number of its deck tiers in its extras:
 
@@ -130,6 +131,12 @@ class Mesh:
         return vs
 
     def finish(self, extras=None):
+        # The origin midships (the middle of its length): the game places,
+        # claims and rocks a yacht about its middle.
+        xs = [v.co.x for v in self.bm.verts]
+        mid = (min(xs) + max(xs)) / 2
+        for v in self.bm.verts:
+            v.co.x -= mid
         bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=1e-5)
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         me = bpy.data.meshes.new(self.name)
@@ -236,7 +243,8 @@ def swim_platform(m, hull):
 
 def outline(x0, x1, w, nose, steps=6):
     """A deck tier's plan: square aft at x0, straight sides at +-w, a
-    rounded front from x1 - nose to x1. Counter-clockwise from aft port."""
+    rounded front from x1 - nose to x1. Clockwise (seen from above) from
+    aft port."""
     pts = [(x0, w)]
     for k in range(steps + 1):
         a = math.pi / 2 * (1 - k / steps)
@@ -278,10 +286,8 @@ def tier(m, x0, x1, w, z0, h, nose, rake, glass=(0.3, 0.86), front_glass="glass"
             continue
         (ax0, ay0), (ax1, ay1) = at(k, glass[0]), at(k, glass[1])
         (bx0, by0), (bx1, by1) = at(j, glass[0]), at(j, glass[1])
-        # Outward a few centimetres (the outline's normal).
-        ex, ey = by0 - ay0, -(bx0 - ax0)
-        l = math.hypot(ex, ey) or 1
-        ox, oy = -ey / l * 0.0, ex / l * 0.0
+        # Outward a few centimetres (along the outline's normal).
+        l = math.hypot(by0 - ay0, bx0 - ax0) or 1
         nx, ny = (by0 - ay0) / l, -(bx0 - ax0) / l
         push = 0.04
         role = front_glass if min(ax0, bx0) > x1 - nose - 0.5 else side_glass

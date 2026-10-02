@@ -25,8 +25,8 @@ import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopte
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
-import { buildPeople, updatePeople, showCrowdFor, inspectPeople } from "./r3d/people.js";
-import { showYachtsFor, updateYachts, inspectYachts } from "./r3d/yachts.js";
+import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
+import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
@@ -157,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -876,7 +876,9 @@ function buildWorld(track) {
   const yachts = landmarks.getObjectByName("yachts");
   // Trackside life: the marshal posts (after everything else has claimed its
   // ground) and the starter by the line.
-  const marshals = buildMarshalPosts(course, track.marshalPosts, venue, { figures: Boolean(tracksideModel("people")) });
+  // The marshals are figures when the people model has the one they wear.
+  const people0 = tracksideModel("people");
+  const marshals = buildMarshalPosts(course, track.marshalPosts, venue, { figures: Boolean(people0 && people0.getObjectByName("crew")) });
   group.add(marshals);
   const starter = buildStarter(course);
   if (starter) group.add(starter);
@@ -914,6 +916,8 @@ function disposeWorld(world) {
   const textures = new Set();
   world.group.traverse((o) => {
     if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
+    // An instanced mesh's matrices are its own buffer, freed only with it.
+    if (o.isInstancedMesh) o.dispose();
     [].concat(o.material || []).forEach((m) => {
       if (m.userData.worldOwned) owned.add(m);
       Object.values(m).forEach((v) => { if (v && v.isTexture) textures.add(v); });
@@ -926,7 +930,7 @@ function disposeWorld(world) {
 }
 
 function ensureWorld(track) {
-  // Built before its venue's models had all arrived (an audit, the garage):
+  // Built before its venue's models had all arrived (an audit run early):
   // built again with them once they have.
   if (current && current.trackId === track.id && (current.modelsComplete || !venueModelsSettled(track.id))) return current;
   if (current) disposeWorld(current);
@@ -1209,27 +1213,43 @@ const lookTarget = new THREE.Vector3();
 // the first view also does the frame's own work (the cars, the power-ups, the
 // particles, the boxes, trackside life); each view has its own camera.
 let lastDt = 0;
-// What each frame drew (every view and pass), and the time its drawing
-// took on the main thread, for the checks' budgets.
-const frameStats = { calls: 0, triangles: 0, cpuMs: 0, building: { calls: 0, triangles: 0, cpuMs: 0 } };
+// What each race frame drew (every view and pass) and the time its drawing
+// took on the main thread, for the checks' budgets. Counted as the change in
+// the renderer's totals across render() (it keeps counting across a frame's
+// passes and views), so the garage's or the podium's drawing never adds in.
+const frameStats = { calls: 0, triangles: 0, cpuMs: 0 };
+const building = { calls: 0, triangles: 0, cpuMs: 0 };
 renderer.info.autoReset = false;
 
 function render(frame) {
   if (!api.ready) return null;
   const started = performance.now();
-  if (frame.viewIndex === undefined || frame.viewIndex === 0) {
-    Object.assign(frameStats, frameStats.building);
-    renderer.info.reset();
-    frameStats.building = { calls: 0, triangles: 0, cpuMs: 0 };
+  const info = renderer.info.render;
+  const calls0 = info.calls;
+  const tris0 = info.triangles;
+  // A new frame starts at the first view (split screen draws two).
+  if (!frame.viewIndex) {
+    frameStats.calls = building.calls;
+    frameStats.triangles = building.triangles;
+    frameStats.cpuMs = building.cpuMs;
+    building.calls = 0;
+    building.triangles = 0;
+    building.cpuMs = 0;
   }
   try {
     return drawFrame(frame);
   } finally {
-    const b = frameStats.building;
-    b.calls = renderer.info.render.calls;
-    b.triangles = renderer.info.render.triangles;
-    b.cpuMs += performance.now() - started;
+    building.calls += info.calls - calls0;
+    building.triangles += info.triangles - tris0;
+    building.cpuMs += performance.now() - started;
+    // Totals that only grow would lose precision some day: start them again.
+    if (info.triangles > 1e12) renderer.info.reset();
   }
+}
+
+// The last whole frame's drawing, cheaply (for the frame-time check).
+function frameStatsNow() {
+  return { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: frameStats.cpuMs };
 }
 
 function drawFrame(frame) {
@@ -1245,6 +1265,15 @@ function drawFrame(frame) {
     lastDt = dt;
   }
   resize();
+  // The venue's own models still on their way: nothing built yet (it would
+  // only be built again when they land), the loading panel up.
+  if (!venueModelsSettled(track.id)) {
+    useViewport(null);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
+    renderer.clear();
+    return { onKerb: false };
+  }
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would
@@ -1358,7 +1387,7 @@ function drawFrame(frame) {
   }
   // Each view draws the near stands' crowd in 3D for its own camera.
   showCrowdFor(world.people, camera, currentTier());
-  showYachtsFor(world.yachts, camera, currentTier());
+  showYachtsFor(world.yachts, camera, currentTier(), scene.fog ? scene.fog.far : Infinity);
   // In the helicopter view the camera is in it.
   if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet, view: index });
@@ -1520,7 +1549,7 @@ function tvCameras(world) {
 // Before a replay opens: its circuit's TV cameras, so no frame of it waits
 // on placing them.
 function prepareReplay(track) {
-  if (!api.ready || !track) return;
+  if (!api.ready || !track || !venueModelsSettled(track.id)) return;
   tvCameras(ensureWorld(track));
 }
 
@@ -1593,6 +1622,8 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const world = ensureWorld(track);
   const { course } = world;
   world.group.updateMatrixWorld(true);
+  // Every yacht drawn (a view may have left some out of sight).
+  showYachtsFor(world.yachts, null, "high");
   const targets = [world.decor, world.landmarks, world.marshals, world.starter, world.people].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
@@ -1678,7 +1709,7 @@ function auditYachts(track) {
       }
     }
   });
-  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least) };
+  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
 }
 
 // Every person placed at a circuit, against the track: none may stand
@@ -1703,7 +1734,11 @@ function auditPeople(track) {
   // Every figure, where it stands and which way it faces at rest (its +x
   // turned by yaw), for the checks.
   const all = figures.map((f) => ({ kind: f.kind, x: +f.x.toFixed(2), y: +f.y.toFixed(2), z: +f.z.toFixed(2), yaw: +f.yaw.toFixed(4), base: f.base === undefined ? undefined : +f.base.toFixed(4) }));
-  return { count: figures.length, byKind, onRoad, samples, figures: all, leastClearance: Math.round(least * 10) / 10 };
+  // Under a roof (the marshals' posts): the least room over a head (a
+  // figure is 1.78 m, 10.7 units, tall).
+  const roofed = figures.filter((f) => f.roof !== undefined);
+  const headroom = roofed.length ? Math.round(Math.min(...roofed.map((f) => f.roof - (f.y + 1.8 * PERSON_SCALE))) * 10) / 10 : null;
+  return { count: figures.length, byKind, onRoad, samples, figures: all, headroom, leastClearance: Math.round(least * 10) / 10 };
 }
 
 // ---------------------------------------------------------------------------

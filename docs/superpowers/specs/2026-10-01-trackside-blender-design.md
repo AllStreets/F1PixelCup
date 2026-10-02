@@ -116,7 +116,7 @@ The user approved the first look ("the trackside features and people are startin
 Materials by role, recoloured per instance in the game: `hull`, `boot` (the waterline stripe), `deck` (teak), `super` (the superstructure), `glass`, `rail`, `gear` (masts, radar, cranes), `lit` (the glass band that lights at night). Budgets: up to 7,000 triangles near, 400 far.
 
 **In the game** (`r3d/yachts.js`): instanced per model and level of detail, drawn at the city's scale (`LANDMARK_SCALE`). Each yacht bobs, pitches and rolls a little on the water in the vertex shader (its own phase). The near model within a range of the camera, the far one beyond, nothing past the fog.
-- **Monaco:** moored stern-to along the harbour's quays (the edge of the town, their sterns to the quay, side by side with a gap between), and anchored out in the bay, bows to the wind.
+- **Monaco:** moored stern-to along the harbour's quays (the edge of the town, their sterns to the quay, side by side with a gap between), filling the longest unbroken stretches of open water first, and anchored out in the bay, bows to the wind, with tenders among them.
 - **Singapore:** a few on Marina Bay in front of Marina Bay Sands.
 - **A hook:** a venue lists `harbour: { quay, moored, anchored }`, and Stage L's harbour venues (Yas Marina, Miami, Baku) take it.
 - Every yacht claims its water, never over the track; `auditScenery` stays 0.
@@ -140,11 +140,11 @@ In `build_landmarks.py`, each in proportion from public photographs (no logos, n
 ### 8.3 Stands and marshals
 
 - **The open terrace** (`grandstand_open.glb`): stepped concrete terraces with bench seats, no roof. Each venue gets its type: covered at Monaco, Singapore, Silverstone, Suzuka and Bahrain; open at Spa, Interlagos and Monza. The crowd fills both.
-- **Marshals** become figures from `people.glb` (a `marshal` in orange overalls), at their posts as now, the flag in hand.
+- **Marshals** become figures from `people.glb`: the crew figure in orange overalls with white trim, at their posts as now (the posts grown to a person's height), the flag in the right hand.
 
 ### 8.4 Performance and loading
 
-- Each venue's landmarks load when its circuit is prepared (the loading panel covers it), not with the car: the game is ready as soon as the car, the people and the stands are in. Every landmark of a venue is in the scene when `prepare()` compiles it.
+- Each venue's landmarks load when its circuit is prepared (the loading panel covers it), not with the car: the game is ready as soon as the car, the people and the stands are in. Nothing of the circuit is built until they have loaded or failed (a download silent for 20 s counts as failed, and the stand-in is used). Every landmark of a venue is in the scene when `prepare()` compiles it.
 - Near and far models (yachts), instancing, and the 3D crowd's range per tier keep every circuit's frame time smooth on all three tiers; Low may draw the far models only. **The frame-time check runs on every circuit.**
 - Split screen draws both views with the same scenery; nothing is built per view.
 

@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, seeded, hashString, canvasTexture, buildingMaterial, photo } from "./textures.js";
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
-import { tracksideModel } from "./models.js";
+import { tracksideModel, LANDMARK_SCALE } from "./models.js";
 import { buildYachts } from "./yachts.js";
 
 // ---------------------------------------------------------------------------
@@ -465,7 +465,7 @@ function floodlights(course, group, venue) {
 // Landmarks are modelled in metres and drawn at the city's scale: its
 // windows are 8 units a storey (buildingMaterial), about 2.5 units a metre
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
-export const LANDMARK_SCALE = 2.5;
+export { LANDMARK_SCALE };
 
 // Facades with a grid of rooms read off the model's UVs (metres: u along
 // the wall, v up): glass between the floor slabs and mullions, and at night
@@ -494,15 +494,18 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         vec2 cell = vec2(vFacade.x / 4.0, vFacade.y / 3.2);
         vec2 f = fract(cell);
         vec2 room = floor(cell);
-        float glassIn = smoothstep(0.04, 0.09, f.x) * smoothstep(0.04, 0.09, 1.0 - f.x)
-          * smoothstep(0.16, 0.24, f.y) * smoothstep(0.03, 0.08, 1.0 - f.y);
         // Where a room is smaller than a pixel or two, the wall's average
-        // instead of its pattern: no shimmer, no noise far away.
+        // instead of its pattern: no shimmer, no noise far away; nearer, the
+        // frames' edges soften by a pixel's width so they never alias.
         float fw = max(fwidth(cell.x), fwidth(cell.y));
+        float glassIn = smoothstep(0.04 - fw, 0.09 + fw, f.x) * smoothstep(0.04 - fw, 0.09 + fw, 1.0 - f.x)
+          * smoothstep(0.16 - fw, 0.24 + fw, f.y) * smoothstep(0.03 - fw, 0.08 + fw, 1.0 - f.y);
         float farAway = smoothstep(0.22, 0.55, fw);
         float glassShare = 0.72;
         float inset = mix(glassIn, glassShare, farAway);
         diffuseColor.rgb = mix(uSlab, uGlass, inset);
+        // The walls darken toward the ground (the light reaches less of them).
+        diffuseColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 14.0, vFacade.y));
         // Whole floors light together (a hotel's evening), a room here and
         // there apart from its floor.
         float floorH = facadeHash(vec2(room.y * 0.37, 7.1));
@@ -515,7 +518,7 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         // The unlit rooms keep a faint glow from the corridors.
         totalEmissiveRadiance += (roomLight * on * 0.62 + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v3-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
+  m.customProgramCacheKey = () => `facade-v4-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
   return m;
 }
 

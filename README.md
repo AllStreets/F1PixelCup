@@ -358,7 +358,7 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with
   `sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg` and
-  `sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team}-*.jpg` and
+  `sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team,trackside}-*.jpg` and
   `sips -Z 960 assets/shots/items/*.jpg`. Set `globalThis.CAPTURE_PARTS = ["items"]`
   first to retake only the power-up shots (posed in a paused race on a clear
   straight, with a hand-placed photo camera). Who drives in each shot is

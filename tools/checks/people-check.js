@@ -51,10 +51,14 @@ async (page) => {
   });
 
   // Every figure faces the track: the crowd from its stand, the crews from
-  // their garages, the photographers and the camera at their corner. (A
-  // figure faces its own +x, turned by its yaw about the vertical.)
+  // their garages, the photographers and the camera at their corner, the
+  // marshals from their posts. (A figure faces its own +x, turned by its yaw
+  // about the vertical.) Facing it: some of the road within 600 lies within
+  // 70 degrees of where they look. And every marshal's head clears the roof
+  // of their post.
   results.everyoneFacesTheTrack = await step(() => {
     const bad = [];
+    const cone = Math.cos(70 * Math.PI / 180);
     CIRCUITS.forEach((c) => {
       const track = TRACKS.find((t) => t.id === c.id);
       const people = Render3D.auditPeople(track);
@@ -62,16 +66,17 @@ async (page) => {
       let away = 0;
       let sample = null;
       figures.forEach((f) => {
-        let best = null;
-        let bd = Infinity;
-        track.points.forEach((p) => { const d = (p.x - f.x) ** 2 + (p.y - f.z) ** 2; if (d < bd) { bd = d; best = p; } });
-        const dx = best.x - f.x;
-        const dz = best.y - f.z;
-        const l = Math.hypot(dx, dz) || 1;
-        const facing = typeof f.yaw === "number" ? (Math.cos(f.yaw) * dx - Math.sin(f.yaw) * dz) / l : -1;
-        if (facing < 0.05) { away += 1; if (!sample) sample = { kind: f.kind, yaw: f.yaw, facing: +facing.toFixed(2) }; }
+        const fx = Math.cos(f.yaw);
+        const fz = -Math.sin(f.yaw);
+        const sees = typeof f.yaw === "number" && track.points.some((p) => {
+          const dx = p.x - f.x;
+          const dz = p.y - f.z;
+          const l = Math.hypot(dx, dz);
+          return l > 1 && l < 600 && (dx * fx + dz * fz) / l > cone;
+        });
+        if (!sees) { away += 1; if (!sample) sample = { kind: f.kind, x: f.x, z: f.z, yaw: f.yaw }; }
       });
-      if (!figures.length || away) bad.push({ id: c.id, figures: figures.length, away, sample });
+      if (!figures.length || away || (people.headroom !== null && !(people.headroom > 0))) bad.push({ id: c.id, figures: figures.length, away, sample, headroom: people.headroom });
     });
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   });
