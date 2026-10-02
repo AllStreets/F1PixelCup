@@ -32,10 +32,10 @@ S = 1.78 / 17.304
 CROWN = 1.762      # the top of the bare head
 NECK_CUT = 1.425   # the neck runs down into the suit to here
 OX = -0.02         # the head's offset forward, so its neck stands over the body's
-# The suit's collar: the top of its band. Below the jaw the neck is fitted to
-# it (build() passes the collar's real outline, measured off the body).
-COLLAR_TOP = 1.478
-FIT_FROM, FIT_TO = 1.535, 1.492
+# The suit's collar: the top of its lip. Below the jaw the neck is fitted
+# inside it (build() passes the collar's real outline, build_driver.py's).
+COLLAR_TOP = 1.475
+FIT_FROM, FIT_TO = 1.54, 1.49
 
 
 def _top():
@@ -99,9 +99,12 @@ def fit(v, collar):
     z = v.z
     if rho > lim:
         z -= (rho - lim) * 1.4 * t
+        # (Drawn in by how far down it ends, so a point dropped below the
+        # collar's lip is wholly inside it.)
+        t = max(t, smoothstep(FIT_FROM, FIT_TO, z))
         new = rho + (lim - rho) * t
     else:
-        new = rho + (lim - rho) * t * smoothstep(1.505, COLLAR_TOP, v.z)
+        new = rho + (lim - rho) * t * smoothstep(1.508, COLLAR_TOP, v.z)
     k = new / max(rho, 1e-9)
     return Vector((collar.cx + dx * k, collar.cy + dy * k, z))
 

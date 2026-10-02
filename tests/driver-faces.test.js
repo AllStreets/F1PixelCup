@@ -174,10 +174,10 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
   });
 });
 
-// The head's outline where the plane y = 1.478 (the collar's top edge) cuts
-// it: a point on every edge of its triangles that crosses the plane.
+// The head's outline where the plane of the collar's inner lip (y = 1.475)
+// cuts it: a point on every edge of its triangles that crosses the plane.
 const headTris = values(doc.meshes[meshNode("head_skin").mesh].primitives[0].indices).map((v) => v[0]);
-function cut(pts, y = 1.478) {
+function cut(pts, y = 1.475) {
   const out = [];
   for (let t = 0; t < headTris.length; t += 3) {
     for (let e = 0; e < 3; e += 1) {
@@ -190,9 +190,9 @@ function cut(pts, y = 1.478) {
   }
   return out;
 }
-// The collar's top edge, its middle, and how far out a set of points
-// reaches at a bearing round it.
-const collarEdge = positions(meshNode("body"), "suit_trim").filter((p) => Math.abs(p[1] - 1.478) < 0.0015);
+// The collar's inner lip (build_driver.py's collar band), its middle, and how
+// far out a set of points reaches at a bearing round it.
+const collarEdge = positions(meshNode("collar")).filter((p) => Math.abs(p[1] - 1.475) < 0.0006);
 const cx = collarEdge.reduce((n, p) => n + p[0], 0) / collarEdge.length;
 const cz = collarEdge.reduce((n, p) => n + p[2], 0) / collarEdge.length;
 const around = (pts, a) => Math.max(...pts.filter((p) => Math.abs(Math.atan2(p[2] - cz, p[0] - cx) - a) < 0.3).map((p) => Math.hypot(p[0] - cx, p[2] - cz)));
@@ -207,7 +207,8 @@ test("faces: the neck stands in the collar, filling it, never floating above it"
   const head = positions(meshNode("head_skin"));
   const low = Math.min(...head.map((p) => p[1]));
   const top = Math.max(...head.map((p) => p[1]));
-  // The suit's collar runs from 1.458 m to 1.478 m (build_driver.py).
+  // The suit's collar stands up to 1.4775 m (build_driver.py).
+  assert.ok(collarEdge.length >= 24, "the collar's inner lip");
   assert.ok(low < 1.458 && low > 1.40, `the neck's bottom is at ${low.toFixed(3)} m`);
   assert.ok(top > 1.72 && top < 1.80, `the crown is at ${top.toFixed(3)} m`);
   // At the collar's top edge, the neck is just inside it all the way round.
@@ -236,7 +237,8 @@ test("faces: every driver's own face keeps its chin clear of the collar and its 
     // The chin's underside: the lowest point in front of the neck, 2 cm or
     // more above the collar.
     const chin = Math.min(...pts.filter((p) => p[0] - cx > 0.075 && Math.abs(p[2] - cz) < 0.03).map((p) => p[1]));
-    assert.ok(chin > 1.5, `${d.id}'s chin comes down to ${chin.toFixed(3)} m`);
+    const collarTop = Math.max(...positions(meshNode("collar")).map((p) => p[1]));
+    assert.ok(chin > collarTop + 0.02, `${d.id}'s chin comes down to ${chin.toFixed(3)} m, the collar's top ${collarTop.toFixed(3)} m`);
     // Never more than a millimetre through the collar, never a gap you could
     // see into.
     gaps(pts).forEach(([a, gap]) => {

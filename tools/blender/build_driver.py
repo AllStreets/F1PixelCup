@@ -238,9 +238,13 @@ def src(bone, bm):
 
 src("root", loft_bm([((-0.005, 0, 0.79), 0.1, 0.075), ((-0.01, 0, 0.84), 0.162, 0.105), ((-0.012, 0, 0.92), 0.176, 0.116), ((-0.005, 0, 1.0), 0.16, 0.104)]))
 src("spine", loft_bm([((0, 0, 0.97), 0.158, 0.102), ((0.005, 0, 1.07), 0.15, 0.098), ((0.01, 0, 1.17), 0.158, 0.108)]))
+# The top of the chest slopes down from the collar to the shoulders like
+# the trapezius under the suit, and the collar stands up round the neck: a
+# band nearly upright, never a flat ledge with the neck flaring into it.
 src("chest", loft_bm([((0.008, 0, 1.12), 0.152, 0.104), ((0.014, 0, 1.24), 0.168, 0.12), ((0.008, 0, 1.33), 0.176, 0.118),
-                      ((0.0, 0, 1.385), 0.17, 0.104), ((0, 0, 1.425), 0.14, 0.088), ((0, 0, 1.455), 0.095, 0.072), ((0, 0, 1.48), 0.066, 0.064)]))
-src("head", loft_bm([((0.004, 0, 1.43), 0.066, 0.066), ((0.01, 0, 1.52), 0.06, 0.063), ((0.012, 0, 1.59), 0.052, 0.056)], segs=16))
+                      ((0.0, 0, 1.385), 0.172, 0.104), ((0, 0, 1.408), 0.152, 0.094), ((0, 0, 1.428), 0.118, 0.082),
+                      ((0, 0, 1.446), 0.082, 0.068), ((0, 0, 1.462), 0.062, 0.058), ((0, 0, 1.49), 0.058, 0.056)]))
+src("head", loft_bm([((0.004, 0, 1.45), 0.056, 0.056), ((0.01, 0, 1.52), 0.054, 0.058), ((0.012, 0, 1.59), 0.05, 0.054)], segs=16))
 for s, sgn in (("L", 1), ("R", -1)):
     d = ARM_DIR[s]
     sh, el, wr = J[f"shoulder_{s}"], J[f"elbow_{s}"], J[f"wrist_{s}"]
@@ -460,20 +464,49 @@ part(sp, "head")
 # The bare head (shown when the helmet is off): the head and neck are skinned,
 # the head bone above the jaw blending into the chest down the neck; the eyes,
 # lashes, brows, hair and beards ride on the head bone.
-# The neck is fitted to the collar's real outline, the top edge of its band.
-collar = [(v.co.x, v.co.y) for v in body.data.vertices if abs(v.co.z - 1.478) < 0.0008 and abs(v.co.y) < 0.12]
-if len(collar) < 12:
-    raise RuntimeError(f"the collar's edge has {len(collar)} points")
+# The suit's collar: a band standing up round the neck, rolled over at its
+# top, rising out of the slope of the shoulders (the body's own trim band is
+# under it). Rings of (height, half width, half depth), out and up, over the
+# lip and back down inside.
+COLLAR_RINGS = [(1.432, 0.066, 0.061), (1.454, 0.0645, 0.0602), (1.471, 0.0636, 0.0596), (1.4765, 0.0618, 0.0578),
+                (1.4775, 0.0598, 0.0558), (1.475, 0.0584, 0.0544), (1.458, 0.0582, 0.0542)]
+COLLAR_X = 0.002
+
+
+def collar_band(segs=48):
+    bm = bmesh.new()
+    rows = []
+    for z, hw, hd in COLLAR_RINGS:
+        rows.append([bm.verts.new((COLLAR_X + hd * math.cos(2 * math.pi * k / segs), hw * math.sin(2 * math.pi * k / segs), z))
+                     for k in range(segs)])
+    for a, b in zip(rows, rows[1:]):
+        for k in range(segs):
+            j = (k + 1) % segs
+            bm.faces.new((a[k], a[j], b[j], b[k]))
+    return bm
+
+
+collar_ob = link("collar", collar_band(), "suit_trim")
+# Outward on the outside, inward (toward the neck) on the inside: the band's
+# winding runs that way round, checked rather than assumed.
+collar_ob.data.update()
+if collar_ob.data.polygons[0].normal.dot(Vector((collar_ob.data.polygons[0].center.x - COLLAR_X, collar_ob.data.polygons[0].center.y, 0))) < 0:
+    for poly in collar_ob.data.polygons:
+        poly.flip()
+part(collar_ob, "chest")
+# The neck is fitted inside the collar's lip.
+z_in, hw_in, hd_in = COLLAR_RINGS[-2]
+collar = [(COLLAR_X + hd_in * math.cos(2 * math.pi * k / 48), hw_in * math.sin(2 * math.pi * k / 48)) for k in range(48)]
 head_skin, head_parts = driver_head.build(MATS, collar)
 hg = head_skin.vertex_groups.new(name="head")
 cg = head_skin.vertex_groups.new(name="chest")
 # (The bend is all below the beard and the hair, which ride the head bone
 # rigidly: the skin under them must move exactly as they do.)
 LOWEST_HAIR = min(min((ob.matrix_world @ v.co).z for v in ob.data.vertices) for ob in head_parts if ob.name in ("hair", "beard"))
-if LOWEST_HAIR < 1.512:
+if LOWEST_HAIR < 1.505:
     raise RuntimeError(f"hair reaches down to {LOWEST_HAIR:.3f} m, into the neck's bend")
 for v in head_skin.data.vertices:
-    w = driver_head.smoothstep(1.48, 1.51, v.co.z)
+    w = driver_head.smoothstep(1.477, 1.505, v.co.z)
     hg.add([v.index], w, "REPLACE")
     if w < 1:
         cg.add([v.index], 1 - w, "REPLACE")
