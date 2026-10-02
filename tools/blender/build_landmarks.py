@@ -79,6 +79,15 @@ PALETTE = {
     "concrete_dark": ((0.45, 0.45, 0.47), 0.0, 0.9),
     "steel": ((0.55, 0.57, 0.6), 0.7, 0.4),
     "roof_membrane": ((0.92, 0.93, 0.95), 0.0, 0.6),
+    "led": ((0.85, 0.9, 0.95), 0.6, 0.3),
+    "white_steel": ((0.9, 0.91, 0.92), 0.5, 0.35),
+    "render": ((0.9, 0.89, 0.86), 0.0, 0.85),
+    "asphalt_old": ((0.3, 0.3, 0.3), 0.0, 0.95),
+    "paint_red": ((0.75, 0.08, 0.06), 0.1, 0.4),
+    "paint_yellow": ((0.95, 0.75, 0.1), 0.1, 0.4),
+    "paint_blue": ((0.1, 0.3, 0.75), 0.1, 0.4),
+    "paint_green": ((0.15, 0.6, 0.3), 0.1, 0.4),
+    "sail_shade": ((0.97, 0.97, 0.96), 0.0, 0.5),
 }
 MATS = {}
 
@@ -540,15 +549,17 @@ def skypark():
     m = Mesh("skypark")
     x0, x1 = -172.0, 170.0
     y0, y1 = -33.0, 11.0
-    steps = 28
+    steps = 40
     rows = []
     for k in range(steps + 1):
-        x = x0 + (x1 - x0) * k / steps
-        # The bow tapers in plan and rises underneath past the last tower.
+        # Closer together toward the prow, where it curves.
+        x = x0 + (x1 - x0) * math.sin(k / steps * math.pi / 2) ** 0.8
+        # The prow: past the last tower the deck narrows in a curve to a
+        # rounded point, its underside sweeping up to the tip.
         t = max(0.0, (x - 100) / (x1 - 100))
-        half = (y1 - y0) / 2 * (1 - 0.72 * t ** 1.6)
+        half = max(0.9, (y1 - y0) / 2 * max(0.0, 1 - t ** 1.5) ** 0.7)
         mid = (y0 + y1) / 2
-        under = TOWER_TOP - 1.0 + 6.5 * t ** 2
+        under = TOWER_TOP - 1.0 + 8.0 * t ** 1.7
         rows.append((x, mid - half, mid + half, under))
     for (xa, ba, fa, ua), (xb, bb, fb, ub) in zip(rows, rows[1:]):
         m.face([(xa, fa, ua), (xb, fb, ub), (xb, fb, DECK), (xa, fa, DECK)], "skypark")
@@ -601,9 +612,12 @@ SEAT_PITCH = 0.55
 ROW_FEET = 0.12
 
 
-def build_grandstand():
+def build_grandstand(covered=True):
+    """The covered stand, or (covered=False) the open terrace: the same
+    stepped rows with long benches in place of seats, no roof, a low back
+    wall."""
     clear()
-    root = empty("grandstand", (0, 0, 0))
+    root = empty("grandstand" if covered else "grandstand_open", (0, 0, 0))
     m = Mesh("stand")
     first = FRONT - 1.0
     # The raker: a stepped concrete mass, a step per row; the front walkway.
@@ -615,8 +629,8 @@ def build_grandstand():
     back = first - TREAD * ROWS
     top = PLINTH + RISE * (ROWS + 1)
     m.box((-HALF_LEN + 0.3, -FRONT + 0.3, 0), (HALF_LEN - 0.3, back, top), "concrete", skip=("-z",))
-    # The back wall up to the roof.
-    m.box((-HALF_LEN, -FRONT, 0), (HALF_LEN, -FRONT + 0.3, 8.9), "concrete", skip=("-z",))
+    # The back wall up to the roof (the terrace's: a parapet).
+    m.box((-HALF_LEN, -FRONT, 0), (HALF_LEN, -FRONT + 0.3, 8.9 if covered else top + 1.1), "concrete", skip=("-z",))
     # End walls following the rake.
     for x0, x1 in ((-HALF_LEN, -HALF_LEN + 0.3), (HALF_LEN - 0.3, HALF_LEN)):
         prof = [(FRONT, 0), (FRONT, PLINTH + 1.1), (first, PLINTH + 1.3), (back, top + 1.2), (-FRONT, top + 1.2), (-FRONT, 0)]
@@ -652,8 +666,14 @@ def build_grandstand():
         yf = first - TREAD * k
         z = PLINTH + RISE * k
         for b0, b1 in blocks:
-            s.box((b0, yf - 0.52, z + 0.42), (b1, yf - 0.1, z + 0.46), "seat", skip=("-z",))
-        for sx in seat_xs:
+            if covered:
+                s.box((b0, yf - 0.52, z + 0.42), (b1, yf - 0.1, z + 0.46), "seat", skip=("-z",))
+            else:
+                # A long bench on its legs, the seat's height above the tread.
+                s.box((b0, yf - 0.5, z + 0.4), (b1, yf - 0.12, z + 0.46), "seat")
+                for lx in (b0 + 0.3, (b0 + b1) / 2, b1 - 0.3):
+                    s.box((lx - 0.05, yf - 0.42, z), (lx + 0.05, yf - 0.2, z + 0.4), "steel")
+        for sx in (seat_xs if covered else []):
             s.box((sx - 0.23, yf - 0.6, z + 0.46), (sx + 0.23, yf - 0.54, z + 0.91), "seat",
                   rot=Matrix.Rotation(math.radians(-10), 3, "X"), about=(sx, yf - 0.57, z + 0.46), skip=("-z",))
         # Where the row's feet stand: on the tread in front of the step.
@@ -671,6 +691,8 @@ def build_grandstand():
                rot=Matrix.Rotation(-math.atan2(RISE, TREAD), 3, "X"), about=(a, first, PLINTH + 1.0))
     st.finish(parent=root)
 
+    if not covered:
+        return root
     # The roof: a membrane cantilevered from columns at the back, its beams
     # tapering to the front edge, a fascia along it.
     r = Mesh("roof")
@@ -694,6 +716,403 @@ def build_grandstand():
     r.finish(parent=root)
     return root
 
+
+# =============================================================================
+# Shared pieces for the steel structures
+# =============================================================================
+
+def tube(m, a, b, r, role, sides=6):
+    """A round bar from a to b."""
+    a, b = Vector(a), Vector(b)
+    d = (b - a).normalized()
+    side = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
+    u = d.cross(side).normalized()
+    v = d.cross(u)
+    ra = [a + (u * math.cos(2 * math.pi * k / sides) + v * math.sin(2 * math.pi * k / sides)) * r for k in range(sides)]
+    rb = [p + (b - a) for p in ra]
+    for k in range(sides):
+        j = (k + 1) % sides
+        m.face((ra[k], ra[j], rb[j], rb[k]), role)
+
+
+def ring(m, centre, radius, y, r, role, segs=56, sides=5):
+    """A circle of tube in the XZ plane (a wheel's rim), at depth y."""
+    cx, cz = centre
+    pts = [(cx + radius * math.cos(2 * math.pi * k / segs), y, cz + radius * math.sin(2 * math.pi * k / segs)) for k in range(segs)]
+    for k in range(segs):
+        tube(m, pts[k], pts[(k + 1) % segs], r, role, sides)
+    return pts
+
+
+# =============================================================================
+# The Singapore Flyer
+# =============================================================================
+
+FLYER_R = 75.0
+FLYER_HUB = 90.0
+
+
+def build_flyer():
+    """165 m: a 150 m wheel (a triangular truss rim, cable spokes, 28
+    capsules outside the rim) on its spindle, held by two pairs of raked
+    legs, over a three-storey terminal with a curved glass roof. The wheel
+    turns in the XZ plane (its face toward +Y, the circuit)."""
+    clear()
+    root = empty("singapore_flyer", (0, 0, 0))
+    w = Mesh("wheel")
+    hub = (0.0, FLYER_HUB)
+    outer_a = ring(w, hub, FLYER_R, 2.2, 0.55, "led")
+    outer_b = ring(w, hub, FLYER_R, -2.2, 0.55, "led")
+    inner = ring(w, hub, FLYER_R - 3.2, 0.0, 0.5, "white_steel")
+    # The truss: each node of the inner ring braced to both outer rings.
+    for k in range(len(inner)):
+        j = (k + 1) % len(inner)
+        tube(w, inner[k], outer_a[k], 0.22, "white_steel", 4)
+        tube(w, inner[k], outer_b[j], 0.22, "white_steel", 4)
+    # Cable spokes from the spindle's two ends to the inner ring.
+    for k in range(0, len(inner), 2):
+        for y in (9.0, -9.0):
+            tube(w, (0.0, y, FLYER_HUB), inner[k], 0.12, "steel", 3)
+    # The spindle and its hub.
+    tube(w, (0.0, -14.0, FLYER_HUB), (0.0, 14.0, FLYER_HUB), 2.2, "white_steel", 12)
+    w.lathe([(0.0, FLYER_HUB - 4.0), (4.5, FLYER_HUB - 3.0), (4.5, FLYER_HUB + 3.0), (0.0, FLYER_HUB + 4.0)], (0.0, 0.0), "steel", segs=12)
+    w.finish(parent=root)
+    # The capsules: 28 glass pods outside the rim, each a stretched octagon
+    # along the axle, its ends steel.
+    c = Mesh("capsules")
+    count = 28
+    for k in range(count):
+        a = 2 * math.pi * k / count
+        cx, cz = math.cos(a) * (FLYER_R + 3.4), FLYER_HUB + math.sin(a) * (FLYER_R + 3.4)
+        ring8 = [(cx + 2.0 * math.cos(2 * math.pi * s / 8), cz + 2.0 * math.sin(2 * math.pi * s / 8)) for s in range(8)]
+        for s in range(8):
+            t = (s + 1) % 8
+            (ax, az), (bx, bz) = ring8[s], ring8[t]
+            c.face(((ax, -6.2, az), (bx, -6.2, bz), (bx, 6.2, bz), (ax, 6.2, az)), "window_lit")
+        for y, flip in ((-6.2, True), (6.2, False)):
+            pts = [(x, y, z) for x, z in ring8]
+            c.face(list(reversed(pts)) if flip else pts, "steel")
+        # The arm that holds it to the rim.
+        tube(c, (cx * 0.955, 0.0, FLYER_HUB + (cz - FLYER_HUB) * 0.955), (math.cos(a) * (FLYER_R + 0.2), 0.0, FLYER_HUB + math.sin(a) * (FLYER_R + 0.2)), 0.35, "white_steel", 4)
+    c.finish(parent=root, extras={"count": count})
+    # The legs: two pairs, raked, from the spindle's ends to the terminal's roof.
+    lg = Mesh("legs")
+    for y in (13.0, -13.0):
+        for x in (-30.0, 30.0):
+            tube(lg, (0.0, y, FLYER_HUB), (x, y * 1.6, 12.0), 1.6, "white_steel", 8)
+        tube(lg, (-30.0, y * 1.6, 12.0), (30.0, y * 1.6, 12.0), 0.9, "white_steel", 6)
+        for x in (-12.0, 12.0):
+            tube(lg, (x * 0.62, y * 1.25, 52.0), (x * 1.6, y * 1.45, 30.0), 0.5, "white_steel", 4)
+    lg.finish(parent=root)
+    # The terminal: three storeys under a curved glass roof.
+    t = Mesh("terminal")
+    t.box((-60.0, -26.0, 0.0), (60.0, 26.0, 12.0), "concrete")
+    for z in (3.6, 7.6):
+        t.box((-60.2, 26.0, z), (60.2, 26.2, z + 2.8), "glass")
+        t.box((-60.2, -26.2, z), (60.2, -26.0, z + 2.8), "glass")
+    vault = []
+    for k in range(13):
+        a = math.pi * k / 12
+        vault.append((-26.0 * math.cos(a), 12.0 + 7.0 * math.sin(a)))
+    for k in range(12):
+        (y0, z0), (y1, z1) = vault[k], vault[k + 1]
+        t.face(((-58.0, y0, z0), (58.0, y0, z0), (58.0, y1, z1), (-58.0, y1, z1)), "glass")
+    for x in (-58.0, 58.0):
+        t.face([(x, y, z) for y, z in vault], "glass")
+    for k in range(-5, 6):
+        x = k * 11.0
+        for a, b in zip(vault, vault[1:]):
+            tube(t, (x, a[0], a[1]), (x, b[0], b[1]), 0.25, "white_steel", 3)
+    t.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# The Suzuka Ferris wheel
+# =============================================================================
+
+def build_suzuka_wheel():
+    """The amusement park's wheel: 50 m across, its hub at 29 m, 32
+    gondolas in four colours hanging under the rim, A-frame legs either
+    side on a concrete base."""
+    clear()
+    root = empty("suzuka_wheel", (0, 0, 0))
+    R, H = 25.0, 29.0
+    w = Mesh("wheel")
+    a = ring(w, (0.0, H), R, 1.6, 0.3, "white_steel", segs=32, sides=4)
+    b = ring(w, (0.0, H), R, -1.6, 0.3, "white_steel", segs=32, sides=4)
+    ring(w, (0.0, H), R * 0.55, 1.6, 0.2, "white_steel", segs=24, sides=4)
+    ring(w, (0.0, H), R * 0.55, -1.6, 0.2, "white_steel", segs=24, sides=4)
+    for k in range(32):
+        tube(w, a[k], b[k], 0.18, "white_steel", 4)
+        tube(w, (0.0, 1.6, H), a[k], 0.12, "white_steel", 3)
+        tube(w, (0.0, -1.6, H), b[k], 0.12, "white_steel", 3)
+    tube(w, (0.0, -4.0, H), (0.0, 4.0, H), 1.1, "steel", 10)
+    w.finish(parent=root)
+    g = Mesh("gondolas")
+    colours = ["paint_red", "paint_yellow", "paint_blue", "paint_green"]
+    for k in range(32):
+        ang = 2 * math.pi * k / 32
+        px, pz = math.cos(ang) * R, H + math.sin(ang) * R
+        role = colours[k % 4]
+        # Hanging under its pivot: a cabin with windows and a roof.
+        g.box((px - 1.1, -1.1, pz - 3.2), (px + 1.1, 1.1, pz - 1.0), role)
+        g.box((px - 1.15, -1.15, pz - 2.6), (px + 1.15, 1.15, pz - 1.5), "glass")
+        g.box((px - 1.3, -1.3, pz - 1.0), (px + 1.3, 1.3, pz - 0.7), "white_steel")
+        tube(g, (px, 0.0, pz), (px, 0.0, pz - 0.7), 0.08, "steel", 3)
+    g.finish(parent=root, extras={"count": 32})
+    lg = Mesh("legs")
+    for y in (4.0, -4.0):
+        for x in (-15.0, 15.0):
+            tube(lg, (0.0, y, H), (x, y * 1.8, 1.0), 0.75, "white_steel", 6)
+        tube(lg, (-8.0, y * 1.4, 14.0), (8.0, y * 1.4, 14.0), 0.4, "white_steel", 4)
+    lg.box((-20.0, -10.0, 0.0), (20.0, 10.0, 1.0), "concrete")
+    lg.box((-4.0, 6.0, 0.0), (4.0, 12.0, 3.2), "paint_red")
+    lg.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# The Monza banking
+# =============================================================================
+
+def build_monza_banking():
+    """A 40-degree stretch of the old banked curve (the sopraelevata): its
+    concrete deck 12 m wide, rising steeply from the inner edge to the outer
+    lip 9 m up, on rows of columns and arches, a rail along the top. Built
+    round a centre 320 m in front of it (+Y), so its deck faces that way."""
+    clear()
+    root = empty("monza_banking", (0, 0, 0))
+    R0, W, LIP = 320.0, 12.0, 9.0
+    span = math.radians(40)
+    steps = 36
+    across = 8
+
+    def at(a, s, dz=0.0):
+        r = R0 + W * s
+        z = max(0.0, 0.4 + LIP * s ** 2.2 + dz)
+        # The centre of the curve in front (+Y): its deck faces the circuit,
+        # rising away from it to the lip.
+        return (r * math.sin(a), R0 + W / 2 - r * math.cos(a), z)
+
+    deck = Mesh("deck")
+    rows_top = []
+    rows_under = []
+    for i in range(steps + 1):
+        a = -span / 2 + span * i / steps
+        rows_top.append([at(a, k / across) for k in range(across + 1)])
+        rows_under.append([at(a, k / across, -0.7) for k in range(across + 1)])
+    for i in range(steps):
+        for k in range(across):
+            # Weathered slabs, cast a few metres at a time: every fourth a shade darker.
+            role = "concrete_dark" if i % 4 == 0 else "asphalt_old" if k == 0 else "concrete"
+            deck.face((rows_top[i][k], rows_top[i + 1][k], rows_top[i + 1][k + 1], rows_top[i][k + 1]), role)
+            deck.face((rows_under[i][k + 1], rows_under[i + 1][k + 1], rows_under[i + 1][k], rows_under[i][k]), "concrete")
+        # The edges: the inner kerb and the outer lip's face.
+        deck.face((rows_top[i][0], rows_under[i][0], rows_under[i + 1][0], rows_top[i + 1][0]), "concrete")
+        deck.face((rows_top[i + 1][-1], rows_under[i + 1][-1], rows_under[i][-1], rows_top[i][-1]), "concrete")
+    for i, flip in ((0, False), (steps, True)):
+        ring_ = rows_top[i] + list(reversed(rows_under[i]))
+        deck.face(list(reversed(ring_)) if flip else ring_, "concrete")
+    deck.finish(parent=root)
+    # Columns under the deck: a row at the outer lip and one halfway, each
+    # pair joined by an arch; the outer face's ribs.
+    cols = Mesh("columns")
+    for i in range(0, steps + 1, 2):
+        a = -span / 2 + span * i / steps
+        for s in (0.5, 0.78, 1.0):
+            x, y, z = at(a, s, -0.7)
+            if z < 1.2:
+                continue
+            cols.box((x - 0.45, y - 0.45, 0.0), (x + 0.45, y + 0.45, z), "concrete")
+        if i + 2 <= steps:
+            b = -span / 2 + span * (i + 2) / steps
+            (x0, y0, z0), (x1, y1, z1) = at(a, 1.0, -0.7), at(b, 1.0, -0.7)
+            for k in range(6):
+                f0, f1 = k / 6, (k + 1) / 6
+                h0 = z0 - 1.6 * math.sin(math.pi * f0)
+                h1 = z0 - 1.6 * math.sin(math.pi * f1)
+                p0 = (x0 + (x1 - x0) * f0, y0 + (y1 - y0) * f0)
+                p1 = (x0 + (x1 - x0) * f1, y0 + (y1 - y0) * f1)
+                cols.face(((p0[0], p0[1], h0), (p1[0], p1[1], h1), (p1[0], p1[1], z0), (p0[0], p0[1], z0)), "concrete_dark")
+    cols.finish(parent=root)
+    rail = Mesh("rail")
+    for i in range(steps):
+        a = -span / 2 + span * i / steps
+        b = -span / 2 + span * (i + 1) / steps
+        p, q = at(a, 1.0, 0.0), at(b, 1.0, 0.0)
+        for h in (0.6, 1.1):
+            tube(rail, (p[0], p[1], p[2] + h), (q[0], q[1], q[2] + h), 0.06, "steel", 4)
+        tube(rail, p, (p[0], p[1], p[2] + 1.15), 0.06, "steel", 4)
+    rail.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# Spa: the old pits at the foot of Eau Rouge
+# =============================================================================
+
+def build_spa_pits():
+    """The old pit building: long and low, painted white, its garages'
+    doors along the ground floor, a strip of windows above, a terrace on the
+    roof behind a rail, and the old timing tower at one end."""
+    clear()
+    root = empty("spa_pits", (0, 0, 0))
+    m = Mesh("spa_pits")
+    L, D = 110.0, 12.0
+    m.box((-L / 2, -D / 2, 0.0), (L / 2, D / 2, 7.2), "render")
+    for k in range(18):
+        x = -L / 2 + 3.0 + k * (L - 6.0) / 18
+        m.box((x, D / 2, 0.0), (x + 4.4, D / 2 + 0.08, 3.4), "gear")
+        m.box((x, D / 2, 4.2), (x + 4.4, D / 2 + 0.08, 6.0), "glass")
+    m.box((-L / 2 - 0.2, D / 2 - 0.2, 3.6), (L / 2 + 0.2, D / 2 + 0.9, 3.9), "render")
+    m.box((-L / 2, -D / 2, 7.2), (L / 2, D / 2, 7.6), "concrete")
+    for k in range(56):
+        x = -L / 2 + 1.0 + k * (L - 2.0) / 55
+        tube(m, (x, D / 2 - 0.2, 7.6), (x, D / 2 - 0.2, 8.6), 0.04, "steel", 3)
+    tube(m, (-L / 2 + 1.0, D / 2 - 0.2, 8.6), (L / 2 - 1.0, D / 2 - 0.2, 8.6), 0.05, "steel", 4)
+    # The timing tower at the end nearest the hill.
+    tx = L / 2 - 6.0
+    m.box((tx - 5.0, -5.0, 7.6), (tx + 5.0, 5.0, 13.0), "render")
+    m.box((tx - 5.2, -5.2, 10.0), (tx + 5.2, 5.2, 12.6), "glass")
+    m.box((tx - 6.0, -6.0, 13.0), (tx + 6.0, 6.0, 13.5), "concrete")
+    # Its stairs up the side.
+    for k in range(12):
+        m.box((-L / 2 - 2.2, -D / 2 + 1 + k * 0.8, k * 0.6), (-L / 2, -D / 2 + 1.8 + k * 0.8, k * 0.6 + 0.6), "concrete")
+    m.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# Silverstone: the Wing
+# =============================================================================
+
+def build_silverstone_wing():
+    """The Wing: a long glass building, three floors over a recessed ground
+    floor, under a roof shaped like an aerofoil, its nose cantilevered out
+    over the front (+Y); the roof rises toward the middle of its length."""
+    clear()
+    root = empty("silverstone_wing", (0, 0, 0))
+    L, D = 250.0, 30.0
+    b = Mesh("building")
+    b.box((-L / 2, -D / 2, 0.0), (L / 2, D / 2 - 4.0, 5.0), "concrete_dark")
+    for z0 in (5.0, 9.4, 13.8):
+        b.box((-L / 2, -D / 2, z0), (L / 2, D / 2, z0 + 0.6), "white_steel")
+        b.box((-L / 2 + 0.2, -D / 2 + 0.2, z0 + 0.6), (L / 2 - 0.2, D / 2 - 0.2, z0 + 4.4), "glass")
+    # Vertical fins down the glass front.
+    for k in range(int(L / 5)):
+        x = -L / 2 + 2.5 + k * 5.0
+        b.box((x - 0.15, D / 2 - 0.1, 5.0), (x + 0.15, D / 2 + 0.9, 18.2), "white_steel")
+    for k in range(int(L / 12)):
+        x = -L / 2 + 6 + k * 12.0
+        b.box((x - 0.5, D / 2 - 2.5, 0.0), (x + 0.5, D / 2 - 1.5, 5.0), "white_steel")
+    b.finish(parent=root)
+    r = Mesh("roof")
+    steps = 24
+    chord = 46.0
+    # The aerofoil's section, nose (+Y) to tail: (fraction of chord, upper, lower).
+    sec = [(0.0, 0.0, 0.0), (0.04, 1.3, -0.6), (0.12, 2.3, -0.8), (0.3, 2.9, -0.7), (0.55, 2.4, -0.4), (0.8, 1.3, -0.15), (1.0, 0.0, 0.0)]
+    rows = []
+    for i in range(steps + 1):
+        x = -L / 2 - 4.0 + (L + 8.0) * i / steps
+        lift = 3.5 * math.sin(math.pi * i / steps)
+        base = 19.0 + lift
+        nose = D / 2 + 12.0
+        up = [(x, nose - f * chord, base + u) for f, u, _ in sec]
+        lo = [(x, nose - f * chord, base + l) for f, _, l in reversed(sec[1:-1])]
+        rows.append(up + lo)
+    n = len(rows[0])
+    for i in range(steps):
+        for k in range(n):
+            j = (k + 1) % n
+            r.face((rows[i][k], rows[i + 1][k], rows[i + 1][j], rows[i][j]), "white_steel" if k < len(sec) else "roof_membrane")
+    r.face(rows[0], "white_steel")
+    r.face(list(reversed(rows[-1])), "white_steel")
+    # Struts from the top floor up to the roof's underside.
+    for i in range(1, steps, 2):
+        x = -L / 2 - 4.0 + (L + 8.0) * i / steps
+        lift = 3.5 * math.sin(math.pi * i / steps)
+        for y in (D / 2 - 2.0, -D / 2 + 6.0):
+            tube(r, (x, y, 18.2), (x, y + 1.0, 19.0 + lift - 0.6), 0.35, "white_steel", 6)
+    r.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# Bahrain: the Sakhir tower
+# =============================================================================
+
+def build_sakhir_tower():
+    """The VIP tower: a slim core rising from a podium to seven stacked
+    floors at the top, each wider and turned a little from the one below,
+    glazed all round, crowned with white sail-like shades."""
+    clear()
+    root = empty("sakhir_tower", (0, 0, 0))
+    m = Mesh("sakhir_tower")
+    m.box((-16.0, -12.0, 0.0), (16.0, 12.0, 6.0), "stone")
+    m.box((-16.2, 11.8, 1.0), (16.2, 12.2, 5.0), "glass")
+    m.box((-4.5, -4.5, 6.0), (4.5, 4.5, 28.0), "stone")
+    for k in range(5):
+        m.box((-4.7, 4.4, 8.0 + k * 4.8), (-1.5, 4.7, 11.0 + k * 4.8), "glass")
+    z = 28.0
+    for k in range(7):
+        a = math.radians(4.0 * k - 12.0)
+        rot = Matrix.Rotation(a, 3, "Z")
+        half = 10.0 + k * 1.2
+        m.box((-half, -half * 0.8, z), (half, half * 0.8, z + 0.6), "stone", rot=rot, about=(0, 0, z))
+        m.box((-half + 0.4, -half * 0.8 + 0.4, z + 0.6), (half - 0.4, half * 0.8 - 0.4, z + 3.0), "glass", rot=rot, about=(0, 0, z))
+        z += 3.0
+    m.box((-19.0, -15.0, z), (19.0, 15.0, z + 0.8), "stone")
+    # The sails: tall curved shades round the crown.
+    for k in range(8):
+        a = 2 * math.pi * k / 8
+        cx, cy = math.cos(a) * 15.0, math.sin(a) * 12.0
+        pts = []
+        for s in range(6):
+            f = s / 5
+            pts.append((cx * (1 - 0.35 * f), cy * (1 - 0.35 * f), z + 0.8 + 10.0 * f))
+        for s in range(5):
+            (x0, y0, z0), (x1, y1, z1) = pts[s], pts[s + 1]
+            tx, ty = -math.sin(a) * 2.6 * (1 - s / 6), math.cos(a) * 2.6 * (1 - s / 6)
+            ux, uy = -math.sin(a) * 2.6 * (1 - (s + 1) / 6), math.cos(a) * 2.6 * (1 - (s + 1) / 6)
+            m.face(((x0 - tx, y0 - ty, z0), (x0 + tx, y0 + ty, z0), (x1 + ux, y1 + uy, z1), (x1 - ux, y1 - uy, z1)), "sail_shade")
+            m.face(((x1 - ux, y1 - uy, z1), (x1 + ux, y1 + uy, z1), (x0 + tx, y0 + ty, z0), (x0 - tx, y0 - ty, z0)), "sail_shade")
+    m.finish(parent=root)
+    return root
+
+
+# =============================================================================
+# São Paulo: two towers for the skyline
+# =============================================================================
+
+def build_sp_towers():
+    """An art deco tower stepping up to its spire (161 m), and a modernist
+    slab of rounded-triangle plan (165 m): the windows are the facade
+    shader's (the UVs in metres), stone at the setbacks."""
+    clear()
+    root = empty("sp_towers", (0, 0, 0))
+    a = Mesh("altino")
+    tiers = [(20.0, 15.0, 0.0, 62.0), (15.0, 12.0, 62.0, 104.0), (10.0, 8.0, 104.0, 132.0), (6.0, 5.0, 132.0, 146.0)]
+    for hx, hy, z0, z1 in tiers:
+        a.box((-hx, -hy, z0), (hx, hy, z1), "facade")
+        a.box((-hx - 0.4, -hy - 0.4, z1 - 1.2), (hx + 0.4, hy + 0.4, z1), "stone")
+        # Pilasters up the faces.
+        for k in range(-3, 4):
+            x = hx * k / 3.5
+            a.box((x - 0.35, hy, z0), (x + 0.35, hy + 0.45, z1), "stone")
+            a.box((x - 0.35, -hy - 0.45, z0), (x + 0.35, -hy, z1), "stone")
+    a.lathe([(3.0, 146.0), (2.0, 152.0), (0.6, 158.0), (0.0, 161.0)], (0.0, 0.0), "stone", segs=8)
+    a.finish(parent=root)
+    it = Mesh("italia")
+    plan = []
+    for k in range(24):
+        ang = 2 * math.pi * k / 24
+        r = 26.0 * (1.0 + 0.12 * math.cos(3 * ang))
+        plan.append((r * math.cos(ang) + 90.0, r * math.sin(ang)))
+    it.prism(plan, 0.0, 160.0, "facade", cap_top=False)
+    it.prism([(x + (x - 90.0) * 0.04, y * 1.04) for x, y in plan], 160.0, 165.0, "stone")
+    it.finish(parent=root)
+    return root
 
 # =============================================================================
 # Build, check, export, preview
@@ -836,3 +1255,31 @@ root = build_grandstand()
 check("grandstand", root, 12000, stand_size)
 export(root, "grandstand.glb", uvs=False)
 preview(root, "grandstand", [("front", (14, 24, 6), (0, 0, 4)), ("side", (30, 6, 5), (0, 0, 4))])
+
+
+root = build_grandstand(covered=False)
+check("grandstand_open", root, 12000, stand_size)
+export(root, "grandstand_open.glb", uvs=False)
+preview(root, "grandstand_open", [("front", (14, 24, 6), (0, 0, 3))])
+
+
+def tall(lo_h, hi_h):
+    def size_check(lo, hi):
+        if not (lo_h < hi.z < hi_h):
+            raise RuntimeError(f"the model's top is at {hi.z:.1f} m, not {lo_h}..{hi_h}")
+    return size_check
+
+
+for build, name, budget, size_check, shots, night, uvs in (
+    (build_flyer, "singapore_flyer", 40000, tall(160, 172), [("front", (60, 330, 70), (0, 0, 85))], True, False),
+    (build_suzuka_wheel, "suzuka_wheel", 40000, tall(46, 60), [("front", (30, 90, 20), (0, 0, 26))], False, False),
+    (build_monza_banking, "monza_banking", 40000, tall(7, 12), [("front", (30, 45, 6), (-20, 0, 4)), ("under", (0, -40, 4), (0, 2, 5))], False, False),
+    (build_spa_pits, "spa_pits", 40000, tall(10, 20), [("front", (40, 70, 12), (0, 0, 5))], False, False),
+    (build_silverstone_wing, "silverstone_wing", 40000, tall(18, 32), [("front", (110, 140, 25), (0, 0, 14))], False, False),
+    (build_sakhir_tower, "sakhir_tower", 40000, tall(45, 65), [("front", (45, 75, 30), (0, 0, 35))], False, False),
+    (build_sp_towers, "sp_towers", 40000, tall(150, 170), [("front", (60, 320, 70), (45, 0, 80))], False, True),
+):
+    root = build()
+    check(name, root, budget, size_check)
+    export(root, f"{name}.glb", uvs=uvs)
+    preview(root, name, shots, night=night)

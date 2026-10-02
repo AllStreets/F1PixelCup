@@ -9,6 +9,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, seeded, hashString, canvasTexture, buildingMaterial, photo } from "./textures.js";
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
 import { tracksideModel } from "./models.js";
+import { buildYachts } from "./yachts.js";
 
 // ---------------------------------------------------------------------------
 // Venue settings
@@ -45,12 +46,16 @@ export const VENUES = {
     trees: [{ kind: "palm", count: 120, tint: "#3f7a3a", near: 60 }],
     // The casino claims its square first; the town fills in round it.
     extras: ["casino", "monacoCity", "yachts", "mountains"],
+    // The harbour: yachts moored stern-to at the town's edge, more at anchor.
+    harbour: { quay: 190, moored: 46, anchored: 22, wind: 0.5 },
     runoffTint: "#b8b4ac",
   },
   singapore: {
     ground: "city", night: true, standColor: "#e03030", stand: "covered",
     trees: [{ kind: "broadleaf", count: 140, tint: "#2d5a3a", near: 80 }],
-    extras: ["marinaBaySands", "singaporeCity", "flyer", "skyline", "floodlights"],
+    extras: ["marinaBaySands", "yachts", "singaporeCity", "flyer", "skyline", "floodlights"],
+    // A few at anchor on Marina Bay, in front of Marina Bay Sands.
+    harbour: { anchored: 6, anchorIn: "marinaBaySands", wind: 2.2 },
   },
   bahrain: {
     ground: "sand", standColor: "#b8001f", runoffTint: "#b8a888", gravelTint: "#e0c89a",
@@ -479,20 +484,34 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit;
         float facadeHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
+        // Rooms 4 m wide, floors 3.2 m: the glass in an inset, its frame
+        // and the floor slab round it (the technique of the user's Chicago
+        // city, not its assets).
         vec2 cell = vec2(vFacade.x / 4.0, vFacade.y / 3.2);
         vec2 f = fract(cell);
         vec2 room = floor(cell);
-        float slabLine = 1.0 - step(0.14, f.y);
-        float mullion = 1.0 - step(0.05, f.x);
-        float frame = max(slabLine, mullion * 0.6);
-        diffuseColor.rgb = mix(uGlass, uSlab, frame);
-        float h = facadeHash(room + floor(vFacade.x / 37.0));
-        float on = step(1.0 - uLit, h) * (1.0 - frame) * step(5.0, vFacade.y);`)
+        float glassIn = smoothstep(0.04, 0.09, f.x) * smoothstep(0.04, 0.09, 1.0 - f.x)
+          * smoothstep(0.16, 0.24, f.y) * smoothstep(0.03, 0.08, 1.0 - f.y);
+        // Where a room is smaller than a pixel or two, the wall's average
+        // instead of its pattern: no shimmer, no noise far away.
+        float fw = max(fwidth(cell.x), fwidth(cell.y));
+        float farAway = smoothstep(0.22, 0.55, fw);
+        float glassShare = 0.72;
+        float inset = mix(glassIn, glassShare, farAway);
+        diffuseColor.rgb = mix(uSlab, uGlass, inset);
+        // Whole floors light together (a hotel's evening), a room here and
+        // there apart from its floor.
+        float floorH = facadeHash(vec2(room.y * 0.37, 7.1));
+        float roomH = facadeHash(room + floor(vFacade.x / 37.0));
+        float lit = step(roomH * 0.35 + floorH * 0.65, uLit) * step(5.0, vFacade.y);
+        float level = 0.55 + 0.3 * facadeHash(vec2(room.y, 3.3)) + 0.15 * roomH;
+        float on = mix(lit * level * glassIn, uLit * 0.72 * glassShare, farAway);`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-        vec3 roomLight = mix(vec3(1.0, 0.76, 0.46), vec3(0.85, 0.9, 1.0), step(0.85, facadeHash(room * 1.7 + 3.1)));
-        totalEmissiveRadiance += roomLight * on * uNight * (0.42 + 0.38 * facadeHash(room + 9.3));`);
+        vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
+        // The unlit rooms keep a faint glow from the corridors.
+        totalEmissiveRadiance += (roomLight * on * 0.62 + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-${night ? 1 : 0}-${glass}-${lit}`;
+  m.customProgramCacheKey = () => `facade-v2-${night ? 1 : 0}-${glass}-${lit}`;
   return m;
 }
 
@@ -656,6 +675,8 @@ function marinaBaySandsModel(course, group, venue) {
   model.position.set(spot.x, 0, spot.z);
   model.rotation.y = spot.yaw;
   model.name = "landmark:marinaBaySands";
+  // Its bay (model metres), for the yachts at anchor.
+  model.userData.bay = bay;
   model.userData.landmark = { name: "marinaBaySands", fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
   const bayWater = waterMaterial("#0e2238");
   bayWater.userData.worldOwned = true;
@@ -741,6 +762,8 @@ const EXTRAS = {
   },
 
   yachts(course, group, venue, rand) {
+    if (buildYachts(course, group, venue, rand)) return;
+    if (!venue.harbour || venue.harbour.anchorIn) return;
     const b = course.bounds;
     const hullMat = std(0xffffff, { roughness: 0.3 });
     const count = 60;

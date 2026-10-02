@@ -92,3 +92,72 @@ test("the covered grandstand: rows of seats rising from the front, under a roof,
   ["roof", "stairs"].forEach((n) => assert.ok(node(glb, n), `${n} is missing`));
   assert.ok(all.tris > 1500 && all.tris <= 12000, `${all.tris} triangles`);
 });
+
+// ---------------------------------------------------------------------------
+// The final look (spec section 8.2): the other venues' landmarks.
+
+test("Marina Bay Sands: the SkyPark's prow narrows to a rounded point past the last tower", () => {
+  const glb = load(file("marina_bay_sands"));
+  const sky = part(glb, "skypark");
+  const tip = triangles(glb, "skypark").flatMap((t) => t).filter((v) => v[0] > sky.hi[0] - 6);
+  const width = Math.max(...tip.map((v) => v[2])) - Math.min(...tip.map((v) => v[2]));
+  assert.ok(width < 12, `the prow's last 6 m are ${width.toFixed(1)} m wide`);
+});
+
+test("the Singapore Flyer: a 150 m wheel, 28 capsules, 165 m tall over its terminal", () => {
+  const glb = load(file("singapore_flyer"));
+  ["wheel", "capsules", "legs", "terminal"].forEach((n) => assert.ok(node(glb, n), `${n} is missing`));
+  const all = part(glb);
+  assert.ok(all.hi[1] > 160 && all.hi[1] < 172, `${all.hi[1].toFixed(1)} m tall`);
+  const wheel = part(glb, "wheel");
+  assert.ok(wheel.size[0] > 145 && wheel.size[0] < 160, `the wheel is ${wheel.size[0].toFixed(1)} m across`);
+  assert.equal(node(glb, "capsules").extras.count, 28);
+  ["led", "window_lit", "steel"].forEach((m) => assert.ok(all.materials.includes(m), `no ${m}`));
+  assert.ok(Math.abs(all.lo[1]) < 0.05, "on the ground");
+  assert.ok(all.tris <= 40000, `${all.tris} triangles`);
+});
+
+test("the Suzuka wheel: about 50 m, gondolas hanging under its rim", () => {
+  const glb = load(file("suzuka_wheel"));
+  const all = part(glb);
+  assert.ok(all.hi[1] > 46 && all.hi[1] < 60, `${all.hi[1].toFixed(1)} m tall`);
+  assert.ok(node(glb, "gondolas").extras.count >= 24, "its gondolas");
+  assert.ok(Math.abs(all.lo[1]) < 0.05 && all.tris <= 40000);
+});
+
+test("the Monza banking: a curved deck rising to its lip on columns", () => {
+  const glb = load(file("monza_banking"));
+  ["deck", "columns", "rail"].forEach((n) => assert.ok(node(glb, n), `${n} is missing`));
+  const deck = part(glb, "deck");
+  assert.ok(deck.hi[1] > 7 && deck.hi[1] < 11, `the lip is ${deck.hi[1].toFixed(1)} m up`);
+  assert.ok(deck.size[0] > 150, `${deck.size[0].toFixed(0)} m of curve`);
+  const all = part(glb);
+  assert.ok(Math.abs(all.lo[1]) < 0.05 && all.tris <= 40000);
+});
+
+test("Spa's old pits, Silverstone's Wing, the Sakhir tower, the São Paulo towers", () => {
+  const spa = part(load(file("spa_pits")));
+  assert.ok(spa.size[0] > 80 && spa.hi[1] < 20, `Spa's pits: ${spa.size[0].toFixed(0)} m long, ${spa.hi[1].toFixed(0)} m tall`);
+  const wing = load(file("silverstone_wing"));
+  assert.ok(node(wing, "roof"), "the Wing's roof");
+  const w = part(wing);
+  assert.ok(w.size[0] > 200 && w.hi[1] > 18 && w.hi[1] < 32, `the Wing: ${w.size[0].toFixed(0)} m long, ${w.hi[1].toFixed(0)} m tall`);
+  const sakhir = part(load(file("sakhir_tower")));
+  assert.ok(sakhir.hi[1] > 45 && sakhir.hi[1] < 65, `the Sakhir tower is ${sakhir.hi[1].toFixed(0)} m tall`);
+  const sp = load(file("sp_towers"));
+  ["altino", "italia"].forEach((n) => assert.ok(node(sp, n), `${n} is missing`));
+  assert.ok(part(sp, "altino").hi[1] > 150 && part(sp, "italia").hi[1] > 155, "the São Paulo towers' heights");
+  [spa, w, sakhir, part(sp)].forEach((p) => { assert.ok(Math.abs(p.lo[1]) < 0.05, "on the ground"); assert.ok(p.tris <= 40000, `${p.tris} triangles`); });
+});
+
+test("the open terrace: rows of benches, no roof, the covered stand's footprint", () => {
+  const glb = load(file("grandstand_open"));
+  const all = part(glb);
+  assert.ok(!node(glb, "roof"), "no roof");
+  assert.ok(all.size[0] <= 26.01 && all.size[2] <= 11.34 && all.hi[1] < 8, `${all.size.map((v) => v.toFixed(1))}`);
+  let rows = 0;
+  while (node(glb, `row_${rows}`)) rows += 1;
+  assert.ok(rows >= 8, `${rows} rows`);
+  assert.ok(node(glb, "row_0").extras.seats.length >= 30, "row 0 lists its places");
+  assert.ok(all.tris <= 12000);
+});

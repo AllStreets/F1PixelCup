@@ -24,8 +24,9 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModelsState, tracksideTemplates } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople } from "./r3d/people.js";
+import { showYachtsFor, updateYachts, inspectYachts } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
@@ -156,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -180,6 +181,9 @@ function setPhotoCamera(shot) {
 // (compileAsync), so the loading panel keeps moving instead of the page
 // freezing; until then it returns false, and the game asks again next frame.
 function prepare(track, racers, weather) {
+  // The venue's own models (its landmarks, its yachts) first: the loading
+  // panel stays up until they have loaded or failed.
+  if (!venueModelsSettled(track.id)) return false;
   const world = ensureWorld(track);
   // Wet or dry before the first frame (only uniforms: nothing to compile).
   rain.apply(world, scene, weather === "wet");
@@ -618,7 +622,7 @@ function inspect() {
   const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
-  const trackside = { memory, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null };
+  const trackside = { memory, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
   // Where each car was drawn (game x, y), and whether it was.
   const drawn = {};
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
@@ -808,6 +812,7 @@ function updateTrackside(world, track, life, now, dt, { players, racers } = {}) 
   world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
   world.life.starter = updateStarter(world.starter, flag, show.ms, t);
   updatePeople(world.people, { players, racers, t, dt: paused ? 0 : dt });
+  updateYachts(world.yachts, t);
 }
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
@@ -867,6 +872,7 @@ function buildWorld(track) {
   group.add(decor);
   const landmarks = buildLandmarks(course, venue);
   group.add(landmarks);
+  const yachts = landmarks.getObjectByName("yachts");
   // Trackside life: the marshal posts (after everything else has claimed its
   // ground) and the starter by the line.
   const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
@@ -886,7 +892,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -919,9 +925,12 @@ function disposeWorld(world) {
 }
 
 function ensureWorld(track) {
-  if (current && current.trackId === track.id) return current;
+  // Built before its venue's models had all arrived (an audit, the garage):
+  // built again with them once they have.
+  if (current && current.trackId === track.id && (current.modelsComplete || !venueModelsSettled(track.id))) return current;
   if (current) disposeWorld(current);
   current = buildWorld(track);
+  current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);
   // The tunnel's light: its shape for the shaders, and every lit material
   // taught it (before the circuit's shaders are compiled).
@@ -1326,6 +1335,7 @@ function render(frame) {
   }
   // Each view draws the near stands' crowd in 3D for its own camera.
   showCrowdFor(world.people, camera, currentTier());
+  showYachtsFor(world.yachts, camera, currentTier());
   // In the helicopter view the camera is in it.
   if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet, view: index });
