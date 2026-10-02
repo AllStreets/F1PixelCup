@@ -1,6 +1,6 @@
 # The 3D podium ceremony (Stage K)
 
-Roadmap stage 11. At the end of a cup, the top three of the real cup standings stand on a podium in 3D: the Blender-built drivers (Stage I) in their teams' suits and their own helmets. The ceremony runs as it does after a Grand Prix.
+Roadmap stage 11. At the end of a cup, the top three of the real cup standings stand on a podium in 3D: the Blender-built drivers (Stage I) in their teams' suits, bareheaded with their own faces (the user, 2026-10-01; until the driver faces land they wear their own helmets). The ceremony runs as it does after a Grand Prix.
 
 ## The set (`r3d/podium.js`)
 
@@ -12,7 +12,7 @@ Roadmap stage 11. At the end of a cup, the top three of the real cup standings s
   - the suit in the team's base colour;
   - the trim in the team's trim colour;
   - dark gloves and boots;
-  - the helmet with the driver's own painted design, the same texture the car's helmet wears (`r3d/car.js`).
+  - bareheaded, each with their own face (`buildDriver(driver, team, { headwear: "none" })`, from the driver faces work); until that lands, the helmet with the driver's own painted design, the same texture the car's helmet wears (`r3d/car.js`).
 
 ## The ceremony
 
@@ -25,7 +25,9 @@ A timeline, on real time (it isn't the race clock):
 | 5–9 s | P1 lifts the trophy (`trophy`) while P2 and P3 wave (`wave`). A confetti burst comes down over the podium. |
 | 9 s on | All three spray champagne (`spray`). The spray shoots from each bottle's neck in the direction the bottle points and falls under gravity. The confetti keeps drifting down. The camera orbits slowly. It loops. |
 
-Confetti is instanced paper squares tumbling as they fall, in the three drivers' team colours and gold. There are 600 pieces on High, 300 on Medium and 120 on Low. The spray is a pooled points system (none on Low).
+Confetti is instanced paper squares tumbling as they fall, in the three drivers' team colours and gold. There are 600 pieces on High, 300 on Medium and 120 on Low. The spray is a pooled points system of 1500 drops on High and 750 on Medium (none on Low); a drop ends on what it hits (a step, the floor or the wall). Confetti lies where it lands, and goes round again only where the camera can't see it or after fading out. The trophy and the bottles change hands halfway through the poses' crossfade.
+
+With reduced motion asked for, the camera holds its settled view, nobody steps forward, the banners hang still, the confetti lies on the ground, there is no spray, and the name plates stay up.
 
 ## In the page
 
@@ -37,7 +39,7 @@ Confetti is instanced paper squares tumbling as they fall, in the three drivers'
 
 - **Browser** (`tools/checks/podium-check.js`):
   - the three drivers on the podium are the real cup's top three, in order (P1 in the middle);
-  - each wears its team's suit colour and its own helmet texture;
+  - each wears its team's suit colour and its own helmet texture (or, bareheaded, its own face);
   - the poses advance on the timeline;
   - the trophy is shown only while P1 lifts it;
   - confetti falls and spray flies once the ceremony reaches them;

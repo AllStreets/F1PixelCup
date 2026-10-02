@@ -119,7 +119,7 @@ function sampleFrame(racing) {
     const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
     if (next !== autoTier) {
       autoTier = next;
-      postfx.setTier(currentTier());
+      postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
   }
@@ -132,8 +132,9 @@ function setGraphics(choice) {
   } catch (error) {
     // The choice holds for this visit only.
   }
-  postfx.setTier(currentTier());
+  postfx.setTier(raceFxTier());
   rain.setTier(currentTier());
+  if (ceremony.fx) ceremony.fx.setTier(currentTier());
   return graphics();
 }
 
@@ -1346,6 +1347,12 @@ function renderGarage(kart, driver, now) {
 
 const ceremony = { podium: null, fx: null, size: "", driverLoading: false, last: null };
 
+// The race's own effects hold full-size buffers; while the ceremony (with
+// effects of its own) has the screen, they are released.
+function raceFxTier() {
+  return ceremony.podium ? "low" : currentTier();
+}
+
 // The driver model, fetched ahead (the cup's last results screen asks).
 function podiumPreload() {
   if (driverLoaded() || ceremony.driverLoading) return;
@@ -1358,21 +1365,24 @@ function podiumPreload() {
 
 // summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
 function podiumBegin(summary) {
-  podiumEnd();
-  if (!api.ready) return false;
+  const entries = summary.podium.map((p) => {
+    const driver = DRIVERS.find((d) => d.id === p.driverId);
+    return driver ? { place: p.place, driver, team: getTeamForDriver(driver), points: p.points } : null;
+  }).filter(Boolean);
+  if (!api.ready || entries.length !== 3) {
+    podiumEnd();
+    return false;
+  }
+  // A ceremony already up gives way; the race's effects stay released.
+  podiumEnd(false);
   podiumPreload();
   // The race's circuit is done with: free it now, as the pit lane would.
   if (current) {
     disposeWorld(current);
     current = null;
   }
-  const entries = summary.podium.map((p) => {
-    const driver = DRIVERS.find((d) => d.id === p.driverId);
-    return driver ? { place: p.place, driver, team: getTeamForDriver(driver), points: p.points } : null;
-  }).filter(Boolean);
-  if (entries.length !== 3) return false;
   const tier = currentTier();
-  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment, fx: null });
+  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment });
   const fx = createPostFx(renderer, podium.scene, podium.camera);
   fx.setTier(tier);
   podium.setFx(fx);
@@ -1380,6 +1390,7 @@ function podiumBegin(summary) {
   ceremony.fx = fx;
   ceremony.size = "";
   ceremony.last = podium;
+  postfx.setTier(raceFxTier());
   return true;
 }
 
@@ -1403,20 +1414,24 @@ function podiumFrame(now) {
     return { drawing: false };
   }
   const t = podium.render(now);
-  return { drawing: true, t, anchors: podium.anchors(w, h) };
+  return { drawing: true, t, anchors: podium.anchors(w, h), platesIn: podium.platesIn(t) };
 }
 
-function podiumEnd() {
+// restore: give the race's effects back (not when a new ceremony follows).
+function podiumEnd(restore = true) {
+  const had = Boolean(ceremony.podium);
   if (ceremony.podium) ceremony.podium.dispose();
   if (ceremony.fx) ceremony.fx.dispose();
   ceremony.podium = null;
   ceremony.fx = null;
+  if (had && restore) postfx.setTier(raceFxTier());
 }
 
 function podiumInspect() {
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
-  if (!ceremony.podium) return { active: false, memory, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
-  return { active: true, memory, ...ceremony.podium.inspect(), owned: ceremony.podium.owned() };
+  const racePostfx = postfx.inspect().frame;
+  if (!ceremony.podium) return { active: false, memory, racePostfx, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
+  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned() };
 }
 
 api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect };

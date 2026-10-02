@@ -54,13 +54,18 @@
     return smooth(at, at + STEP_TIME, t);
   }
 
-  const trophyShown = (place, t) => place === 1 && t >= BEATS.trophy && t < BEATS.spray;
+  // The trophy and the bottles change hands halfway through the poses'
+  // crossfade (r3d/driver.js fades poses over 0.35 s), as the hands meet.
+  const PROP_SWAP = 0.175;
+  const trophyShown = (place, t) => place === 1 && t >= BEATS.trophy + PROP_SWAP && t < BEATS.spray + PROP_SWAP;
+  const bottleShown = (place, t) => t >= BEATS.spray + PROP_SWAP;
   const confettiOn = (t) => t >= BEATS.trophy;
   const sprayOn = (t, tier) => t >= BEATS.spray && tier !== "low";
 
   // The name plates come in as the camera settles and step aside while it
   // is close on P1 with the trophy, as a broadcast's captions do.
-  const platesShown = (t) => t >= BEATS.sweepEnd - 0.3 && !(t > BEATS.trophy + 0.4 && t < BEATS.spray + 0.6);
+  // With reduced motion (still) the camera holds its settled view: they stay.
+  const platesShown = (t, still = false) => still || (t >= BEATS.sweepEnd - 0.3 && !(t > BEATS.trophy + 0.4 && t < BEATS.spray + 0.6));
 
   const COUNTS = {
     high: { confetti: 600, spray: 1500 },
@@ -147,21 +152,20 @@
 
   // Champagne: a drop leaves the neck along the bottle at a few metres a
   // second, spread a little, and falls under gravity with a little air drag.
+  // out: a drop to fill in place (the pool's own), else a new one.
   const SPRAY_SPEED = 6.5;
-  function sprayDrop(neck, dir, random = Math.random) {
+  function sprayDrop(neck, dir, random = Math.random, out = {}) {
     const len = Math.hypot(dir.x, dir.y, dir.z) || 1;
     const spread = 0.09;
     const speed = SPRAY_SPEED * (0.7 + random() * 0.5);
-    const jitter = () => (random() - 0.5) * 2 * spread;
-    return {
-      x: neck.x,
-      y: neck.y,
-      z: neck.z,
-      vx: (dir.x / len + jitter()) * speed,
-      vy: (dir.y / len + jitter()) * speed,
-      vz: (dir.z / len + jitter()) * speed,
-      age: 0,
-    };
+    out.x = neck.x;
+    out.y = neck.y;
+    out.z = neck.z;
+    out.vx = (dir.x / len + (random() - 0.5) * 2 * spread) * speed;
+    out.vy = (dir.y / len + (random() - 0.5) * 2 * spread) * speed;
+    out.vz = (dir.z / len + (random() - 0.5) * 2 * spread) * speed;
+    out.age = 0;
+    return out;
   }
 
   function stepDrop(d, dt) {
@@ -177,7 +181,7 @@
   }
 
   return {
-    BEATS, STEP_FORWARD, ORBIT_PERIOD, stepFor, beatAt, poseAt, forwardAt, trophyShown, confettiOn, sprayOn, platesShown,
+    BEATS, STEP_FORWARD, ORBIT_PERIOD, PROP_SWAP, stepFor, beatAt, poseAt, forwardAt, trophyShown, bottleShown, confettiOn, sprayOn, platesShown,
     counts, cameraAt, fitFov, cupColour, stepConfetti, sprayDrop, stepDrop,
   };
 }));

@@ -64,9 +64,26 @@ async (page) => {
   results.stepsWhileLoading = cup.stepsWhileLoading;
   const drawn = await p.waitForFunction(() => Render3D.podium && Render3D.podium.inspect().drawing, null, { timeout: 30000 }).then(() => true, () => false);
   results.ceremonyDraws = drawn || await p.evaluate(() => JSON.stringify({ phase: state.phase, view: Render3D.ready, podium: Render3D.podium && Render3D.podium.inspect() }).slice(0, 400));
+  // The state of the first frame at or after t, read in the same call that
+  // finds it (a second round trip could land past the next beat). Every state
+  // read is also held to the timeline: each driver's pose, step forward and
+  // props are what ceremony.js says for that frame's time.
+  const timeline = [];
   const at = async (t) => {
-    await p.waitForFunction((tt) => Render3D.podium.inspect().t >= tt, t, { timeout: 40000 });
-    return p.evaluate(() => Render3D.podium.inspect());
+    const s = await (await p.waitForFunction((tt) => {
+      const st = Render3D.podium.inspect();
+      if (!(st.t >= tt)) return false;
+      st.p1ArmsAt = Ceremony.BEATS.arms[1];
+      st.want = st.drivers.map((d) => ({
+        pose: Ceremony.poseAt(d.place, st.t),
+        z: Ceremony.stepFor(d.place).standZ + Ceremony.STEP_FORWARD * Ceremony.forwardAt(d.place, st.t),
+        trophy: Ceremony.trophyShown(d.place, st.t),
+        bottle: Ceremony.bottleShown(d.place, st.t),
+      }));
+      return st;
+    }, t, { timeout: 40000, polling: "raf" })).jsonValue();
+    timeline.push(s);
+    return s;
   };
   if (drawn) {
     const first = await at(0.3);
@@ -86,17 +103,19 @@ async (page) => {
       });
     }, first.drivers);
     results.suitsInTeamColours = first.drivers.every((d, i) => d.suit === dress[i].want) || JSON.stringify(first.drivers.map((d, i) => [d.suit, dress[i].want]));
+    // Each driver wears one or the other, never neither: all three counted.
     const helmeted = first.drivers.filter((d) => (d.headwear || "helmet") === "helmet" && !d.face);
-    results.ownHelmets = helmeted.every((d) => d.helmetTexture && d.helmetTexture === dress[first.drivers.indexOf(d)].helmetId);
     const faces = first.drivers.filter((d) => d.face).map((d) => JSON.stringify(d.face));
+    results.everyoneDressedAbove = helmeted.length + faces.length === 3 || `${helmeted.length} helmets, ${faces.length} faces`;
+    results.ownHelmets = helmeted.every((d) => d.helmetTexture && d.helmetTexture === dress[first.drivers.indexOf(d)].helmetId);
     results.ownFaces = new Set(faces).size === faces.length;
     results.sweepStands = first.beat === "sweep" && first.drivers.every((d) => d.pose === "stand" && !d.props.trophy);
     results.noConfettiYet = !first.confetti.visible && first.confetti.airborne === 0 && first.spray.emitted === 0;
 
     const arms = await at(3.6);
     const pose = (s) => s.drivers.map((d) => d.pose).join(",");
-    results.armsUpInTurn = pose(arms) === "stand,arms_up,arms_up" || pose(arms);
-    results.p3SteppedForward = arms.drivers[2].z > first.drivers[2].z + 0.15 && Math.abs(arms.drivers[0].z - first.drivers[0].z) < 1e-6;
+    results.armsUpInTurn = (arms.t < arms.p1ArmsAt ? pose(arms) === "stand,arms_up,arms_up" : pose(arms) === "arms_up,arms_up,arms_up") || `${pose(arms)} at ${arms.t}`;
+    results.p3SteppedForward = arms.drivers[2].z > first.drivers[2].z + 0.15;
 
     const trophy = await at(6.4);
     results.trophyBeat = pose(trophy) === "trophy,wave,wave" || pose(trophy);
@@ -108,6 +127,10 @@ async (page) => {
     results.confettiFalls = later.confetti.meanY < trophy.confetti.meanY - 0.4 && later.confetti.meanVy < -0.3 || `${trophy.confetti.meanY} -> ${later.confetti.meanY}`;
     results.noSprayBeforeNine = later.spray.emitted === 0;
 
+    // Just into the spray: the poses crossfade, so the trophy is still up for
+    // the first moment and the bottles come in as the hands meet.
+    const swap = await at(9);
+    results.propsSwapMidFade = (swap.drivers[0].props.trophy === swap.want[0].trophy && swap.drivers.every((d, i) => d.props.bottle === swap.want[i].bottle)) || JSON.stringify({ t: swap.t, props: swap.drivers.map((d) => d.props) });
     const spray = await at(10.6);
     results.allSpray = pose(spray) === "spray,spray,spray" && spray.drivers.every((d) => d.props.bottle && !d.props.trophy) || pose(spray);
     const sprayWanted = spray.tier !== "low";
@@ -120,6 +143,10 @@ async (page) => {
       return [a, cam()];
     });
     results.stillRunning = shots[1].t > shots[0].t + 1 && shots[1].confetti.airborne > 0;
+
+    results.followsTimeline = timeline.every((st) => st.drivers.every((d, i) => d.pose === st.want[i].pose && Math.abs(d.z - st.want[i].z) < 1e-6
+      && Boolean(d.props.trophy) === st.want[i].trophy && Boolean(d.props.bottle) === st.want[i].bottle))
+      || JSON.stringify(timeline.map((st) => [st.t, st.drivers.map((d) => [d.pose, d.props])])).slice(0, 400);
 
     // The plates: one per driver, in the drivers' order on screen, on screen.
     const plates = () => p.evaluate(() => {
@@ -139,13 +166,16 @@ async (page) => {
     const names = await p.evaluate(() => state.cupEntries.slice(0, 3).map((e) => [e.driver.name, e.kart.name, String(e.points)]));
     results.platesSayWho = names.every((n, i) => { const pl = big.plates.find((x) => x.place === i + 1); return pl && n.every((bit) => pl.text.toLowerCase().includes(bit.toLowerCase())); });
     results.fillsWindow = big.canvas[0] === big.w && big.canvas[1] === big.h;
-    for (const [w, h] of [[700, 900], [1000, 600]]) {
+    for (const [w, h] of [[700, 900], [1000, 600], [380, 800]]) {
       await sizeTo(w, h);
       await p.waitForTimeout(700);
       const s = await plates();
       results[`plates${w}x${h}`] = (onScreen(s) && noOverlap(s) && s.canvas[0] === s.w && s.canvas[1] === s.h) || JSON.stringify(s.plates.map((x) => x.r)).slice(0, 300);
     }
     await sizeTo(1600, 900);
+
+    // The race's own effects are released while the ceremony has the screen.
+    results.racePostfxReleased = (await p.evaluate(() => Render3D.podium.inspect().racePostfx)) === null;
 
     // Leaving stops it and frees it.
     const during = await p.evaluate(() => Render3D.podium.inspect().memory);
@@ -154,6 +184,28 @@ async (page) => {
     const after = await p.evaluate(() => ({ ...Render3D.podium.inspect(), phase: state.phase }));
     results.leavingStops = after.phase === "garage" && after.active === false && after.lastDisposed === true;
     results.leavingFrees = after.memory.geometries < during.geometries && after.memory.textures < during.textures || `${JSON.stringify(during)} -> ${JSON.stringify(after.memory)}`;
+    // And frees all of it: a whole ceremony (built, drawn a while, ended) from
+    // the pit lane leaves the GPU holding no more than before it.
+    results.noLeakAfterCycle = await p.evaluate(async (ids) => {
+      const frames = (n) => new Promise((r) => { const go = () => (n-- > 0 ? requestAnimationFrame(go) : r()); go(); });
+      await frames(30);
+      const mem = () => ({ ...Render3D.podium.inspect().memory });
+      const before = mem();
+      const top = ids.map((driverId, i) => ({ place: i + 1, driverId, points: 100 - i * 20 }));
+      Render3D.podium.begin({ cup: { id: "trophyCup", name: "Trophy Cup" }, podium: top });
+      const t0 = performance.now();
+      while (performance.now() - t0 < 20000) {
+        const f = Render3D.podium.frame(performance.now());
+        if (f.drawing && f.t > 10.5) break;
+        await frames(1);
+      }
+      const drew = Render3D.podium.inspect().t;
+      Render3D.podium.end();
+      await frames(30);
+      const after = mem();
+      return (drew > 10.5 && after.textures <= before.textures && after.geometries <= before.geometries) || JSON.stringify({ drew, before, after });
+    }, cup.top);
+    results.racePostfxBack = (await p.evaluate(() => Render3D.podium.inspect().racePostfx)) !== null || "still released";
 
     // Low: fewer pieces and no spray.
     const before = await p.evaluate(() => Render3D.graphics().choice);
@@ -162,6 +214,21 @@ async (page) => {
     const low = await at(10.4).catch(() => null);
     results.lowTier = Boolean(low) && low.tier === "low" && low.confetti.count === 120 && low.spray.pool === 0 && low.spray.live === 0;
     await p.evaluate((c) => { Render3D.setGraphics(c); resetToGarage(); }, before);
+
+    // Reduced motion asked for: the camera holds its view, nobody steps
+    // forward, the confetti lies where it fell, no spray, the plates stay up.
+    await p.emulateMedia({ reducedMotion: "reduce" });
+    await runCup();
+    const calm = [await at(3), await at(7)];
+    const platesUp = await p.evaluate(() => document.getElementById("podium-screen").classList.contains("plates-in"));
+    calm.push(await at(10.4));
+    results.reducedMotion = (calm.every((st) => JSON.stringify(st.camera) === JSON.stringify(calm[0].camera)
+      && st.drivers.every((d, i) => Math.abs(d.z - calm[0].drivers[i].z) < 1e-6))
+      && calm[1].confetti.airborne === 0 && calm[1].confetti.landed === calm[1].confetti.count
+      && calm[2].spray.emitted === 0 && platesUp)
+      || JSON.stringify({ platesUp, cams: calm.map((st) => st.camera), confetti: calm[1].confetti, spray: calm[2].spray });
+    await p.emulateMedia({ reducedMotion: null });
+    await p.evaluate(() => resetToGarage());
   }
 
   // Without 3D: the 2D steps, as before.

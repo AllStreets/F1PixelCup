@@ -2761,7 +2761,7 @@ function drawPodiumScene() {
   const on = Boolean(frame && frame.drawing);
   if (on !== state.podium3d || on) {
     state.podium3d = on;
-    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && window.Ceremony.platesShown(frame.t));
+    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.platesIn);
   }
 }
 

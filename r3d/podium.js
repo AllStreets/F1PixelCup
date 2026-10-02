@@ -28,8 +28,10 @@ const GOLD = "#e3b54a";
 const FONT = "'Titillium Web', 'Trebuchet MS', system-ui, sans-serif";
 
 // entries: [{ place, driver, team, points }], P1 first. cup: { id, name }.
-export function createPodium(renderer, { entries, cup, tier, environment, fx: givenFx = null }) {
-  let fx = givenFx;
+// The effects (r3d/postfx.js) are made for this scene after it, and handed
+// over with setFx.
+export function createPodium(renderer, { entries, cup, tier, environment }) {
+  let fx = null;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 0.1, 80);
   const own = { geometries: [], materials: [], textures: [] };
@@ -39,6 +41,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
   const tex = (t) => keep("textures", t);
 
   const cupColour = Ceremony.cupColour(cup.id);
+  // The steps, once (the confetti asks what is under it every frame).
+  const STEPS = [1, 2, 3].map((place) => Ceremony.stepFor(place));
   const counts = Ceremony.counts(tier);
   let figures = [];
   let built = false;
@@ -50,6 +54,11 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
   let disposed = false;
   let firstFramePrograms = null;
   const confetti = { mesh: null, pieces: [], burstAt: -1 };
+  // With reduced motion asked for (read every frame, it can change): the
+  // camera holds its settled view, nobody steps forward, the banners hang
+  // still, the confetti lies where it fell and there is no spray.
+  const motionQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  const still = () => Boolean(motionQuery && motionQuery.matches);
   const spray = { points: null, drops: [], next: 0, emitted: 0 };
 
   scene.background = color("#06070b");
@@ -70,8 +79,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     const top = mat(new THREE.MeshStandardMaterial({ color: "#24252c", roughness: 0.5, metalness: 0.08 }));
     const side = mat(new THREE.MeshStandardMaterial({ color: color(cupColour).multiplyScalar(0.55), roughness: 0.45, metalness: 0.1 }));
     const goldTrim = mat(new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.28, metalness: 0.9, emissive: "#5a3d0a", emissiveIntensity: 0.4 }));
-    [1, 2, 3].forEach((place) => {
-      const s = Ceremony.stepFor(place);
+    STEPS.forEach((s) => {
+      const place = s.place;
       const front = mat(new THREE.MeshStandardMaterial({ map: tex(stepFront(place, s)), roughness: 0.42, metalness: 0.05 }));
       // BoxGeometry faces: +x, -x, +y, -y, +z (the front), -z.
       const box = new THREE.Mesh(geo(new THREE.BoxGeometry(s.width, s.height, s.depth)), [side, side, top, top, front, side]);
@@ -148,8 +157,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
   // The game's own mark: a red slanted bar and F1 PIXEL CUP, the cup's name
   // under it, on a step-and-repeat of the same; no series or sponsor marks.
   function backdropTexture() {
-    const W = 4096;
+    // Sharp on High; half the size (a quarter of the memory) below it.
+    const W = tier === "high" ? 4096 : 2048;
     const H = Math.round((W * WALL_H) / WALL_W);
+    const k = W / 4096;
     return canvasTexture(W, H, (g) => {
       const bg = g.createLinearGradient(0, 0, 0, H);
       bg.addColorStop(0, "#0b0f22");
@@ -161,17 +172,17 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       g.save();
       g.textAlign = "center";
       g.textBaseline = "middle";
-      const cellW = 520;
-      const cellH = 150;
+      const cellW = 520 * k;
+      const cellH = 150 * k;
       for (let row = 0; row * cellH < H + cellH; row += 1) {
         for (let col = -1; col * cellW < W + cellW; col += 1) {
           const x = col * cellW + (row % 2 ? cellW / 2 : 0);
           const y = row * cellH + cellH / 2;
           g.fillStyle = "rgba(225, 6, 0, 0.2)";
-          skewBar(g, x - 150, y - 12, 40, 18);
+          skewBar(g, x - 150 * k, y - 12 * k, 40 * k, 18 * k);
           g.fillStyle = "rgba(235, 240, 255, 0.085)";
-          g.font = `italic 900 40px ${FONT}`;
-          g.fillText(row % 2 ? cup.name.toUpperCase() : "F1 PIXEL CUP", x + 18, y);
+          g.font = `italic 900 ${Math.round(40 * k)}px ${FONT}`;
+          g.fillText(row % 2 ? cup.name.toUpperCase() : "F1 PIXEL CUP", x + 18 * k, y);
         }
       }
       g.restore();
@@ -179,7 +190,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       // PIXEL CUP, a gold rule, the cup's name.
       const pxPerM = W / WALL_W;
       const cy = (WALL_H - 4.42) * pxPerM;
-      const glow = g.createRadialGradient(W / 2, cy - 30, 10, W / 2, cy - 30, W * 0.3);
+      const glow = g.createRadialGradient(W / 2, cy - 30 * k, 10 * k, W / 2, cy - 30 * k, W * 0.3);
       glow.addColorStop(0, "rgba(46, 66, 150, 0.6)");
       glow.addColorStop(1, "rgba(46, 66, 150, 0)");
       g.fillStyle = glow;
@@ -202,14 +213,14 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       skewBar(g, x, cy - pxPerM * 0.42, bar, pxPerM * 0.24);
       x += bar + gap;
       g.shadowColor = "rgba(0,0,0,0.5)";
-      g.shadowBlur = 16;
+      g.shadowBlur = 16 * k;
       g.font = big;
       g.fillStyle = "#ffffff";
       g.fillText(word, x, cy);
       x += ww + gap;
       g.shadowBlur = 0;
       g.fillStyle = GOLD;
-      g.fillRect(x - gap * 0.2, cy - pxPerM * 0.5, 4, pxPerM * 0.52);
+      g.fillRect(x - gap * 0.2, cy - pxPerM * 0.5, Math.max(2, 4 * k), pxPerM * 0.52);
       x += gap;
       g.font = small;
       g.fillText(name, x, cy - pxPerM * 0.06);
@@ -320,6 +331,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
 
   function buildFigures() {
     figures = entries.map((e) => {
+      // Bareheaded on the podium (the user, 2026-10-01): the option takes
+      // effect with the driver faces (r3d/driver.js ignores it until then, and
+      // the drivers wear their helmets).
       const fig = buildDriver(e.driver, e.team, { headwear: "none" });
       const s = Ceremony.stepFor(e.place);
       // The figure faces +X; turned to face the camera (+Z).
@@ -327,7 +341,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       fig.root.position.set(s.x, s.height, s.standZ);
       fig.root.name = `podium-${e.driver.id}`;
       scene.add(fig.root);
-      return { entry: e, fig, step: s, neck: findNeck(fig) };
+      const props = {};
+      fig.model.traverse((n) => { if (n.name === "trophy" || n.name === "bottle") props[n.name] = n; });
+      return { entry: e, fig, step: s, neck: findNeck(fig), props };
     });
   }
 
@@ -366,7 +382,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     const rnd = seeded(7);
     for (let i = 0; i < n; i += 1) {
       mesh.setColorAt(i, color(palette[Math.floor(rnd() * palette.length)]));
-      confetti.pieces.push({ x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0, phase: rnd() * 6.28, spin: 3 + rnd() * 5, landed: true, rest: 0, yaw: rnd() * 6.28, tilt: rnd() });
+      confetti.pieces.push({ x: 0, y: -10, z: 0, vx: 0, vy: 0, vz: 0, phase: rnd() * 6.28, spin: 3 + rnd() * 5, landed: true, rest: 0, fade: 1, dirty: true, yaw: rnd() * 6.28, tilt: rnd() });
     }
     mesh.visible = false;
     confetti.mesh = mesh;
@@ -424,15 +440,19 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
 
   // What a falling piece lands on: a step's top or the floor.
   function groundAt(x, z) {
-    for (const place of [1, 2, 3]) {
-      const s = Ceremony.stepFor(place);
+    for (let i = 0; i < STEPS.length; i += 1) {
+      const s = STEPS[i];
       if (Math.abs(x - s.x) < s.width / 2 && Math.abs(z) < s.depth / 2) return s.height + 0.003;
     }
     return 0.003;
   }
 
   const dummy = new THREE.Object3D();
-  function updateConfetti(t, dt) {
+  const frustum = new THREE.Frustum();
+  const viewMatrix = new THREE.Matrix4();
+  const at3 = new THREE.Vector3();
+  const FADE = 1.5;
+  function updateConfetti(t, dt, calm) {
     if (!Ceremony.confettiOn(t)) return;
     const { mesh, pieces, rnd } = confetti;
     if (confetti.burstAt < 0) {
@@ -441,26 +461,51 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       mesh.visible = true;
       pieces.forEach((p) => throwPiece(p, rnd, true));
     }
+    camera.updateMatrixWorld();
+    frustum.setFromProjectionMatrix(viewMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    let moved = false;
     pieces.forEach((p, i) => {
+      if (calm && !p.landed) {
+        // Reduced motion: it lies where it would have fallen, now.
+        p.y = groundAt(p.x, p.z);
+        p.landed = true;
+        p.rest = Infinity;
+        p.fade = 1;
+        p.dirty = true;
+      }
       if (p.landed) {
         p.rest -= dt;
-        // A while on the ground, then it drifts down again from above.
-        if (p.rest <= 0) throwPiece(p, rnd, false);
+        if (p.rest <= 0) {
+          // A while on the ground, then it goes round again from above: at
+          // once where the camera can't see it, else it fades out first.
+          if (p.fade >= 1 && !frustum.containsPoint(at3.set(p.x, p.y, p.z))) p.fade = 0;
+          else p.fade -= dt / FADE;
+          p.dirty = true;
+          if (p.fade <= 0) throwPiece(p, rnd, false);
+        }
       } else {
         Ceremony.stepConfetti(p, dt, groundAt);
-        if (p.landed) p.rest = 0.5 + rnd() * 7;
+        if (p.landed) p.rest = 0.5 + rnd() * 8;
+        p.dirty = true;
       }
+      // A piece lying still keeps the matrix it was given when it landed.
+      if (!p.dirty) return;
+      p.dirty = false;
+      moved = true;
       if (p.landed) dummy.rotation.set(-Math.PI / 2, 0, p.yaw);
       else dummy.rotation.set(p.phase * 1.3, p.phase * 0.8 + p.yaw, p.tilt * 2);
       dummy.position.set(p.x, p.y, p.z);
+      dummy.scale.setScalar(Math.max(0, p.fade));
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
     });
-    mesh.instanceMatrix.needsUpdate = true;
+    if (moved) mesh.instanceMatrix.needsUpdate = true;
   }
 
   function throwPiece(p, rnd, burst) {
     p.landed = false;
+    p.fade = 1;
+    p.dirty = true;
     p.x = (rnd() - 0.5) * 7;
     p.z = -1.4 + rnd() * 3.6;
     if (burst) {
@@ -478,9 +523,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
 
   const neckAt = new THREE.Vector3();
   const glassAt = new THREE.Vector3();
-  function updateSpray(t, dt) {
+  const dir = new THREE.Vector3();
+  function updateSpray(t, dt, calm) {
     if (!spray.drops.length) return;
-    const on = Ceremony.sprayOn(t, tier);
+    const on = Ceremony.sprayOn(t, tier) && !calm;
     const pos = spray.points.geometry.attributes.position;
     if (on) {
       // Each bottle in spurts, a few hundred drops a second.
@@ -490,13 +536,13 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
         const pulse = 0.55 + 0.45 * Math.sin(t * 7.3 + k * 2.1);
         f.neck.bottle.localToWorld(neckAt.copy(f.neck.tip));
         f.neck.bottle.localToWorld(glassAt.copy(f.neck.glass));
-        const dir = neckAt.clone().sub(glassAt);
+        dir.subVectors(neckAt, glassAt);
         f.emit = (f.emit || 0) + rate * pulse * dt;
         while (f.emit >= 1) {
           f.emit -= 1;
           const d = spray.drops[spray.next];
           spray.next = (spray.next + 1) % spray.drops.length;
-          Object.assign(d, Ceremony.sprayDrop(neckAt, dir));
+          Ceremony.sprayDrop(neckAt, dir, Math.random, d);
           spray.emitted += 1;
         }
       });
@@ -505,7 +551,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     spray.drops.forEach((d, i) => {
       if (d.age < SPRAY_LIFE) {
         Ceremony.stepDrop(d, dt);
-        if (d.y <= 0) d.age = SPRAY_LIFE;
+        // It ends on what it hits: a step, the floor or the wall.
+        if (d.z <= WALL_Z || d.y <= groundAt(d.x, d.z)) d.age = SPRAY_LIFE;
       }
       if (d.age >= SPRAY_LIFE) {
         pos.setXYZ(i, 0, -50, 0);
@@ -608,10 +655,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     return [...found];
   }
 
-  // With reduced motion asked for, the camera holds its settled view.
-  const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  function placeCamera(t) {
-    const c = Ceremony.cameraAt(still ? Ceremony.BEATS.sweepEnd : t);
+  function placeCamera(t, calm = still()) {
+    const c = Ceremony.cameraAt(calm ? Ceremony.BEATS.sweepEnd : t);
     camera.position.set(c.x, c.y, c.z);
     camera.up.set(0, 1, 0);
     camera.lookAt(c.lookX, c.lookY, c.lookZ);
@@ -640,19 +685,24 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     const t = (now - startedAt) / 1000;
     const dt = Math.min(0.1, Math.max(0, (now - lastAt) / 1000));
     lastAt = now;
+    const calm = still();
     figures.forEach((f) => {
-      f.fig.play(Ceremony.poseAt(f.entry.place, t));
-      f.fig.root.position.z = f.step.standZ + Ceremony.STEP_FORWARD * Ceremony.forwardAt(f.entry.place, t);
+      const place = f.entry.place;
+      f.fig.play(Ceremony.poseAt(place, t));
+      // The props change hands as the hands meet, halfway through the fade.
+      if (f.props.trophy) f.props.trophy.visible = Ceremony.trophyShown(place, t);
+      if (f.props.bottle) f.props.bottle.visible = Ceremony.bottleShown(place, t);
+      f.fig.root.position.z = f.step.standZ + (calm ? 0 : Ceremony.STEP_FORWARD * Ceremony.forwardAt(place, t));
       f.fig.update(dt);
     });
     scene.children.forEach((o) => {
-      if (o.userData.sway !== undefined) o.rotation.x = Math.sin(t * 0.9 + o.userData.sway) * 0.025;
+      if (o.userData.sway !== undefined) o.rotation.x = calm ? 0 : Math.sin(t * 0.9 + o.userData.sway) * 0.025;
     });
-    placeCamera(t);
+    placeCamera(t, calm);
     scene.updateMatrixWorld();
-    updateConfetti(t, dt);
+    updateConfetti(t, dt, calm);
     if (spray.points && spray.scale) spray.points.material.uniforms.uScale.value = spray.scale;
-    updateSpray(t, dt);
+    updateSpray(t, dt, calm);
     renderer.toneMappingExposure = 1.0;
     if (fx) fx.render({ dt, now, trackId: "podium" });
     else renderer.render(scene, camera);
@@ -666,15 +716,24 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
   const inspectState = { t: -1, newPrograms: null };
 
   // Where each plate goes: the foot of each step's front, on screen (CSS px).
+  // The same list each frame, refilled.
   const v = new THREE.Vector3();
+  const points = [];
   function anchors(w, h) {
     camera.updateMatrixWorld();
-    return figures.map((f) => {
+    figures.forEach((f, i) => {
       v.set(f.step.x, 0, f.step.depth / 2 + 0.05).project(camera);
-      const head = new THREE.Vector3(f.step.x, f.step.height + 1.9, 0).project(camera);
-      return { place: f.entry.place, x: (v.x * 0.5 + 0.5) * w, y: (-v.y * 0.5 + 0.5) * h, headY: (-head.y * 0.5 + 0.5) * h };
+      const a = points[i] || (points[i] = {});
+      a.place = f.entry.place;
+      a.x = (v.x * 0.5 + 0.5) * w;
+      a.y = (-v.y * 0.5 + 0.5) * h;
     });
+    points.length = figures.length;
+    return points;
   }
+
+  // Whether the name plates show at time t.
+  const platesIn = (t) => Ceremony.platesShown(t, still());
 
   function inspect() {
     const t = inspectState.t;
@@ -685,6 +744,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
       t,
       beat: t >= 0 ? Ceremony.beatAt(t) : null,
       tier,
+      still: still(),
+      camera: [camera.position.x, camera.position.y, camera.position.z],
       cupColour,
       newProgramsOnFirstFrame: inspectState.newPrograms,
       drivers: figures.map((f) => {
@@ -706,7 +767,15 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
   function dispose() {
     if (disposed) return;
     disposed = true;
-    figures.forEach((f) => f.fig.dispose());
+    // Each clone's skeletons hold a bone texture on the GPU once drawn
+    // (r3d/driver.js's dispose leaves the shared model's parts alone).
+    figures.forEach((f) => {
+      const skeletons = new Set();
+      f.fig.model.traverse((n) => { if (n.isSkinnedMesh && n.skeleton) skeletons.add(n.skeleton); });
+      skeletons.forEach((sk) => sk.dispose());
+      f.fig.dispose();
+    });
+    if (confetti.mesh) confetti.mesh.dispose();
     figures = [];
     own.geometries.forEach((g) => g.dispose());
     own.materials.forEach((m) => m.dispose());
@@ -715,5 +784,5 @@ export function createPodium(renderer, { entries, cup, tier, environment, fx: gi
     scene.clear();
   }
 
-  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
+  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
 }

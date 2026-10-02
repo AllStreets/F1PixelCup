@@ -391,29 +391,47 @@
       </div>`).join("");
     placePodium(null);
     renderStrip($("podium-career"), summary.career);
+    podiumLayout = null;
     show("podium-screen");
   }
 
   // anchors: [{ place, x, y }] in the window's pixels, from the 3D scene; null
   // goes back to the 2D steps. platesIn: whether the plates are showing yet. Each plate is centred on its point and kept on
   // screen, clear of the title above and the buttons below.
+  // What placePodium measures (the title's foot, the buttons, each plate's
+  // size), read once per window size and content rather than every frame.
+  let podiumLayout = null;
+  function measurePodium(screen) {
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const key = `${W}x${H}`;
+    if (podiumLayout && podiumLayout.key === key) return podiumLayout;
+    const plates = {};
+    screen.querySelectorAll(".podium-plate").forEach((plate) => {
+      const { width: w, height: h } = plate.getBoundingClientRect();
+      plates[plate.dataset.place] = { plate, w, h };
+    });
+    podiumLayout = {
+      key, W, H, plates,
+      head: $("podium-title").getBoundingClientRect().bottom,
+      actions: screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect(),
+    };
+    return podiumLayout;
+  }
+
   function placePodium(anchors, platesIn = true) {
     const screen = $("podium-screen");
     const on = Boolean(anchors && anchors.length);
+    if (on !== screen.classList.contains("is-3d")) podiumLayout = null;
     screen.classList.toggle("is-3d", on);
     screen.classList.toggle("plates-in", on && platesIn);
     if (!on) return;
-    const W = window.innerWidth;
-    const H = window.innerHeight;
-    const card = screen.querySelector(".overlay-card");
-    const head = $("podium-title").getBoundingClientRect().bottom;
-    const actions = screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect();
+    const { W, H, head, actions, plates } = measurePodium(screen);
     const margin = 12;
     const placed = anchors.map((a) => {
-      const plate = card.querySelector(`.podium-plate[data-place="${a.place}"]`);
-      if (!plate) return null;
-      const { width: w, height: h } = plate.getBoundingClientRect();
-      return { plate, place: a.place, w, h, x: a.x, y: a.y };
+      const m = plates[a.place];
+      if (!m) return null;
+      return { plate: m.plate, place: a.place, w: m.w, h: m.h, x: a.x, y: a.y };
     }).filter(Boolean).sort((a, b) => a.x - b.x);
     // Side by side with a gap: pushed apart where they would touch, and kept
     // inside the window. If the window is too narrow for all three in a row,

@@ -47,11 +47,21 @@ test("each steps forward as the arms go up, and stays there", () => {
 });
 
 test("the trophy only while P1 lifts it; confetti from the trophy, spray from 9 s (none on Low)", () => {
+  // The props change hands halfway through the poses' crossfade, not as it starts.
+  const half = Ceremony.PROP_SWAP;
+  assert.ok(half > 0.1 && half < 0.3);
   assert.equal(Ceremony.trophyShown(1, 4.9), false);
-  assert.equal(Ceremony.trophyShown(1, 5.1), true);
-  assert.equal(Ceremony.trophyShown(1, 8.9), true);
-  assert.equal(Ceremony.trophyShown(1, 9.1), false);
+  assert.equal(Ceremony.trophyShown(1, 5 + half - 0.05), false);
+  assert.equal(Ceremony.trophyShown(1, 5 + half + 0.05), true);
+  assert.equal(Ceremony.trophyShown(1, 9.05), true);
+  assert.equal(Ceremony.trophyShown(1, 9 + half + 0.05), false);
   assert.equal(Ceremony.trophyShown(2, 6), false);
+  [1, 2, 3].forEach((p) => {
+    assert.equal(Ceremony.bottleShown(p, 8), false);
+    assert.equal(Ceremony.bottleShown(p, 9 + half - 0.05), false);
+    assert.equal(Ceremony.bottleShown(p, 9 + half + 0.05), true);
+    assert.equal(Ceremony.bottleShown(p, 300), true);
+  });
   assert.equal(Ceremony.confettiOn(4.9), false);
   assert.equal(Ceremony.confettiOn(5), true);
   assert.equal(Ceremony.sprayOn(8.9, "high"), false);
@@ -147,6 +157,11 @@ test("spray: a drop leaves the neck along the bottle and falls under gravity", (
   Ceremony.stepDrop(drop, 0.1);
   assert.ok(Math.abs(drop.vy - (v0 - 0.981)) < 0.05, "gravity");
   assert.ok(drop.y > 2 && drop.z > 0);
+  // Filled in place when given a drop to reuse (no allocation per drop).
+  const reuse = { x: 9, y: 9, z: 9, vx: 0, vy: 0, vz: 0, age: 1 };
+  const same = Ceremony.sprayDrop({ x: 0, y: 2, z: 0 }, { x: 0, y: 0.6, z: 0.8 }, () => 0.5, reuse);
+  assert.equal(same, reuse);
+  assert.deepEqual(same, Ceremony.sprayDrop({ x: 0, y: 2, z: 0 }, { x: 0, y: 0.6, z: 0.8 }, () => 0.5));
 });
 
 test("the name plates: in once the camera settles, out for the trophy close-up, back for the spray", () => {
@@ -156,4 +171,6 @@ test("the name plates: in once the camera settles, out for the trophy close-up, 
   assert.equal(Ceremony.platesShown(7), false);
   assert.equal(Ceremony.platesShown(10.5), true);
   assert.equal(Ceremony.platesShown(300), true);
+  // With reduced motion the camera holds still: there is no close-up to clear.
+  [0, 1, 4.5, 7, 10.5].forEach((t) => assert.equal(Ceremony.platesShown(t, true), true));
 });
