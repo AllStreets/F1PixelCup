@@ -470,19 +470,22 @@ export const LANDMARK_SCALE = 2.5;
 // Facades with a grid of rooms read off the model's UVs (metres: u along
 // the wall, v up): glass between the floor slabs and mullions, and at night
 // a share of the rooms lit, warm and a few cool.
-function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55 } = {}) {
+// floors: how much a room's light follows its floor's (1: whole floors
+// together, an office; lower: a hotel, its rooms each their own).
+function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65 } = {}) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uGlass = { value: color(glass) };
     shader.uniforms.uSlab = { value: color(slab) };
     shader.uniforms.uNight = { value: night ? 1 : 0 };
     shader.uniforms.uLit = { value: lit };
+    shader.uniforms.uFloors = { value: floors };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vFacade;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n// glTF flips v: back to metres up the wall.\nvFacade = vec2(uv.x, 1.0 - uv.y);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
-        varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit;
+        varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit; uniform float uFloors;
         float facadeHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
         // Rooms 4 m wide, floors 3.2 m: the glass in an inset, its frame
@@ -504,15 +507,15 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         // there apart from its floor.
         float floorH = facadeHash(vec2(room.y * 0.37, 7.1));
         float roomH = facadeHash(room + floor(vFacade.x / 37.0));
-        float lit = step(roomH * 0.35 + floorH * 0.65, uLit) * step(5.0, vFacade.y);
-        float level = 0.55 + 0.3 * facadeHash(vec2(room.y, 3.3)) + 0.15 * roomH;
+        float lit = step(mix(roomH, floorH, uFloors), uLit) * step(5.0, vFacade.y);
+        float level = 0.7 + 0.15 * facadeHash(vec2(room.y, 3.3)) + 0.15 * roomH;
         float on = mix(lit * level * glassIn, uLit * 0.72 * glassShare, farAway);`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
         // The unlit rooms keep a faint glow from the corridors.
         totalEmissiveRadiance += (roomLight * on * 0.62 + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v2-${night ? 1 : 0}-${glass}-${lit}`;
+  m.customProgramCacheKey = () => `facade-v3-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
   return m;
 }
 
@@ -524,7 +527,7 @@ function dressLandmark(model, venue) {
     if (made.has(src.name)) return made.get(src.name);
     let out;
     // At night the glass reads dark and the rooms carry the tower.
-    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#1b283a", slab: "#4b535f", lit: 0.5 } : {});
+    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#1b283a", slab: "#4b535f", lit: 0.72, floors: 0.3 } : {});
     else {
       out = src.clone();
       if (src.name === "window_lit") Object.assign(out, { emissive: color(night ? "#ffe6c0" : "#000000"), emissiveIntensity: night ? 1.6 : 0 });
@@ -724,6 +727,20 @@ function marinaBaySandsModel(course, group, venue) {
   );
   water.userData.ground = true;
   model.add(water);
+  // The bay's stone edge, a promenade round the water (inside the ground it claimed).
+  const edge = new THREE.MeshStandardMaterial({ color: color("#8d8a84"), roughness: 0.9 });
+  edge.userData.worldOwned = true;
+  const kerb = (w, d, x, z) => new THREE.BoxGeometry(w, 0.8, d).translate(x, 0.4, z);
+  const bw = bay.x1 - bay.x0;
+  const bd = bay.z1 - bay.z0;
+  const cx = (bay.x0 + bay.x1) / 2;
+  const cz = (bay.z0 + bay.z1) / 2;
+  const promenade = new THREE.Mesh(mergeGeometries([
+    kerb(bw, 3, cx, bay.z0 + 1.5), kerb(bw, 3, cx, bay.z1 - 1.5),
+    kerb(3, bd, bay.x0 + 1.5, cz), kerb(3, bd, bay.x1 - 1.5, cz),
+  ]), edge);
+  promenade.receiveShadow = true;
+  model.add(promenade);
   group.add(model);
   return true;
 }
@@ -763,7 +780,7 @@ const EXTRAS = {
   monzaBanking(course, group, venue) {
     // The old banking stands in the park inside the lap.
     const lap = modelLandmark(course, group, venue, {
-      name: "monzaBanking", model: "monzaBanking", gaps: [40, 80, 140, 220, 320, 440], step: 24,
+      name: "monzaBanking", model: "monzaBanking", gaps: [14, 30, 60, 100, 160, 240, 340], step: 24, gapFirst: true,
       anchors: anchorsAround(course, 0.3, 90, (p) => (p.curve > 0 ? [1, -1] : [-1, 1])),
     });
     if (lap) return;

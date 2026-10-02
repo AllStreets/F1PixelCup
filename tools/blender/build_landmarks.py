@@ -202,6 +202,10 @@ class Mesh:
         self.face(pts, role)
 
     def finish(self, extras=None, parent=None):
+        # Faces joined where they meet, so their normals can be made to agree
+        # (all outward): loose faces could come out facing in, and the game
+        # draws only their fronts.
+        bmesh.ops.remove_doubles(self.bm, verts=self.bm.verts, dist=1e-4)
         bmesh.ops.recalc_face_normals(self.bm, faces=self.bm.faces)
         for f in self.bm.faces:
             n = f.normal
@@ -905,7 +909,7 @@ def build_monza_banking():
     for i in range(steps):
         for k in range(across):
             # Weathered slabs, cast a few metres at a time: every fourth a shade darker.
-            role = "concrete_dark" if i % 4 == 0 else "asphalt_old" if k == 0 else "concrete"
+            role = "concrete_dark" if i % 4 == 0 else "asphalt_old"
             deck.face((rows_top[i][k], rows_top[i + 1][k], rows_top[i + 1][k + 1], rows_top[i][k + 1]), role)
             deck.face((rows_under[i][k + 1], rows_under[i + 1][k + 1], rows_under[i + 1][k], rows_under[i][k]), "concrete")
         # The edges: the inner kerb and the outer lip's face.
