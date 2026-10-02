@@ -47,7 +47,7 @@ function synthRace(samples, cars = 20, seed = 1) {
         lap: Math.floor(k / 900), place: ((c + k) % cars) + 1, item: ITEMS[Math.floor(r() * ITEMS.length)],
         spinning: r() < 0.1, drs: r() < 0.2, boosting: r() < 0.2, formation: r() < 0.05, protected: r() < 0.05,
         drifting: r() < 0.3, driftRight: r() < 0.5, finished: r() < 0.02, trailingOil: r() < 0.05,
-        offroad: r() < 0.1, underRoof: r() < 0.05, braking: r() < 0.3, roulette: r() < 0.05, charge: Math.floor(r() * 3),
+        offroad: r() < 0.1, underRoof: r() < 0.05, roulette: r() < 0.05, charge: Math.floor(r() * 3),
       });
     }
     // About one item fired every second across the field (a busy race).
@@ -104,7 +104,7 @@ test("quantisation stays inside the documented bounds", () => {
       assert.ok(Math.abs(g.throttle - c.throttle) <= 1 / 510 + 1e-12);
       // The brake as applied (a fraction in traffic, full for a corner).
       assert.ok(Math.abs(g.brake - c.brake) <= 1 / 510 + 1e-12, "brake");
-      ["lap", "place", "item", "spinning", "drs", "boosting", "formation", "protected", "drifting", "driftRight", "finished", "trailingOil", "offroad", "underRoof", "braking", "roulette", "charge"]
+      ["lap", "place", "item", "spinning", "drs", "boosting", "formation", "protected", "drifting", "driftRight", "finished", "trailingOil", "offroad", "underRoof", "roulette", "charge"]
         .forEach((f) => assert.equal(g[f], c[f], f));
     });
     q.objects.forEach((o, i) => {
@@ -112,6 +112,55 @@ test("quantisation stays inside the documented bounds", () => {
       assert.equal(o.type, s.objects[i].type);
       assert.equal(o.d, fround(s.objects[i].d));
       assert.ok(Math.abs(o.age - s.objects[i].age) <= 0.0005 + 1e-12);
+    });
+  });
+});
+
+test("the edges of every field read back as written out here (clamps, wraps, unknowns)", () => {
+  const h = header(1);
+  const rec = Replay.createRecording(h);
+  const base = { x: 1, y: 2, d: 3, heading: 0, speed: 0, lat: 0, gap: 0, steer: 0, throttle: 0, brake: 0, lap: 0, place: 1, item: "none" };
+  const cases = [
+    [{ gap: 1400 }, { gap: 1310.7 }],
+    [{ gap: -1 }, { gap: 0 }],
+    [{ heading: 3 * Math.PI }, { heading: -Math.PI }],
+    [{ heading: Math.PI }, { heading: -Math.PI }],
+    [{ heading: -4 * Math.PI }, { heading: 0 }],
+    [{ lap: 300 }, { lap: 255 }],
+    [{ place: -2 }, { place: 0 }],
+    [{ item: "not an item" }, { item: "none" }],
+    [{ speed: 600 }, { speed: 511.984375 }],
+    [{ speed: -700 }, { speed: -512 }],
+    [{ lat: 300 }, { lat: 255.9921875 }],
+    [{ steer: 3 }, { steer: 1 }],
+    [{ throttle: -1, brake: 2 }, { throttle: 0, brake: 1 }],
+    [{ charge: 7 }, { charge: 3 }],
+  ];
+  cases.forEach(([given]) => rec.push({ cars: [{ ...base, ...given }], objects: [], safetyCar: null, boxes: [], flags: [], keys: {} }));
+  cases.forEach(([given, want], k) => {
+    const got = rec.sampleAt(k).cars[0];
+    Object.entries(want).forEach(([field, value]) => assert.equal(got[field], value, `${JSON.stringify(given)} -> ${field} ${got[field]}`));
+  });
+  // A shot's id wraps at 16 bits; its age is held to 65 s.
+  rec.push({ cars: [base], objects: [{ id: 65537, type: "debris", d: 1, lat: 0, age: 99 }], safetyCar: null, boxes: [], flags: [], keys: {} });
+  const shot = rec.sampleAt(cases.length).objects[0];
+  assert.equal(shot.id, 1);
+  assert.equal(shot.age, 65.535);
+});
+
+test("every sample reads back within the documented resolution of the race's own values", () => {
+  const race = synthRace(600, 20, 4);
+  const rec = Replay.createRecording(header());
+  race.forEach((s) => rec.push(s));
+  race.forEach((s, k) => {
+    const got = rec.sampleAt(k);
+    s.cars.forEach((c, i) => {
+      const g = got.cars[i];
+      assert.ok(Math.abs(g.x - c.x) <= Math.abs(c.x) * 2 ** -23 && Math.abs(g.y - c.y) <= Math.abs(c.y) * 2 ** -23, "x, y Float32");
+      assert.ok(Math.abs(g.speed - c.speed) <= 1 / 128 + 1e-12 && Math.abs(g.gap - c.gap) <= 0.01 + 1e-12);
+      assert.ok(Math.abs(g.throttle - c.throttle) <= 1 / 510 + 1e-12 && Math.abs(g.brake - c.brake) <= 1 / 510 + 1e-12);
+      assert.equal(g.place, c.place);
+      assert.equal(g.item, c.item);
     });
   });
 });
@@ -169,6 +218,22 @@ test("positions are kept every step: a frame at an odd step is exactly the car t
   assert.equal(rec.sampleAt(1).mid, null);
 });
 
+test("the replay runs to the race's last step: the step after the last sample, when recorded", () => {
+  const h = header(1);
+  const rec = Replay.createRecording(h);
+  const car = (x) => ({ x, y: 0, d: x, heading: 0, speed: 100, lat: 0, gap: 0, steer: 0, throttle: 1, lap: 0, place: 1, item: "none" });
+  const s = (c) => ({ cars: [c], objects: [], safetyCar: null, boxes: [], flags: [], keys: {} });
+  rec.push(s(car(100)));
+  rec.pushMid([{ x: 104, y: 0, heading: 0 }]);
+  rec.push(s(car(108)));
+  assert.equal(rec.duration, rec.sampleMs);
+  rec.pushMid([{ x: 112, y: 0, heading: 0 }]);
+  assert.equal(rec.duration, rec.sampleMs + h.stepMs);
+  assert.equal(rec.frameAt(h.t0 + rec.duration).cars[0].x, 112);
+  assert.equal(rec.frameAt(h.t0 + 1e9).cars[0].x, 112);
+  assert.ok(Math.abs(rec.frameAt(h.t0 + rec.sampleMs + h.stepMs / 2).cars[0].x - 110) < 1e-4);
+});
+
 test("seeking lands on the right sample, before the start and after the end too", () => {
   const race = synthRace(500, 4, 3);
   const h = header(4);
@@ -179,7 +244,8 @@ test("seeking lands on the right sample, before the start and after the end too"
   assert.equal(rec.indexAt(h.t0 - 5000), 0);
   assert.equal(rec.indexAt(h.t0 + 123 * ms + 0.1), 123);
   assert.equal(rec.indexAt(h.t0 + 1e9), 499);
-  assert.equal(rec.duration, 499 * ms);
+  // (The last sample's step after it was recorded: the race's last step.)
+  assert.equal(rec.duration, 499 * ms + h.stepMs);
   // A frame exactly on a sample is that sample, as recorded.
   const f = rec.frameAt(h.t0 + 321 * ms);
   const q = rec.sampleAt(321);
@@ -194,7 +260,7 @@ test("seeking lands on the right sample, before the start and after the end too"
   rec.frameAt(h.t0 + 3 * ms);
   assert.equal(JSON.stringify(rec.frameAt(h.t0 + 100.5 * ms)), a);
   // The end is held.
-  assert.deepEqual(rec.frameAt(h.t0 + 1e9).cars, rec.frameAt(h.t0 + 499 * ms).cars);
+  assert.deepEqual(rec.frameAt(h.t0 + 1e9).cars, rec.frameAt(h.t0 + rec.duration).cars);
 });
 
 test("memory: a 20-car race is within budget", () => {

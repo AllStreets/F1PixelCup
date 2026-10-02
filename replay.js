@@ -18,11 +18,12 @@
 
   const OBJECT_TYPES = ["undercut", "debris", "stewardPenalty", "oilSlick"];
   const FLAGS = ["none", "yellow", "green"];
+  const FLAG_INDEX = { none: 0, yellow: 1, green: 2 };
   const KEYS = ["throttle", "brake", "left", "right", "drift", "item"];
   // The car's on/off states, one bit each; the drift's charge (0 to 2, as the
   // smoke colours it) takes the two bits after them.
   const BITS = ["spinning", "drs", "boosting", "formation", "protected", "drifting", "driftRight", "finished",
-    "trailingOil", "offroad", "underRoof", "braking", "roulette"];
+    "trailingOil", "offroad", "underRoof", "roulette"];
   const CHARGE_SHIFT = BITS.length;
 
   // ---- Quantisation (the same arithmetic stores and reads every field) ----
@@ -73,8 +74,8 @@
   function carBits(c) {
     return (c.spinning ? 1 : 0) | (c.drs ? 2 : 0) | (c.boosting ? 4 : 0) | (c.formation ? 8 : 0)
       | (c.protected ? 16 : 0) | (c.drifting ? 32 : 0) | (c.driftRight ? 64 : 0) | (c.finished ? 128 : 0)
-      | (c.trailingOil ? 256 : 0) | (c.offroad ? 512 : 0) | (c.underRoof ? 1024 : 0) | (c.braking ? 2048 : 0)
-      | (c.roulette ? 4096 : 0) | (clamp(c.charge | 0, 0, 3) << CHARGE_SHIFT);
+      | (c.trailingOil ? 256 : 0) | (c.offroad ? 512 : 0) | (c.underRoof ? 1024 : 0)
+      | (c.roulette ? 2048 : 0) | (clamp(c.charge | 0, 0, 3) << CHARGE_SHIFT);
   }
 
   function quantizeCar(c, header) {
@@ -123,6 +124,8 @@
     const n = header.cars.length;
     const boxWords = Math.ceil(header.boxes / 32);
     const sampleMs = header.stepMs * SAMPLE_EVERY;
+    // Looked up for every car at every sample: kept to hand.
+    const itemAt = new Map(header.items.map((name, i) => [name, i]));
     const chunks = [];
     const objChunks = [];
     let count = 0;
@@ -155,7 +158,13 @@
       flashes: [],
       chequerAt: 0,
       get count() { return count; },
-      get duration() { return Math.max(0, count - 1) * sampleMs; },
+      // To the last sample, and the step after it when that was recorded
+      // (the race's last step).
+      get duration() {
+        if (!count) return 0;
+        const last = count - 1;
+        return last * sampleMs + (chunks[Math.floor(last / CHUNK)].hasMid[last % CHUNK] ? header.stepMs : 0);
+      },
 
       push(s) {
         const ci = Math.floor(count / CHUNK);
@@ -168,7 +177,7 @@
           ch.x[at] = c.x || 0; ch.y[at] = c.y || 0; ch.d[at] = c.d || 0; ch.gap[at] = Q.gap(c.gap);
           ch.heading[at] = Q.heading(c.heading); ch.speed[at] = Q.speed(c.speed); ch.lat[at] = Q.lat(c.lat);
           ch.steer[at] = Q.steer(c.steer); ch.throttle[at] = Q.throttle(c.throttle); ch.brake[at] = Q.throttle(c.brake);
-          ch.lap[at] = Q.byte(c.lap); ch.place[at] = Q.byte(c.place); ch.item[at] = itemIndex(header, c.item);
+          ch.lap[at] = Q.byte(c.lap); ch.place[at] = Q.byte(c.place); ch.item[at] = itemAt.get(c.item) || 0;
           ch.bits[at] = carBits(c);
         }
         ch.hasMid[j] = 0;
@@ -193,7 +202,7 @@
           for (let b = 0; b < 32 && w * 32 + b < header.boxes; b += 1) if (s.boxes && s.boxes[w * 32 + b]) word |= 1 << b;
           ch.boxes[j * boxWords + w] = word >>> 0;
         }
-        for (let p = 0; p < header.posts; p += 1) ch.flags[j * header.posts + p] = Math.max(0, FLAGS.indexOf(s.flags && s.flags[p]));
+        for (let p = 0; p < header.posts; p += 1) ch.flags[j * header.posts + p] = (s.flags && FLAG_INDEX[s.flags[p]]) || 0;
         let keys = 0;
         if (s.keys) for (let b = 0; b < KEYS.length; b += 1) if (s.keys[KEYS[b]]) keys |= 1 << b;
         ch.keys[j] = keys;
@@ -241,7 +250,7 @@
             steer: D.steer(ch.steer[at]), throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]),
             lap: ch.lap[at], place: ch.place[at], item: header.items[ch.item[at]],
           };
-          BITS.forEach((name, b) => { car[name] = Boolean(bits & (1 << b)); });
+          for (let b = 0; b < BITS.length; b += 1) car[BITS[b]] = (bits & (1 << b)) !== 0;
           car.charge = (bits >> CHARGE_SHIFT) & 3;
           cars.push(car);
         }
@@ -280,7 +289,7 @@
         const j = k % CHUNK;
         const at = j * n + i;
         const keys = {};
-        KEYS.forEach((name, b) => { keys[name] = Boolean(ch.keys[j] & (1 << b)); });
+        for (let b = 0; b < KEYS.length; b += 1) keys[KEYS[b]] = (ch.keys[j] & (1 << b)) !== 0;
         return { throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]), steer: D.steer(ch.steer[at]), keys };
       },
 
@@ -288,7 +297,7 @@
       // to the step after it, then to the next sample), straight between two
       // steps as the race itself draws them; the rest goes between samples.
       frameAt(t) {
-        const time = count ? clamp(t, header.t0, rec.timeOf(count - 1)) : t;
+        const time = count ? clamp(t, header.t0, header.t0 + rec.duration) : t;
         // Where the moment is in physics steps, snapped onto a step when it is
         // one (so a frame on a step is that step exactly, not a rounding off it).
         const raw = (time - header.t0) / header.stepMs;
@@ -296,19 +305,21 @@
         const k = count ? clamp(Math.floor(steps / SAMPLE_EVERY), 0, count - 1) : 0;
         const a = rec.sampleAt(k);
         const last = k >= count - 1;
-        const into = last ? 0 : clamp(steps - k * SAMPLE_EVERY, 0, SAMPLE_EVERY);
+        // (After the last sample there is at most its recorded step.)
+        const into = clamp(steps - k * SAMPLE_EVERY, 0, last ? (a.mid ? 1 : 0) : SAMPLE_EVERY);
         const alpha = into / SAMPLE_EVERY;
         const flashes = rec.flashes.filter((f) => f.at <= time && time < f.until)
           .map((f) => ({ ...f, t: (time - f.at) / (f.until - f.at) }));
         const frame = { t: time, k, alpha, ...a, flashes };
         if (!alpha) return frame;
-        const b = rec.sampleAt(k + 1);
+        // Past the last sample only the positions move, to its recorded step.
+        const b = last ? a : rec.sampleAt(k + 1);
         const L = header.lapLength;
         const wrap = (v) => (v < 0 ? v + L : v >= L ? v - L : v);
         const along = (from, to) => ((to - from) % L + L * 1.5) % L - L / 2;
         const mix = (u, v, f = alpha) => u + (v - u) * f;
         // Which two steps the moment is between, and how far.
-        const second = into >= 1;
+        const second = !last && into >= 1;
         const f = second ? into - 1 : into;
         frame.cars = a.cars.map((ca, i) => {
           const cb = b.cars[i];

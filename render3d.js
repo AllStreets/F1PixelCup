@@ -766,12 +766,19 @@ function updateTrackside(world, track, life, now, dt) {
   const t = (world.life.clock || 0) / 1000;
   // The show after the flag runs on real time (the race is fast-forwarded
   // then), held while paused: show.ms since the flag fell.
-  const show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
   const flag = life && life.flagOutAt ? life.flagOutAt : 0;
-  if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
-  else if (flag && !paused) show.ms += wallDt;
-  // A replay runs the show on its own clock (a seek lands in it).
-  if (flag && life && life.showMs !== undefined) show.ms = life.showMs;
+  let show;
+  if (life && life.showMs !== undefined) {
+    // A replay runs the show on its own clock (a seek lands in it), in its
+    // own record: the race's show, behind the results, is left as it was.
+    show = world.life.replayShow || (world.life.replayShow = { flag: 0, ms: 0 });
+    show.flag = flag;
+    show.ms = flag ? life.showMs : 0;
+  } else {
+    show = world.life.show || (world.life.show = { flag: 0, ms: 0 });
+    if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
+    else if (flag && !paused) show.ms += wallDt;
+  }
   crowdUniforms.uTime.value = t;
   // At the flag the crowd's wave runs along the stands.
   crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
@@ -968,7 +975,7 @@ function ensureCar(world, racer) {
   return car;
 }
 
-function syncCars(world, racers, player, now, dt, alsoShow) {
+function syncCars(world, racers, player, now, dt, alsoShow, cut = false) {
   const { course } = world;
   const seen = new Set();
   racers.forEach((racer) => {
@@ -980,6 +987,7 @@ function syncCars(world, racers, player, now, dt, alsoShow) {
     car.root.visible = visible;
     if (!visible) return;
     const spinning = racer.spinUntil > now;
+    if (cut) car.spin = 0;
     car.spin = spinning ? car.spin + dt * 14 : car.spin * Math.pow(0.001, dt);
     const d = racer.trackDistance || 0;
     const h = course.heightAt(d);
@@ -1001,7 +1009,7 @@ function syncCars(world, racers, player, now, dt, alsoShow) {
     if (car.flap) {
       const target = racer.drsUntil > now ? 1 : 0;
       const step = dt / 0.15;
-      car.flapOpen += Math.max(-step, Math.min(step, target - car.flapOpen));
+      car.flapOpen = cut ? target : car.flapOpen + Math.max(-step, Math.min(step, target - car.flapOpen));
       car.flap.rotation.z = -car.flapOpen * DRS_OPEN;
     }
     const boosting = racer.formationUntil > now || racer.boostUntil > now;
@@ -1095,7 +1103,10 @@ function render(frame) {
   world.group.visible = true;
   powerUpLayer.group.visible = particles.visible = true;
 
-  syncCars(world, racers, player, now, dt, frame.view && frame.view.alsoShow);
+  // A replay's cut (a seek, opening it): what eases from frame to frame
+  // starts from the moment itself, not from wherever the last frame was.
+  const cut = Boolean(frame.view && frame.view.cut);
+  syncCars(world, racers, player, now, dt, frame.view && frame.view.alsoShow, cut);
   if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
@@ -1104,7 +1115,7 @@ function render(frame) {
     const target = hidden ? 0 : 1;
     // Burst away fast when taken, grow back more slowly with a shimmer.
     const rate = hidden ? dt / 0.15 : dt / 0.3;
-    u.scale = (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
+    u.scale = cut ? target : (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
     b.scale.setScalar(Math.max(0.0001, u.scale));
     b.visible = u.scale > 0.001;
     // It glows brighter while it grows back.
@@ -1192,8 +1203,11 @@ function render(frame) {
 
   // The frame, through the post-processing of the current tier.
   sampleFrame(Boolean(frame.racing));
+  // A replay's fixed cameras (trackside, the helicopter) do not move with the
+  // car: no speed blur or streaks there, only onboard.
+  const still = frame.view && frame.view.mode !== "onboard";
   postfx.render({
-    dt, now, trackId: track.id, speedFraction: sf, boosting, playerId: player.id,
+    dt, now, trackId: track.id, speedFraction: still ? 0 : sf, boosting: still ? false : boosting, playerId: player.id,
     // Drops on the lens, out of the tunnel.
     rain: wet ? 1 - world.tunnel.adapted : 0,
     sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
@@ -1320,6 +1334,8 @@ function tvCameras(world) {
   const started = performance.now();
   world.tvCams = window.Replay.placeTvCameras(course, { heights: TV_HEIGHTS, visible });
   world.tvCamsMs = performance.now() - started;
+  // The nearest any of them stands to its barriers (for the checks).
+  world.tvCamsClearance = world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null;
   return world.tvCams;
 }
 
@@ -1383,7 +1399,7 @@ function placeViewCamera(world, view, focus) {
     carY: car ? car.root.position.y : null,
     cams: world.tvCams ? world.tvCams.length : 0,
     // The nearest any TV camera of this circuit stands to its barriers.
-    camsClearance: world.tvCams && world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null,
+    camsClearance: world.tvCams ? world.tvCamsClearance : null,
     camsMs: world.tvCamsMs || 0,
   };
 }

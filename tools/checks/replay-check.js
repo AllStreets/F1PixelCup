@@ -62,18 +62,40 @@ async (page) => {
       let steps = 0;
       let calls = 0;
       let ms = 0;
+      let recordUs = null;
+      let midMs = 0;
+      let midSteps = 0;
       while (state.phase === "race" && calls < 60 * 300) {
         now += 1000 / 60;
         const these = state.flagOutAt ? FLAG_FAST_FORWARD : 1;
+        // The player's keys are recorded whoever drives: throttle held from
+        // step 600 to 1200 (the AI driving the player's car ignores them).
+        input.throttle = steps >= 600 && steps < 1200;
         const t = performance.now();
         updateRace(1 / 60, now);
-        ms += performance.now() - t;
+        const took = performance.now() - t;
+        ms += took;
+        // The race's own steps around the moment the recorder is timed (below).
+        if (steps >= 2000 && steps < 2800) { midMs += took; midSteps += these; }
         steps += these;
         calls += 1;
         if (truth) truth[steps] = snap();
+        // Forty seconds in, with the field racing, the recorder's cost per
+        // step (a sample every second step, the cars' positions on the
+        // others), timed over a batch (one step is under the browser's clock
+        // resolution) into a scratch recording; the race's own is put back.
+        if (truth && recordUs === null && steps >= 2400) {
+          const keep = ["recording", "recordSteps", "recordKeys", "recordIds", "recordNextId", "recordFlashes", "recordMarshals", "recordYellowAt", "recordPool"].map((k) => [k, state[k]]);
+          startRecording(state.lastTick);
+          const N = 4000;
+          const t1 = performance.now();
+          for (let i = 0; i < N; i += 1) recordStep(state.lastTick);
+          recordUs = ((performance.now() - t1) / N) * 1000;
+          keep.forEach(([k, v]) => { state[k] = v; });
+        }
       }
       player.isPlayer = true;
-      return { steps, calls, ms, final: state.racers.map((r) => [r.id, r.finishPosition, Math.round(r.finishTime * 1000)]) };
+      return { steps, calls, ms, recordUs, midUs: (midMs / midSteps) * 1000, final: state.racers.map((r) => [r.id, r.finishPosition, Math.round(r.finishTime * 1000)]) };
     };
     // Off: the recorder's two entry points stubbed.
     const start = window.startRecording;
@@ -86,19 +108,11 @@ async (page) => {
     const truth = [];
     const on = run(truth);
     window.__truth = truth;
-    // The recorder's cost per step (a sample every second step, the cars'
-    // positions on the others), timed over a batch (one step is under the
-    // browser's clock resolution), into a scratch recording.
     const kept = state.recording;
-    startRecording(state.lastTick);
-    const N = 4000;
-    const t0 = performance.now();
-    for (let i = 0; i < N; i += 1) recordStep(state.lastTick);
-    const recordUs = ((performance.now() - t0) / N) * 1000;
-    state.recording = kept;
     return {
       sameRace: JSON.stringify(off.final) === JSON.stringify(on.final),
-      steps: on.steps, stepUs: (on.ms / on.steps) * 1000, recordUs,
+      // A step's own cost at the same point of the race, run with the recorder off.
+      steps: on.steps, stepUs: off.midUs, recordUs: on.recordUs,
       samples: kept.count, bytes: kept.bytes(), duration: kept.duration, sampleMs: kept.sampleMs,
       phase: state.phase,
     };
@@ -265,23 +279,47 @@ async (page) => {
     return ok || JSON.stringify({ rows, focusRow: Boolean(focusRow), third, name, lap: q("#bc-lap").textContent, traceOn, traceOff });
   });
 
+  // On the player's car the trace is the player's keys: throttle held through
+  // the stretch the race had it held, and the speed in the race's own km/h.
+  results.traceShowsPlayersKeys = await step(async () => {
+    const r = state.replay;
+    Game.replay.setCamera("onboard");
+    r.focusId = state.playerId;
+    Game.replay.seek(1100 * PHYSICS_STEP_MS);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const label = document.getElementById("bc-trace-label").textContent;
+    const bar = document.getElementById("bc-thr").style.height;
+    const kph = document.getElementById("bc-kph").textContent;
+    const ghost = r.ghosts.get(state.playerId);
+    const want = Math.round(Math.abs(ghost.speed) * KPH_PER_UNIT);
+    Game.replay.seek(1500 * PHYSICS_STEP_MS);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const after = document.getElementById("bc-thr").style.height;
+    return (label === "Your inputs" && bar === "100%" && after === "0%" && kph.includes(String(want)) && kph.includes("KM/H")) || JSON.stringify({ label, bar, after, kph, want });
+  });
+
   // At any window size the graphics and every control are on screen, and the
-  // picture fills the window.
+  // picture fills the window (onboard, so the input trace is measured too).
   const fits = {};
-  for (const [w, h] of [[1600, 900], [1024, 640], [800, 500], [1280, 1000]]) {
+  await step(() => Game.replay.setCamera("onboard"));
+  for (const [w, h] of [[1600, 900], [1024, 640], [800, 500], [1280, 1000], [700, 400], [420, 820]]) {
     await resize(w, h);
     await frames(3);
     fits[`${w}x${h}`] = await step(() => {
       const W = window.innerWidth;
       const H = window.innerHeight;
       const inside = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.left >= -0.5 && r.top >= -0.5 && r.right <= W + 0.5 && r.bottom <= H + 0.5; };
-      const els = [...document.querySelectorAll("#replay-screen .bc-btn, #bc-seek, .bc-tower, .bc-third-card, .bc-tag")];
+      const els = [...document.querySelectorAll("#replay-screen .bc-btn, #bc-seek, .bc-tower, .bc-third-card, .bc-tag, .bc-trace")]
+        .filter((el) => el.getClientRects().length);
       const out = els.filter((el) => !inside(el)).map((el) => el.className || el.id);
       const c = document.getElementById("game3d").getBoundingClientRect();
       const tower = document.querySelector(".bc-tower").getBoundingClientRect();
       const third = document.querySelector(".bc-third-card").getBoundingClientRect();
       const controls = document.querySelector(".bc-controls").getBoundingClientRect();
-      const overlap = tower.bottom > third.top || third.bottom > controls.top + 1;
+      const trace = document.querySelector(".bc-trace");
+      const tr = trace.getClientRects().length ? trace.getBoundingClientRect() : null;
+      const overlap = tower.bottom > third.top || third.bottom > controls.top + 1
+        || (tr && (tr.bottom > controls.top + 1 || (tr.left < third.right && tr.top < third.bottom)));
       const fills = Math.abs(c.width - W) < 1 && Math.abs(c.height - H) < 1;
       return (out.length === 0 && !overlap && fills) || JSON.stringify({ out, overlap, fills, W, H });
     });
@@ -299,9 +337,14 @@ async (page) => {
     const gone = document.getElementById("replay-screen").classList.contains("hidden");
     return (state.phase === "results" && shown && gone && rows === before && rows.split("|").length === 20) || JSON.stringify({ phase: state.phase, shown, gone, same: rows === before });
   }, before);
+  // Focus is back on the replay button: Enter on it opens the replay (it is
+  // not taken as "next race").
+  results.enterOnReplayButtonOpensIt = await step(() => document.activeElement && document.activeElement.id) === "results-replay"
+    ? await (async () => { await p.keyboard.press("Enter"); await frames(2); return await step(() => state.phase === "replay" || state.phase); })()
+    : "focus not on the replay button";
   // And Esc from a replay does the same (not the pit lane).
   results.escapeLeavesReplayOnly = await step(async () => {
-    Game.replay.open();
+    if (state.phase !== "replay") Game.replay.open();
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     await new Promise((r) => requestAnimationFrame(r));
     return state.phase === "results" || state.phase;

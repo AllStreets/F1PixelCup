@@ -49,7 +49,7 @@ A recording starts at lights out and takes a **sample every second physics step 
 | state bits | Uint16 | exact |
 | x, y, heading at the odd step after the sample | Float32, Float32, Int16 | as above |
 
-State bits: spinning, DRS open, boosting, Formation Lap, Overtake Mode, drifting, drift to the right, finished, trailing oil, off the road, under a roof, braking, item roulette spinning, and the drift's charge (two bits: none, blue, orange, as the smoke colours it).
+State bits: spinning, DRS open, boosting, Formation Lap, Overtake Mode, drifting, drift to the right, finished, trailing oil, off the road, under a roof, item roulette spinning, and the drift's charge (two bits: none, blue, orange, as the smoke colours it).
 
 That is 38 bytes per car per sample (28 for the sample, 10 for the step after it). Quantisation is honest: every field keeps more precision than anything it is drawn or shown with (the tower shows tenths of a second; the input trace is 60 px tall).
 
@@ -69,13 +69,14 @@ Typed arrays in chunks of 128 samples, allocated as the race goes (never a reall
 
 ### Cost
 
-Recording runs during every race. Its cost per step is measured (the browser check times a batch of samples against the race's own steps) and must stay negligible: well under 2% of a physics step's own time. The browser check reports it.
+Recording runs during every race. Its cost per step is measured (the browser check times a batch of samples against the race's own steps) and must stay negligible: under 2% of a physics step's own time at the same point of the race (measured at about 1.6%, some 5 µs a step). The browser check reports it.
 
 ### Playback
 
 - `Replay.sampleAt(recording, k)` returns sample `k` exactly as stored (every field decoded, bit for bit).
 - `Replay.frameAt(recording, t)` returns the state at any race time `t`: positions, `d`, heading (the short way round), speed, `lat`, gap, steer and throttle interpolated between the samples either side; on/off states, lap, place and item from the earlier sample (what the race had at the last step). A jump of more than 60 units between two samples (a rescue by the watchdog) is drawn as it is, as `placeForDrawing` does. Shots are matched by id; one that appears or disappears between samples is drawn where it is.
 - **Seeking** is instant: the sample index is `floor((t − t0) / sampleMs)`.
+- Smoke, sparks and dust are decoration, as in the live race: re-emitted from the replay's cars as they were (drifting, boosting, off the road) with the visual generator, never the race's. They are not part of the recording, so they may differ between two viewings; everything recorded plays back exactly. A seek clears them, and whatever the renderer eases from frame to frame (a spin, the DRS flap, an item box growing back) starts from the moment itself.
 - The playback clock is the race clock: at 1x a second of replay is a second of the race (so the field's fast-forwarded laps after the player's flag play at their true speed).
 
 ## Cameras

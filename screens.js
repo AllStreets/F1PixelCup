@@ -82,7 +82,8 @@
           <header class="bc-tower-head"><span id="bc-track"></span><strong id="bc-lap"></strong></header>
           <div id="bc-rows"></div>
         </aside>
-        <div id="bc-third" class="bc-third" aria-live="polite"></div>
+        <div id="bc-third" class="bc-third"></div>
+        <p id="bc-announce" class="visually-hidden" aria-live="polite"></p>
         <div id="bc-trace" class="bc-trace hidden" aria-hidden="true">
           <div class="bc-trace-head"><span id="bc-trace-label"></span><b id="bc-kph"></b></div>
           <div class="bc-trace-body">
@@ -169,7 +170,9 @@
     $("screens").addEventListener("click", onClick);
     const seek = $("bc-seek");
     seek.addEventListener("pointerdown", () => { seeking = true; });
-    window.addEventListener("pointerup", () => { seeking = false; });
+    // (A cancelled touch, or a lost capture, ends the drag too.)
+    ["pointerup", "pointercancel"].forEach((type) => window.addEventListener(type, () => { seeking = false; }));
+    seek.addEventListener("lostpointercapture", () => { seeking = false; });
     seek.addEventListener("input", () => {
       if (window.Game && Game.replay && replayDuration) Game.replay.seek((Number(seek.value) / 1000) * replayDuration);
     });
@@ -180,6 +183,9 @@
     if (!target || !window.Game) return;
     if (target.dataset.replay !== undefined) {
       onReplayControl(target.dataset.replay, target.dataset.value);
+      // Clicked with the mouse, the button lets focus go, so Space stays
+      // play/pause (a keyboard press keeps it, for Tab and Enter).
+      if (event.detail > 0 && target.blur) target.blur();
     } else if (target.dataset.driver !== undefined) {
       Game.selectDriver(Number(target.dataset.driver));
       if (target.dataset.actionClose) {
@@ -407,6 +413,9 @@
   let lastResults = null;
   let seeking = false;
   let replayDuration = 0;
+  let replayButtons = null;
+  let towerOrder = "";
+  let towerAt = 0;
   const replayShown = {};
 
   function onReplayControl(what, value) {
@@ -423,6 +432,7 @@
     hideMain();
     closeOverlay();
     Object.keys(replayShown).forEach((k) => { delete replayShown[k]; });
+    towerOrder = "";
     show("replay-screen");
     $("bc-play").focus({ preventScroll: true });
   }
@@ -445,11 +455,18 @@
     put("speed", $("bc-speed"), info.playing ? (info.speed === 1 ? "" : esc(`${info.speed}x`)) : "PAUSED");
     put("track", $("bc-track"), esc(info.track));
     put("lap", $("bc-lap"), esc(info.lap));
+    // The tower refreshes four times a second, as the race's own does (its
+    // gaps move every frame between samples), and at once on a change of
+    // order or of the car in view.
     const top = info.tower.slice(0, 10);
     const focus = info.tower.find((r) => r.isFocus);
     const extra = focus && !top.includes(focus) ? [focus] : [];
+    const order = top.concat(extra).map((r) => `${r.code}${r.isFocus ? "*" : ""}`).join();
+    const wall = performance.now();
+    const towerDue = order !== towerOrder || wall - towerAt >= 250;
+    if (towerDue) { towerOrder = order; towerAt = wall; }
     const row = (r) => `<div class="bc-row ${r.isFocus ? "is-focus" : ""} ${r.isPlayer ? "is-player" : ""}"><b>${num(r.position)}</b><i style="background:${esc(r.teamColor)}"></i><span>${esc(r.code)}</span><em>${esc(r.gap)}</em></div>`;
-    put("rows", $("bc-rows"), top.map(row).join("") + (extra.length ? `<div class="bc-row-gap"></div>${extra.map(row).join("")}` : ""));
+    if (towerDue) put("rows", $("bc-rows"), top.map(row).join("") + (extra.length ? `<div class="bc-row-gap"></div>${extra.map(row).join("")}` : ""));
     const f = info.focus;
     const parts = String(f.name).trim().split(/\s+/);
     const last = parts.pop() || "";
@@ -462,7 +479,11 @@
         <div class="bc-third-name"><strong>${esc(parts.join(" "))} <em>${esc(last.toUpperCase())}</em></strong><small>${esc(f.team)}${f.isPlayer ? " · You" : ""}</small></div>
         <span class="bc-third-int" id="bc-int"></span>
       </div>`);
-    if (newCard) { delete replayShown.pos; delete replayShown.int; }
+    if (newCard) {
+      delete replayShown.pos; delete replayShown.int;
+      // Said once when the camera changes car (the card itself changes every frame).
+      $("bc-announce").textContent = `On camera: ${f.name}, ${f.team}`;
+    }
     put("pos", $("bc-pos"), f.finished ? "FIN" : `P${num(f.place)}`);
     put("int", $("bc-int"), esc(f.interval));
     const onboard = info.mode === "onboard";
@@ -470,11 +491,15 @@
     if (onboard) drawTrace(info.trace, f);
     put("play", $("bc-play"), info.playing ? "<span class=\"bc-icon-pause\"></span>" : "<span class=\"bc-icon-play\"></span>");
     $("bc-play").setAttribute("aria-label", info.playing ? "Pause" : "Play");
-    document.querySelectorAll("#replay-screen [data-replay=speed]").forEach((b) => {
+    const buttons = replayButtons || (replayButtons = {
+      speed: [...document.querySelectorAll("#replay-screen [data-replay=speed]")],
+      camera: [...document.querySelectorAll("#replay-screen [data-replay=camera]")],
+    });
+    buttons.speed.forEach((b) => {
       const on = Number(b.dataset.value) === info.speed;
       if (b.getAttribute("aria-pressed") !== String(on)) b.setAttribute("aria-pressed", String(on));
     });
-    document.querySelectorAll("#replay-screen [data-replay=camera]").forEach((b) => {
+    buttons.camera.forEach((b) => {
       const on = b.dataset.value === info.camera;
       if (b.getAttribute("aria-pressed") !== String(on)) b.setAttribute("aria-pressed", String(on));
       // Under the director, the camera it has cut to is marked live.
@@ -482,17 +507,20 @@
     });
     put("focus", $("bc-focus"), esc(f.code));
     if (!seeking) $("bc-seek").value = String(info.duration ? Math.round((info.time / info.duration) * 1000) : 0);
-    put("time", $("bc-time"), `${clock(info.time)} / ${clock(info.duration)}`);
+    if (put("time", $("bc-time"), `${clock(info.time)} / ${clock(info.duration)}`)) {
+      $("bc-seek").setAttribute("aria-valuetext", `${clock(info.time)} of ${clock(info.duration)}`);
+    }
   }
 
   // The onboard input trace: throttle and brake now, four seconds of both,
   // and the steering.
   function drawTrace(trace, focus) {
     put("traceLabel", $("bc-trace-label"), focus.isPlayer ? "Your inputs" : esc(`${focus.code} controls`));
-    put("kph", $("bc-kph"), `${num(Math.round(focus.speed))}<small> SPD</small>`);
+    put("kph", $("bc-kph"), `${num(focus.kph)}<small> KM/H</small>`);
     $("bc-thr").style.height = `${Math.round(trace.throttle * 100)}%`;
     $("bc-brk").style.height = `${Math.round(trace.brake * 100)}%`;
-    $("bc-steer").style.transform = `translateX(${(Math.max(-1, Math.min(1, trace.steer)) * 50).toFixed(1)}%)`;
+    // Full lock puts the marker at the bar's end (the percentage is of the bar).
+    $("bc-steer").style.left = `calc(${(50 + Math.max(-1, Math.min(1, trace.steer)) * 50).toFixed(1)}% - 0.5em)`;
     const canvas = $("bc-graph");
     const g = canvas.getContext("2d");
     const w = canvas.width;
