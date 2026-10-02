@@ -175,8 +175,8 @@ From the master to-do, unchanged.
 
 Committed (user, 2026-10-01: "all the way through the two player option").
 
-- [ ] A pit-lane option, never the default: two players, separate key sets or gamepads, two views and independent HUDs, both within the responsive rules (no black bars, the HUD on screen at every size).
-- [ ] A browser check: both drive, the HUDs are independent, it is off by default, and there are no errors. Review, merge and push.
+- [x] A pit-lane option, never the default: two players, separate key sets or gamepads, two views and independent HUDs, both within the responsive rules (no black bars, the HUD on screen at every size).
+- [x] A browser check: both drive, the HUDs are independent, it is off by default, and there are no errors. Review, merge and push.
 
 ## 8. Stage R: the README
 

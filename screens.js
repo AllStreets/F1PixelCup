@@ -125,7 +125,7 @@
         <div class="overlay-card wide">
           <p id="qualifying-kicker" class="kicker"></p>
           <h2 id="qualifying-title" class="it-title overlay-title"></h2>
-          <p class="muted quali-lede">Qualifying classification — this is the starting grid. Qualifying points count when you finish the race.</p>
+          <p class="muted quali-lede">Qualifying classification: this is the starting grid. Qualifying points count when you finish the race.</p>
           <p id="qualifying-note" class="quali-note"></p>
           <div id="qualifying-table" class="results-table quali-table"></div>
           <div class="overlay-actions">
@@ -794,7 +794,7 @@
             : esc(driverName(d.driverId));
           return `<tr class="${current ? "is-current" : ""}"${current ? ' aria-current="true"' : ""}><td>${label}</td><td>${esc(d.tier)}</td><td>${num(d.rating)}</td>
             <td>${num(d.careerPoints).toLocaleString()}</td><td>${num(d.races)}</td><td>${num(d.wins)}</td></tr>`;
-        }).join("")}</tbody></table>` : `<p class="muted">No careers yet — pick any driver and race to start theirs.</p>`}
+        }).join("")}</tbody></table>` : `<p class="muted">No careers yet. Pick any driver and race to start theirs.</p>`}
       <div class="overlay-actions"><button class="ghost-btn" data-action="close" data-autofocus type="button">Back (Esc)</button></div>`;
   }
 

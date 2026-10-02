@@ -1614,7 +1614,7 @@ function updateCountdown(now) {
     state.simOffset = 0;
     audio.lastBeepStep = -1;
     sfx.lightsOut();
-    addFeed("Lights out — go go go!");
+    addFeed("Lights out, go go go!");
   }
 }
 
@@ -3120,7 +3120,7 @@ function finalizeRace() {
   if (fastest && finishers.indexOf(fastest) < 10) {
     const entry = state.cupEntries.find((cupEntry) => cupEntry.driver.id === fastest.driver.id);
     if (entry) entry.points += 1;
-    addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
+    addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}), a bonus point.`);
   }
   // Player 2's first, so player 1's driver is the one the game comes back to.
   state.lastSecondRaceCareer = recordSecondPlayerRace(finishers, fastest);
