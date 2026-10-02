@@ -31,11 +31,15 @@ async (page) => {
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 200)}`; } };
   const frames = (n = 2) => p.evaluate((n) => new Promise((done) => { let i = 0; const f = () => (++i >= n ? done() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 
-  // The circuit built for real (Monza, the first cup's first race), then the
+  // The circuit built for real (Monza, by id: the cups follow the calendar), then the
   // same seeded two-lap race run twice: once with the recorder switched off,
   // once with it on. Every car on autopilot.
   const race = await step(async () => {
-    Game.selectCup(0); Game.selectGridMode("back"); Game.startCup();
+    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "monza"));
+    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "monza");
+    Game.selectCup(ci); Game.selectGridMode("back"); Game.startCup();
+    state.raceIndex = ti;
+    startRace(ti);
     for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const seed = (n) => {
       let s = n >>> 0;
@@ -44,7 +48,7 @@ async (page) => {
     const run = (truth) => {
       seed(11);
       buildCupEntries();
-      startRace(0);
+      startRace(ti);
       state.preparing = null;
       state.track.laps = 2;
       const player = getPlayer();

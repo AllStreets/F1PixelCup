@@ -167,7 +167,10 @@ async (page) => {
     const realRandom = Math.random;
     const out = [];
     try {
-      for (const [cup, index] of [[0, 1], [1, 0]]) {
+      // Spa and Monaco, by id (the cups follow the calendar). A flat-out
+      // circuit (Jeddah) loses far less in the wet: the grip only bites in corners.
+      const at = (id) => { const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === id)); return [ci, CUPS[ci].tracks.findIndex((t) => t.id === id)]; };
+      for (const [cup, index] of [at("spa"), at("monaco")]) {
         const dry = race(cup, index, "dry");
         const wet = race(cup, index, "wet");
         out.push({ track: state.track.id, dry, wet, slower: +(wet.fastest / dry.fastest).toFixed(3), slowerAvg: +(wet.avg / dry.avg).toFixed(3) });

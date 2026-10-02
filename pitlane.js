@@ -117,7 +117,8 @@
     const W = lane.halfWidth;
     const side = lane.side;
     const r = lane.rel(d);
-    const atEdge = Math.abs(lat - side * (W - EDGE_IN)) <= 2;
+    // On the edge itself, not still closing on it (a jump onto the lane's line).
+    const atEdge = Math.abs(lat - side * (W - EDGE_IN)) <= 0.5;
     const takingEntry = atEdge && r >= lane.entry && r <= lane.entry + TURN_IN;
     if (!entered && !takingEntry) return { lat: side * (W - EDGE_IN), inLane: false, park: false };
     const park = side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2);

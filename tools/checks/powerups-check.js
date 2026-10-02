@@ -385,7 +385,8 @@ async (page) => {
     // called in just before the entry, out in the middle of the road: it
     // can't swerve in, so it goes round again -- it never jumps sideways.
     const cases = [];
-    CUPS.forEach((cup, ci) => cup.tracks.forEach((_, ti) => { cases.push([ci, ti, "leader"]); cases.push([ci, ti, "late"]); }));
+    // Every circuit once (the season races them all again).
+    CUPS.forEach((cup, ci) => { if (!cup.season) cup.tracks.forEach((_, ti) => { cases.push([ci, ti, "leader"]); cases.push([ci, ti, "late"]); }); });
     cases.forEach(([ci, ti, how]) => {
       state.selectedCup = ci; state.activeCupIndex = ci; buildCupEntries(); startRace(ti); state.phase = "race";
       const lane = state.track.pitLane;

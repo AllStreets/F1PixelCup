@@ -2,7 +2,7 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split, v1LeftAlone, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
+// yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; errors [].
 // Returns { results, errors } (the shared convention of every check in tools/checks).
@@ -39,6 +39,22 @@ async (page) => {
   out.threeLoaded = await p.evaluate(() => performance.getEntriesByType("resource").some((r) => r.name.includes("three")));
   out.circuits = await p.locator("#circuits .circuit-card").count();
   out.maps = await p.locator("#circuits .circuit-card svg path.track").count();
+  // The calendar as the game races it: six cups of four, in calendar order,
+  // each card numbered by its round, and the season beside them.
+  out.circuitsByCup = await p.evaluate(() => {
+    const groups = [...document.querySelectorAll("#circuits .cup-group")];
+    const ok = groups.length === CUP_DEFS.length && groups.every((g, i) => {
+      const ids = [...g.querySelectorAll(".circuit-card")].map((c) => c.dataset.circuit);
+      return g.querySelector(".cup-name").textContent.includes(CUP_DEFS[i].name)
+        && JSON.stringify(ids) === JSON.stringify(CUP_DEFS[i].circuitIds)
+        && ids.every((id, k) => g.querySelectorAll(".circuit-round")[k].textContent.trim() === `R${CIRCUITS.findIndex((c) => c.id === id) + 1}`);
+    });
+    return ok || groups.map((g) => g.textContent.slice(0, 60)).join(" | ");
+  });
+  out.seasonCard = await p.evaluate(() => {
+    const card = document.querySelector("#circuits .season-card");
+    return Boolean(card) && /24/.test(card.textContent) && /constructors/i.test(card.textContent) && /saved after every race/i.test(card.textContent);
+  });
   out.teams = await p.locator("#grid .team-card").count();
   out.newPlayer = (await p.locator("#career-summary").innerText()).toLowerCase().includes("starts");
   out.heroImage = await p.evaluate(() => { const i = document.querySelector("#hero img"); return Boolean(i) && i.complete && i.naturalWidth > 0; });
@@ -67,10 +83,11 @@ async (page) => {
       return driver ? driver.teamId : null;
     });
     const firstTwo = (sel) => [...document.querySelectorAll(sel)].slice(0, 2).map((img) => img.alt.split("'s")[0]);
-    const sets = ["#circuits .circuit-shot img", "#power-ups .pu-shot img"];
-    return sets.every((sel) => {
+    // A shot per circuit and per power-up.
+    const sets = [["#circuits .circuit-shot img", CIRCUITS.length], ["#power-ups .pu-shot img", POWER_UPS.length]];
+    return sets.every(([sel, count]) => {
       const teams = teamsIn(sel);
-      return teams.length === 8 && teams.every(Boolean) && new Set(teams).size >= 6
+      return teams.length === count && teams.every(Boolean) && new Set(teams).size >= 6
         && firstTwo(sel).join("|") === "Charles Leclerc|Lewis Hamilton";
     });
   });

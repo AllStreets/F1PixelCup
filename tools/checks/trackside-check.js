@@ -265,7 +265,11 @@ async (page) => {
   // the car is away, green; the posts elsewhere stay furled.
   await step(async () => {
     Game.backToPitLane();
-    Game.selectCup(0); Game.startCup();
+    // At Monza, by id (the cups follow the calendar).
+    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "monza"));
+    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "monza");
+    Game.selectCup(ci); Game.startCup();
+    if (ti > 0) { state.raceIndex = ti; startRace(ti); }
     for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     // Past the lights and the first seconds (no flags off the line).
     const until = performance.now() + 20000;

@@ -169,6 +169,9 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   assert.equal(turn.inLane, true);
   // Still out in the road at the entry: it can't swerve in, so it goes round.
   assert.deepEqual(Pit.wayIn(lane, 6000 - 600 + 5, false, 10), { lat: edge, inLane: false, park: false });
+  // Still closing on the edge (not on it yet): turning in would jump it
+  // sideways onto the lane's line, so it doesn't.
+  assert.equal(Pit.wayIn(lane, 6000 - 600 + 5, false, edge - 1.5).inLane, false);
   assert.ok(Math.abs(turn.lat - lane.latAt(6000 - 595)) < 1e-9);
   // Down the lane, until it eases into the working lane before its bay.
   const before = bay.rel - 150;
