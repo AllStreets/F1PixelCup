@@ -21,7 +21,7 @@ import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/
 import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
-import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
+import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -61,6 +61,7 @@ const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
 
 const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 2, 9000);
+const Replay = window.Replay;
 
 // ---------------------------------------------------------------------------
 // Graphics quality and post-processing (quality.js, r3d/postfx.js). The tier
@@ -606,7 +607,12 @@ function inspect() {
   };
   const cars = {};
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
-  return { drawing, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // Where each car was drawn (game x, y), and whether it was.
+  const drawn = {};
+  if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
+  // The replay's camera, when one drew the last frame.
+  const view = viewInfo;
+  return { drawing, view, drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -764,6 +770,8 @@ function updateTrackside(world, track, life, now, dt) {
   const flag = life && life.flagOutAt ? life.flagOutAt : 0;
   if (flag !== show.flag) { show.flag = flag; show.ms = 0; }
   else if (flag && !paused) show.ms += wallDt;
+  // A replay runs the show on its own clock (a seek lands in it).
+  if (flag && life && life.showMs !== undefined) show.ms = life.showMs;
   crowdUniforms.uTime.value = t;
   // At the flag the crowd's wave runs along the stands.
   crowdUniforms.uWave.value = flag ? Math.min(1, show.ms / 1000) : 0;
@@ -960,13 +968,15 @@ function ensureCar(world, racer) {
   return car;
 }
 
-function syncCars(world, racers, player, now, dt) {
+function syncCars(world, racers, player, now, dt, alsoShow) {
   const { course } = world;
   const seen = new Set();
   racers.forEach((racer) => {
     const car = ensureCar(world, racer);
     seen.add(racer.id);
-    const visible = !racer.finished || racer.id === player.id;
+    // A finished car is parked out of the way, except the one in view (and,
+    // in a replay, the player's, as the race showed it).
+    const visible = !racer.finished || racer.id === player.id || racer.id === alsoShow;
     car.root.visible = visible;
     if (!visible) return;
     const spinning = racer.spinUntil > now;
@@ -1066,6 +1076,7 @@ const lookTarget = new THREE.Vector3();
 function render(frame) {
   if (!api.ready) return null;
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
+  viewInfo = null;
   const dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
   lastNow = now;
   resize();
@@ -1084,7 +1095,7 @@ function render(frame) {
   world.group.visible = true;
   powerUpLayer.group.visible = particles.visible = true;
 
-  syncCars(world, racers, player, now, dt);
+  syncCars(world, racers, player, now, dt, frame.view && frame.view.alsoShow);
   if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
   syncParticles(list, course);
   world.boxes.forEach((b, i) => {
@@ -1135,7 +1146,9 @@ function render(frame) {
   camera.up.set(0, 1, 0);
   camera.lookAt(lookTarget);
   camera.rotateZ(-(roll || 0) * 0.8 + jitter(t, 13) * r * 0.012);
-  if (photoCamera) {
+  if (frame.view) {
+    placeViewCamera(world, frame.view, player);
+  } else if (photoCamera) {
     const { from, at } = photoCamera;
     camera.position.set(from.x, course.heightAt(from.d) + from.h, from.y);
     lookTarget.set(at.x, course.heightAt(at.d) + at.h, at.y);
@@ -1145,6 +1158,7 @@ function render(frame) {
   } else {
     finishShot(world, frame.trackside, player);
   }
+  if (!frame.view) setNear(CAMERA_NEAR);
   // The "?" in each box keeps facing the camera (turning about the vertical
   // only), placed now the camera is: no frame's lag.
   world.boxes.forEach((b) => {
@@ -1163,6 +1177,8 @@ function render(frame) {
   setTyreCompound(frame.weather);
   updateTunnelLight(world, track, dt);
   updateTrackside(world, track, frame.trackside, now, dt);
+  // In the helicopter view the camera is in it.
+  if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet });
   // Models loaded since (car bodies, items) learn the tunnel's light too.
   if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
@@ -1184,6 +1200,126 @@ function render(frame) {
     occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
   });
   return surface;
+}
+
+// ---------------------------------------------------------------------------
+// Replay cameras (docs/superpowers/specs/2026-10-01-replays-design.md):
+// trackside TV cameras that pan and zoom after a car and cut to the next, the
+// onboard T-cam, and the helicopter. The maths is in replay.js.
+// ---------------------------------------------------------------------------
+
+const CAMERA_NEAR = 2;
+// The T-cam, in the car's own frame (x forward, y up): above and behind the
+// airbox, looking down the road over the nose.
+const TCAM = new THREE.Vector3(-0.95 * CAR_SCALE, 1.55 * CAR_SCALE, 0);
+const TCAM_AT = new THREE.Vector3(8 * CAR_SCALE, 0.3 * CAR_SCALE, 0);
+const TCAM_NEAR = 0.4;
+// The helicopter view: from the helicopter, trailing the car in view.
+const HELI_BEHIND = 250;
+const HELI_SUBJECT = 320;
+let viewInfo = null;
+
+function setNear(near) {
+  if (camera.near !== near) {
+    camera.near = near;
+    camera.updateProjectionMatrix();
+  }
+}
+
+// A point on the lap at any distance, between the course's samples (the
+// samples alone would step the helicopter along 6 at a time).
+function pointOnLap(course, d) {
+  const n = course.samples.length;
+  const L = course.track.totalLength;
+  const f = ((((d % L) + L) % L) / L) * n;
+  const a = course.samples[Math.floor(f) % n];
+  const b = course.samples[(Math.floor(f) + 1) % n];
+  const t = f - Math.floor(f);
+  const mix = (u, v) => u + (v - u) * t;
+  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny) };
+}
+
+// The TV cameras of a circuit, placed once, the first time a replay there
+// asks: off the track through the claim system, each where it sees most of
+// its stretch past the scenery, the landmarks and the circuit's own walls.
+function tvCameras(world) {
+  if (world.tvCams) return world.tvCams;
+  const { course } = world;
+  world.group.updateMatrixWorld(true);
+  const blockers = [world.decor, world.landmarks, world.circuit].filter(Boolean);
+  const ray = new THREE.Raycaster();
+  const from = new THREE.Vector3();
+  const dir = new THREE.Vector3();
+  const visible = (a, b) => {
+    from.set(a.x, a.y, a.z);
+    dir.set(b.x - a.x, b.y - a.y, b.z - a.z);
+    const far = dir.length();
+    ray.set(from, dir.normalize());
+    ray.far = far - 2;
+    return !ray.intersectObjects(blockers, true).some((h) => !h.object.userData.ground);
+  };
+  const started = performance.now();
+  world.tvCams = window.Replay.placeTvCameras(course, { height: course.street ? 40 : 26, visible });
+  world.tvCamsMs = performance.now() - started;
+  return world.tvCams;
+}
+
+const viewTarget = new THREE.Vector3();
+function placeViewCamera(world, view, focus) {
+  const { course } = world;
+  const L = course.track.totalLength;
+  const car = world.cars.get(focus.id);
+  const road = course.heightAt(focus.trackDistance || 0);
+  let cam = -1;
+  if (view.mode === "onboard" && car) {
+    car.root.updateMatrixWorld(true);
+    camera.position.copy(TCAM).applyMatrix4(car.root.matrixWorld);
+    viewTarget.copy(TCAM_AT).applyMatrix4(car.root.matrixWorld);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(TCAM_NEAR);
+    setFov(64);
+  } else if (view.mode === "helicopter") {
+    // Behind and beside the car along the road's direction there (taken over
+    // 300 of road, so a corner turns the shot gently, never in a snap).
+    const d = focus.trackDistance || 0;
+    const here = pointOnLap(course, d);
+    const a = pointOnLap(course, d - 150);
+    const b = pointOnLap(course, d + 150);
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const tx = (b.x - a.x) / len;
+    const ty = (b.y - a.y) / len;
+    camera.position.set(focus.x - tx * HELI_BEHIND - ty * HELI_ASIDE, here.h + HELI_HEIGHT, focus.y - ty * HELI_BEHIND + tx * HELI_ASIDE);
+    viewTarget.set(focus.x, road + 2, focus.y);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(CAMERA_NEAR);
+    setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget), HELI_SUBJECT));
+  } else {
+    const cams = tvCameras(world);
+    cam = Replay.tvCameraFor(cams, focus.trackDistance || 0, L);
+    const c = cams[cam];
+    if (c) camera.position.set(c.x, c.y, c.z);
+    // Aimed a little ahead of the car, as an operator leads a moving subject.
+    const lead = 6 + Math.abs(focus.speed || 0) * 0.04;
+    viewTarget.set(focus.x + Math.cos(focus.heading) * lead, road + 3, focus.y + Math.sin(focus.heading) * lead);
+    camera.up.set(0, 1, 0);
+    camera.lookAt(viewTarget);
+    setNear(CAMERA_NEAR);
+    setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget)));
+  }
+  viewInfo = {
+    mode: view.mode, focusId: focus.id, cam,
+    x: camera.position.x, y: camera.position.y, z: camera.position.z, fov: camera.fov, near: camera.near,
+    clearance: course.clearance(camera.position.x, camera.position.z),
+    ground: course.heightAtPoint(camera.position.x, camera.position.z),
+    toCar: Math.hypot(camera.position.x - focus.x, camera.position.z - focus.y),
+    carY: car ? car.root.position.y : null,
+    cams: world.tvCams ? world.tvCams.length : 0,
+    // The nearest any TV camera of this circuit stands to its barriers.
+    camsClearance: world.tvCams && world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null,
+    camsMs: world.tvCamsMs || 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1313,6 +1449,7 @@ function renderGarage(kart, driver, now) {
   sun.color.set(0xffffff);
   renderer.toneMappingExposure = 1.1;
   setFov(BASE_FOV);
+  setNear(CAMERA_NEAR);
   const key = `${kart.id}|${driver.id || driver.name}`;
   if (garage.key !== key) {
     if (garage.car) garage.group.remove(garage.car.root);
