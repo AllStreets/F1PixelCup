@@ -116,6 +116,7 @@ test("the key sets: every key belongs to one player and one action, and the sets
 
 const pad = ({ axes = [0, 0, 0, 0], pressed = [], values = {} } = {}) => ({
   connected: true,
+  mapping: "standard",
   axes,
   buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: pressed.includes(i) || (values[i] || 0) > 0.5, value: values[i] ?? (pressed.includes(i) ? 1 : 0) })),
 });
@@ -146,7 +147,7 @@ test("a pad's triggers are proportional past a small dead zone; A and B are full
   assert.equal(TwoPlayer.readPad(pad({ pressed: [3] })).item, true);
   assert.equal(TwoPlayer.readPad(pad({ pressed: [9] })).pause, true);
   // A pad that reports fewer buttons or axes reads as nothing pressed.
-  assert.deepEqual(TwoPlayer.readPad({ connected: true, axes: [], buttons: [] }), { throttle: 0, brake: 0, steer: 0, drift: false, item: false, pause: false });
+  assert.deepEqual(TwoPlayer.readPad({ connected: true, mapping: "standard", axes: [], buttons: [] }), { throttle: 0, brake: 0, steer: 0, drift: false, item: false, pause: false });
   assert.deepEqual(TwoPlayer.readPad(null), { throttle: 0, brake: 0, steer: 0, drift: false, item: false, pause: false });
 });
 
@@ -166,10 +167,12 @@ test("keys and pad together: whichever asks for more; the keys' steering wins wh
 });
 
 test("the pads in play: connected ones, in the order the browser lists them", () => {
-  const a = { id: "a", index: 0, connected: true };
-  const b = { id: "b", index: 2, connected: true };
-  const gone = { id: "c", index: 1, connected: false };
-  assert.deepEqual(TwoPlayer.padsInOrder([null, a, gone, b]).map((p) => p.id), ["a", "b"]);
+  const a = { id: "a", index: 0, connected: true, mapping: "standard" };
+  const b = { id: "b", index: 2, connected: true, mapping: "standard" };
+  const gone = { id: "c", index: 1, connected: false, mapping: "standard" };
+  // A device without the standard layout (a wheel, a flight stick) takes no slot.
+  const wheel = { id: "w", index: 3, connected: true, mapping: "" };
+  assert.deepEqual(TwoPlayer.padsInOrder([null, a, gone, b, wheel]).map((p) => p.id), ["a", "b"]);
   assert.deepEqual(TwoPlayer.padsInOrder(undefined), []);
   assert.deepEqual(TwoPlayer.padsInOrder([]), []);
 });
@@ -193,4 +196,35 @@ test("the CPU catch-up measures against the nearest human", () => {
   assert.equal(TwoPlayer.nearestGap([1300, 400], 1000), 300);
   assert.equal(TwoPlayer.nearestGap([1300], 1000), 300);
   assert.equal(TwoPlayer.nearestGap([], 1000), 0);
+});
+
+test("a pad without the standard layout reads as nothing (its buttons mean something else)", () => {
+  const odd = { ...pad({ pressed: [0, 9], axes: [1, 0] }), mapping: "" };
+  assert.deepEqual(TwoPlayer.readPad(odd), { throttle: 0, brake: 0, steer: 0, drift: false, item: false, pause: false });
+});
+
+test("reading and merging can fill a kept object, so nothing new is made each step", () => {
+  const out = {};
+  const got = TwoPlayer.readPad(pad({ pressed: [0] }), out);
+  assert.equal(got, out);
+  assert.equal(out.throttle, 1);
+  TwoPlayer.readPad(null, out);
+  assert.equal(out.throttle, 0);
+  const merged = {};
+  assert.equal(TwoPlayer.merge({ throttle: true }, null, merged), merged);
+  assert.equal(merged.throttle, 1);
+});
+
+test("each player keeps their pad: one unplugged leaves the other where it was", () => {
+  const p = (index) => ({ index, connected: true, mapping: "standard" });
+  let slots = TwoPlayer.assignPads([null, null], [p(0), p(1)]);
+  assert.deepEqual(slots, [0, 1]);
+  // Pad 0 goes: player 2 keeps pad 1, player 1 has none.
+  slots = TwoPlayer.assignPads(slots, [p(1)]);
+  assert.deepEqual(slots, [null, 1]);
+  // A pad plugged in fills the empty slot.
+  slots = TwoPlayer.assignPads(slots, [p(1), p(4)]);
+  assert.deepEqual(slots, [4, 1]);
+  // Single player: one slot.
+  assert.deepEqual(TwoPlayer.assignPads([null], [p(2), p(3)]), [2]);
 });

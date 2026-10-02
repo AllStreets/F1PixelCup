@@ -26,8 +26,8 @@ function fitViewToElement() {
   view.height = cssHeight / fit;
   view.scale = fit * dpr;
   // Lets the timing tower and ticker line up with the HUD at any size (a
-  // split screen's views set it to theirs).
-  setHudScale(fit);
+  // split screen's views set it to theirs, in drawSplit).
+  if (!splitActive()) setHudScale(fit);
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
 }
 
@@ -402,6 +402,31 @@ const input2 = {
 // Each player's gamepad as last read (pollPads), and its buttons' last state.
 const padState = [TwoPlayer.readPad(null), TwoPlayer.readPad(null)];
 const padWas = [{ item: false, pause: false }, { item: false, pause: false }];
+// Which pad (its index) each player has; kept while it stays connected.
+let padSlots = [null, null];
+// Each player's merged controls, kept and refilled each step.
+const controlsKept = [{}, {}];
+
+// What the two players' keys are labelled on this keyboard: they are read by
+// position, so on AZERTY player 1's are Z Q S D and player 2's power-up key
+// is "!". The browser tells us where it can; the labels default to QWERTY.
+const keyLabels = { KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", Slash: "/" };
+try {
+  if (navigator.keyboard && navigator.keyboard.getLayoutMap) {
+    navigator.keyboard.getLayoutMap().then((map) => {
+      Object.keys(keyLabels).forEach((code) => { if (map.get(code)) keyLabels[code] = map.get(code).toUpperCase(); });
+      if (window.Screens && state.phase === "garage") window.Screens.refreshPitLane();
+    }, () => {});
+  }
+} catch (error) {
+  // The QWERTY labels stand.
+}
+
+// Every key let go (leaving a race, losing focus): none can stay held into the next.
+function releaseAllKeys() {
+  Object.keys(input).forEach((k) => { input[k] = false; });
+  Object.keys(input2).forEach((k) => { input2[k] = false; });
+}
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -614,8 +639,11 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
   let brakeBoost = 0;
   let steerAdjust = 0;
 
+  // Two players qualify as ghosts to each other: neither holds the other up.
+  const ghosts = state.phase === "qualifying" && isHuman(racer);
   state.racers.forEach((other) => {
     if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
+    if (ghosts && isHuman(other)) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
@@ -757,8 +785,9 @@ function getPitLaneState() {
     gridMode: state.gridMode,
     weatherModes: Weather.MODES,
     weatherMode: state.weatherMode,
-    // Two-player split screen: how many, and player 2's driver.
+    // Two-player split screen: how many, player 2's driver, and the keys' labels.
     players: state.players,
+    keys: { p1: ["KeyW", "KeyA", "KeyS", "KeyD"].map((code) => keyLabels[code]).join(" "), p2Item: keyLabels.Slash },
     secondDriver: (() => {
       const d = DRIVERS[state.secondDriver];
       const t = getTeamForDriver(d);
@@ -1196,7 +1225,16 @@ function stepQualifying(q) {
   state.lastTick = tick;
   if (state.phase !== "qualifying") return;
   const timeUp = q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS;
-  drivers.forEach((player) => { if (player.lastLapTime > 0 || timeUp) parkQualifier(player); });
+  drivers.forEach((player) => {
+    if (player.finished || !(player.lastLapTime > 0 || timeUp)) return;
+    parkQualifier(player);
+    // Two players: a lap in that beats the provisional pole becomes it, for
+    // the other player's delta.
+    if (drivers.length > 1 && player.lastLapTime > 0 && (!q.poleTimeMs || player.lastLapTime < q.poleTimeMs)) {
+      q.poleTimeMs = player.lastLapTime;
+      q.poleSplits = (player.splits || []).slice(0, TIMING_POINTS_PER_LAP).map((t) => t - player.previousLapStartAt);
+    }
+  });
   if (drivers.every((player) => player.finished)) finishQualifying();
 }
 
@@ -1250,7 +1288,7 @@ function finishQualifying() {
   const pole = rows[0];
   const noteFor = (racer, timeMs, aborted) => {
     const place = q.order.indexOf(racer.driver.id) + 1;
-    return aborted ? "Lap aborted — you went back over the line, so no time was set."
+    return aborted ? "Lap aborted: you went back over the line, so no time was set."
       : !timeMs ? "No time set within the session."
         : place === 1 ? `Pole position! ${formatLapTime(timeMs)}.` : `You qualified ${formatOrdinal(place)} · ${formatLapTime(timeMs)}.`;
   };
@@ -1306,7 +1344,7 @@ function updateQualifyingTower(force = false) {
   });
   humans().filter((r) => !lapIn(r)).forEach((r) => {
     const entry = humanEntry(r.playerSlot || 0);
-    rows.push({ position: "—", code: entry.driver.code, teamColor: entry.kart.body, isPlayer: true, tag: entryTag(entry), gap: r.finished ? "NO TIME" : "ON LAP" });
+    rows.push({ position: "-", code: entry.driver.code, teamColor: entry.kart.body, isPlayer: true, tag: entryTag(entry), gap: r.finished ? "NO TIME" : "ON LAP" });
   });
   window.Screens.updateTower(rows);
 }
@@ -1397,6 +1435,7 @@ function startCup() {
   state.activeCupIndex = state.selectedCup;
   state.raceIndex = 0;
   state.cupPlayers = state.players;
+  releaseAllKeys();
   buildCupEntries();
   // One id per cup attempt ties its races to its cup bonus (see career.js);
   // each player has their own (a cup bonus is recorded once per id).
@@ -1540,13 +1579,19 @@ function playerTag(racer) {
 // One player's controls this step: their keys and their pad together.
 function controlsFor(racer) {
   const slot = racer.playerSlot || 0;
-  return TwoPlayer.merge(slot ? input2 : input, padState[slot]);
+  return TwoPlayer.merge(slot ? input2 : input, padState[slot], controlsKept[slot]);
 }
 
-// The same as the keys the replay keeps.
-function keysHeld(slot) {
-  const c = TwoPlayer.merge(slot ? input2 : input, padState[slot]);
-  return { throttle: c.throttle > 0, brake: c.brake > 0, left: c.steer < 0, right: c.steer > 0, drift: c.drift, item: c.item };
+// A player's keys (and pad) as the replay keeps them, added to what is held
+// since the last sample (a tap between two still counts).
+function holdKeys(keys, slot) {
+  const c = TwoPlayer.merge(slot ? input2 : input, padState[slot], controlsKept[slot]);
+  keys.throttle = keys.throttle || c.throttle > 0;
+  keys.brake = keys.brake || c.brake > 0;
+  keys.left = keys.left || c.steer < 0;
+  keys.right = keys.right || c.steer > 0;
+  keys.drift = keys.drift || c.drift;
+  keys.item = keys.item || c.item;
 }
 
 function updateCountdown(now) {
@@ -2386,6 +2431,27 @@ function updateRacer(racer, dt, now) {
   emitRacerParticles(racer, dt, now, offroad);
 }
 
+// After the flag, with the other player still racing: the car lifts, brakes
+// gently and drifts to the edge of the road it is nearer, out of the way of
+// the cars still racing (finished cars take no part in contacts), and stops.
+const COOL_DOWN_BRAKE = 70;
+function coolDown(racer, dt) {
+  const route = getItemRoute(state.track);
+  racer.drawFrom = { x: racer.x, y: racer.y, heading: racer.heading };
+  racer.speed = Math.max(0, racer.speed - COOL_DOWN_BRAKE * dt);
+  if (racer.speed <= 0) return;
+  const d = racer.trackDistance || 0;
+  const side = racer.lat >= 0 ? 1 : -1;
+  const edge = side * Math.max(0, route.halfWidthAt(d) - PowerUps.CAR_WIDTH);
+  racer.lat += clamp(edge - racer.lat, -30 * dt, 30 * dt);
+  racer.trackDistance = wrapLap(d + racer.speed * dt);
+  const w = route.toWorld(racer.trackDistance, racer.lat);
+  racer.x = w.x;
+  racer.y = w.y;
+  racer.heading = w.heading;
+  racer.drifting = false;
+}
+
 function finishRacer(racer, now) {
   if (racer.finished) return;
   racer.finished = true;
@@ -2486,6 +2552,28 @@ function updateHazards(now) {
     return false;
   });
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
+}
+
+// The power-ups and the trackside life as drawn this frame: worked out once
+// a frame (a split screen's two views and the mini maps share them).
+const thisFrame = { no: -1, now: 0, powerUps: null, trackside: null };
+let frameNo = 0;
+function sharedFrame(now) {
+  if (thisFrame.no !== frameNo || thisFrame.now !== now) {
+    thisFrame.no = frameNo;
+    thisFrame.now = now;
+    thisFrame.powerUps = null;
+    thisFrame.trackside = null;
+  }
+  return thisFrame;
+}
+function powerUpsThisFrame(now) {
+  const f = sharedFrame(now);
+  return f.powerUps || (f.powerUps = powerUpFrame(now));
+}
+function tracksideThisFrame(now) {
+  const f = sharedFrame(now);
+  return f.trackside || (f.trackside = tracksideFrame(now));
 }
 
 // World positions of everything the renderers draw.
@@ -2632,6 +2720,8 @@ function updateRace(dt, now) {
       if (racer.finished || (!playerSteps && racer.isPlayer)) return;
       updateRacer(racer, PHYSICS_DT, tick);
     });
+    // Two players: one home while the other still races coasts off the line.
+    if (state.humanIds.length > 1 && !state.flagOutAt) humans().forEach((racer) => { if (racer.finished) coolDown(racer, PHYSICS_DT); });
     settleFinishers();
     updateShots(PHYSICS_DT, tick);
     updateSafetyCar(PHYSICS_DT, tick);
@@ -2657,7 +2747,7 @@ function updateRace(dt, now) {
     // Safety valve only. With the fast-forward above the field is home in a
     // few seconds; this exists so a wedged car can never hang the race.
     state.resultTimeoutAt = now + 60000;
-    addFeed("Chequered flag — waiting for the rest of the field to come home.");
+    addFeed("Chequered flag: waiting for the rest of the field to come home.");
   }
 
   if (!state.resultsQueued && (everyoneFinished || (state.resultTimeoutAt && now >= state.resultTimeoutAt))) {
@@ -2712,9 +2802,8 @@ function recordStep(tick) {
   const rec = state.recording;
   if (!rec) return;
   // The players' keys (and pads) since the last sample (a tap between two still counts).
-  const hold = (keys, now) => Object.keys(now).forEach((k) => { keys[k] = keys[k] || now[k]; });
-  hold(state.recordKeys, keysHeld(0));
-  if (state.humanIds.length > 1) hold(state.recordKeys2, keysHeld(1));
+  holdKeys(state.recordKeys, 0);
+  if (state.humanIds.length > 1) holdKeys(state.recordKeys2, 1);
   state.recordSteps += 1;
   if (state.recordSteps % Replay.SAMPLE_EVERY === 0) recordSample(tick);
   // Between samples the cars' positions alone (a contact can shove a car in
@@ -3235,6 +3324,7 @@ function resetToGarage() {
   state.humanIds = [];
   state.cupPlayers = 1;
   state.second = {};
+  releaseAllKeys();
   addFeed("Back in the pit lane.");
   if (window.Screens) window.Screens.showPitLane();
 }
@@ -3592,7 +3682,7 @@ function syncViewports() {
   const arrangement = layout ? layout.arrangement : "";
   if (document.body.dataset.split !== arrangement) document.body.dataset.split = arrangement;
   if (!window.Render3D || !window.Render3D.setViewports) return;
-  const key = views ? JSON.stringify(views) : "";
+  const key = views ? `${views[0].x},${views[0].y},${views[0].w},${views[0].h},${views[1].x},${views[1].y}` : "";
   if (key === viewportsKey) return;
   viewportsKey = key;
   window.Render3D.setViewports(views);
@@ -3603,8 +3693,10 @@ function syncViewports() {
 const splitDrawn = { layout: null, views: [] };
 let drawingView = null;
 
+// (Only while the checks ask: Game.probeHud.)
+let hudProbe = false;
 function noteHudBox(x, y, w, h) {
-  if (!drawingView) return;
+  if (!drawingView || !hudProbe) return;
   const m = ctx.getTransform();
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   drawingView.boxes.push({ x: (m.a * x + m.e) / dpr, y: (m.d * y + m.f) / dpr, w: (m.a * w) / dpr, h: (m.d * h) / dpr });
@@ -3623,7 +3715,7 @@ function drawSplit(track) {
     view.width = fit.width;
     view.height = fit.height;
     view.scale = fit.scale * dpr;
-    drawingView = { slot, rect, playerId: state.humanIds[slot], fit: fit.scale, boxes: [], hud: {} };
+    drawingView = { slot, rect, playerId: state.humanIds[slot], fit: fit.scale, boxes: [], hud: hudProbe ? {} : null };
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.beginPath();
@@ -4445,14 +4537,14 @@ function drawDriverView(track) {
       camPos: state.camPos,
       roll: state.camRoll,
       shake: getScreenShake(),
-      powerUps: powerUpFrame(now),
+      powerUps: powerUpsThisFrame(now),
       particles: state.particles,
       now,
       // Real racing frames only, for the graphics auto tier: not the
       // countdown, qualifying, a pause, the loading panel, or the
       // fast-forward after the flag.
       racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
-      trackside: tracksideFrame(now),
+      trackside: tracksideThisFrame(now),
       weather: state.weather,
       // Split screen: which view this is, and the other player's car kept in
       // sight after it finishes.
@@ -4473,7 +4565,7 @@ function drawDriverView(track) {
     // The 3D renderer failed on this frame: carry on in 2D from here.
   }
 
-  state.fallbackFrames += 1;
+  if (!drawingView || drawingView.slot === 0) state.fallbackFrames += 1;
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
   const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
     && sample.y < view.height + 500
@@ -5236,8 +5328,10 @@ function drawMiniMap(track, player, frame) {
   const fov = Math.atan(view.width / 2 / CAMERA.focal);
   const eye = toMap(state.camPos || player);
   const wedge = ctx.createRadialGradient(eye.x, eye.y, 0, eye.x, eye.y, radius * 1.15);
-  wedge.addColorStop(0, "rgba(117, 213, 255, 0.42)");
-  wedge.addColorStop(1, "rgba(117, 213, 255, 0)");
+  // (Player 2's view in player 2's colour.)
+  const own = drawingView && drawingView.slot === 1 ? "255, 122, 198" : "117, 213, 255";
+  wedge.addColorStop(0, `rgba(${own}, 0.42)`);
+  wedge.addColorStop(1, `rgba(${own}, 0)`);
   ctx.beginPath();
   ctx.moveTo(eye.x, eye.y);
   ctx.arc(eye.x, eye.y, radius * 1.15, -Math.PI / 2 - fov, -Math.PI / 2 + fov);
@@ -5259,7 +5353,7 @@ function drawMiniMap(track, player, frame) {
   }
   ctx.restore();
 
-  const pu = powerUpFrame(renderClock());
+  const pu = powerUpsThisFrame(renderClock());
   pu.hazards.concat(pu.trails).forEach((h) => {
     const point = toMap(h);
     ctx.fillStyle = "#08080c";
@@ -5301,7 +5395,7 @@ function drawMiniMap(track, player, frame) {
 
   const me = toMap(player);
   const pulse = 5.5 + Math.sin(renderClock() / 260) * 1.4;
-  ctx.strokeStyle = "rgba(117, 213, 255, 0.85)";
+  ctx.strokeStyle = `rgba(${own}, 0.85)`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(me.x, me.y, pulse, 0, TAU);
@@ -5418,7 +5512,9 @@ function drawQualifyingHud(track, player) {
   ctx.font = "bold 22px Georgia";
   // (Two players: one may be in while the other is still on their lap.)
   const label = state.phase === "qualifyingSim" ? "Timing the field…" : state.phase === "qualifyingResults" ? "Session over"
-    : player.finished ? "Lap complete" : !(q && q.handedOver) ? "Get ready…" : onLap ? "Flying lap" : "Out lap";
+    : player.finished ? ((player.playerSlot === 1 ? q.secondAborted : q.aborted) ? "Lap aborted" : "Lap complete")
+      : !(q && q.handedOver) ? "Get ready…" : onLap ? "Flying lap" : "Out lap";
+  if (drawingView && drawingView.hud) drawingView.hud.label = label;
   ctx.fillText(label, 34, 62);
   const liveLap = player.finished ? player.lastLapTime : onLap && player.lapStartAt ? now - player.lapStartAt : 0;
   const row = (label, text, y, color) => {
@@ -5447,7 +5543,7 @@ function drawDriverHud(track, player) {
   const total = sorted.length;
   const placeStyle = getPlaceStyle(place);
   const now = raceNow();
-  if (drawingView) Object.assign(drawingView.hud, { place, lap: getDisplayedLap(player, track), driver: player.driver.code });
+  if (drawingView && drawingView.hud) Object.assign(drawingView.hud, { place, lap: getDisplayedLap(player, track), driver: player.driver.code });
 
   // Flash the position panel whenever a place changes hands.
   if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "race") {
@@ -5582,7 +5678,9 @@ function drawDriverHud(track, player) {
     ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
     ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
     ctx.font = "bold 15px Trebuchet MS";
-    ctx.fillText(`You finished P${player.finishPosition} · ${(other.playerSlot || 0) + 1}P still racing`, view.width / 2, 288);
+    const waiting = `You finished P${player.finishPosition} · ${(other.playerSlot || 0) + 1}P still racing`;
+    if (drawingView.hud) drawingView.hud.waiting = waiting;
+    ctx.fillText(waiting, view.width / 2, 288);
     ctx.textAlign = "left";
   }
 
@@ -5598,7 +5696,7 @@ function drawDriverHud(track, player) {
     ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
     ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
     ctx.font = "bold 15px Trebuchet MS";
-    ctx.fillText(`You finished P${player.finishPosition} — field coming home`, view.width / 2, 288);
+    ctx.fillText(`You finished P${player.finishPosition} · field coming home`, view.width / 2, 288);
     ctx.fillStyle = "#fff0c9";
     ctx.font = "bold 16px Georgia";
     ctx.fillText(`${done} / ${state.racers.length} classified`, view.width / 2, 310);
@@ -5611,7 +5709,7 @@ function drawDriverHud(track, player) {
 // Speed, bottom right: in the race and on a qualifying lap alike.
 function drawSpeedPanel(player) {
   const kph = Math.round(Math.abs(player.speed) * KPH_PER_UNIT);
-  if (drawingView) drawingView.hud.kph = kph;
+  if (drawingView && drawingView.hud) drawingView.hud.kph = kph;
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
   const sx = view.width - 208;
   const sy = view.height - 116;
@@ -5657,9 +5755,11 @@ function hudItemState(player, now) {
   }
   const key = player.currentItem;
   if (!key || key === "none") return null;
-  // The player's own key (2P's is /), and their pad's button when one is in.
+  // The player's own key (2P's is the one left of Right Shift), and their
+  // pad's button when one is in (the left face button: X on one make of pad,
+  // a square on another).
   const slot = player.playerSlot || 0;
-  const button = `${slot ? "/" : "Space"}${padState[slot].connected ? " or X" : ""}`;
+  const button = `${slot ? keyLabels.Slash : "Space"}${padState[slot].connected ? " or pad left button" : ""}`;
   let hint = `Press ${button} to use`;
   if (key === "oilSlick") hint = player.trailingOil ? `TRAILING · release ${button} to drop` : `Tap ${button}: drop · Hold: trail`;
   return { key, label: labelizeItem(key), hint, rolling: false };
@@ -5669,7 +5769,7 @@ function drawDriverItemBadge(player) {
   const now = renderClock();
   const slot = hudItemState(player, now);
   if (!slot) return;
-  if (drawingView) drawingView.hud.item = { label: slot.label, hint: slot.hint };
+  if (drawingView && drawingView.hud) drawingView.hud.item = { label: slot.label, hint: slot.hint };
   // Wide enough for the longest line (the TRAILING hint is the longest).
   ctx.save();
   ctx.font = "bold 18px Georgia";
@@ -5905,10 +6005,13 @@ function pollPads() {
   } catch (error) {
     list = [];
   }
-  const slots = twoPlayerSession() ? 2 : 1;
+  // One slot with one player, two with two; a player keeps their pad.
+  padSlots = TwoPlayer.assignPads(twoPlayerSession() ? [padSlots[0], padSlots[1]] : [padSlots[0]], list);
   for (let slot = 0; slot < 2; slot += 1) {
-    const pad = slot < slots ? list[slot] || null : null;
-    padState[slot] = { ...TwoPlayer.readPad(pad), connected: Boolean(pad) };
+    const index = padSlots[slot] ?? null;
+    const pad = index === null ? null : list.find((p) => p.index === index) || null;
+    TwoPlayer.readPad(pad, padState[slot]);
+    padState[slot].connected = Boolean(pad);
     const now = padState[slot];
     const was = padWas[slot];
     const player = humanBySlot(slot);
@@ -5975,6 +6078,7 @@ function drawPauseOverlay() {
 }
 
 function update(now) {
+  frameNo += 1;
   fitViewToElement();
   pollPads();
   syncViewports();
@@ -6137,6 +6241,8 @@ function bindEvents() {
         } else {
           (hit.player ? input2 : input)[hit.action] = true;
         }
+        // A driving key is only that (KeyA types q on AZERTY: never Quit).
+        return;
       }
     } else {
       if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") input.throttle = true;
@@ -6195,8 +6301,7 @@ function bindEvents() {
   // Losing focus loses the key-up: count Space as released rather than keep a
   // slick trailing forever (while paused, it drops on resume).
   window.addEventListener("blur", () => {
-    input.space = false;
-    Object.keys(input2).forEach((k) => { input2[k] = false; });
+    releaseAllKeys();
     if (!state.paused) {
       letGoOfOil();
       if (state.humanIds[1]) letGoOfOil(humanBySlot(1));
@@ -6220,11 +6325,13 @@ window.Game = {
   selectWeatherMode,
   selectPlayers,
   stepSecondDriver,
+  // The checks ask each split view to note its HUD panels and values.
+  probeHud(on) { hudProbe = Boolean(on); },
   // What the split screen drew last frame (the checks read it).
   splitInfo: () => (splitActive() ? {
     arrangement: splitDrawn.layout && splitDrawn.layout.arrangement,
     divider: splitDrawn.layout && { ...splitDrawn.layout.divider },
-    views: splitDrawn.views.map((v) => ({ slot: v.slot, rect: { ...v.rect }, playerId: v.playerId, fit: v.fit, hud: { ...v.hud }, boxes: v.boxes.map((b) => ({ ...b })) })),
+    views: splitDrawn.views.map((v) => ({ slot: v.slot, rect: { ...v.rect }, playerId: v.playerId, fit: v.fit, hud: { ...(v.hud || {}) }, boxes: v.boxes.map((b) => ({ ...b })) })),
   } : null),
   startCup,
   startRaceFromQualifying,

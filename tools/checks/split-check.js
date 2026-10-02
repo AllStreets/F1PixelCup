@@ -35,6 +35,8 @@ async (page) => {
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 30000 });
   await p.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("f1pixelcup.profile")).forEach((k) => localStorage.removeItem(k)));
+  // What each view draws (its HUD panels and values) is noted for the check.
+  await step(() => Game.probeHud(true));
 
   // Off by default: one player chosen, no player 2 picker, and a cup started
   // as it comes is one view.
@@ -64,7 +66,8 @@ async (page) => {
     Game.selectDriver(DRIVERS.findIndex((d) => d.id === first));
     document.querySelector('[data-second="1"]').click();
     const stepped = Game.getPitLaneState().secondDriver.id !== Game.getPitLaneState().driver.id;
-    const hint = /W A S D/.test(document.getElementById("players-hint").textContent) && /Right Shift/.test(document.getElementById("players-hint").textContent);
+    const hint = /Right Shift/.test(document.getElementById("players-hint").textContent)
+      && /1P and 2P/.test(document.getElementById("grid-hint").textContent);
     return (shown && first !== second && moved && stepped && hint) || JSON.stringify({ shown, first, second, moved, stepped, hint });
   });
 
@@ -77,7 +80,11 @@ async (page) => {
   });
   results.bothInTheField = (info.start.players === 2 && info.start.field === 20 && info.start.humans.length === 2) || JSON.stringify(info.start);
 
-  const humansNow = () => step(() => humans().map((h) => ({ id: h.id, speed: h.speed, steer: h.steer, throttle: h.throttleIn, brake: h.brakeIn })));
+  // (Empty if the race never started, so a failure reports instead of crashing.)
+  const humansNow = async () => {
+    const got = await step(() => humans().map((h) => ({ id: h.id, speed: h.speed, steer: h.steer, throttle: h.throttleIn, brake: h.brakeIn, asked: controlsFor(h).throttle })));
+    return Array.isArray(got) && got.length === 2 ? got : [{}, {}];
+  };
   const release = async () => { for (const k of ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"]) await p.keyboard.up(k); };
 
   // Player 1's keys move only player 1's car.
@@ -95,6 +102,17 @@ async (page) => {
   await release();
   results.player2KeysOnly = (b[1].speed > 40 && b[1].throttle > 0.5 && b[1].steer < -0.5 && b[0].throttle === 0 && b[0].steer < -0.5) || JSON.stringify(b);
 
+  // Player 1's left (KeyA) types q on an AZERTY keyboard: while paused it
+  // steers, it does not quit the cup.
+  results.azertyLeftDoesNotQuit = await step(() => {
+    togglePause();
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyA", key: "q" }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyA", key: "q" }));
+    const phase = state.phase;
+    togglePause();
+    return phase === "race" || phase;
+  });
+
   // Each player's power-up key fires their own item.
   results.powerUpKeys = await step(async () => {
     const [p1, p2] = humans();
@@ -109,13 +127,14 @@ async (page) => {
 
   // Gamepads: the second pad drives player 2 alone (its trigger in proportion).
   await step(() => {
-    const pad = (index, rt) => ({ index, id: `pad${index}`, connected: true, axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 7 && rt > 0.5, value: i === 7 ? rt : 0 })) });
+    const pad = (index, rt) => ({ index, id: `pad${index}`, connected: true, mapping: "standard", axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, (_, i) => ({ pressed: i === 7 && rt > 0.5, value: i === 7 ? rt : 0 })) });
     window.__pads = [pad(0, 0), pad(1, 0.55)];
     navigator.getGamepads = () => window.__pads;
   });
   await p.waitForTimeout(800);
   const c = await humansNow();
-  results.padsDriveTheirOwn = (Math.abs(c[1].throttle - 0.5) < 1e-6 && c[0].throttle === 0) || JSON.stringify(c);
+  // (What each pad asks for; the car's applied throttle can be trimmed by traffic.)
+  results.padsDriveTheirOwn = (Math.abs(c[1].asked - 0.5) < 1e-6 && c[1].throttle > 0 && c[0].asked === 0 && c[0].throttle === 0) || JSON.stringify(c);
   await step(() => { window.__pads = []; });
 
   // The HUDs are independent: each view shows its own player's numbers, and
@@ -184,25 +203,56 @@ async (page) => {
   }
   results.layoutFillsEveryWindow = layouts.every((x) => x === true) || layouts.filter((x) => x !== true).join(" | ");
 
-  // Frame time: the 3D draw for one view against two, on each tier.
-  info.frameMs = await step(() => {
-    const tiers = {};
+  // Frame time on each tier, real frames (the time between animation frames),
+  // with the effects compiled and drawing: two views here, one view in a
+  // one-player race further down. Medium and High must draw their effects
+  // in each view.
+  const tierFrames = () => step(async () => {
+    const out = {};
     const was = Render3D.graphics().choice;
-    const time = (n, fn) => { const t = performance.now(); for (let i = 0; i < n; i += 1) fn(); return (performance.now() - t) / n; };
-    ["low", "medium", "high"].forEach((tier) => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    for (const tier of ["low", "medium", "high"]) {
       Render3D.setGraphics(tier);
-      const [p1, p2] = humans();
-      const frame = (player, viewIndex, alsoShow) => ({ track: state.track, player, racers: state.racers, cameraHeading: player.heading, camPos: null, roll: 0, shake: { x: 0, y: 0 }, powerUps: powerUpFrame(raceNow()), particles: [], now: raceNow(), racing: false, trackside: tracksideFrame(raceNow()), weather: state.weather, viewIndex, alsoShow });
-      const views = Render3D.inspect().split.rects;
-      const two = time(20, () => { Render3D.render(frame(p1, 0, p2.id)); Render3D.render(frame(p2, 1, p1.id)); });
-      Render3D.setViewports(null);
-      const one = time(20, () => Render3D.render(frame(p1)));
-      Render3D.setViewports(views);
-      tiers[tier] = { one: Math.round(one * 10) / 10, two: Math.round(two * 10) / 10 };
-    });
+      for (let i = 0; i < 240 && tier !== "low" && !Render3D.inspect().postfx.drawing; i += 1) await frame();
+      for (let i = 0; i < 20; i += 1) await frame();
+      const gaps = [];
+      let last = performance.now();
+      for (let i = 0; i < 90; i += 1) { await frame(); const t = performance.now(); gaps.push(t - last); last = t; }
+      gaps.sort((a, b) => a - b);
+      const fx = Render3D.inspect().postfx;
+      out[tier] = { medianMs: Math.round(gaps[45] * 10) / 10, effects: fx.drawing, frame: fx.frame };
+    }
     Render3D.setGraphics(was);
-    return tiers;
+    return out;
   });
+  info.frameMsTwoViews = await tierFrames();
+  const viewPx = await step(() => { const r = Game.splitInfo().views[0].rect; const d = Math.min(devicePixelRatio || 1, 2); return { w: Math.round(r.w * d), h: Math.round(r.h * d) }; });
+  results.effectsDrawInEachView = ["medium", "high"].every((t) => info.frameMsTwoViews[t].effects && info.frameMsTwoViews[t].frame
+    && info.frameMsTwoViews[t].frame.width === viewPx.w && info.frameMsTwoViews[t].frame.height === viewPx.h) || JSON.stringify({ viewPx, f: info.frameMsTwoViews });
+
+  // Full-window pictures after the split (replay, a one-player race): the
+  // renderer is back to the whole canvas, and no edge of the window is bare.
+  const windowBars = async () => {
+    const shot = await p.screenshot();
+    return p.evaluate(async (b64) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      const cv = document.createElement("canvas");
+      cv.width = img.width; cv.height = img.height;
+      const g = cv.getContext("2d");
+      g.drawImage(img, 0, 0);
+      const k = img.width / innerWidth;
+      const at = (x, y) => Array.from(g.getImageData(Math.round(x * k), Math.round(y * k), 1, 1).data.slice(0, 3));
+      const along = (x0, y0, x1, y1) => Array.from({ length: 30 }, (_, i) => at(x0 + ((x1 - x0) * (i + 0.5)) / 30, y0 + ((y1 - y0) * (i + 0.5)) / 30));
+      const W = innerWidth; const H = innerHeight;
+      // The middle third of each half of the window, edge to edge, top and bottom halves too.
+      const lines = [along(0, H * 0.25, W, H * 0.25), along(0, H * 0.75, W, H * 0.75), along(W * 0.25, 0, W * 0.25, H), along(W * 0.75, 0, W * 0.75, H)];
+      const dark = ([r, g2, b2]) => r < 14 && g2 < 14 && b2 < 24;
+      // A run of more than a third of a line all bare background is a bar.
+      return lines.filter((line) => { let run = 0; let worst = 0; line.forEach((px) => { run = dark(px) ? run + 1 : 0; worst = Math.max(worst, run); }); return worst > 10; }).length;
+    }, shot.toString("base64"));
+  };
 
   // A two-player race to the flag (both on autopilot, one lap), its replay,
   // and both careers; then the rest of the cup, to the podium.
@@ -243,13 +293,41 @@ async (page) => {
     for (let i = 0; i < 20; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const view = Render3D.inspect().view;
     const label = document.getElementById("bc-trace-label").textContent;
+    const scissor = Render3D.inspect().scissor;
     const ok = opened && state.phase === "replay" && view && view.mode === "onboard" && view.focusId === state.humanIds[1]
-      && Render3D.inspect().split === null && label === "2P inputs";
-    Game.replay.exit();
-    return ok || JSON.stringify({ opened, phase: state.phase, view, label });
+      && Render3D.inspect().split === null && scissor === false && label === "2P inputs";
+    return ok || JSON.stringify({ opened, phase: state.phase, view, label, scissor });
+  });
+  const replayBars = await windowBars();
+  results.replayFillsTheWindow = replayBars === 0 || `bars: ${replayBars}`;
+  await step(() => Game.replay.exit());
+
+  // The flag with both players racing: the first one home starts the show and
+  // coasts off the racing line; the field is fast-forwarded only once both are in.
+  results.flagWaitsForBoth = await step(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    Game.nextRace();
+    for (let i = 0; i < 1500 && state.phase !== "race"; i += 1) await frame();
+    const [p1, p2] = humans();
+    const route = getItemRoute(state.track);
+    p1.speed = 160;
+    finishRacer(p1, raceNow());
+    for (let i = 0; i < 200; i += 1) await frame();
+    const view1 = Game.splitInfo().views[0].hud;
+    const one = { flagOut: state.flagOutAt, chequer: state.chequerAt > 0, p2Racing: !p2.finished, speed: p1.speed,
+      lat: Math.abs(p1.lat), edge: route.halfWidthAt(p1.trackDistance || 0), waiting: view1.waiting };
+    finishRacer(p2, raceNow());
+    for (let i = 0; i < 10; i += 1) await frame();
+    const both = { flagOut: state.flagOutAt > 0 };
+    const ok = one.flagOut === 0 && one.chequer && one.p2Racing && one.speed === 0 && one.lat > one.edge * 0.6 && /still racing/.test(one.waiting || "") && both.flagOut;
+    // The field (fast-forwarded now) is placed at once, as the time limit would.
+    for (let i = 0; i < 60 && state.phase === "race"; i += 1) await frame();
+    if (state.phase === "race") { state.resultsQueued = true; completeRemainingFinishers(raceNow()); finalizeRace(); }
+    return ok || JSON.stringify({ one, both });
   });
 
   results.cupReachesPodium = await step(async () => {
+    // (The flag test ran a race of its own; the rest are settled at once.)
     for (let guard = 0; guard < 6 && state.phase === "results"; guard += 1) {
       if (state.raceIndex >= getActiveCup().tracks.length - 1) { Game.nextRace(); break; }
       Game.nextRace();
@@ -270,15 +348,86 @@ async (page) => {
     const ok = state.phase === "podium" && careers.every((c) => c.totals.cupsCompleted === 1 && c.totals.races === 4)
       && strip.includes(`${surnameOf(a.driver.name)}:`) && strip.includes(`${surnameOf(b.driver.name)}:`)
       && (title.includes(surnameOf(a.driver.name)) || title.includes(surnameOf(b.driver.name)))
-      && Game.splitInfo() === null && Render3D.inspect().split === null;
-    return ok || JSON.stringify({ phase: state.phase, totals: careers.map((c) => c.totals), title, strip });
+      && Game.splitInfo() === null && Render3D.inspect().split === null && Render3D.inspect().scissor === false;
+    // Player 2 still holding the throttle as the cup ends (let go in the pit lane).
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp", key: "ArrowUp" }));
+    return ok || JSON.stringify({ phase: state.phase, totals: careers.map((c) => c.totals), title, strip, scissor: Render3D.inspect().scissor });
   });
 
   // Back in the pit lane: one view again, ready for a one-player cup.
   results.backToOneView = await step(async () => {
     Game.backToPitLane();
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowUp", key: "ArrowUp" }));
     for (let i = 0; i < 5; i += 1) await new Promise((r) => requestAnimationFrame(r));
-    return (state.phase === "garage" && Render3D.inspect().split === null && Game.getPitLaneState().players === 2) || state.phase;
+    return (state.phase === "garage" && Render3D.inspect().split === null && Render3D.inspect().scissor === false && Game.getPitLaneState().players === 2) || state.phase;
+  });
+
+  // A one-player race after a two-player cup: the whole window, as ever.
+  results.onePlayerAfterTwo = await step(async () => {
+    Game.selectPlayers(1); Game.selectCup(0); Game.selectGridMode("back"); Game.startCup();
+    for (let i = 0; i < 1500 && state.phase !== "race"; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 30; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    const ok = Game.splitInfo() === null && Render3D.inspect().split === null && Render3D.inspect().scissor === false && state.humanIds.length === 1;
+    return ok || JSON.stringify({ split: Render3D.inspect().split, scissor: Render3D.inspect().scissor });
+  });
+  const oneBars = await windowBars();
+  results.onePlayerFillsTheWindow = oneBars === 0 || `bars: ${oneBars}`;
+  info.frameMsOneView = await tierFrames();
+
+  // Two-player qualifying: both run their laps at once as ghosts to each
+  // other, both times are classified, and the keys held as the last cup
+  // ended are not still held.
+  results.qualifyingTwoPlayers = await step(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    Game.backToPitLane();
+    Game.selectPlayers(2); Game.selectGridMode("qualifying"); Game.startCup();
+    const keysClear = Object.values(input2).every((v) => !v) && !input.throttle;
+    for (let i = 0; i < 3000 && state.phase !== "qualifying"; i += 1) await frame();
+    const [p1, p2] = humans();
+    const apart = Math.abs(p1.lat - p2.lat) > 20;
+    // Right behind the other player on their line: no lift, no brake.
+    const keep = { x: p2.x, y: p2.y, d: p2.trackDistance };
+    const w = getItemRoute(state.track).toWorld(p1.trackDistance - 30, p1.lat);
+    Object.assign(p2, { x: w.x, y: w.y, trackDistance: p1.trackDistance - 30 });
+    const ghost = applyTrafficAvoidance(p2, 1, 0, 0);
+    Object.assign(p2, { x: keep.x, y: keep.y, trackDistance: keep.d });
+    p1.isPlayer = false; p2.isPlayer = false;
+    let now = performance.now();
+    for (let i = 0; i < 60 * 150 && state.phase === "qualifying"; i += 1) { now += 1000 / 60; updateQualifying(1 / 60, now); }
+    p1.isPlayer = true; p2.isPlayer = true;
+    const q = state.qualifying;
+    const rows = [...document.querySelectorAll("#qualifying-screen .quali-row")];
+    const tags = rows.map((r) => r.textContent).filter((t) => /[12]P/.test(t)).length;
+    const ok = keysClear && apart && ghost.throttle === 1 && ghost.brake === 0 && state.phase === "qualifyingResults"
+      && q.playerTimeMs > 10000 && q.secondTimeMs > 10000 && rows.length === 20 && tags === 2
+      && q.order.includes(p1.driver.id) && q.order.includes(p2.driver.id);
+    return ok || JSON.stringify({ keysClear, apart, ghost, phase: state.phase, t1: q.playerTimeMs, t2: q.secondTimeMs, rows: rows.length, tags });
+  });
+
+  // One player backs over the line: that lap is aborted (no time, "Lap
+  // aborted" on their HUD, NO TIME on the tower) while the other carries on.
+  results.qualifyingAbortIsPerPlayer = await step(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    Game.backToPitLane(); Game.startCup();
+    for (let i = 0; i < 3000 && state.phase !== "qualifying"; i += 1) await frame();
+    const q = state.qualifying;
+    const [p1, p2] = humans();
+    q.readyElapsed = QUALI_READY_MS; q.handedOver = true; p1.qualiAutopilot = false; p2.qualiAutopilot = false;
+    const L = state.track.totalLength;
+    const route = getItemRoute(state.track);
+    const drive = (d) => { const w = route.toWorld(d, 0); Object.assign(p2, { x: w.x, y: w.y, speed: 0, segmentHint: null }); updateLapProgress(p2, raceNow() + 16.7, 1 / 60); };
+    [L - 20, L - 5, 10, 30].forEach(drive);
+    [10, L - 5].forEach(drive);
+    for (let i = 0; i < 30; i += 1) await frame();
+    const tower = document.getElementById("tower").textContent;
+    const label = Game.splitInfo().views[1].hud.label;
+    const mid = { phase: state.phase, aborted: q.secondAborted, p1Out: !p1.finished, tower: /NO TIME/.test(tower), label };
+    q.releasedAt = state.lastTick - QUALI_TIME_LIMIT_MS - 1;
+    updateQualifying(1 / 60, performance.now());
+    const ok = mid.phase === "qualifying" && mid.aborted && mid.p1Out && mid.tower && mid.label === "Lap aborted"
+      && state.phase === "qualifyingResults" && q.secondTimeMs === null && q.playerTimeMs === null;
+    Game.backToPitLane();
+    return ok || JSON.stringify({ mid, phase: state.phase, t2: q.secondTimeMs });
   });
 
   await context.close();

@@ -392,6 +392,8 @@ export function createPostFx(renderer, scene, camera) {
     setSize,
     warm,
     dispose,
+    // Back to one view: player 2's bursts and sun are let go.
+    dropViews() { views.length = 1; },
     // index: which split-screen view's bursts and sun (0 with one view).
     inspect: (index = 0) => ({
       tier,

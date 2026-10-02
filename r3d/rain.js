@@ -158,6 +158,7 @@ export function createRain(scene) {
   const camVel = new THREE.Vector3();
   // Split screen: the second view's camera, tracked the same way.
   const second = { last: new THREE.Vector3(), vel: new THREE.Vector3(), live: false };
+  const first = { last: lastCamera, vel: camVel };
   const wheelAt = new THREE.Vector3();
   let sprayLive = 0;
 
@@ -211,7 +212,7 @@ export function createRain(scene) {
   // view: view 1 only aims the rain at its own camera; view 0 also moves the
   // spray, for the cars near either camera.
   function update({ camera, world, racers, dt, isWet, view = 0 }) {
-    const own = view ? second : { last: lastCamera, vel: camVel };
+    const own = view ? second : first;
     if (view) second.live = true;
     wet = isWet;
     streaks.visible = wet;
@@ -242,8 +243,9 @@ export function createRain(scene) {
     u.uCamVel.value.copy(own.vel);
     if (!sprayOn || view) return;
     // The second view's camera where it last was (the spray is for both).
-    const near = (p) => p.distanceTo(camera.position) <= SPRAY_NEAR || (second.live && p.distanceTo(second.last) <= SPRAY_NEAR);
+    const secondLive = second.live;
     second.live = false;
+    const near = (p) => p.distanceTo(camera.position) <= SPRAY_NEAR || (secondLive && p.distanceTo(second.last) <= SPRAY_NEAR);
     if (next >= cap) next = 0;
 
     if (world) {
@@ -310,6 +312,8 @@ export function createRain(scene) {
     apply,
     setTier,
     update,
+    // Back to one view: the second camera is forgotten.
+    dropViews() { second.live = false; },
     inspect: () => ({
       wet,
       streaks: streaks.visible ? streaks.geometry.drawRange.count / 2 : 0,

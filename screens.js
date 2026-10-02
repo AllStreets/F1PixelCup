@@ -295,9 +295,13 @@
       <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button" aria-pressed="${d.index === s.selectedDifficulty}">${esc(d.name)}</button>`).join("");
     $("grid-pills").innerHTML = s.gridModes.map((m) => `
       <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button" aria-pressed="${m.id === s.gridMode}">${esc(m.name)}</button>`).join("");
-    $("grid-hint").textContent = s.gridMode === "qualifying"
-      ? "Before every race: one flying lap sets your grid, and pays career points."
-      : "You start every race last and fight through the field.";
+    $("grid-hint").textContent = s.players === 2
+      ? (s.gridMode === "qualifying"
+        ? "Before every race: one flying lap each, both at once, sets your grid and pays career points."
+        : "1P and 2P start every race side by side on the last row and fight through the field.")
+      : s.gridMode === "qualifying"
+        ? "Before every race: one flying lap sets your grid, and pays career points."
+        : "You start every race last and fight through the field.";
     $("weather-pills").innerHTML = s.weatherModes.map((m) => `
       <button class="pill ${m.id === s.weatherMode ? "is-on" : ""}" data-weather="${esc(m.id)}" type="button" aria-pressed="${m.id === s.weatherMode}">${esc(m.name)}</button>`).join("");
     $("weather-hint").textContent = s.weatherMode === "wet"
@@ -313,7 +317,7 @@
     $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
     $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
     $("players-hint").textContent = s.players === 2
-      ? "Split screen. 1P: W A S D, Left Shift to drift, Space for power-ups. 2P: the arrows, Right Shift, and / for power-ups. Gamepads work too: the first is 1P's, the second 2P's."
+      ? `Split screen. 1P: ${s.keys.p1}, Left Shift to drift, Space for power-ups. 2P: the arrows, Right Shift to drift, and ${s.keys.p2Item} (left of Right Shift) for power-ups. Gamepads work too: the first is 1P's, the second 2P's.`
       : "One player, the whole screen.";
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"

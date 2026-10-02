@@ -616,8 +616,8 @@ function inspect() {
   // The replay's camera, when one drew the last frame.
   const view = viewInfo;
   // Split screen: the views, and each one's camera as last drawn.
-  const split = viewports ? { rects: viewports.map((r) => ({ ...r })), cams: viewCams.slice(0, viewports.length) } : null;
-  return { drawing, view, split, drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  const split = viewports ? { rects: viewports.map((r) => ({ ...r })), cams: viewCams.slice(0, viewports.length).map((c) => ({ ...c })) } : null;
+  return { drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -1072,6 +1072,9 @@ function resize() {
     if (split) postfx.setSize(split.w, split.h, dpr, true);
     else postfx.setSize(w, h, dpr);
     sizedEffects = effects;
+    // setSize puts the viewport back to the whole canvas, but not the
+    // scissor: that goes back here, so nothing after a split is clipped.
+    renderer.setScissorTest(false);
     viewportOn = false;
   }
 }
@@ -1092,6 +1095,12 @@ const fullSize = new THREE.Vector2();
 function setViewports(rects) {
   viewports = rects && rects.length ? rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })) : null;
   resize();
+  // One view again: the whole canvas, and nothing of player 2's view kept.
+  if (!viewports) {
+    useViewport(null);
+    postfx.dropViews();
+    rain.dropViews();
+  }
 }
 
 // Draw into one rectangle of the canvas (CSS px from its top left), or, with
@@ -1099,9 +1108,10 @@ function setViewports(rects) {
 function useViewport(rect) {
   renderer.getSize(fullSize);
   if (!rect) {
+    // (Cheap, and it must never be left on: the clips would cut the picture.)
+    renderer.setScissorTest(false);
     if (!viewportOn) return;
     viewportOn = false;
-    renderer.setScissorTest(false);
     renderer.setViewport(0, 0, fullSize.x, fullSize.y);
     renderer.setScissor(0, 0, fullSize.x, fullSize.y);
     camera.aspect = fullSize.x / Math.max(1, fullSize.y);
@@ -1301,7 +1311,8 @@ function render(frame) {
     occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
   });
   // Where each view's camera was, and whose car it followed (for the checks).
-  viewCams[index] = { playerId: player.id, x: camera.position.x, z: camera.position.z, fov: camera.fov, aspect: camera.aspect };
+  const cam = viewCams[index] || (viewCams[index] = {});
+  cam.playerId = player.id; cam.x = camera.position.x; cam.z = camera.position.z; cam.fov = camera.fov; cam.aspect = camera.aspect;
   return surface;
 }
 const viewCams = [];

@@ -24,7 +24,7 @@ The choice is never remembered: every visit starts at **1 player**, and nothing 
 
 ## Controls
 
-Two key sets on the keyboard, read by **physical key** (`event.code`, so they sit in the same place on AZERTY or QWERTZ), plus gamepads.
+Two key sets on the keyboard, read by **physical key** (`event.code`, so they sit in the same place on AZERTY or QWERTZ), plus gamepads. Where the browser can say what a key is labelled (`navigator.keyboard.getLayoutMap`), the pit lane and the HUD name it by its label (Z Q S D on AZERTY); otherwise by its QWERTY label, with "left of Right Shift" for player 2's power-up key. A driving key never does anything else (on AZERTY, player 1's left types `q`, which is never read as Quit).
 
 | | Player 1 | Player 2 |
 |---|---|---|
@@ -38,7 +38,7 @@ Shared: **P** or **Esc** pauses for both, **Q** quits from the pause, as now.
 
 Why these: the single-player race uses the arrows *or* WASD, Shift, Space, P, Q, Esc and Enter. Split, WASD with Left Shift and Space is the left hand's natural cluster; the arrows with Right Shift and `/` are the right side's. Enter stays off both sets: on the results screen Enter means "next race", and a player still mashing a power-up key as the results appear must not skip them.
 
-**Gamepads** (the Gamepad API, standard mapping): left stick or d-pad steers (the stick proportionally, past a 0.25 dead zone), right trigger or A is the throttle (the trigger proportionally), left trigger or B brakes and reverses, RB or LB drifts, X or Y fires the power-up (held, it trails oil), Start pauses. A pad and that player's keys work together (whichever asks for more). In single-player the first pad drives player 1 as well; it is the same code.
+**Gamepads** (the Gamepad API, standard mapping only; a device with another layout, such as a wheel, is ignored, since its buttons mean something else): left stick or d-pad steers (the stick proportionally, past a 0.25 dead zone), right trigger or the bottom face button is the throttle (the trigger proportionally), left trigger or the right face button brakes and reverses, either bumper drifts, the left or top face button fires the power-up (held, it trails oil), Start pauses. A pad and that player's keys work together (whichever asks for more). Each player keeps their pad while it stays connected; a pad plugged in fills the first free slot. In single-player the first pad drives player 1 as well; it is the same code. Every held key is let go when a race is left, a cup starts, or the window loses focus.
 
 All of the mapping is pure (`twoplayer.js`, tested in Node): which key belongs to which player and action, the pad's reading, the dead zones, and the merging.
 
@@ -72,9 +72,9 @@ Per frame, done once (on view 0): the cars posed, the power-ups, the particles, 
 
 **CPU catch-up** (the easier difficulties' rubber band) measures each CPU car against the nearest human, so it keeps the racing close round both players.
 
-**The flag.** The trackside show starts when the first human takes the chequered flag. The field is fast-forwarded only once **both** humans have finished; until then the race runs in real time, and the finished player's view shows their result and "2P still racing" (or 1P). The pause hint and Q (save the result and leave) count the race as done only once both have finished.
+**The flag.** The trackside show starts when the first human takes the chequered flag. The field is fast-forwarded only once **both** humans have finished; until then the race runs in real time, and the finished player's view shows their result and "2P still racing" (or 1P). The finished car does not stop dead on the racing line (finished cars take no part in contacts, so it would be driven through): it cools down, braking gently and drifting to the edge of the road it is nearer, and stops there. The pause hint and Q (save the result and leave) count the race as done only once both have finished.
 
-**Qualifying** (when the cup has it): both humans run their flying laps at the same time, from a rolling start side by side, as **ghosts to each other** (in qualifying the cars pass through one another, so neither can spoil the other's lap; the CPU laps are simulated alone, as now). Each player's lap ends on its own; the session ends when both are done. The classification has both times, and each player's qualifying result goes to their own career.
+**Qualifying** (when the cup has it): both humans run their flying laps at the same time, from a rolling start side by side, as **ghosts to each other** (in qualifying the cars pass through one another and neither lifts or brakes for the other, so neither can spoil the other's lap; the CPU laps are simulated alone, as now). Each player's lap ends on its own ("Lap complete", or "Lap aborted" after backing over the line); the session ends when both are done. A lap that comes in faster than the provisional pole becomes it, for the other player's delta. The classification has both times, and each player's qualifying result goes to their own career.
 
 **Grid from the back:** both humans start at the back, side by side on the last row, the one higher in the cup standings ahead (player 1 ahead in the first race). `Grid.gridFromBack` takes the list of humans (pure, tested).
 
@@ -97,7 +97,7 @@ Each view has the full single-player HUD, plus a small **player tag** at the top
 
 ## Performance
 
-The split draws the scene twice (two cameras, two shadow passes) at half the pixels each. The browser check measures the time per frame of `Render3D.render` for one view and for two, on each tier, and reports them. Low already drops every effect; the split adds no tier rule of its own unless the measurement shows one is needed.
+The split draws the scene twice (two cameras, two shadow passes) at half the pixels each; the power-ups, the trackside life and the HUD's shared data are worked out once a frame, and the per-step input merge and key recording reuse their objects. The browser check measures real frames (the time between animation frames, with each tier's effects compiled and drawing) in a two-player race and in a one-player race on each tier. Measured at 1600x900 on the test machine: 16.7 ms (the display's 60 Hz) on Low, Medium and High, with two views and with one. Low already drops every effect; the split adds no tier rule of its own.
 
 ## Tests and checks
 

@@ -75,10 +75,13 @@
     return hit ? { ...hit } : null;
   }
 
-  // A gamepad in the standard mapping, read as the game's controls.
+  // A gamepad in the standard mapping, read as the game's controls (into out
+  // when given, so nothing new is made each frame). A device with another
+  // layout (a wheel, a flight stick) reads as nothing: its buttons mean
+  // something else.
   const NOTHING = { throttle: 0, brake: 0, steer: 0, drift: false, item: false, pause: false };
-  function readPad(pad) {
-    if (!pad) return { ...NOTHING };
+  function readPad(pad, out = {}) {
+    if (!pad || pad.mapping !== "standard") return Object.assign(out, NOTHING);
     const buttons = pad.buttons || [];
     // A trigger's value is how far it is pulled (pressed is set part way); a
     // button that reports no value counts as full when pressed.
@@ -94,36 +97,47 @@
     const x = Number((pad.axes || [])[0]) || 0;
     let steer = Math.abs(x) <= STICK_DEAD ? 0 : Math.sign(x) * clamp((Math.abs(x) - STICK_DEAD) / (1 - STICK_DEAD), 0, 1);
     if (down(14) !== down(15)) steer = down(15) ? 1 : -1;
-    return {
-      throttle: Math.max(down(0) ? 1 : 0, trigger(value(7))),
-      brake: Math.max(down(1) ? 1 : 0, trigger(value(6))),
-      steer,
-      drift: down(4) || down(5),
-      item: down(2) || down(3),
-      pause: down(9),
-    };
+    out.throttle = Math.max(down(0) ? 1 : 0, trigger(value(7)));
+    out.brake = Math.max(down(1) ? 1 : 0, trigger(value(6)));
+    out.steer = steer;
+    out.drift = down(4) || down(5);
+    out.item = down(2) || down(3);
+    out.pause = down(9);
+    return out;
   }
 
   // A player's keys and pad together: whichever asks for more. Keys are
   // { throttle, brake, left, right, drift, item } (the single player's
   // Space counts as item).
-  function merge(keys, pad) {
+  function merge(keys, pad, out = {}) {
     const k = keys || {};
     const p = pad || NOTHING;
     const keySteer = (k.right ? 1 : 0) - (k.left ? 1 : 0);
     const steerKeys = Boolean(k.left || k.right);
-    return {
-      throttle: Math.max(k.throttle ? 1 : 0, p.throttle || 0),
-      brake: Math.max(k.brake ? 1 : 0, p.brake || 0),
-      steer: steerKeys ? keySteer : clamp(p.steer || 0, -1, 1),
-      drift: Boolean(k.drift || p.drift),
-      item: Boolean(k.item || k.space || p.item),
-    };
+    out.throttle = Math.max(k.throttle ? 1 : 0, p.throttle || 0);
+    out.brake = Math.max(k.brake ? 1 : 0, p.brake || 0);
+    out.steer = steerKeys ? keySteer : clamp(p.steer || 0, -1, 1);
+    out.drift = Boolean(k.drift || p.drift);
+    out.item = Boolean(k.item || k.space || p.item);
+    return out;
   }
 
-  // The pads in play: connected ones, in the browser's order.
+  // The pads in play: connected ones with the standard layout, in the browser's order.
   function padsInOrder(list) {
-    return Array.from(list || []).filter((pad) => pad && pad.connected !== false);
+    return Array.from(list || []).filter((pad) => pad && pad.connected !== false && pad.mapping === "standard");
+  }
+
+  // Which pad (by its index) each player has: a player keeps theirs while it
+  // stays connected; a new pad fills the first empty slot.
+  function assignPads(slots, pads) {
+    const here = new Set(pads.map((pad) => pad.index));
+    const next = slots.map((index) => (index !== null && here.has(index) ? index : null));
+    pads.forEach((pad) => {
+      if (next.includes(pad.index)) return;
+      const free = next.indexOf(null);
+      if (free >= 0) next[free] = pad.index;
+    });
+    return next;
   }
 
   // Player 2's driver: the player's second favourite, else the first.
@@ -155,6 +169,6 @@
 
   return {
     SAFE_WIDTH, SAFE_HEIGHT, SIDE_BY_SIDE_FROM, DIVIDER, WIDE_CAP, STICK_DEAD, TRIGGER_DEAD, KEYS,
-    layout, hudFit, viewFov, keyFor, readPad, merge, padsInOrder, secondDriver, stepDriver, nearestGap,
+    layout, hudFit, viewFov, keyFor, readPad, merge, padsInOrder, assignPads, secondDriver, stepDriver, nearestGap,
   };
 }));
