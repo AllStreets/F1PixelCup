@@ -6,7 +6,9 @@ The stage has two design reviews. **This document covers the whole stage; the fi
 
 ## 1. Scale and conventions
 
-- **Models are built in real metres** in Blender (X forward, Y left, Z up), exported as glTF (three.js: Y up, the model's front toward -Z after the export's axis change, which is Blender's +Y).
+- **Models are built in real metres** in Blender (Z up), exported as glTF (three.js: Y up). Two conventions for which way a model faces:
+  - **Buildings and stands** face Blender's +Y, which is three.js's -Z after the export's axis change.
+  - **People** face Blender's +X (Y to their left), which stays +X in three.js; the game turns each figure about the vertical so +X looks where it should.
 - **Two scales in the game, as the scene already has them:**
   - **People and grandstands** stand next to the cars, so they share the car's scale: `CAR_SCALE` = 6 game units per metre (`r3d/car.js`). A 1.78 m person is 10.7 units tall, as tall as a car is long a third of the way.
   - **Landmarks** sit with the city around them. The street blocks' windows are 8 units a storey (`buildingMaterial`, about 3.2 m), so the city reads at about 2.5 units per metre; the procedural casino (80 wide) and Marina Bay Sands (200 tall) are close to that. `LANDMARK_SCALE` = 2.5. The circuit's own map is 1.3 units per metre (`build_tracks.py`), so a landmark at 2.5 is a little larger than its true footprint on the map: it reads as the size it is from the car, without crowding the circuit.

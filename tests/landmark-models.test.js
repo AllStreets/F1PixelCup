@@ -4,7 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { load, part, node, at } = require("./glb-read.js");
+const { load, part, node, at, triangles, groundBelow } = require("./glb-read.js");
 
 const DIR = path.join(__dirname, "..", "assets", "landmarks");
 const file = (n) => path.join(DIR, `${n}.glb`);
@@ -18,6 +18,10 @@ test("the casino: its front, its towers and the Hôtel de Paris beside it", () =
   assert.ok(casino.size[0] > 50 && casino.size[0] < 75, `the casino is ${casino.size[0].toFixed(1)} m across`);
   assert.ok(casino.hi[1] > 30 && casino.hi[1] < 42, `the casino's top is at ${casino.hi[1].toFixed(1)} m`);
   assert.ok(Math.abs(casino.lo[1]) < 0.05, "the casino stands on the ground");
+  // Its front toward -z: the entrance canopy stands proud of the front, the
+  // harbour-side towers behind.
+  const front = part(glb, "tower_L").lo[2];
+  assert.ok(part(glb, "tower_sea_L").lo[2] > front + 20, "the harbour-side towers are behind the front");
   const hotel = part(glb, "hotel_de_paris");
   ["stone", "roof_slate", "glass"].forEach((m) => assert.ok(hotel.materials.includes(m), `the hotel has no ${m}`));
   assert.ok(Math.max(hotel.size[0], hotel.size[2]) > 50, "the hotel's front is long");
@@ -47,6 +51,10 @@ test("Marina Bay Sands: three towers and the SkyPark on top", () => {
   assert.ok(xs[0] < xs[1] && xs[1] < xs[2], "the towers in a row");
   // The cantilever: the SkyPark reaches well past the last tower.
   assert.ok(sky.hi[0] - part(glb, "tower_3").hi[0] > 50, "the SkyPark's cantilever");
+  // Its front toward -z: each tower's curved leg reaches out at its foot, in
+  // front of the straight leg, and the SkyPark's pool runs along that side.
+  const t1 = part(glb, "tower_1");
+  assert.ok(t1.lo[2] < -35 && t1.hi[2] < 32, `tower_1 runs ${t1.lo[2].toFixed(1)}..${t1.hi[2].toFixed(1)} m front to back`);
   assert.ok(all.tris > 1000 && all.tris <= 40000, `${all.tris} triangles`);
 });
 
@@ -68,6 +76,19 @@ test("the covered grandstand: rows of seats rising from the front, under a roof,
   });
   const seats = node(glb, "row_0").extras && node(glb, "row_0").extras.seats;
   assert.ok(Array.isArray(seats) && seats.length >= 30, "row 0 lists its seats");
+  // A seat per person: 0.55 m apart or more (a fan is up to 0.6 m across
+  // the arms; neighbours side by side, not through each other).
+  seats.slice(1).forEach((x, k) => assert.ok(x - seats[k] >= 0.549, `seats ${k} and ${k + 1} are ${(x - seats[k]).toFixed(2)} m apart`));
+  // Each row's point is where its fans' feet are: on the tread, not inside
+  // the step behind it, with the seat pan a seat's height above and behind.
+  const solid = triangles(glb, "stand");
+  const pans = triangles(glb, "seats");
+  rows.forEach((r, k) => {
+    const floor = groundBelow(solid, 1.2, r[1] + 2, r[2]);
+    assert.ok(Math.abs(floor - r[1]) < 0.03, `row ${k}'s feet are ${(r[1] - floor).toFixed(2)} m off the tread`);
+    const pan = groundBelow(pans, 1.2, r[1] + 0.8, r[2] + 0.3);
+    assert.ok(pan - r[1] > 0.4 && pan - r[1] < 0.5, `row ${k}'s seat is ${(pan - r[1]).toFixed(2)} m above its feet`);
+  });
   ["roof", "stairs"].forEach((n) => assert.ok(node(glb, n), `${n} is missing`));
   assert.ok(all.tris > 1500 && all.tris <= 12000, `${all.tris} triangles`);
 });

@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModelsState } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModelsState, tracksideTemplates } from "./r3d/models.js";
 import { buildPeople, updatePeople, inspectPeople } from "./r3d/people.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
@@ -612,7 +612,9 @@ function inspect() {
   const landmarks = [];
   if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
   const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
-  const trackside = { models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayer) : null };
+  // What the GPU holds (for the checks: a circuit change must not leak).
+  const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
+  const trackside = { memory, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayer) : null };
   return { drawing, weather, cars, flaps, helmets, life, trackside, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
@@ -872,12 +874,27 @@ function disposeWorld(world) {
   world.cars.forEach((car) => scene.remove(car.root));
   // The item boxes' geometry belongs to the shared models: leave it; free only
   // what each box owns (its cloned glow materials).
+  // So does the trackside models' (landmarks, stands, the TV platform): their
+  // copies share it. The materials made for this world (marked worldOwned:
+  // the people's, the landmarks' and the stands' own) and their textures go.
   const shared = new Set();
-  Object.values(itemTemplates()).forEach((t) => t.traverse((n) => { if (n.geometry) shared.add(n.geometry); }));
+  [...Object.values(itemTemplates()), ...tracksideTemplates()].forEach((t) => t.traverse((n) => { if (n.geometry) shared.add(n.geometry); }));
   world.boxes.forEach((b) => { if (b.userData.body.userData.fromGlb) disposeItemCopy(b.userData.body); });
+  // Every texture the circuit drew with leaves the GPU too: one another
+  // circuit shares (a cached photo) is simply uploaded again when it is next
+  // drawn (prepare() does that behind the loading panel).
+  const owned = new Set();
+  const textures = new Set();
   world.group.traverse((o) => {
     if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
+    [].concat(o.material || []).forEach((m) => {
+      if (m.userData.worldOwned) owned.add(m);
+      Object.values(m).forEach((v) => { if (v && v.isTexture) textures.add(v); });
+      Object.values(m.uniforms || {}).forEach((u) => { if (u && u.value && u.value.isTexture) textures.add(u.value); });
+    });
   });
+  textures.forEach((t) => t.dispose());
+  owned.forEach((m) => m.dispose());
   world.warmMaterials.forEach((m) => m.dispose());
 }
 
@@ -1304,7 +1321,10 @@ function auditPeople(track) {
     least = Math.min(least, clear);
     if (clear < 0) onRoad.push({ kind: f.kind, x: Math.round(f.x), z: Math.round(f.z), clear: Math.round(clear * 10) / 10 });
   });
-  return { count: figures.length, byKind, onRoad, samples, leastClearance: Math.round(least * 10) / 10 };
+  // Every figure, where it stands and which way it faces at rest (its +x
+  // turned by yaw), for the checks.
+  const all = figures.map((f) => ({ kind: f.kind, x: +f.x.toFixed(2), y: +f.y.toFixed(2), z: +f.z.toFixed(2), yaw: +f.yaw.toFixed(4), base: f.base === undefined ? undefined : +f.base.toFixed(4) }));
+  return { count: figures.length, byKind, onRoad, samples, figures: all, leastClearance: Math.round(least * 10) / 10 };
 }
 
 // ---------------------------------------------------------------------------

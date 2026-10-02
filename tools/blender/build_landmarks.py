@@ -596,6 +596,9 @@ PLINTH = 1.8
 HALF_LEN = 13.0
 FRONT = 5.65
 AISLES = (-6.5, 6.5)
+SEAT_PITCH = 0.55
+# A row's feet, ahead of its step's edge (a seated fan's knees come over it).
+ROW_FEET = 0.12
 
 
 def build_grandstand():
@@ -632,24 +635,29 @@ def build_grandstand():
         m.box((x - 0.04, FRONT - 0.22, PLINTH), (x + 0.04, FRONT - 0.1, PLINTH + 1.0), "steel")
     stand = m.finish(parent=root)
 
-    # Seats: a pan along each row's block, a back for every seat.
+    # Seats: a pan along each row's step, a back for every seat. Each step
+    # rises a seat's height (RISE) over the tread in front of it, where the
+    # row's feet are: a seated fan's hip over the pan, the knees over the
+    # step's edge, the feet on the tread below. A seat every 0.55 m, as wide
+    # as a person's shoulders with room to wave.
     s = Mesh("seats")
     seat_xs = []
     x = -HALF_LEN + 0.6
     while x < HALF_LEN - 0.55:
         if all(abs(x - a) > 0.85 for a in AISLES):
             seat_xs.append(round(x, 3))
-        x += 0.5
+        x += SEAT_PITCH
     blocks = [(-HALF_LEN + 0.35, AISLES[0] - 0.65), (AISLES[0] + 0.65, AISLES[1] - 0.65), (AISLES[1] + 0.65, HALF_LEN - 0.35)]
     for k in range(ROWS):
         yf = first - TREAD * k
         z = PLINTH + RISE * k
         for b0, b1 in blocks:
-            s.box((b0, yf - 0.68, z + 0.38), (b1, yf - 0.28, z + 0.45), "seat", skip=("-z",))
+            s.box((b0, yf - 0.52, z + 0.42), (b1, yf - 0.1, z + 0.46), "seat", skip=("-z",))
         for sx in seat_xs:
-            s.box((sx - 0.21, yf - 0.76, z + 0.45), (sx + 0.21, yf - 0.7, z + 0.9), "seat",
-                  rot=Matrix.Rotation(math.radians(-10), 3, "X"), about=(sx, yf - 0.73, z + 0.45), skip=("-z",))
-        empty(f"row_{k}", (0, yf - 0.12, z), parent=root, extras={"seats": seat_xs})
+            s.box((sx - 0.23, yf - 0.6, z + 0.46), (sx + 0.23, yf - 0.54, z + 0.91), "seat",
+                  rot=Matrix.Rotation(math.radians(-10), 3, "X"), about=(sx, yf - 0.57, z + 0.46), skip=("-z",))
+        # Where the row's feet stand: on the tread in front of the step.
+        empty(f"row_{k}", (0, yf + ROW_FEET, z), parent=root, extras={"seats": seat_xs})
     s.finish(parent=root)
 
     # Stairs up each aisle: a step at every half row, and a handrail.

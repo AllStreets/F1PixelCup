@@ -19,8 +19,13 @@ async (page) => {
   p.on("pageerror", (e) => errors.push(String(e)));
   const cdp = await context.newCDPSession(p);
   const { windowId } = await cdp.send("Browser.getWindowForTarget");
-  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
-  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
+  // A size is set from the normal state (a window left maximized or full
+  // screen by an earlier step refuses a size).
+  const size = async (width, height) => {
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
+  };
+  await size(1440, 900);
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.evaluate(() => localStorage.removeItem("f1pixelcup.graphics"));
   await p.reload();
@@ -241,14 +246,14 @@ async (page) => {
     const c = document.getElementById("game3d");
     return (low === null && high && high.width === c.width && high.height === c.height) || JSON.stringify({ low, high, canvas: [c.width, c.height] });
   });
-  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1180, height: 760 } });
+  await size(1180, 760);
   await p.waitForTimeout(600);
   results.frameFollowsResize = await step(() => {
     const f = Render3D.inspect().postfx.frame;
     const c = document.getElementById("game3d");
     return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Math.min(devicePixelRatio, 2))) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
   });
-  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
+  await size(1440, 900);
   await p.waitForTimeout(400);
 
   // Frame time per tier, the race running: Low is never slower than High.

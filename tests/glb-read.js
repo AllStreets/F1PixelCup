@@ -1,6 +1,6 @@
 // Reading a GLB in Node, for the model tests: its glTF document, its
 // accessors' numbers, and each named part's bounds (through its nodes'
-// transforms) and triangle count. (Not a test file itself.)
+// transforms), triangle count and triangles. (Not a test file itself.)
 const fs = require("node:fs");
 
 function load(file) {
@@ -101,4 +101,34 @@ function at(glb, name) {
   return out;
 }
 
-module.exports = { load, read, part, node, at, walk, apply };
+// Every triangle of a named node's own meshes, in world space.
+function triangles(glb, name) {
+  const out = [];
+  walk(glb, (n, m) => {
+    if (n.name !== name || n.mesh === undefined) return;
+    glb.doc.meshes[n.mesh].primitives.forEach((p) => {
+      const pos = read(glb, p.attributes.POSITION).map((v) => apply(m, v));
+      const idx = p.indices !== undefined ? read(glb, p.indices).map((v) => v[0]) : pos.map((_, i) => i);
+      for (let i = 0; i < idx.length; i += 3) out.push([pos[idx[i]], pos[idx[i + 1]], pos[idx[i + 2]]]);
+    });
+  });
+  return out;
+}
+
+// The highest surface of `tris` straight below (x, top, z), or -Infinity.
+function groundBelow(tris, x, top, z) {
+  let best = -Infinity;
+  tris.forEach(([a, b, c]) => {
+    const d = (b[2] - c[2]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[2] - c[2]);
+    if (Math.abs(d) < 1e-12) return;
+    const u = ((b[2] - c[2]) * (x - c[0]) + (c[0] - b[0]) * (z - c[2])) / d;
+    const v = ((c[2] - a[2]) * (x - c[0]) + (a[0] - c[0]) * (z - c[2])) / d;
+    const w = 1 - u - v;
+    if (u < -1e-6 || v < -1e-6 || w < -1e-6) return;
+    const y = u * a[1] + v * b[1] + w * c[1];
+    if (y <= top && y > best) best = y;
+  });
+  return best;
+}
+
+module.exports = { load, read, part, node, at, walk, apply, triangles, groundBelow };

@@ -20,6 +20,9 @@ let settled = false;
 // Calls done() once every model has loaded or failed.
 export function loadTracksideModels(done, files = FILES) {
   const loader = new GLTFLoader();
+  // Each chunk that arrives is progress: a slow connection keeps the loader
+  // up (game.js) rather than calling the download stalled.
+  const progress = () => { if (window.Render3DBoot) window.Render3DBoot.progressAt = performance.now(); };
   const names = Object.keys(files);
   let left = names.length;
   const finish = () => {
@@ -33,7 +36,7 @@ export function loadTracksideModels(done, files = FILES) {
     loader.load(files[name], (gltf) => {
       templates[name] = gltf.scene;
       finish();
-    }, undefined, (error) => {
+    }, progress, (error) => {
       console.warn(`Trackside model ${name} failed to load; using the stand-in.`, error);
       failed.push(name);
       finish();
@@ -44,6 +47,11 @@ export function loadTracksideModels(done, files = FILES) {
 // A loaded model's scene, or null (not loaded, or failed).
 export function tracksideModel(name) {
   return templates[name] || null;
+}
+
+// Every loaded model's scene (their geometry is shared by every copy).
+export function tracksideTemplates() {
+  return Object.values(templates);
 }
 
 export function tracksideModelsState() {

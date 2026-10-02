@@ -50,6 +50,32 @@ async (page) => {
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   });
 
+  // Every figure faces the track: the crowd from its stand, the crews from
+  // their garages, the photographers and the camera at their corner. (A
+  // figure faces its own +x, turned by its yaw about the vertical.)
+  results.everyoneFacesTheTrack = await step(() => {
+    const bad = [];
+    CIRCUITS.forEach((c) => {
+      const track = TRACKS.find((t) => t.id === c.id);
+      const people = Render3D.auditPeople(track);
+      const figures = people.figures || [];
+      let away = 0;
+      let sample = null;
+      figures.forEach((f) => {
+        let best = null;
+        let bd = Infinity;
+        track.points.forEach((p) => { const d = (p.x - f.x) ** 2 + (p.y - f.z) ** 2; if (d < bd) { bd = d; best = p; } });
+        const dx = best.x - f.x;
+        const dz = best.y - f.z;
+        const l = Math.hypot(dx, dz) || 1;
+        const facing = typeof f.yaw === "number" ? (Math.cos(f.yaw) * dx - Math.sin(f.yaw) * dz) / l : -1;
+        if (facing < 0.05) { away += 1; if (!sample) sample = { kind: f.kind, yaw: f.yaw, facing: +facing.toFixed(2) }; }
+      });
+      if (!figures.length || away) bad.push({ id: c.id, figures: figures.length, away, sample });
+    });
+    return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
+  });
+
   const race = (id) => step(async (id) => {
     Game.backToPitLane();
     const cup = CUPS.findIndex((c) => c.tracks.some((t) => t.id === id));
@@ -76,6 +102,16 @@ async (page) => {
     }, name);
   }
   results.landmarksFromModels = Object.values(built).every((b) => b.fromModel && b.stands >= 2 && b.crowd > 500 && !b.failed.length) || JSON.stringify(built);
+
+  // Changing circuits frees what the last one held: there and back twice,
+  // the GPU holds no more geometries or textures the second time round.
+  const held = [];
+  for (const id of ["monaco", "singapore", "monaco", "singapore"]) {
+    await race(id);
+    await frames(10);
+    held.push(await step(() => Render3D.inspect().trackside.memory));
+  }
+  results.circuitChangeFreesTheLast = (held[3].geometries <= held[1].geometries + 2 && held[3].textures <= held[1].textures) || JSON.stringify(held);
 
   // Marina Bay Sands is lit for the night race: seen from across the bay,
   // the towers' rooms glow warm.
@@ -108,34 +144,66 @@ async (page) => {
     results.marinaBaySandsLitAtNight = "no Marina Bay Sands";
   }
 
-  // The crowd: the camera on a stand at Singapore, the race running, the
-  // player (no throttle: parked) behind the stand, out of the picture, and
-  // then far away. Near, the crowd is on its feet and waving: two moments
-  // differ on the stand's pixels. Far, seated and still: they don't.
+  // From here the field is held away (every other car parked 100 km off and
+  // counted as finished, so it neither drives nor is put back on the track),
+  // and the player is parked where a step puts it: nothing else moves in the
+  // pictures or turns a head.
+  await step(() => {
+    window.peopleCheckHold = null;
+    const hold = () => {
+      const h = window.peopleCheckHold;
+      if (h) {
+        state.racers.forEach((r, i) => {
+          if (r === getPlayer()) { r.x = h.x; r.y = h.y; r.speed = 0; } else { r.x = 1e5 + i * 50; r.y = 1e5; r.speed = 0; r.finished = true; }
+        });
+      }
+      requestAnimationFrame(hold);
+    };
+    hold();
+  });
+  const park = (x, y) => step(([x, y]) => { window.peopleCheckHold = { x, y }; }, [x, y]);
+  // A point of the road (off it, the game would put the car back on it): the
+  // nearest to (x, z), or the farthest, or the first that `pick` accepts.
+  const roadPoint = (x, z, how) => step(([x, z, how]) => {
+    const pts = state.track.points.map((p) => ({ x: p.x, z: p.y, d: Math.hypot(p.x - x, p.y - z) }));
+    if (how === "far") return pts.reduce((a, b) => (b.d > a.d ? b : a));
+    return pts.reduce((a, b) => (b.d < a.d ? b : a));
+  }, [x, z, how || "near"]);
+
+  // The crowd: the camera on a stand at Singapore, the player parked on the
+  // road nearest the stand (out of the picture), then as far away as the
+  // circuit goes. Near, the spectators are
+  // on their feet (the pose the shader gives them, as inspect reports it)
+  // and waving: two moments differ on the stand's pixels. Far, seated and
+  // still: they don't.
   const shot = async () => {
     const png = await p.screenshot({ clip: { x: 420, y: 250, width: 600, height: 400 } });
     return png.toString("base64");
   };
+  // The stand nearest the road.
   const stand = await step(() => {
     const t = Render3D.inspect().trackside;
-    return t && t.standSpots[0];
+    const gap = (st) => Math.min(...state.track.points.map((p) => Math.hypot(p.x - st.x, p.y - st.z)));
+    return t && t.standSpots.length ? t.standSpots.reduce((a, b) => (gap(b) < gap(a) ? b : a)) : null;
   });
+  const cheer = () => step(() => Render3D.inspect().trackside.people.cheer);
   if (stand && stand.x !== undefined) {
-    await step((st) => {
+    const f = { x: -Math.sin(stand.yaw), z: -Math.cos(stand.yaw) };
+    await step(([st, f]) => {
       document.getElementById("game").style.visibility = "hidden";
-      const f = { x: -Math.sin(st.yaw), z: -Math.cos(st.yaw) };
       Render3D.setPhotoCamera({ from: { x: st.x + f.x * 150, y: st.z + f.z * 150, d: 0, h: 60 }, at: { x: st.x, y: st.z, d: 0, h: 30 }, fov: 50 });
-      const pl = getPlayer();
-      pl.x = st.x - f.x * 60;
-      pl.y = st.z - f.z * 60;
-      pl.speed = 0;
-    }, stand);
+    }, [stand, f]);
+    const by = await roadPoint(stand.x, stand.z);
+    await park(by.x, by.z);
     await frames(20);
+    const near = await cheer();
     const nearA = await shot();
     await p.waitForTimeout(130);
     const nearB = await shot();
-    await step((st) => { const pl = getPlayer(); pl.x = st.x + 5000; pl.y = st.z + 5000; pl.speed = 0; }, stand);
+    const away = await roadPoint(stand.x, stand.z, "far");
+    await park(away.x, away.z);
     await frames(20);
+    const far = await cheer();
     const farA = await shot();
     await p.waitForTimeout(130);
     const farB = await shot();
@@ -154,7 +222,9 @@ async (page) => {
       const share = (x, y) => { let n = 0; for (let i = 0; i < x.length; i += 4) if (Math.abs(x[i] - y[i]) + Math.abs(x[i + 1] - y[i + 1]) + Math.abs(x[i + 2] - y[i + 2]) > 30) n += 1; return n / (x.length / 4); };
       return { waving: share(a, b), still: share(c, d) };
     }, [nearA, nearB, farA, farB]);
-    results.crowdCheersAsThePlayerPasses = (typeof diffs === "object" && diffs.waving > 0.004 && diffs.still < diffs.waving / 4) || JSON.stringify(diffs);
+    const ok = typeof diffs === "object" && diffs.waving > 0.004 && diffs.still < diffs.waving / 4
+      && near && near.near.count > 50 && near.near.excited > 0.95 && far && far.near.count === 0 && far.far.count > 500 && far.far.excited < 0.02;
+    results.crowdCheersAsThePlayerPasses = ok || JSON.stringify({ diffs, near, far });
 
     // Low: no 3D crowd, the painted crowd instead. High: the near stands in 3D.
     const tiers = {};
@@ -170,15 +240,51 @@ async (page) => {
     results.lowHasNoCrowdFigures = "no stand";
   }
 
-  // The pit crews turn to watch a car passing their garage.
-  results.crewsWatchTheCars = await step(async () => {
-    const t = Render3D.inspect().trackside;
-    return t.people.watcherYaw.filter((w) => w.kind === "crew").some((w) => Math.abs(w.turned) > 0.1) || JSON.stringify(t.people.watcherYaw.slice(0, 6));
+  // The pit crews turn to watch a car by their garage: the player parked on
+  // the road off to one side of a crew member, they turn to face it (as far
+  // as a body turns); with the car gone they face the lane again.
+  const crew = await step(() => {
+    const c = Render3D.auditPeople(state.track).figures.find((x) => x.kind === "crew");
+    if (!c) return null;
+    // A road point in range, 0.5 to 1.5 rad off the way they face at rest.
+    const car = state.track.points.map((p) => ({ x: p.x, z: p.y })).find((p) => {
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      const toward = Math.atan2(-(p.z - c.z), p.x - c.x);
+      const off = Math.abs(Math.atan2(Math.sin(toward - c.base), Math.cos(toward - c.base)));
+      return d > 40 && d < 250 && off > 0.5 && off < 1.5;
+    });
+    return car && { ...c, car };
   });
+  if (crew && crew.car) {
+    const { car } = crew;
+    await park(car.x, car.z);
+    await p.waitForTimeout(2000);
+    const turned = await step((c) => {
+      const f = Render3D.inspect().trackside.people.watchers.find((w) => Math.abs(w.x - c.x) < 0.5 && Math.abs(w.z - c.z) < 0.5);
+      return f;
+    }, crew);
+    const want = Math.atan2(-(car.z - crew.z), car.x - crew.x);
+    const off = turned ? Math.abs(Math.atan2(Math.sin(turned.yaw - want), Math.cos(turned.yaw - want))) : 9;
+    const gone = await roadPoint(crew.x, crew.z, "far");
+    await park(gone.x, gone.z);
+    await p.waitForTimeout(2500);
+    const back = await step((c) => Render3D.inspect().trackside.people.watchers.find((w) => Math.abs(w.x - c.x) < 0.5 && Math.abs(w.z - c.z) < 0.5), crew);
+    const home = back ? Math.abs(Math.atan2(Math.sin(back.yaw - crew.base), Math.cos(back.yaw - crew.base))) : 9;
+    results.crewsWatchTheCars = (off < 0.15 && home < 0.05) || JSON.stringify({ off, home, turned, back });
+  } else {
+    results.crewsWatchTheCars = `no crew: ${JSON.stringify(crew)}`;
+  }
 
-  // Frame time per tier at Singapore, the race running: each tier's median
-  // frame stays smooth (measured there and back, so warming up doesn't count).
+  // Frame time per tier at Singapore, the race running, the player parked
+  // in front of a stand so the near crowd is drawn (in 3D on High and
+  // Medium, painted on Low): each tier's median frame stays smooth
+  // (measured there and back, so warming up doesn't count).
+  if (stand && stand.x !== undefined) {
+    const by = await roadPoint(stand.x, stand.z);
+    await park(by.x, by.z);
+  }
   const samples = { high: [], medium: [], low: [] };
+  const drawn = {};
   for (const tier of ["high", "medium", "low", "low", "medium", "high"]) {
     await step((t) => Render3D.setGraphics(t), tier);
     samples[tier].push(await step(() => new Promise((resolve) => {
@@ -193,11 +299,12 @@ async (page) => {
       };
       requestAnimationFrame(tick);
     })));
+    drawn[tier] = await step(() => Render3D.inspect().trackside.people.standsDrawn3d);
   }
   const measured = {};
   Object.keys(samples).forEach((tier) => { measured[tier] = +((samples[tier][0] + samples[tier][1]) / 2).toFixed(1); });
-  results.frameTimeHolds = Object.values(measured).every((ms) => ms < 22) || JSON.stringify(measured);
-  await step(() => Render3D.setGraphics("auto"));
+  results.frameTimeHolds = (Object.values(measured).every((ms) => ms < 22) && drawn.high >= 1 && drawn.medium >= 1 && drawn.low === 0) || JSON.stringify({ measured, drawn });
+  await step(() => { window.peopleCheckHold = null; Render3D.setGraphics("auto"); });
 
   await context.close();
   return { results, errors };

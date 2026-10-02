@@ -21,12 +21,31 @@ import { CAR_SCALE } from "./car.js";
 
 // People share the car's scale (6 units a metre).
 export const PERSON_SCALE = CAR_SCALE;
-// How near the camera a stand's crowd is drawn in 3D.
-export const CROWD_NEAR = 1500;
+// How near the camera a stand's crowd is drawn in 3D, per tier (Low draws
+// only the painted crowd).
+export const CROWD_NEAR = { high: 1500, medium: 800, low: 0 };
 // The crowd stands up within CHEER_NEAR of the player, and is seated again
-// past CHEER_FAR (each spectator's own distances vary about these).
-export const CHEER_NEAR = 170;
-export const CHEER_FAR = 420;
+// past CHEER_FAR (each spectator's own distances vary about these). The
+// stands' nearest seats are some 140 units from the racing line, so a car
+// going by brings a whole stand to its feet, the eager ones first.
+export const CHEER_NEAR = 260;
+export const CHEER_FAR = 520;
+// Each spectator's own distances: CHEER_NEAR and CHEER_FAR times
+// EAGER_BASE + EAGER_SPAN * their eagerness (0..1).
+const EAGER_BASE = 0.6;
+const EAGER_SPAN = 0.8;
+
+// How excited a spectator is (0 seated, 1 on their feet) at `distance` from
+// the player: the vertex shader's own rule (personMaterial), for inspect.
+export function excitement(distance, eager) {
+  const k = EAGER_BASE + EAGER_SPAN * eager;
+  const t = Math.min(1, Math.max(0, (distance - CHEER_NEAR * k) / (CHEER_FAR * k - CHEER_NEAR * k)));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+// A heading about the vertical read from a matrix that turns only about it
+// (an Euler's y is wrong past a quarter turn: it folds into x and z).
+const yawOf = (matrix) => Math.atan2(matrix.elements[8], matrix.elements[10]);
 
 const ROLES = ["skin", "hair", "shirt", "trousers", "shoes", "trim", "gear", "lens"];
 const CROWD_KINDS = ["crowd_a", "crowd_b", "crowd_c", "crowd_d"];
@@ -112,19 +131,29 @@ function personMaterial(joints, { animated }) {
         ${animated ? `
         // How excited: the player near (each spectator's own distances).
         vec3 home = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-        float eager = 0.6 + 0.8 * aPose.w;
+        float eager = ${EAGER_BASE.toFixed(2)} + ${EAGER_SPAN.toFixed(2)} * aPose.w;
         float excite = 1.0 - smoothstep(uNear * eager, uFar * eager, distance(home.xz, uPlayer.xz));
         float sit = aPose.x * (1.0 - excite);
         float a = sit * 1.5708;
         float part = aPart;
-        // Arms: raised out to the side and up, the forearms waving.
-        float raiseR = excite * (aPose.z < 1.5 ? 2.55 : 0.0);
-        float raiseL = excite * (aPose.z < 0.5 ? 2.55 : 0.0);
+        // Arms: swung forward and up over the head, opened a little to a V
+        // (not straight out to the side, into the neighbours), the forearms
+        // waving side to side.
+        float raiseR = excite * (aPose.z < 1.5 ? 2.6 : 0.0);
+        float raiseL = excite * (aPose.z < 0.5 ? 2.6 : 0.0);
+        float openR = raiseR * 0.12;
+        float openL = raiseL * 0.12;
         float wave = sin(uTime * 7.0 + aPose.y * 6.2832) * 0.45;
         if (part == 3.0) { posed = rotX(posed, uElL, wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), wave * excite); }
         if (part == 5.0) { posed = rotX(posed, uElR, -wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), -wave * excite); }
-        if (part == 2.0 || part == 3.0) { posed = rotX(posed, uShL, raiseL); objectNormal = rotX(objectNormal, vec3(0.0), raiseL); }
-        if (part == 4.0 || part == 5.0) { posed = rotX(posed, uShR, -raiseR); objectNormal = rotX(objectNormal, vec3(0.0), -raiseR); }
+        if (part == 2.0 || part == 3.0) {
+          posed = rotX(rotZ(posed, uShL, raiseL), uShL, -openL);
+          objectNormal = rotX(rotZ(objectNormal, vec3(0.0), raiseL), vec3(0.0), -openL);
+        }
+        if (part == 4.0 || part == 5.0) {
+          posed = rotX(rotZ(posed, uShR, raiseR), uShR, openR);
+          objectNormal = rotX(rotZ(objectNormal, vec3(0.0), raiseR), vec3(0.0), openR);
+        }
         // Legs: seated, the thighs forward and the shins hanging; the body
         // lowered and moved back so the feet stay on the floor.
         if (part == 7.0) { posed = rotZ(posed, uKneeL, -a); objectNormal = rotZ(objectNormal, vec3(0.0), -a); }
@@ -149,7 +178,9 @@ function personMaterial(joints, { animated }) {
 }
 
 // Instanced figures of one kind: their matrices, colours and pose attributes.
-function instanced(kind, list, { animated, cast }) {
+// `materials` holds the world's person materials, one per kind and pose
+// (r3d/people.js owns them; render3d.js disposes them with the world).
+function instanced(kind, list, { animated, cast, materials }) {
   const made = figureGeometry(kind);
   if (!made || !list.length) return null;
   const geometry = made.geometry.clone();
@@ -166,7 +197,13 @@ function instanced(kind, list, { animated, cast }) {
   attr("aTrousers", 3, rgb("trousers"));
   attr("aTrim", 3, rgb("trim"));
   attr("aPose", 4, (f, a, o) => { a[o] = f.seated ? 1 : 0; a[o + 1] = f.phase || 0; a[o + 2] = f.style || 0; a[o + 3] = f.eager || 0; });
-  const mesh = new THREE.InstancedMesh(geometry, personMaterial(made.joints, { animated }), n);
+  const key = `${kind}:${animated ? 1 : 0}`;
+  if (!materials.has(key)) {
+    const m = personMaterial(made.joints, { animated });
+    m.userData.worldOwned = true;
+    materials.set(key, m);
+  }
+  const mesh = new THREE.InstancedMesh(geometry, materials.get(key), n);
   const q = new THREE.Quaternion();
   const s = new THREE.Vector3(PERSON_SCALE, PERSON_SCALE, PERSON_SCALE);
   const up = new THREE.Vector3(0, 1, 0);
@@ -215,14 +252,14 @@ function fan(rand) {
 
 // Every seat of every model-built stand (r3d/track.js marks them) gets a
 // spectator, a share left empty; a few stand at the front rail.
-function crowdInStands(decor, rand) {
+function crowdInStands(decor, rand, materials) {
   const stands = [];
   decor.children.forEach((stand) => {
     const info = stand.userData.stand;
     if (!info) return;
     stand.updateMatrixWorld(true);
     const byKind = Object.fromEntries(CROWD_KINDS.map((k) => [k, []]));
-    const yaw = new THREE.Euler().setFromRotationMatrix(stand.matrixWorld).y;
+    const yaw = yawOf(stand.matrixWorld);
     // Facing the track: the stand's local -z, which the figure's +x turns to.
     const facing = yaw + Math.PI / 2;
     const add = (local, seated) => {
@@ -238,12 +275,13 @@ function crowdInStands(decor, rand) {
         if (rand() < 0.86) add(new THREE.Vector3(x, row.y, row.z), true);
       });
     });
-    // Fans on their feet along the front walkway.
+    // Fans on their feet along the front walkway, half a metre ahead of the
+    // first row's feet (the rail is 0.2 m further).
     const front = info.rows[0];
     for (let x = -11.5; x <= 11.5; x += 1.6) {
-      if (rand() < 0.5) add(new THREE.Vector3(x + (rand() - 0.5) * 0.4, front.y, front.z - 0.75), false);
+      if (rand() < 0.5) add(new THREE.Vector3(x + (rand() - 0.5) * 0.4, front.y, front.z - 0.45), false);
     }
-    const meshes = CROWD_KINDS.map((k) => instanced(k, byKind[k], { animated: true, cast: false })).filter(Boolean);
+    const meshes = CROWD_KINDS.map((k) => instanced(k, byKind[k], { animated: true, cast: false, materials })).filter(Boolean);
     const centre = new THREE.Vector3();
     stand.getWorldPosition(centre);
     stands.push({ stand, meshes, planes: info.planes, centre, count: meshes.reduce((n, m) => n + m.count, 0) });
@@ -264,7 +302,7 @@ function pitCrews(landmarks, rand) {
     const { index, depth, recess } = bay.userData.bay;
     const team = teams()[index % Math.max(1, teams().length)];
     const kit = team ? suitColours(team) : { suit: "#c9ced6", trim: "#222222" };
-    const yaw = new THREE.Euler().setFromRotationMatrix(bay.matrixWorld).y + Math.PI / 2;
+    const yaw = yawOf(bay.matrixWorld) + Math.PI / 2;
     [-8.5, -3, 3, 8.5].forEach((x, k) => {
       const local = new THREE.Vector3(x + (rand() - 0.5) * 1.5, 0, -depth / 2 + (recess || 9) * (0.35 + 0.3 * rand()));
       const position = bay.localToWorld(local);
@@ -311,6 +349,8 @@ function besideBend(course, bend, { past, half, radius }) {
   for (const which of [1, -1]) {
     for (const shift of [0, -25, 25, -50, 50, -80, 80]) {
       const p = course.sampleAt(((bend.d + shift) % total + total) % total);
+      // Not by a bridge or its ramps: they stand on the ground.
+      if (p.h > 0.5) continue;
       const side = (bend.curve > 0 ? -1 : 1) * which;
       const off = side * ((side > 0 ? p.outerR : p.outerL) + past);
       const x = p.x + p.nx * off;
@@ -329,7 +369,8 @@ const yawToward = (from, x, z) => Math.atan2(-(z - from.z), x - from.x);
 function photographers(course, rand) {
   const out = [];
   bends(course, 5).forEach((bend) => {
-    const spot = besideBend(course, bend, { past: 9, half: 3, radius: 4 });
+    // The lens reaches 0.8 m ahead (4.8 units) and turns with the cars.
+    const spot = besideBend(course, bend, { past: 9, half: 3, radius: 6 });
     if (!spot) return;
     const position = new THREE.Vector3(spot.x, 0, spot.z);
     const yaw = yawToward(position, spot.apex.x, spot.apex.y);
@@ -386,14 +427,15 @@ export function buildPeople(course, { decor, landmarks }) {
     return group;
   }
   const rand = seeded(hashString(course.track.id) ^ 0x2f6b9a13);
-  const stands = crowdInStands(decor, rand);
+  const materials = new Map();
+  const stands = crowdInStands(decor, rand, materials);
   stands.forEach((s) => s.meshes.forEach((m) => group.add(m)));
   const crew = pitCrews(landmarks, rand);
   const snappers = photographers(course, rand);
   const tv = tvPlatform(course, rand, group);
   const watchers = [];
   [["crew", crew], ["photographer", snappers], ["camera_operator", tv]].forEach(([kind, list]) => {
-    const mesh = instanced(kind, list, { animated: false, cast: true });
+    const mesh = instanced(kind, list, { animated: false, cast: true, materials });
     if (!mesh) return;
     group.add(mesh);
     watchers.push(mesh);
@@ -403,8 +445,8 @@ export function buildPeople(course, { decor, landmarks }) {
     watchers,
     // Every figure placed, for the checks.
     figures: [
-      ...stands.flatMap((s) => s.meshes.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, stand: true })))),
-      ...[...crew, ...snappers, ...tv].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, platform: Boolean(f.platform) })),
+      ...stands.flatMap((s) => s.meshes.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.yaw, stand: true })))),
+      ...[...crew, ...snappers, ...tv].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform) })),
     ],
   };
   return group;
@@ -424,9 +466,9 @@ export function updatePeople(group, { camera, player, racers, tier, t, dt }) {
   if (!group || !group.userData.stands) return;
   if (player) shared.uPlayer.value.set(player.x, 0, player.y);
   shared.uTime.value = t;
-  const solid = tier !== "low";
+  const reach = CROWD_NEAR[tier] ?? CROWD_NEAR.high;
   group.userData.stands.forEach((st) => {
-    const near = solid && camera.position.distanceTo(st.centre) < CROWD_NEAR;
+    const near = camera.position.distanceTo(st.centre) < reach;
     st.meshes.forEach((m) => { m.visible = near; });
     if (st.planes) st.planes.visible = !near;
   });
@@ -467,21 +509,32 @@ export function inspectPeople(group, player) {
   figures.forEach((f) => { byKind[f.kind] = (byKind[f.kind] || 0) + 1; });
   const drawn3d = stands.filter((st) => st.meshes.some((m) => m.visible)).length;
   const painted = stands.filter((st) => st.planes && st.planes.visible).length;
-  // The crowd's excitement as the shader has it (its average over the
-  // spectators within reach of the player), and the yaw of each watcher.
-  let near = 0;
+  // The crowd's pose as the shader gives it (excitement: 0 seated and
+  // still, 1 on their feet and waving), averaged over the spectators near
+  // the player (all within everyone's own near distance) and those far from
+  // them (past everyone's far distance).
+  const cheer = { near: { count: 0, excited: 0 }, far: { count: 0, excited: 0 } };
+  const nearBy = CHEER_NEAR * EAGER_BASE;
+  const farOff = CHEER_FAR * (EAGER_BASE + EAGER_SPAN);
   if (player) {
     stands.forEach((st) => st.meshes.forEach((m) => m.userData.figures.forEach((f) => {
-      if (Math.hypot(f.position.x - player.x, f.position.z - player.y) < CHEER_NEAR * 0.6) near += 1;
+      const d = Math.hypot(f.position.x - player.x, f.position.z - player.y);
+      const group = d < nearBy ? cheer.near : d > farOff ? cheer.far : null;
+      if (!group) return;
+      group.count += 1;
+      group.excited += excitement(d, f.eager);
     })));
   }
+  [cheer.near, cheer.far].forEach((g) => { g.excited = g.count ? +(g.excited / g.count).toFixed(3) : 0; });
   return {
     byKind,
     stands: stands.length,
     crowd3d: stands.reduce((n, st) => n + st.count, 0),
     standsDrawn3d: drawn3d,
     standsPainted: painted,
-    nearPlayer: near,
-    watcherYaw: watchers.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, turned: +(f.yaw - f.base).toFixed(3) }))),
+    cheer,
+    // Each crew member, photographer and camera operator: where, and which
+    // way they face now and at rest.
+    watchers: watchers.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: +f.position.x.toFixed(2), z: +f.position.z.toFixed(2), yaw: +f.yaw.toFixed(4), base: +f.base.toFixed(4) }))),
   };
 }

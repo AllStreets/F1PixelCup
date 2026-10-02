@@ -103,9 +103,9 @@ function pushClear(course, x, z, radius, margin = 40) {
 }
 
 // The garages' height and their open doors (people stand in them: a 1.78 m
-// person is 10.7 units at the car's scale, so the door is 17, about 2.8 m).
+// person is 10.7 units at the car's scale, so the door is 17.4, 2.9 m).
 const GARAGE_HEIGHT = 21;
-const GARAGE_DOOR = 17;
+const GARAGE_DOOR = 17.4;
 const GARAGE_RECESS = 9;
 
 const TEAM_COLOURS = ["#1e41b2", "#dc0000", "#ff8000", "#00d2be", "#006f62", "#0090ff", "#005aff", "#e8002d", "#6692ff", "#39ff14"];
@@ -515,6 +515,7 @@ function dressLandmark(model, venue) {
       if (src.name === "skypark" && night) out.color = color("#454b55");
     }
     out.name = src.name;
+    out.userData.worldOwned = true;
     made.set(src.name, out);
     return out;
   };
@@ -577,7 +578,7 @@ function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 1
     const pts = [...rects, ...court].flatMap((r) => rectPoints(r, scale, x, z, yaw, step));
     if (pts.some(([px, pz]) => course.clearance(px, pz) < margin || course.occupied.blocked(px, pz, step * 0.5))) continue;
     pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
-    return { x, z, yaw, p, side };
+    return { x, z, yaw, p, side, claimed: [...rects, ...court] };
   }
   return null;
 }
@@ -616,11 +617,13 @@ function casinoModel(course, group, venue) {
   model.rotation.y = spot.yaw;
   model.name = "landmark:casino";
   model.userData.landmark = { name: "casino", fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
-  // The square: paving under the casino, the hotel and the space between.
-  const all = rects.reduce((a, r) => ({ x0: Math.min(a.x0, r.x0), x1: Math.max(a.x1, r.x1), z0: Math.min(a.z0, r.z0), z1: Math.max(a.z1, r.z1) }));
+  // The square: paving under the casino and the hotel and in front of them,
+  // exactly the ground they claimed.
+  const paving = new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 4, 4), color: color("#d8cdb8"), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 });
+  paving.userData.worldOwned = true;
   const pad = new THREE.Mesh(
-    new THREE.PlaneGeometry(all.x1 - all.x0 + 8, all.z1 - all.z0 + 8).rotateX(-Math.PI / 2).translate((all.x0 + all.x1) / 2, 0.02, (all.z0 + all.z1) / 2),
-    new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 4, 4), color: color("#d8cdb8"), roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2 }),
+    mergeGeometries(spot.claimed.map((r) => new THREE.PlaneGeometry(r.x1 - r.x0, r.z1 - r.z0).rotateX(-Math.PI / 2).translate((r.x0 + r.x1) / 2, 0.02, (r.z0 + r.z1) / 2))),
+    paving,
   );
   pad.receiveShadow = true;
   pad.userData.ground = true;
@@ -654,9 +657,12 @@ function marinaBaySandsModel(course, group, venue) {
   model.rotation.y = spot.yaw;
   model.name = "landmark:marinaBaySands";
   model.userData.landmark = { name: "marinaBaySands", fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  const bayWater = waterMaterial("#0e2238");
+  bayWater.userData.worldOwned = true;
   const water = new THREE.Mesh(
-    new THREE.PlaneGeometry(bay.x1 - bay.x0 + 60, bay.z1 - bay.z0).rotateX(-Math.PI / 2).translate((bay.x0 + bay.x1) / 2, 0.05, (bay.z0 + bay.z1) / 2),
-    waterMaterial("#0e2238"),
+    // The bay: exactly the ground claimed for it.
+    new THREE.PlaneGeometry(bay.x1 - bay.x0, bay.z1 - bay.z0).rotateX(-Math.PI / 2).translate((bay.x0 + bay.x1) / 2, 0.05, (bay.z0 + bay.z1) / 2),
+    bayWater,
   );
   water.userData.ground = true;
   model.add(water);

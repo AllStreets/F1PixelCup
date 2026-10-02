@@ -931,29 +931,42 @@ function modelStand(venue, bg, i) {
   const model = tracksideModel("grandstand").clone(true);
   model.scale.setScalar(STAND_SCALE);
   const seatColour = color(venue.standColor || bg.curbA, "#dc0000");
+  // Only the seats (the venue's colour) and the glass (see-through) get
+  // materials of their own; the rest keep the model's, shared.
   const made = new Map();
   model.traverse((m) => {
     if (!m.isMesh) return;
     m.castShadow = true;
     m.receiveShadow = true;
     const name = m.material.name;
+    if (name !== "seat" && name !== "glass") return;
     if (!made.has(name)) {
       const out = m.material.clone();
       if (name === "seat") { out.color = seatColour.clone(); out.roughness = 0.55; }
       if (name === "glass") { out.transparent = true; out.opacity = 0.35; out.depthWrite = false; }
+      out.userData.worldOwned = true;
       made.set(name, out);
     }
     m.material = made.get(name);
     if (name === "glass") m.castShadow = false;
   });
   g.add(model);
+  // Each row where its feet are, in the model's own metres (from wherever
+  // the row sits in the model's tree).
   const rows = [];
+  model.updateMatrixWorld(true);
+  const toModel = new THREE.Matrix4().copy(model.matrixWorld).invert();
   model.traverse((o) => {
     const k = /^row_(\d+)$/.exec(o.name);
-    if (k) rows[+k[1]] = { y: o.position.y, z: o.position.z, seats: o.userData.seats || [] };
+    if (!k) return;
+    const at = new THREE.Vector3().setFromMatrixPosition(o.matrixWorld).applyMatrix4(toModel);
+    rows[+k[1]] = { y: at.y, z: at.z, seats: o.userData.seats || [] };
   });
   // The painted crowd: a strip along each row, facing the track.
-  const crowd = crowdMaterial(makeCrowdTexture(i + 99));
+  const texture = makeCrowdTexture(i + 99);
+  texture.userData.worldOwned = true;
+  const crowd = crowdMaterial(texture);
+  crowd.userData.worldOwned = true;
   const strips = rows.map((row) => new THREE.PlaneGeometry(150, 7).rotateY(Math.PI)
     .translate(0, (row.y + 0.75) * STAND_SCALE, (row.z + 0.4) * STAND_SCALE));
   const planes = new THREE.Mesh(mergeGeometries(strips), crowd);

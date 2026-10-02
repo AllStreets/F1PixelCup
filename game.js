@@ -65,7 +65,7 @@ function worldView() {
   // Only the 3D renderer's own files count as progress -- not, say, the
   // showroom photo the 2D view loads.
   const files = performance.getEntriesByType("resource")
-    .filter((entry) => /\/(vendor\/three|r3d|render3d|assets\/(f1_car|textures))/.test(entry.name)).length;
+    .filter((entry) => /\/(vendor\/three|r3d|render3d|assets\/(f1_car|textures|landmarks|people))/.test(entry.name)).length;
   if (files !== downloadWatch.files) {
     downloadWatch.files = files;
     downloadWatch.at = now;
