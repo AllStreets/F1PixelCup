@@ -89,7 +89,8 @@ function yachtMaterial() {
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
         // Glass and the lacquered hull are glossy; teak is not.
         if (vRoleY > 3.5 && vRoleY < 4.5 || vRoleY > 6.5) roughnessFactor = 0.07;
-        else if (vRoleY < 0.5) roughnessFactor = 0.16;
+        else if (vRoleY < 0.5) roughnessFactor = 0.22;
+        else if (vRoleY > 2.5 && vRoleY < 3.5) roughnessFactor = 0.55;
         else if (vRoleY > 1.5 && vRoleY < 2.5) roughnessFactor = 0.75;`)
       .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>
         if (vRoleY > 4.5 && vRoleY < 5.5) metalnessFactor = 0.9;
@@ -98,7 +99,7 @@ function yachtMaterial() {
         // At night the cabins' glass glows warm.
         if (vRoleY > 6.5) totalEmissiveRadiance += vec3(1.0, 0.78, 0.5) * 0.9 * uYachtNight;`);
   };
-  m.customProgramCacheKey = () => "yacht-v1";
+  m.customProgramCacheKey = () => "yacht-v2";
   return m;
 }
 
