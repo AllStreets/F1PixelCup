@@ -191,6 +191,25 @@ async (page) => {
   });
   results.helmetHidesTheFace = (helmeted.headwear === "helmet" && helmeted.helmetShown && helmeted.ownHelmet && Array.isArray(helmeted.shown) && helmeted.shown.length === 0) || JSON.stringify(helmeted);
 
+  // On Low and Medium the faces cost less: fewer hair layers and the skin
+  // without its finest detail; High in full.
+  results.lighterOnLowerTiers = await p.evaluate(async () => {
+    const { buildDriver } = await import("../../r3d/driver.js");
+    const d = DRIVERS.find((x) => x.id === "leclerc");
+    const out = {};
+    ["high", "medium", "low"].forEach((tier) => {
+      const fig = buildDriver(d, getTeamForDriver(d), { tier });
+      let layers = 0, lite = null;
+      fig.model.traverse((n) => {
+        if (n.isMesh && n.name === "hair") layers = n.geometry.instanceCount;
+        if (n.isMesh && n.material.name === "skin") lite = Boolean(n.material.defines && "SKIN_LITE" in n.material.defines);
+      });
+      out[tier] = { layers, lite };
+      fig.dispose();
+    });
+    return (out.high.layers > out.medium.layers && out.medium.layers > out.low.layers && !out.high.lite && out.medium.lite && out.low.lite) || JSON.stringify(out);
+  });
+
   // Every driver's head, in the studio's grid: twenty figures, no errors.
   await p.goto(`http://localhost:8765/tools/preview/driver.html?grid=1&t=0.5&${Date.now()}`);
   await p.waitForFunction(() => window.preview && (window.preview.ready || window.preview.error), null, { timeout: 60000 });

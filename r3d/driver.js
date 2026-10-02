@@ -104,7 +104,7 @@ const NOISE = `
     return mix(mix(mix(faceHash(i), faceHash(i + vec3(1, 0, 0)), f.x), mix(faceHash(i + vec3(0, 1, 0)), faceHash(i + vec3(1, 1, 0)), f.x), f.y),
                mix(mix(faceHash(i + vec3(0, 0, 1)), faceHash(i + vec3(1, 0, 1)), f.x), mix(faceHash(i + vec3(0, 1, 1)), faceHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
   }`;
-function skinMaterial(look) {
+function skinMaterial(look, tier = "high") {
   const m = new THREE.MeshPhysicalMaterial({
     name: "skin",
     color: color(look.skin),
@@ -149,8 +149,10 @@ function skinMaterial(look) {
           float redder = faceNoise(vSkinPos * 34.0) - 0.5, golden = faceNoise(vSkinPos * 34.0 + 11.0) - 0.5;
           c *= 1.0 + redder * vec3(0.06, -0.01, -0.03) + golden * vec3(0.03, 0.02, -0.04);
           c *= 0.95 + 0.06 * faceNoise(vSkinPos * 90.0) + 0.04 * faceNoise(vSkinPos * 420.0);
-          float freckle = smoothstep(0.72, 0.9, faceNoise(vSkinPos * 900.0)) * (1.0 - smoothstep(0.3, 1.0, length(fwidth(vSkinPos * 900.0))));
-          c *= 1.0 - 0.06 * freckle * vec3(0.7, 1.0, 1.2);
+          #ifndef SKIN_LITE
+            float freckle = smoothstep(0.72, 0.9, faceNoise(vSkinPos * 900.0)) * (1.0 - smoothstep(0.3, 1.0, length(fwidth(vSkinPos * 900.0))));
+            c *= 1.0 - 0.06 * freckle * vec3(0.7, 1.0, 1.2);
+          #endif
           // Warmth: cheeks, nose and ears a little redder.
           c = mix(c, c * vec3(1.06, 0.88, 0.86), vMasks.b * 0.45);
           // The lips: darker and redder, a soft edge.
@@ -180,9 +182,14 @@ function skinMaterial(look) {
         // never one even sheen (the finest part faded out where it is
         // smaller than a pixel, so it never shimmers).
         roughnessFactor = mix(roughnessFactor, 0.4, smoothstep(0.0, 0.6, vMasks.r));
-        float poreFade = 1.0 - smoothstep(0.3, 0.9, length(fwidth(vSkinPos * 1400.0)));
-        roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.14 * poreFade * (faceNoise(vSkinPos * 1400.0 + 5.0) - 0.5) + 0.07;`)
+        #ifdef SKIN_LITE
+          roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.07;
+        #else
+          float poreFade = 1.0 - smoothstep(0.3, 0.9, length(fwidth(vSkinPos * 1400.0)));
+          roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.14 * poreFade * (faceNoise(vSkinPos * 1400.0 + 5.0) - 0.5) + 0.07;
+        #endif`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+        #ifndef SKIN_LITE
         {
           // Pores: a fine bump a few hundredths of a millimetre deep, faded
           // out where it is smaller than a pixel.
@@ -193,7 +200,8 @@ function skinMaterial(look) {
           float det = dot(dpx, r1);
           vec3 grad = sign(det) * (dFdx(hgt) * r1 + dFdy(hgt) * r2);
           normal = normalize(abs(det) * normal - grad * 0.00003 * fade);
-        }`)
+        }
+        #endif`)
       .replace("#include <lights_physical_pars_fragment>", THREE.ShaderChunk.lights_physical_pars_fragment.replace(WRAP_FROM, `{
           // (Wider in red: light goes furthest through skin in red.)
           vec3 wrapW = vec3(0.42, 0.17, 0.1);
@@ -202,11 +210,16 @@ function skinMaterial(look) {
           reflectedLight.directDiffuse += directLight.color * wrapped * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );
         }`));
   };
-  m.customProgramCacheKey = () => "driver-skin";
+  // On Low and Medium the finest detail (pores, freckles, the pore-scale
+  // breakup of the sheen) is left out: smaller than a pixel beyond a
+  // close-up, and it costs on the podium's every frame.
+  const lite = tier !== "high";
+  if (lite) m.defines = { SKIN_LITE: "" };
+  m.customProgramCacheKey = () => (lite ? "driver-skin-lite" : "driver-skin");
   return m;
 }
 
-// Hair, beards and brows: fur shells. Each shell is drawn LAYERS times, the
+// Hair, beards and brows: fur shells. Each shell is drawn as its layers (HAIR_KINDS; fewer on lower tiers), the
 // layers stacked from the skin out to the hair's outer surface (_TIP), and
 // each layer keeps fewer strands than the one under it: strands drawn along
 // the way the hair lies (_FLOW), in clumps, thinning to nothing at the
@@ -225,10 +238,14 @@ const HAIR_KINDS = {
   beard: { layers: 12, solid: 0.4, deep: 0.55, shine: 0.5, strands: [2200, 160], clumps: [260, 30] },
   brows: { layers: 6, solid: 0.2, deep: 0.75, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
 };
-const LAYERS = Object.fromEntries(Object.entries(HAIR_KINDS).map(([k, v]) => [k, v.layers]));
+// On Medium and Low, fewer layers: the strands are coarser close up, the
+// same from the podium's cameras.
+const LAYER_SHARE = { high: 1, medium: 0.4, low: 0.3 };
+const layersFor = (name, tier) => (HAIR_KINDS[name] ? Math.max(4, Math.round(HAIR_KINDS[name].layers * LAYER_SHARE[tier])) : 0);
 const PATTERN = { straight: 0, curly: 1, braids: 2 };
 function hairMaterial(name, hex, pattern = "straight", opts = {}) {
   const kind = HAIR_KINDS[name];
+  const layers = layersFor(name, opts.tier || "high");
   // A faint sheen of the hair's own colour off the room, not a grey haze.
   const m = new THREE.MeshPhysicalMaterial({ name, color: color(hex), roughness: 0.75, metalness: 0, specularIntensity: 0.22, specularColor: color(hex).lerp(new THREE.Color(1, 1, 1), 0.3) });
   m.alphaToCoverage = true;
@@ -239,7 +256,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
   const b = opts.brows || { thickness: 1, arch: 0, tail: 0.5, gap: 0.5 };
   const uniforms = {
     hairTint: { value: color(hex) },
-    hairLayers: { value: kind.layers },
+    hairLayers: { value: layers },
     hairPattern: { value: PATTERN[pattern] },
     hairSolid: { value: kind.solid },
     hairDeep: { value: kind.deep },
@@ -455,7 +472,7 @@ function ownGeometry(mesh, layers, variant) {
   return geo;
 }
 
-function shapeFace(model, weights, parts, look) {
+function shapeFace(model, weights, parts, look, tier) {
   let head = null;
   model.traverse((n) => { if (n.isMesh && n.name === "head_skin") head = n; });
   if (!head) return;
@@ -477,7 +494,7 @@ function shapeFace(model, weights, parts, look) {
   parts.forEach((mesh) => {
     const src = mesh.geometry;
     const variant = { hair: look.hair.style, beard: look.facialHair }[partName(mesh)];
-    const geo = ownGeometry(mesh, LAYERS[mesh.material.name] || 0, variant);
+    const geo = ownGeometry(mesh, layersFor(mesh.material.name, tier), variant);
     const pos = src.attributes.position.clone();
     if (src.attributes._bind) {
       // From the head's space to this part's.
@@ -516,7 +533,7 @@ function shapeFace(model, weights, parts, look) {
   });
 }
 
-function dress(model, driver, team, look) {
+function dress(model, driver, team, look, tier) {
   const { suit, trim } = suitColours(team);
   const made = new Map();
   const dressed = (m) => {
@@ -533,7 +550,7 @@ function dress(model, driver, team, look) {
     if (look) {
       if (m.name === "skin") {
         out.dispose();
-        out = skinMaterial(look);
+        out = skinMaterial(look, tier);
       }
       if (m.name === "eye_iris") out.color = color(look.eyes);
       if (m.name === "eye_iris" || m.name === "eye_sclera") shadedByLids(out);
@@ -548,7 +565,7 @@ function dress(model, driver, team, look) {
         out.dispose();
         const hex = { hair: look.hair.color, beard: look.beardColor, brows: look.brow }[m.name];
         const pattern = m.name === "hair" && (look.hair.style === "curly" || look.hair.style === "braids") ? look.hair.style : "straight";
-        out = hairMaterial(m.name, hex, pattern, { volume: m.name === "hair" ? look.hair.volume : 1, brows: m.name === "brows" ? look.brows : null });
+        out = hairMaterial(m.name, hex, pattern, { volume: m.name === "hair" ? look.hair.volume : 1, brows: m.name === "brows" ? look.brows : null, tier });
       }
     }
     made.set(m.name, out);
@@ -571,11 +588,14 @@ export function buildDriver(driver, team, options = {}) {
   if (!template) throw new Error("buildDriver before loadDriver");
   const headwear = options.headwear || "none";
   if (!HEADWEAR.includes(headwear)) throw new Error(`unknown headwear ${headwear}`);
+  // The graphics tier (quality.js): High draws the faces in full.
+  const tier = options.tier || "high";
+  if (!(tier in LAYER_SHARE)) throw new Error(`unknown tier ${tier}`);
   const look = driver.look || null;
   if (look && Faces.checkLook(look).length) throw new Error(`${driver.id}'s look: ${Faces.checkLook(look).join(", ")}`);
   const bare = headwear === "none" && Boolean(look);
   const model = SkeletonUtils.clone(template);
-  const materials = dress(model, driver, team, look);
+  const materials = dress(model, driver, team, look, tier);
   const root = new THREE.Group();
   root.add(model);
   const props = {};
@@ -605,7 +625,7 @@ export function buildDriver(driver, team, options = {}) {
   if (bare) {
     const shown = [];
     model.traverse((n) => { if (n.isMesh && n.visible && BARE.test(partName(n)) && n.name !== "head_skin") shown.push(n); });
-    shapeFace(model, weights, shown, look);
+    shapeFace(model, weights, shown, look, tier);
   }
   const mixer = new THREE.AnimationMixer(model);
   const actions = {};

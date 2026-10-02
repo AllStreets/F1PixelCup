@@ -342,7 +342,7 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
     figures = entries.map((e) => {
       // Bareheaded on the podium (the user, 2026-10-01): each driver's own
       // face, hair and beard (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
-      const fig = buildDriver(e.driver, e.team, { headwear: "none" });
+      const fig = buildDriver(e.driver, e.team, { headwear: "none", tier });
       const s = Ceremony.stepFor(e.place);
       // The figure faces +X; turned to face the camera (+Z).
       fig.root.rotation.y = -Math.PI / 2;
