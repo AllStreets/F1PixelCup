@@ -31,6 +31,8 @@ const GRADES = {
   singapore: { gain: [1.05, 1.0, 0.96], lift: [0, 0.01, 0.02], contrast: 1.08, saturation: 1.1, night: true },
   bahrain: { gain: [1.06, 1.0, 0.9], lift: [0.01, 0.005, 0], contrast: 1.05, saturation: 1.05, haze: 1 },
   interlagos: { gain: [1.02, 1.02, 0.98], lift: [0, 0, 0], contrast: 1.05, saturation: 1.1 },
+  // The podium ceremony (r3d/podium.js): a warm TV grade, its lights bloom.
+  podium: { gain: [1.04, 1.0, 0.96], lift: [0.004, 0.004, 0.012], contrast: 1.07, saturation: 1.06, night: true },
 };
 const NEUTRAL = { gain: [1, 1, 1], lift: [0, 0, 0], contrast: 1, saturation: 1 };
 
@@ -182,13 +184,14 @@ export function createPostFx(renderer, scene, camera) {
   const ray = new THREE.Raycaster();
 
   // The player's own events set off the bursts (other cars' don't).
-  window.addEventListener("f1:fx", (event) => {
+  function onFx(event) {
     const d = event.detail || {};
     if (!passes.bursts || !playerId || d.racerId !== playerId) return;
     if (d.type === "overtakeMode") burst.gold = 1;
     else if (d.type === "hitTaken") burst.red = 1;
     else if (d.type === "itemUsed" && d.item === "drs") burst.blur = 1;
-  });
+  }
+  window.addEventListener("f1:fx", onFx);
 
   // The frame, copied off the canvas: sized to its drawing buffer.
   function frameSize() {
@@ -352,11 +355,19 @@ export function createPostFx(renderer, scene, camera) {
     return warming;
   }
 
+  // Everything it holds on the GPU, and its listener (a second instance, the
+  // podium's, comes and goes).
+  function dispose() {
+    release();
+    window.removeEventListener("f1:fx", onFx);
+  }
+
   return {
     render,
     setTier,
     setSize,
     warm,
+    dispose,
     inspect: () => ({
       tier,
       // Whether the effects are drawing (their shaders compiled).

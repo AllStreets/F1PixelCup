@@ -28,6 +28,8 @@ import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
 import { createRain, wettable, WET_GRASS, WET_RUNOFF } from "./r3d/rain.js";
+import { loadDriver, driverLoaded } from "./r3d/driver.js";
+import { createPodium } from "./r3d/podium.js";
 
 const MAX_PARTICLES = 256;
 
@@ -118,7 +120,7 @@ function sampleFrame(racing) {
     const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
     if (next !== autoTier) {
       autoTier = next;
-      postfx.setTier(currentTier());
+      postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
   }
@@ -131,8 +133,9 @@ function setGraphics(choice) {
   } catch (error) {
     // The choice holds for this visit only.
   }
-  postfx.setTier(currentTier());
+  postfx.setTier(raceFxTier());
   rain.setTier(currentTier());
+  if (ceremony.fx) ceremony.fx.setTier(currentTier());
   return graphics();
 }
 
@@ -151,7 +154,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics };
+const api = { ready: false, failed: false, render, renderGarage, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -1553,3 +1556,110 @@ function renderGarage(kart, driver, now) {
   renderer.render(scene, camera);
   return true;
 }
+
+// ---------------------------------------------------------------------------
+// The podium ceremony (r3d/podium.js): its own scene, drawn while the podium
+// screen is up. begin() builds it and compiles it in the background; frame()
+// draws nothing (drawing: false, the page keeps its 2D steps) until it can
+// draw without a stall; end() frees it all.
+// ---------------------------------------------------------------------------
+
+const ceremony = { podium: null, fx: null, size: "", driverLoading: false, last: null };
+
+// The race's own effects hold full-size buffers; while the ceremony (with
+// effects of its own) has the screen, they are released.
+function raceFxTier() {
+  return ceremony.podium ? "low" : currentTier();
+}
+
+// The driver model, fetched ahead (the cup's last results screen asks).
+function podiumPreload() {
+  if (driverLoaded() || ceremony.driverLoading) return;
+  ceremony.driverLoading = true;
+  loadDriver(() => { ceremony.driverLoading = false; }, (error) => {
+    ceremony.driverLoading = false;
+    console.warn("Driver model failed to load; the podium stays 2D.", error);
+  });
+}
+
+// summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
+function podiumBegin(summary) {
+  const entries = summary.podium.map((p) => {
+    const driver = DRIVERS.find((d) => d.id === p.driverId);
+    return driver ? { place: p.place, driver, team: getTeamForDriver(driver), points: p.points } : null;
+  }).filter(Boolean);
+  if (!api.ready || entries.length !== 3) {
+    podiumEnd();
+    return false;
+  }
+  // A ceremony already up gives way; the race's effects stay released.
+  podiumEnd(false);
+  podiumPreload();
+  // The race's circuit is done with: free it now, as the pit lane would.
+  if (current) {
+    disposeWorld(current);
+    current = null;
+  }
+  const tier = currentTier();
+  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment });
+  const fx = createPostFx(renderer, podium.scene, podium.camera);
+  fx.setTier(tier);
+  podium.setFx(fx);
+  ceremony.podium = podium;
+  ceremony.fx = fx;
+  ceremony.size = "";
+  ceremony.last = podium;
+  postfx.setTier(raceFxTier());
+  return true;
+}
+
+// reserve: the page's title box over the picture (CSS px), kept clear of the wall's.
+function podiumFrame(now, reserve = null) {
+  const podium = ceremony.podium;
+  if (!podium || !api.ready) return { drawing: false };
+  podium.setReserve(reserve);
+  resize();
+  const w = canvas2d.clientWidth || canvas2d.width;
+  const h = canvas2d.clientHeight || canvas2d.height;
+  const dpr = renderer.getPixelRatio();
+  const size = `${w}x${h}@${dpr}`;
+  if (size !== ceremony.size) {
+    ceremony.size = size;
+    podium.setSize(w, h);
+    ceremony.fx.setSize(w, h, dpr);
+  }
+  if (!podium.prepare()) {
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(0x06070b, 1);
+    renderer.clear();
+    return { drawing: false };
+  }
+  const t = podium.render(now);
+  ceremony.title = podium.titleRect(w, h);
+  return { drawing: true, t, anchors: podium.anchors(w, h), platesIn: podium.platesIn(t) };
+}
+
+// restore: give the race's effects back (not when a new ceremony follows).
+function podiumEnd(restore = true) {
+  const had = Boolean(ceremony.podium);
+  if (ceremony.podium) ceremony.podium.dispose();
+  if (ceremony.fx) ceremony.fx.dispose();
+  ceremony.podium = null;
+  ceremony.fx = null;
+  if (had && restore) postfx.setTier(raceFxTier());
+}
+
+function podiumInspect() {
+  const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
+  const racePostfx = postfx.inspect().frame;
+  if (!ceremony.podium) return { active: false, memory, racePostfx, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
+  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned(), title: ceremony.title || null };
+}
+
+// Where the wall's title would be on screen at time t, at this window's size.
+function podiumTitleAt(t) {
+  if (!ceremony.podium || !ceremony.podium.ready()) return null;
+  return ceremony.podium.titleRect(canvas2d.clientWidth || canvas2d.width, canvas2d.clientHeight || canvas2d.height, t);
+}
+
+api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };
