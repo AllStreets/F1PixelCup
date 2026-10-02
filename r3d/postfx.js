@@ -168,35 +168,44 @@ export function createPostFx(renderer, scene, camera) {
   // stalling on them.
   let ready = false;
   let warming = null;
-  const burst = { gold: 0, red: 0, blur: 0 };
-  let playerId = null;
-  let sunVisible = 0;
-  let sunCheck = 0;
-  let sunBlocked = false;
-  let sunOnScreen = false;
-  let sunBlocker = "";
+  // Each view's own bursts and sun (split screen has two; one view is view 0).
   // The flare eases on real time (it is how the picture looks, paused or not);
   // the bursts fade on race time (they freeze with a paused race).
-  let lastWall = 0;
+  const views = [];
+  function viewFor(index) {
+    if (!views[index]) {
+      views[index] = { burst: { gold: 0, red: 0, blur: 0 }, playerId: null, sunVisible: 0, sunCheck: 0, sunBlocked: false, sunOnScreen: false, sunBlocker: "", lastWall: 0 };
+    }
+    return views[index];
+  }
+  viewFor(0);
+  // The view being drawn, in the drawing buffer's pixels (null: the whole canvas).
+  let pixels = null;
+  // The size last asked for (setSize), in CSS px.
+  let sized = null;
   const sunNdc = new THREE.Vector3();
   const ray = new THREE.Raycaster();
 
-  // The player's own events set off the bursts (other cars' don't).
+  // A player's own events set off the bursts in that player's view (other cars' don't).
   window.addEventListener("f1:fx", (event) => {
     const d = event.detail || {};
-    if (!passes.bursts || !playerId || d.racerId !== playerId) return;
-    if (d.type === "overtakeMode") burst.gold = 1;
-    else if (d.type === "hitTaken") burst.red = 1;
-    else if (d.type === "itemUsed" && d.item === "drs") burst.blur = 1;
+    if (!passes.bursts) return;
+    views.forEach((v) => {
+      if (!v.playerId || d.racerId !== v.playerId) return;
+      if (d.type === "overtakeMode") v.burst.gold = 1;
+      else if (d.type === "hitTaken") v.burst.red = 1;
+      else if (d.type === "itemUsed" && d.item === "drs") v.burst.blur = 1;
+    });
   });
 
-  // The frame, copied off the canvas: sized to its drawing buffer.
+  // The frame, copied off the canvas: sized to its drawing buffer, or to the
+  // view's part of it.
   function frameSize() {
-    return renderer.getDrawingBufferSize(new THREE.Vector2());
+    return pixels ? new THREE.Vector2(pixels.w, pixels.h) : renderer.getDrawingBufferSize(new THREE.Vector2());
   }
 
   function build() {
-    const size = renderer.getSize(new THREE.Vector2());
+    const size = sized ? new THREE.Vector2(sized.w, sized.h) : renderer.getSize(new THREE.Vector2());
     const drawn = frameSize();
     frameTexture = new THREE.FramebufferTexture(drawn.x, drawn.y);
     const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
@@ -240,10 +249,14 @@ export function createPostFx(renderer, scene, camera) {
     if (passes.composer && !composer) build();
     if (!passes.composer) release();
     if (bloom) bloom.enabled = passes.bloom;
-    if (!passes.bursts) { burst.gold = 0; burst.red = 0; burst.blur = 0; }
+    if (!passes.bursts) views.forEach((v) => { v.burst.gold = 0; v.burst.red = 0; v.burst.blur = 0; });
   }
 
-  function setSize(w, h, dpr) {
+  // The size the effects work at, in CSS px: the canvas, or (view true) one
+  // split-screen view (the views are the same size).
+  function setSize(w, h, dpr, view = false) {
+    sized = { w, h };
+    pixels = view ? { w: Math.round(w * dpr), h: Math.round(h * dpr) } : null;
     if (!composer) return;
     composer.setPixelRatio(dpr);
     composer.setSize(w, h);
@@ -257,37 +270,42 @@ export function createPostFx(renderer, scene, camera) {
 
   // How much of the sun the camera sees: on screen, in front, and not behind
   // scenery (a ray toward it, every few frames, eased).
-  function updateSun(sunPosition, occluders, dt) {
+  function updateSun(v, sunPosition, occluders, dt) {
     // Project with the camera as it is this frame (its matrices are otherwise
     // only brought up to date when the scene is drawn).
     camera.updateMatrixWorld();
     sunNdc.copy(sunPosition).project(camera);
     const onScreen = sunNdc.z < 1 && Math.abs(sunNdc.x) < 1.15 && Math.abs(sunNdc.y) < 1.15;
-    sunOnScreen = onScreen;
+    v.sunOnScreen = onScreen;
     let target = 0;
     if (onScreen) {
-      sunCheck -= 1;
-      if (sunCheck <= 0) {
-        sunCheck = 6;
+      v.sunCheck -= 1;
+      if (v.sunCheck <= 0) {
+        v.sunCheck = 6;
         const dir = sunPosition.clone().sub(camera.position).normalize();
         ray.set(camera.position, dir);
         ray.far = camera.position.distanceTo(sunPosition);
         const hit = occluders.length > 0 ? ray.intersectObjects(occluders, true).find((h) => !h.object.userData.ground) : null;
-        sunBlocked = Boolean(hit);
-        sunBlocker = hit ? (hit.object.name || hit.object.parent?.name || hit.object.type) : "";
+        v.sunBlocked = Boolean(hit);
+        v.sunBlocker = hit ? (hit.object.name || hit.object.parent?.name || hit.object.type) : "";
       }
-      target = sunBlocked ? 0 : 1 - Math.min(1, Math.max(Math.abs(sunNdc.x), Math.abs(sunNdc.y)));
+      target = v.sunBlocked ? 0 : 1 - Math.min(1, Math.max(Math.abs(sunNdc.x), Math.abs(sunNdc.y)));
     }
-    sunVisible += (target - sunVisible) * Math.min(1, dt * 6);
+    v.sunVisible += (target - v.sunVisible) * Math.min(1, dt * 6);
     finish.uniforms.uSun.value.set(sunNdc.x * 0.5 + 0.5, sunNdc.y * 0.5 + 0.5);
-    finish.uniforms.uSunVisible.value = sunVisible;
+    finish.uniforms.uSunVisible.value = v.sunVisible;
   }
 
-  // frame: { dt, now, trackId, speedFraction, boosting, playerId, sunPosition, occluders }
+  // frame: { dt, now, trackId, speedFraction, boosting, playerId, sunPosition,
+  // occluders, view, viewport }. Split screen draws each view on its own:
+  // view is 0 or 1, viewport its rectangle in CSS px from the canvas's
+  // bottom left (the renderer's viewport and scissor are already set to it).
   function render(frame) {
-    playerId = frame.playerId || null;
+    const v = viewFor(frame.view || 0);
+    v.playerId = frame.playerId || null;
     const dt = Math.min(0.1, Math.max(0, frame.dt || 0));
     // Bursts fade: the gold over half a second, the red faster, the blur slower.
+    const burst = v.burst;
     burst.gold *= Math.exp(-dt / 0.5);
     burst.red *= Math.exp(-dt / 0.3);
     burst.blur *= Math.exp(-dt / 0.7);
@@ -320,16 +338,22 @@ export function createPostFx(renderer, scene, camera) {
     bloom.strength = (grade.night ? 0.32 : 0.3) + burst.gold * 0.35;
     bloom.threshold = 0.9;
     const wall = performance.now();
-    const wallDt = lastWall ? Math.min(0.1, (wall - lastWall) / 1000) : 0;
-    lastWall = wall;
+    const wallDt = v.lastWall ? Math.min(0.1, (wall - v.lastWall) / 1000) : 0;
+    v.lastWall = wall;
     // No sun to find at night (and no rays spent looking for it).
-    if (passes.flare && !grade.night && frame.sunPosition) updateSun(frame.sunPosition, frame.occluders || [], wallDt);
-    else { sunVisible = 0; u.uSunVisible.value = 0; }
+    if (passes.flare && !grade.night && frame.sunPosition) updateSun(v, frame.sunPosition, frame.occluders || [], wallDt);
+    else { v.sunVisible = 0; u.uSunVisible.value = 0; }
     renderer.setRenderTarget(null);
     renderer.render(scene, camera);
-    renderer.copyFramebufferToTexture(frameTexture);
+    // A view's own rectangle is copied, and the last pass draws back into it
+    // (the renderer's viewport and scissor are the view's).
+    const at = frame.viewport;
+    const ratio = renderer.getPixelRatio();
+    if (at) copyFrom.set(Math.round(at.x * ratio), Math.round(at.y * ratio));
+    renderer.copyFramebufferToTexture(frameTexture, at ? copyFrom : null);
     composer.render(dt);
   }
+  const copyFrom = new THREE.Vector2();
 
   // Compile the effects' shaders (the scene's compile never sees them) with
   // the targets they draw to: all but the last into the effects' buffers, the
@@ -357,14 +381,15 @@ export function createPostFx(renderer, scene, camera) {
     setTier,
     setSize,
     warm,
-    inspect: () => ({
+    // index: which split-screen view's bursts and sun (0 with one view).
+    inspect: (index = 0) => ({
       tier,
       // Whether the effects are drawing (their shaders compiled).
       drawing: Boolean(composer && ready),
       passes: { ...passes, bloom: Boolean(bloom && bloom.enabled && passes.bloom) },
-      burst: { ...burst },
-      sunVisible,
-      sun: { onScreen: sunOnScreen, blocked: sunBlocked, by: sunBlocker },
+      burst: { ...viewFor(index).burst },
+      sunVisible: viewFor(index).sunVisible,
+      sun: { onScreen: viewFor(index).sunOnScreen, blocked: viewFor(index).sunBlocked, by: viewFor(index).sunBlocker },
       blur: finish ? finish.uniforms.uBlur.value : 0,
       rain: finish ? finish.uniforms.uRain.value : 0,
       // What the effects hold on the GPU: the copied frame's size, or null.

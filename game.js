@@ -360,6 +360,20 @@ const state = {
   hudPlaceFlashDir: 0,
   shakeMag: 0,
   shakeUntil: 0,
+  // Two-player split screen (twoplayer.js; docs/superpowers/specs/
+  // 2026-10-01-split-screen-design.md): the pit-lane choice (never stored, so
+  // every visit starts with one player), the cup's (fixed once it starts),
+  // player 2's driver, and the racer ids of the humans in the session
+  // (player 1's first; state.playerId is player 1's).
+  players: 1,
+  cupPlayers: 1,
+  secondDriver: -1,
+  humanIds: [],
+  secondCupRunId: null,
+  lastSecondRaceCareer: null,
+  lastSecondCupCareer: null,
+  // Player 2's camera and HUD state, swapped in while their view is drawn (asPlayer).
+  second: {},
 };
 
 const input = {
@@ -370,6 +384,20 @@ const input = {
   right: false,
   drift: false,
 };
+
+// Player 2's keys in a two-player session (the arrows, Right Shift and /).
+const input2 = {
+  throttle: false,
+  brake: false,
+  left: false,
+  right: false,
+  drift: false,
+  item: false,
+};
+
+// Each player's gamepad as last read (pollPads), and its buttons' last state.
+const padState = [TwoPlayer.readPad(null), TwoPlayer.readPad(null)];
+const padWas = [{ item: false, pause: false }, { item: false, pause: false }];
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -725,9 +753,44 @@ function getPitLaneState() {
     gridMode: state.gridMode,
     weatherModes: Weather.MODES,
     weatherMode: state.weatherMode,
+    // Two-player split screen: how many, and player 2's driver.
+    players: state.players,
+    secondDriver: (() => {
+      const d = DRIVERS[state.secondDriver];
+      const t = getTeamForDriver(d);
+      return { index: state.secondDriver, id: d.id, code: d.code, number: d.number, name: d.name, team: t.name, teamColor: t.body };
+    })(),
     // Drivers can be changed only in the pit lane, between cups.
     canChooseDriver: state.phase === "garage",
   };
+}
+
+// One player or two (split screen). Chosen in the pit lane for the next cup;
+// never stored, so every visit starts with one.
+function selectPlayers(count) {
+  if (state.phase !== "garage" || (count !== 1 && count !== 2)) return;
+  state.players = count;
+  settleSecondDriver();
+  renderGarage();
+}
+
+// Player 2's driver, the next (dir 1) or previous (-1) round the grid,
+// never player 1's.
+function stepSecondDriver(dir) {
+  if (state.phase !== "garage") return;
+  const ids = DRIVERS.map((d) => d.id);
+  const next = TwoPlayer.stepDriver(ids, DRIVERS[state.secondDriver].id, dir < 0 ? -1 : 1, DRIVERS[state.selectedDriver].id);
+  state.secondDriver = ids.indexOf(next);
+  renderGarage();
+}
+
+// Player 2 never drives player 1's car: when player 1 picks it, player 2
+// goes back to their default (twoplayer.js).
+function settleSecondDriver() {
+  const ids = DRIVERS.map((d) => d.id);
+  const first = DRIVERS[state.selectedDriver].id;
+  if (DRIVERS[state.secondDriver] && DRIVERS[state.secondDriver].id !== first) return;
+  state.secondDriver = Math.max(0, ids.indexOf(TwoPlayer.secondDriver(ids, first)));
 }
 
 const GRID_MODES = [
@@ -794,6 +857,7 @@ function selectDriver(index) {
 function setSelectedDriver(index) {
   state.selectedDriver = ((index % DRIVERS.length) + DRIVERS.length) % DRIVERS.length;
   state.selectedKart = TEAMS.findIndex((t) => t.id === DRIVERS[state.selectedDriver].teamId);
+  settleSecondDriver();
 }
 
 // Every driver has their own career, so the game comes back to the driver you
@@ -867,10 +931,14 @@ function loadDifficultyPreference() {
 function buildCupEntries() {
   const playerDriver = DRIVERS[state.selectedDriver];
   const playerKart = getTeamForDriver(playerDriver);
-  const remainingDrivers = shuffle(DRIVERS.filter((driver) => driver.id !== playerDriver.id));
+  // A two-player cup: player 2's driver races too, and one fewer CPU car.
+  const secondDriver = state.cupPlayers === 2 ? DRIVERS[state.secondDriver] : null;
+  const remainingDrivers = shuffle(DRIVERS.filter((driver) => driver.id !== playerDriver.id && driver !== secondDriver));
+  const humanEntries = [{ driver: playerDriver, kart: playerKart, points: 0, isPlayer: true, player: 1 }];
+  if (secondDriver) humanEntries.push({ driver: secondDriver, kart: getTeamForDriver(secondDriver), points: 0, isPlayer: true, player: 2 });
   const cupEntries = [
-    { driver: playerDriver, kart: playerKart, points: 0, isPlayer: true },
-    ...remainingDrivers.slice(0, 19).map((driver) => ({
+    ...humanEntries,
+    ...remainingDrivers.slice(0, 20 - humanEntries.length).map((driver) => ({
       driver,
       kart: getTeamForDriver(driver),
       points: 0,
@@ -894,16 +962,17 @@ const QUALI_TIME_LIMIT_MS = 180000;
 // Extra distance the player rolls in on autopilot before taking over.
 const QUALI_RUN_IN = 260;
 
-function placeForQualifying(racer, track, runIn = 0) {
+// lat: across the road from its centre (two players roll in side by side).
+function placeForQualifying(racer, track, runIn = 0, lat = 0) {
   const route = getItemRoute(track);
   const d = track.totalLength - QUALI_RUN_UP - runIn;
-  const w = route.toWorld(d, 0);
+  const w = route.toWorld(d, lat);
   // Tell the road lookup which stretch the car is on: the circuit runs past
   // itself in places, and the nearest bit of road may be another part of the lap.
   let segment = 0;
   while (segment < track.cumulativeStarts.length - 1 && track.cumulativeStarts[segment + 1] <= d) segment += 1;
   Object.assign(racer, {
-    x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat: 0, segmentHint: segment,
+    x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat, segmentHint: segment,
     speed: racer.physics.maxSpeed * QUALI_ROLL_SPEED,
     lap: 0, startedRaceLap: false, lapAccum: 0, lapStartAt: 0, lastLapTime: 0, bestLapTime: 0,
     splits: [], lastSplit: -1, finished: false,
@@ -1004,14 +1073,28 @@ function startQualifying(index) {
   // Set first, so every CPU lap reads the cup's difficulty.
   state.phase = "qualifyingSim";
   state.preparing = { trackId: state.track.id, painted: false };
-  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const playerEntry = humanEntry(0);
   const player = createRacer(playerEntry.driver, playerEntry.kart, true, 0);
+  player.playerSlot = 0;
+  // Two players roll in side by side, and are ghosts to each other on their
+  // laps (qualifying has no contact), so neither can spoil the other's.
+  const secondEntry = humanEntry(1);
+  const lane = secondEntry ? state.track.roadWidth * 0.4 : 0;
   // The player rolls in on autopilot while they get ready, and takes over at
   // the same point and speed the CPU laps start from.
-  placeForQualifying(player, state.track, QUALI_RUN_IN);
+  placeForQualifying(player, state.track, QUALI_RUN_IN, lane ? -lane : 0);
   player.qualiAutopilot = true;
   state.racers = [player];
+  if (secondEntry) {
+    const second = createRacer(secondEntry.driver, secondEntry.kart, true, 1);
+    second.playerSlot = 1;
+    placeForQualifying(second, state.track, QUALI_RUN_IN, lane);
+    second.qualiAutopilot = true;
+    state.racers.push(second);
+  }
   state.playerId = player.id;
+  state.humanIds = state.racers.map((racer) => racer.id);
+  resetSecondView();
   state.gridOrder = [];
   // Qualifying has no power-ups.
   state.boxHiddenUntil = state.track.itemBoxes.map(() => Infinity);
@@ -1023,6 +1106,8 @@ function startQualifying(index) {
   state.qualifying = {
     raceIndex: index, sims, times: [], poleSplits: [], poleTimeMs: null, playerTimeMs: null, order: null,
     readyElapsed: 0, handedOver: false, releasedAt: null, aborted: false,
+    // Player 2's lap, in a two-player session.
+    secondTimeMs: null, secondAborted: false,
   };
   if (window.Screens) window.Screens.showRace();
   addFeed(`${state.track.name} qualifying: the field is setting its times.`);
@@ -1063,7 +1148,9 @@ function updateQualifyingSim() {
   state.phase = "qualifying";
   state.lastTick = performance.now();
   state.stepAccum = 0;
-  addFeed(`${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
+  addFeed(state.humanIds.length > 1
+    ? `${state.track.name} qualifying: one flying lap each. Your times set your grid.`
+    : `${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
   updateQualifyingTower(true);
 }
 
@@ -1074,34 +1161,55 @@ function updateQualifying(dt, now) {
   // Nothing starts until the circuit can be seen.
   if (worldView() === "loading") return;
   const steps = takePhysicsSteps(dt);
-  for (let i = 0; i < steps && state.phase === "qualifying"; i += 1) stepQualifying(q, player);
+  for (let i = 0; i < steps && state.phase === "qualifying"; i += 1) stepQualifying(q);
   updateParticles(dt);
   updateQualifyingTower();
 }
 
-function stepQualifying(q, player) {
+// Each player's lap ends on its own (they park past the line); the session
+// ends when every player's has.
+function stepQualifying(q) {
   const tick = (state.lastTick !== null ? state.lastTick : performance.now()) + PHYSICS_STEP_MS;
+  const drivers = humans();
   if (!q.handedOver) {
     // Rolling in on autopilot at the CPU laps' starting speed.
     q.readyElapsed += PHYSICS_STEP_MS;
-    const driving = player.isPlayer;
-    player.isPlayer = false;
-    updateRacer(player, PHYSICS_DT, tick);
-    player.isPlayer = driving;
-    player.speed = player.physics.maxSpeed * QUALI_ROLL_SPEED;
+    drivers.forEach((player) => {
+      const driving = player.isPlayer;
+      player.isPlayer = false;
+      updateRacer(player, PHYSICS_DT, tick);
+      player.isPlayer = driving;
+      player.speed = player.physics.maxSpeed * QUALI_ROLL_SPEED;
+    });
     if (q.readyElapsed >= QUALI_READY_MS) {
       q.handedOver = true;
       q.releasedAt = tick;
-      player.qualiAutopilot = false;
+      drivers.forEach((player) => { player.qualiAutopilot = false; });
     }
   } else {
-    updateRacer(player, PHYSICS_DT, tick);
+    drivers.forEach((player) => updateRacer(player, PHYSICS_DT, tick));
   }
   state.lastTick = tick;
   if (state.phase !== "qualifying") return;
-  if (player.lastLapTime > 0 || q.aborted || (q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS)) {
-    finishQualifying();
-  }
+  const timeUp = q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS;
+  drivers.forEach((player) => { if (player.lastLapTime > 0 || timeUp) parkQualifier(player); });
+  if (drivers.every((player) => player.finished)) finishQualifying();
+}
+
+// A player's qualifying is over: the engine settles and the car is done for the session.
+function parkQualifier(player) {
+  player.finished = true;
+  player.speed = 0;
+  player.drifting = false;
+}
+
+// Backing over the line ends that player's flying lap, with no time.
+function abortQualifyingLap(racer) {
+  const q = state.qualifying;
+  if (racer.playerSlot === 1) q.secondAborted = true;
+  else q.aborted = true;
+  parkQualifier(racer);
+  if (humans().every((player) => player.finished)) finishQualifying();
 }
 
 // How far behind (+) or ahead (-) of the provisional pole the player was at
@@ -1271,9 +1379,12 @@ function startCup() {
   if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
   state.activeCupIndex = state.selectedCup;
   state.raceIndex = 0;
+  state.cupPlayers = state.players;
   buildCupEntries();
-  // One id per cup attempt ties its races to its cup bonus (see career.js).
+  // One id per cup attempt ties its races to its cup bonus (see career.js);
+  // each player has their own (a cup bonus is recorded once per id).
   state.cupRunId = window.Career ? window.Career.startCupRun() : null;
+  state.secondCupRunId = window.Career && state.cupPlayers === 2 ? window.Career.startCupRun() : null;
   state.cupRecordedFor = null;
   state.cupDifficulty = state.difficulty;
   state.feed = [];
@@ -1282,7 +1393,9 @@ function startCup() {
   state.qualifying = null;
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
-    : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
+    : state.cupPlayers === 2
+      ? `Lights out soon. ${getActiveCup().name} grid is forming: 1P and 2P start from the back.`
+      : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(0);
 }
@@ -1364,6 +1477,49 @@ function startRace(index) {
 
 function getPlayer() {
   return state.racers.find((racer) => racer.id === state.playerId);
+}
+
+// The humans in the session: player 1 (as state.playerId has it), then
+// player 2 in a two-player session.
+function humans() {
+  const first = getPlayer();
+  if (!first) return [];
+  const second = state.humanIds[1] ? racerById(state.humanIds[1]) : null;
+  return second && second !== first ? [first, second] : [first];
+}
+
+function isHuman(racer) {
+  return Boolean(racer) && state.humanIds.includes(racer.id);
+}
+
+function humanBySlot(slot) {
+  return slot ? racerById(state.humanIds[1]) : getPlayer();
+}
+
+// A cup entry of a human: player 1's (slot 0) or player 2's (slot 1).
+function humanEntry(slot = 0) {
+  return state.cupEntries.find((entry) => entry.isPlayer && (entry.player || 1) === slot + 1);
+}
+
+function twoPlayerSession() {
+  return state.cupPlayers === 2 && state.phase !== "garage";
+}
+
+// "1P: " and "2P: " before a player's own news, in a two-player session.
+function playerTag(racer) {
+  return twoPlayerSession() && isHuman(racer) ? `${(racer.playerSlot || 0) + 1}P` : "";
+}
+
+// One player's controls this step: their keys and their pad together.
+function controlsFor(racer) {
+  const slot = racer.playerSlot || 0;
+  return TwoPlayer.merge(slot ? input2 : input, padState[slot]);
+}
+
+// The same as the keys the replay keeps.
+function keysHeld(slot) {
+  const c = TwoPlayer.merge(slot ? input2 : input, padState[slot]);
+  return { throttle: c.throttle > 0, brake: c.brake > 0, left: c.steer < 0, right: c.steer > 0, drift: c.drift, item: c.item };
 }
 
 function updateCountdown(now) {
@@ -1821,9 +1977,8 @@ function updateLapProgress(racer, now, dt = 0) {
   // race stays continuous instead of jumping almost a lap ahead.
   const unwrapped = previousDistance < lapLength * 0.25 && currentDistance > lapLength * 0.75;
   // In qualifying there is one flying lap: backing over the line ends it.
-  if (unwrapped && delta < 0 && racer.startedRaceLap && state.phase === "qualifying" && racer.id === state.playerId && state.qualifying) {
-    state.qualifying.aborted = true;
-    finishQualifying();
+  if (unwrapped && delta < 0 && racer.startedRaceLap && state.phase === "qualifying" && isHuman(racer) && state.qualifying) {
+    abortQualifyingLap(racer);
     return;
   }
   if (unwrapped && delta < 0 && racer.startedRaceLap) {
@@ -5717,6 +5872,7 @@ window.Game = {
 loadAudioPreference();
 loadDifficultyPreference();
 loadDriverPreference();
+settleSecondDriver();
 if (window.Screens) {
   window.Screens.init();
   window.Screens.showPitLane();

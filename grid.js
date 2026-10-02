@@ -17,14 +17,19 @@
 
   // Mario Kart style: the player starts at the back. The CPU cars line up by
   // cup standings (leader on pole); ties, and the first race of a cup, are
-  // settled by a draw.
-  function gridFromBack({ playerId, aiIds, standings = {}, rng = Math.random }) {
+  // settled by a draw. Two players share the last row, the one higher in the
+  // standings first (player 1 on a tie).
+  function gridFromBack({ playerId, playerIds, aiIds, standings = {}, rng = Math.random }) {
     const drawn = shuffled(aiIds, rng);
     const order = drawn
       .map((id, draw) => ({ id, points: standings[id] || 0, draw }))
       .sort((a, b) => b.points - a.points || a.draw - b.draw)
       .map((entry) => entry.id);
-    return [...order, playerId];
+    const humans = (playerIds || [playerId])
+      .map((id, index) => ({ id, points: standings[id] || 0, index }))
+      .sort((a, b) => b.points - a.points || a.index - b.index)
+      .map((entry) => entry.id);
+    return [...order, ...humans];
   }
 
   // The grid is the qualifying classification. A car without a valid time
