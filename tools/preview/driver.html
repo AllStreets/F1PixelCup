@@ -7,7 +7,9 @@
   <title>Driver Studio</title>
   <!-- The driver figure, dressed by the game's own code (r3d/driver.js), in a
        studio: for the design review of docs/superpowers/specs/2026-10-01-driver-v2-design.md.
-       ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back -->
+       ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back|face|face3
+       &head=none|helmet (bareheaded by default, docs/superpowers/specs/2026-10-01-driver-faces-design.md)
+       &focus=<n> (the face cameras look at the nth driver) &grid=1 (every driver's head, five by four, named) -->
   <style>
     html, body { margin: 0; height: 100%; background: #121316; overflow: hidden; font-family: "Trebuchet MS", system-ui, sans-serif; }
     canvas { display: block; width: 100%; height: 100%; }
@@ -16,6 +18,9 @@
     .plate b { display: block; font-size: clamp(16px, 2.2vw, 30px); font-style: italic; }
     .plate span { font-size: clamp(11px, 1.1vw, 15px); opacity: 0.75; text-transform: uppercase; }
     .plate i { display: inline-block; width: 28px; height: 4px; margin: 6px auto 0; border-radius: 2px; }
+    body.grid .plate { bottom: auto; }
+    body.grid .plate b { font-size: clamp(12px, 1.2vw, 18px); }
+    body.grid .plate span { font-size: clamp(9px, 0.75vw, 12px); }
     #poses { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
     #poses button { background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.18); border-radius: 18px; padding: 6px 14px; cursor: pointer; font: inherit; }
     #poses button.on { background: #e10600; border-color: #e10600; }
@@ -38,8 +43,12 @@
     import { loadDriver, buildDriver, POSES } from "../../r3d/driver.js";
 
     const q = new URLSearchParams(location.search);
-    const ids = (q.get("drivers") || "leclerc,hamilton").split(",");
+    const grid = q.get("grid") === "1";
+    const ids = grid ? DRIVERS.map((d) => d.id) : (q.get("drivers") || "leclerc,hamilton").split(",");
+    const headwear = q.get("head") || "none";
+    const focus = Number(q.get("focus") || 0);
     const still = q.has("t");
+    if (grid) document.body.classList.add("grid");
     if (still) document.body.classList.add("still");
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -89,15 +98,34 @@
       three: { pos: [4.1, 1.5, 2.9], at: [0, 0.98, 0] },
       close: { pos: [2.2, 1.62, 0.6], at: [0, 1.42, 0] },
       back: { pos: [-3.9, 1.6, 2.6], at: [0, 1.0, 0] },
+      // Close on one face: straight on, and from three quarters.
+      face: { pos: [1.05, 1.665, 0], at: [0, 1.635, 0], fov: 22 },
+      face3: { pos: [0.86, 1.68, 0.6], at: [0, 1.635, 0], fov: 22 },
+      side: { pos: [0.02, 1.6, 1.25], at: [0.02, 1.58, 0], fov: 22 },
     };
-    const cam = CAMS[q.get("cam")] || CAMS.front;
-    camera.position.set(...cam.pos);
-    camera.lookAt(new THREE.Vector3(...cam.at));
+    const cam = CAMS[q.get("cam")] || (grid ? CAMS.face : CAMS.front);
+    // (In the grid every figure stands on the same spot, drawn one at a time.)
+    const slot = (i) => (grid ? 0 : (i - (ids.length - 1) / 2) * -0.95);
+    // The face cameras follow the figure they look at.
+    const shift = cam.fov ? slot(grid ? 0 : focus) : 0;
+    function aimCamera(z) {
+      camera.position.set(cam.pos[0], cam.pos[1], cam.pos[2] + z);
+      camera.lookAt(new THREE.Vector3(cam.at[0], cam.at[1], cam.at[2] + z));
+    }
+    if (cam.fov) camera.fov = cam.fov;
+    aimCamera(shift);
 
     const figures = [];
     // Each plate under its own figure, wherever the camera is.
     function placePlates() {
       camera.updateMatrixWorld();
+      if (grid) {
+        figures.forEach((f, i) => {
+          f.plate.style.left = `${((i % 5) + 0.5) * 20}%`;
+          f.plate.style.top = `${(Math.floor(i / 5) + 1) * 25 - 6.5}%`;
+        });
+        return;
+      }
       figures.forEach((f) => {
         const p = f.root.position.clone().project(camera);
         f.plate.style.left = `${(p.x * 0.5 + 0.5) * 100}%`;
@@ -106,7 +134,7 @@
     function resize() {
       const w = innerWidth, h = innerHeight;
       renderer.setSize(w, h, false);
-      camera.aspect = w / h;
+      camera.aspect = grid ? (w / 5) / (h / 4) : w / h;
       camera.updateProjectionMatrix();
       placePlates();
     }
@@ -115,14 +143,31 @@
 
     window.preview = { ready: false, figures, looks: () => figures.map((f) => f.looks()) };
 
+    // One frame: the whole view, or in the grid, each head in its own cell.
+    function draw() {
+      if (!grid) {
+        renderer.render(scene, camera);
+        return;
+      }
+      const w = innerWidth, h = innerHeight;
+      renderer.setScissorTest(true);
+      figures.forEach((f, i) => {
+        const x = (i % 5) * w / 5, y = h - (Math.floor(i / 5) + 1) * h / 4;
+        renderer.setViewport(x, y, w / 5, h / 4);
+        renderer.setScissor(x, y, w / 5, h / 4);
+        figures.forEach((g) => { g.root.visible = g === f; });
+        renderer.render(scene, camera);
+      });
+      renderer.setScissorTest(false);
+    }
+
     loadDriver(() => {
-      const spacing = 0.95;
       ids.forEach((id, i) => {
         const driver = DRIVERS.find((d) => d.id === id);
         const team = getTeamForDriver(driver);
-        const fig = buildDriver(driver, team);
+        const fig = buildDriver(driver, team, { headwear });
         // The figure faces +X: toward the front camera.
-        fig.root.position.z = (i - (ids.length - 1) / 2) * spacing * -1;
+        fig.root.position.z = slot(i);
         scene.add(fig.root);
         figures.push(fig);
         const plate = document.createElement("div");
@@ -144,14 +189,14 @@
       if (still) {
         // A still frame: the pose held at time t, rendered once.
         figures.forEach((f) => f.update(Number(q.get("t"))));
-        renderer.render(scene, camera);
+        draw();
       } else {
         renderer.setAnimationLoop(() => {
           const now = performance.now();
           const dt = Math.min(0.1, (now - last) / 1000);
           last = now;
           figures.forEach((f) => f.update(dt));
-          renderer.render(scene, camera);
+          draw();
         });
       }
       window.preview.ready = true;

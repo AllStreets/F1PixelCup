@@ -37,6 +37,7 @@ from mathutils.bvhtree import BVHTree
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from f1parts import helmet_bmesh, spoiler_bmesh, spoiler_uvs  # noqa: E402
+import driver_head  # noqa: E402
 
 OUT = os.environ.get("F1_DRIVER_OUT", "")
 PREVIEW = os.environ.get("F1_DRIVER_PREVIEW", "")
@@ -75,7 +76,18 @@ MATS = {
     "trophy": mat("trophy", (1.0, 0.72, 0.22), 1.0, 0.22),
     "bottle": mat("bottle", (0.02, 0.12, 0.05), 0.0, 0.08),
     "foil": mat("foil", (0.95, 0.75, 0.2), 1.0, 0.3),
+    # The bare head (driver_head.py); each recoloured per driver.
+    "skin": mat("skin", (0.62, 0.42, 0.32), 0.0, 0.5),
+    "eye_sclera": mat("eye_sclera", (0.86, 0.83, 0.79), 0.0, 0.25),
+    "eye_iris": mat("eye_iris", (0.35, 0.45, 0.3), 0.0, 0.3),
+    "eye_cornea": mat("eye_cornea", (1.0, 1.0, 1.0), 0.0, 0.02),
+    "lashes": mat("lashes", (0.03, 0.025, 0.02), 0.0, 0.6),
+    "brows": mat("brows", (0.08, 0.06, 0.04), 0.0, 0.6),
+    "hair": mat("hair", (0.08, 0.06, 0.04), 0.0, 0.45),
+    "beard": mat("beard", (0.08, 0.06, 0.04), 0.0, 0.6),
 }
+_cornea = next(n for n in MATS["eye_cornea"].node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+_cornea.inputs["Alpha"].default_value = 0.12
 
 
 def link(name, bm, material):
@@ -445,6 +457,23 @@ sp = link("helmet_spoiler", spoiler_bmesh(HC.x, HC.z), "helmet")
 spoiler_uvs(sp)
 part(sp, "head")
 
+# The bare head (shown when the helmet is off): the head and neck are skinned,
+# the head bone above the jaw blending into the chest down the neck; the eyes,
+# lashes, brows, hair and beards ride on the head bone.
+head_skin, head_parts = driver_head.build(MATS)
+hg = head_skin.vertex_groups.new(name="head")
+cg = head_skin.vertex_groups.new(name="chest")
+for v in head_skin.data.vertices:
+    w = driver_head.smoothstep(1.47, 1.535, v.co.z)
+    hg.add([v.index], w, "REPLACE")
+    if w < 1:
+        cg.add([v.index], 1 - w, "REPLACE")
+head_skin.parent = rig
+head_skin.modifiers.new("rig", "ARMATURE").object = rig
+for ob in head_parts:
+    if ob is not head_skin:
+        part(ob, "head")
+
 
 def hand(s, sgn):
     """A gloved hand: palm, four fingers in two segments curled a little,
@@ -720,5 +749,8 @@ if PREVIEW:
 if OUT:
     bpy.ops.object.select_all(action="SELECT")
     bpy.ops.export_scene.gltf(filepath=OUT, export_format="GLB", use_selection=True, export_yup=True,
-                              export_animations=True, export_animation_mode="NLA_TRACKS")
+                              export_animations=True, export_animation_mode="NLA_TRACKS",
+                              export_morph=True, export_morph_normal=False, export_try_sparse_sk=True,
+                              export_vertex_color="NONE",
+                              export_attributes=True)
     print("exported", OUT)
