@@ -332,6 +332,9 @@ const state = {
   weather: "dry",
   gridOrder: [],
   qualifying: null,
+  // The race's recording, and the replay of it when one is open (replay.js).
+  recording: null,
+  replay: null,
   finishQueue: [],
   fallbackFrames: 0,
   particles: [],
@@ -1309,6 +1312,9 @@ function startRace(index) {
   state.lastTick = null;
   state.finishQueue = [];
   state.particles = [];
+  // A new race, a new recording (the last one's replay is gone).
+  state.recording = null;
+  state.replay = null;
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
   state.camRoll = 0;
@@ -2014,6 +2020,12 @@ function updateRacer(racer, dt, now) {
   }
 
   ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
+  // The controls as applied this step: the front wheels turn with the
+  // steering, and the replay's input trace reads them.
+  racer.steer = clamp(steerInput, -1, 1);
+  racer.throttleIn = throttle;
+  racer.brakeIn = brake;
+  racer.offroad = offroad;
 
   const turnRate = racer.physics.turnRate * (0.45 + clamp(racer.speed / 180, 0.2, 1));
   // The yaw this step asks for (a drift adds to it, below); it is applied
@@ -2425,6 +2437,8 @@ function updateRace(dt, now) {
   const steps = physicsSteps * (state.flagOutAt ? FLAG_FAST_FORWARD : 1);
   const step = PHYSICS_STEP_MS;
   const from = state.lastTick !== null ? state.lastTick : now + state.simOffset - step;
+  // The replay's recording starts with the field as it stands at lights out.
+  if (!state.recording && steps > 0) startRecording(from);
   for (let index = 0; index < steps; index += 1) {
     const tick = from + (index + 1) * step;
     // After the flag the field runs FLAG_FAST_FORWARD steps to the player's one
@@ -2441,6 +2455,7 @@ function updateRace(dt, now) {
     handleRacerContacts(tick);
     handleRacerContacts(tick);
     handleRacerContacts(tick);
+    recordStep(tick);
   }
   if (steps > 0) state.lastTick = from + steps * step;
   // Kept for tools that drive the race with their own clock (raceNow(wall)).
@@ -2465,6 +2480,162 @@ function updateRace(dt, now) {
     completeRemainingFinishers(raceTime);
     finalizeRace();
   }
+}
+
+// ---------------------------------------------------------------------------
+// The replay's recording (replay.js; docs/superpowers/specs/
+// 2026-10-01-replays-design.md). From lights out, every second physics step,
+// the race as it stands: every car, everything on the road, the boxes, the
+// marshals' flags and the player's keys. It only reads the race.
+// ---------------------------------------------------------------------------
+
+function startRecording(from) {
+  if (!window.Replay || !state.track) return;
+  const track = state.track;
+  state.recording = Replay.createRecording({
+    trackId: track.id,
+    trackName: track.name,
+    laps: track.laps,
+    weather: state.weather,
+    lapLength: track.totalLength,
+    t0: from,
+    stepMs: PHYSICS_STEP_MS,
+    items: ["none", ...PowerUps.ITEM_ORDER],
+    boxes: track.itemBoxes.length,
+    posts: (track.marshalPosts || []).length,
+    playerId: state.playerId,
+    cars: state.racers.map((racer) => ({
+      id: racer.id, name: racer.driver.name, code: racer.driver.code, number: racer.driver.number,
+      team: racer.kart.name, color: racer.kart.body, isPlayer: racer.id === state.playerId,
+    })),
+  });
+  state.recordSteps = 0;
+  state.recordKeys = {};
+  state.recordIds = new WeakMap();
+  state.recordNextId = 1;
+  state.recordFlashes = new WeakSet();
+  state.recordMarshals = {};
+  state.recordYellowAt = null;
+  recordSample(from);
+}
+
+// Called after every physics step; samples every SAMPLE_EVERY-th.
+function recordStep(tick) {
+  const rec = state.recording;
+  if (!rec) return;
+  const keys = state.recordKeys;
+  // The player's keys since the last sample (a tap between two still counts).
+  keys.throttle = keys.throttle || input.throttle;
+  keys.brake = keys.brake || input.brake;
+  keys.left = keys.left || input.left;
+  keys.right = keys.right || input.right;
+  keys.drift = keys.drift || input.drift;
+  keys.item = keys.item || input.space;
+  state.recordSteps += 1;
+  if (state.recordSteps % Replay.SAMPLE_EVERY === 0) recordSample(tick);
+  // Between samples the cars' positions alone (a contact can shove a car in
+  // one step), so every step the race drew is in the replay exactly.
+  else rec.pushMid(state.racers);
+}
+
+// Which item boxes are taken at this sample (one array, reused).
+function recordBoxes(track, now) {
+  const boxes = state.recordPool.boxes || (state.recordPool.boxes = []);
+  boxes.length = track.itemBoxes.length;
+  for (let i = 0; i < boxes.length; i += 1) boxes[i] = (state.boxHiddenUntil[i] || 0) > now;
+  return boxes;
+}
+
+// The marshals' flags at this sample. Only a car that is an incident can
+// raise a yellow, so the flags come from those alone; with none, and no
+// yellow in the last GREEN_MS, every post is quiet and nothing is worked out.
+const QUIET = [];
+function recordFlags(track, now, racing) {
+  if (!window.Marshals || !track.marshalPosts) return QUIET;
+  const incidents = state.racers.filter((racer) => Marshals.incident(racer, now));
+  if (!incidents.length && now - (state.recordYellowAt ?? -Infinity) >= Marshals.GREEN_MS) return QUIET;
+  const flags = Marshals.flags(track.marshalPosts, incidents, now, track.totalLength, state.recordMarshals, racing);
+  if (flags.includes("yellow")) state.recordYellowAt = now;
+  return flags;
+}
+
+function recordId(object) {
+  let id = state.recordIds.get(object);
+  if (!id) {
+    id = state.recordNextId;
+    state.recordNextId = (state.recordNextId % 65535) + 1;
+    state.recordIds.set(object, id);
+  }
+  return id;
+}
+
+function recordSample(now) {
+  const rec = state.recording;
+  const track = state.track;
+  const racers = state.racers;
+  // The running order, as getSortedRacers has it (each car's progress worked
+  // out once; the sort is stable, so ties fall the same way). The arrays and
+  // the cars' records are kept from sample to sample: this runs 30 times a
+  // second, all race.
+  const pool = state.recordPool || (state.recordPool = { order: [], progress: [], cars: [] });
+  const { order, progress, cars } = pool;
+  if (order.length !== racers.length) {
+    order.length = 0;
+    racers.forEach((_, i) => order.push(i));
+  }
+  progress.length = cars.length = racers.length;
+  for (let i = 0; i < racers.length; i += 1) {
+    progress[i] = getRaceProgress(racers[i]);
+    if (!cars[i]) cars[i] = {};
+  }
+  // From the last sample's order (it barely changes in a thirtieth of a
+  // second), by insertion: further first, ties by grid index, which is the
+  // order getSortedRacers' stable sort gives.
+  const ahead = (a, b) => progress[a] > progress[b] || (progress[a] === progress[b] && a < b);
+  for (let i = 1; i < order.length; i += 1) {
+    const index = order[i];
+    let j = i - 1;
+    while (j >= 0 && ahead(index, order[j])) { order[j + 1] = order[j]; j -= 1; }
+    order[j + 1] = index;
+  }
+  const leader = racers[order[0]];
+  order.forEach((index, place) => { cars[index].place = place + 1; });
+  racers.forEach((racer, i) => {
+    const car = cars[i];
+    const charge = racer.driftCharge || 0;
+    car.x = racer.x; car.y = racer.y; car.d = racer.trackDistance || 0; car.heading = racer.heading; car.speed = racer.speed; car.lat = racer.lat || 0;
+    // The tower's own gap: seconds behind the leader, as getRaceStandings has it.
+    car.gap = racer === leader ? 0 : gapSeconds(racer, leader);
+    car.steer = racer.steer || 0; car.throttle = racer.throttleIn || 0; car.brake = racer.brakeIn || 0;
+    car.lap = racer.lap; car.item = racer.currentItem;
+    car.spinning = racer.spinUntil > now; car.drs = racer.drsUntil > now; car.boosting = racer.boostUntil > now;
+    car.formation = racer.formationUntil > now; car.protected = racer.protectedUntil > now;
+    car.drifting = racer.drifting; car.driftRight = racer.driftSide > 0; car.finished = racer.finished;
+    car.trailingOil = racer.trailingOil; car.offroad = Boolean(racer.offroad); car.underRoof = Boolean(racer.underRoof);
+    car.roulette = racer.rouletteUntil > now;
+    car.charge = charge > 1.6 ? 2 : charge > 0.9 ? 1 : 0;
+  });
+  const objects = [
+    ...state.shots.map((shot) => ({ id: recordId(shot), type: shot.type, d: shot.d, lat: shot.lat, age: shot.age })),
+    ...state.hazards.map((hazard) => ({ id: recordId(hazard), type: hazard.type, d: hazard.d, lat: hazard.lat, age: 0 })),
+  ];
+  const sc = state.safetyCar;
+  const racing = now - (state.raceStart || now) > MARSHAL_GRACE_MS;
+  rec.push({
+    cars,
+    objects,
+    safetyCar: sc ? { d: sc.d, lat: sc.lat, leaving: Boolean(sc.leaving), parked: Boolean(sc.parked) } : null,
+    boxes: recordBoxes(track, now),
+    flags: recordFlags(track, now, racing),
+    keys: state.recordKeys,
+  });
+  state.recordKeys = {};
+  state.fxFlashes.forEach((flash) => {
+    if (state.recordFlashes.has(flash)) return;
+    state.recordFlashes.add(flash);
+    rec.addFlash(flash);
+  });
+  if (state.chequerAt && !rec.chequerAt) rec.chequerAt = state.chequerAt;
 }
 
 // Timing points: each lap is split into this many, and every car's race-clock
@@ -2689,6 +2860,10 @@ function showResults(finishers) {
     racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
   ), null);
   state.phase = "results";
+  // The cup's last race: the podium's drivers start loading now.
+  if (state.raceIndex === activeCup.tracks.length - 1 && worldView() === "3d" && window.Render3D.podium) {
+    render3dSafely(() => window.Render3D.podium.preload());
+  }
   if (!window.Screens) return;
   window.Screens.showResults({
     kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
@@ -2721,19 +2896,45 @@ function showPodium() {
   state.phase = "podium";
   if (!window.Screens) return;
   const playerPlace = state.cupEntries.findIndex((entry) => entry.isPlayer) + 1;
+  const podium = state.cupEntries.slice(0, 3).map((entry, index) => ({
+    place: index + 1,
+    driverId: entry.driver.id,
+    name: entry.driver.name,
+    team: entry.kart.name,
+    teamColor: entry.kart.body,
+    points: entry.points,
+    isPlayer: entry.isPlayer,
+  }));
   window.Screens.showPodium({
     kicker: `${activeCup.name} complete`,
     title: playerPlace === 1 ? "Cup winner" : `You finished ${formatOrdinal(playerPlace)}`,
-    podium: state.cupEntries.slice(0, 3).map((entry, index) => ({
-      place: index + 1,
-      name: entry.driver.name,
-      team: entry.kart.name,
-      teamColor: entry.kart.body,
-      points: entry.points,
-      isPlayer: entry.isPlayer,
-    })),
+    podium,
     career: careerForCup(state.lastCupCareer, playerPlace),
   });
+  // The ceremony in 3D (r3d/podium.js): the cup's real top three. Until it
+  // can draw, the screen's 2D steps stand in.
+  state.podium3d = false;
+  if (worldView() === "3d" && window.Render3D.podium) {
+    render3dSafely(() => window.Render3D.podium.begin({ cup: { id: activeCup.id, name: activeCup.name }, podium }));
+  }
+}
+
+// The podium phase's frame: the ceremony behind the screen, its name plates
+// placed under the drivers; the 2D steps while it loads or without 3D.
+function drawPodiumScene() {
+  ctx.clearRect(0, 0, view.width, view.height);
+  showViewLoading(null);
+  let frame = null;
+  if (worldView() === "3d" && window.Render3D.podium) {
+    const reserve = window.Screens && window.Screens.podiumReserve ? window.Screens.podiumReserve() : null;
+    const drawn = render3dSafely(() => window.Render3D.podium.frame(performance.now(), reserve));
+    if (drawn.ok) frame = drawn.value;
+  }
+  const on = Boolean(frame && frame.drawing);
+  if (on !== state.podium3d || on) {
+    state.podium3d = on;
+    if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.platesIn);
+  }
 }
 
 function nextRace() {
@@ -2775,6 +2976,9 @@ function resetToGarage() {
     audio.master.gain.setTargetAtTime(audio.enabled ? 0.55 : 0, audio.ctx.currentTime, 0.05);
   }
   state.phase = "garage";
+  // The ceremony stops and frees its drivers, set and effects.
+  if (window.Render3D && window.Render3D.podium) render3dSafely(() => window.Render3D.podium.end());
+  state.podium3d = false;
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
   // Nothing run from the pit lane is wet.
@@ -2791,6 +2995,8 @@ function resetToGarage() {
   state.stepAccum = 0;
   state.lastTick = null;
   state.finishQueue = [];
+  state.recording = null;
+  state.replay = null;
   state.qualifying = null;
   state.preparing = null;
   state.gridOrder = [];
@@ -2799,6 +3005,307 @@ function resetToGarage() {
   state.camRoll = 0;
   addFeed("Back in the pit lane.");
   if (window.Screens) window.Screens.showPitLane();
+}
+
+// ---------------------------------------------------------------------------
+// The replay: the race just run, from its recording, as television shows it
+// (docs/superpowers/specs/2026-10-01-replays-design.md). Its own clock is the
+// race clock; the cars are stand-ins posed from the recording each frame (the
+// race's own racers are never touched, so the results stand).
+// ---------------------------------------------------------------------------
+
+const REPLAY_SPEEDS = [0.25, 0.5, 1, 2, 4];
+// The speed panel's km/h per unit of speed (the race's and the replay's).
+const KPH_PER_UNIT = 1.45;
+const REPLAY_CAMERAS = ["director", "trackside", "onboard", "helicopter"];
+const REPLAY_SEEK_MS = 5000;
+const REPLAY_TRACE_MS = 4000;
+
+// The replay is drawn by the 3D renderer only (its cameras are 3D views).
+function replayAvailable() {
+  return Boolean(state.recording && state.recording.count > 1 && window.Replay && worldView() === "3d");
+}
+
+function openReplay() {
+  if (state.phase !== "results" || !replayAvailable()) return false;
+  const rec = state.recording;
+  if (!state.replay || state.replay.rec !== rec) {
+    state.replay = { rec, shots: Replay.directorShots(rec), ghosts: new Map() };
+  }
+  Object.assign(state.replay, { time: 0, playing: true, speed: 1, camera: "director", focusId: null, pendingDt: 0, cut: true });
+  state.phase = "replay";
+  state.particles = [];
+  if (worldView() === "3d" && window.Render3D && Render3D.prepareReplay) render3dSafely(() => Render3D.prepareReplay(state.track));
+  if (window.Screens) window.Screens.showReplay();
+  return true;
+}
+
+function exitReplay() {
+  if (state.phase !== "replay") return;
+  state.phase = "results";
+  state.particles = [];
+  if (window.Screens) window.Screens.showResultsAgain();
+}
+
+// The camera and car on screen: the director's shot, or the viewer's choice.
+function replayShot() {
+  const r = state.replay;
+  if (r.camera === "director") {
+    const shot = Replay.shotAt(r.shots, r.time);
+    return { mode: shot.mode, focusId: shot.focusId, director: true };
+  }
+  return { mode: r.camera, focusId: r.focusId || r.rec.header.playerId, director: false };
+}
+
+function replayTogglePlay() {
+  const r = state.replay;
+  if (!r) return;
+  // Played to the end: play goes again from the start.
+  if (!r.playing && r.time >= r.rec.duration) r.time = 0;
+  r.playing = !r.playing;
+}
+
+function replaySeek(ms) {
+  const r = state.replay;
+  if (!r) return;
+  r.time = clamp(Number(ms) || 0, 0, r.rec.duration);
+  state.particles = [];
+  r.pendingDt = 0;
+  r.cut = true;
+}
+
+function replaySetSpeed(speed) {
+  if (state.replay && REPLAY_SPEEDS.includes(speed)) state.replay.speed = speed;
+}
+
+function replayStepSpeed(dir) {
+  const r = state.replay;
+  if (!r) return;
+  const i = REPLAY_SPEEDS.indexOf(r.speed);
+  r.speed = REPLAY_SPEEDS[clamp(i + dir, 0, REPLAY_SPEEDS.length - 1)];
+}
+
+function replaySetCamera(mode) {
+  const r = state.replay;
+  if (!r || !REPLAY_CAMERAS.includes(mode)) return;
+  // Taking the director off keeps the car it was on.
+  if (r.camera === "director" && mode !== "director") r.focusId = replayShot().focusId;
+  r.camera = mode;
+}
+
+function replayFocusStep(dir) {
+  const r = state.replay;
+  if (!r) return;
+  const shot = replayShot();
+  // Choosing a car takes the director off, on the camera it had.
+  if (r.camera === "director") r.camera = shot.mode;
+  const frame = r.rec.sampleAt(r.rec.indexAt(r.rec.header.t0 + r.time));
+  const cars = frame.cars.map((c, i) => ({ id: r.rec.header.cars[i].id, place: c.place }));
+  r.focusId = Replay.neighbour(cars, shot.focusId, dir);
+}
+
+function updateReplayClock(dt) {
+  const r = state.replay;
+  if (!r || !r.playing) return;
+  const step = dt * 1000 * r.speed;
+  r.time = Math.min(r.rec.duration, r.time + step);
+  r.pendingDt += step / 1000;
+  if (r.time >= r.rec.duration) r.playing = false;
+}
+
+// The cars as the recording has them at this moment, in the shape the
+// renderer and the particles read.
+const DRIFT_CHARGE = [0, 1.2, 1.8];
+function replayGhosts(frame, now) {
+  const r = state.replay;
+  const ghosts = [];
+  r.rec.header.cars.forEach((meta, i) => {
+    let ghost = r.ghosts.get(meta.id);
+    if (!ghost) {
+      const racer = racerById(meta.id);
+      if (!racer) return;
+      ghost = { id: racer.id, driver: racer.driver, kart: racer.kart, physics: racer.physics, stats: racer.stats, isPlayer: racer.isPlayer, isRacer: true, emitAccum: 0 };
+      r.ghosts.set(meta.id, ghost);
+    }
+    const c = frame.cars[i];
+    const until = (on) => (on ? now + 1 : 0);
+    Object.assign(ghost, {
+      x: c.x, y: c.y, heading: c.heading, speed: c.speed, steer: c.steer, trackDistance: c.d, lat: c.lat,
+      lap: c.lap, place: c.place, gap: c.gap, finished: c.finished, currentItem: c.item,
+      drifting: c.drifting, driftSide: c.driftRight ? 1 : -1, driftCharge: DRIFT_CHARGE[c.charge] || 0,
+      spinUntil: until(c.spinning), drsUntil: until(c.drs), boostUntil: until(c.boosting),
+      formationUntil: until(c.formation), protectedUntil: until(c.protected), rouletteUntil: until(c.roulette),
+      trailingOil: c.trailingOil, underRoof: c.underRoof, offroad: c.offroad, throttleIn: c.throttle, brakeIn: c.brake,
+    });
+    ghosts.push(ghost);
+  });
+  return ghosts;
+}
+
+function replayPowerUps(frame, ghosts) {
+  const route = getItemRoute(state.track);
+  const place = (d, lat) => ({ d, ...route.toWorld(d, lat) });
+  const sc = frame.safetyCar;
+  return {
+    shots: frame.objects.filter((o) => o.type !== "oilSlick").map((o) => ({ type: o.type, ...place(o.d, o.lat), age: o.age })),
+    hazards: frame.objects.filter((o) => o.type === "oilSlick").map((o) => ({ type: o.type, ...place(o.d, o.lat) })),
+    trails: ghosts.filter((g) => g.trailingOil && !g.finished)
+      .map((g) => ({ ownerId: g.id, ...place(wrapLap(g.trackDistance - PowerUps.TRAIL_GAP), g.lat) })),
+    safetyCar: sc ? { ...place(sc.d, sc.lat), leaving: sc.leaving, parked: sc.parked } : null,
+    boxHidden: frame.boxes,
+    flashes: frame.flashes,
+  };
+}
+
+function replayTrackside(frame, ghosts, now) {
+  const r = state.replay;
+  const track = state.track;
+  const order = [...ghosts].sort((a, b) => a.place - b.place);
+  const leader = order.find((g) => !g.finished) || order[0];
+  const chequer = r.rec.chequerAt && now >= r.rec.chequerAt ? r.rec.chequerAt : 0;
+  const winner = chequer ? order.find((g) => g.finished) : null;
+  return {
+    posts: track.marshalPosts,
+    flags: frame.flags,
+    helicopter: leader ? { d: wrapLap(leader.trackDistance - 400) } : null,
+    flagOutAt: chequer,
+    // The show after the flag, on the replay's clock (so a seek lands in it).
+    showMs: chequer ? now - chequer : 0,
+    winnerColour: winner ? winner.kart.body : null,
+    paused: !r.playing,
+  };
+}
+
+// What the broadcast graphics show at this moment.
+function replayGraphics(frame, shot, focus) {
+  const r = state.replay;
+  const rec = r.rec;
+  const h = rec.header;
+  const cars = frame.cars.map((c, i) => ({ ...c, meta: h.cars[i], index: i }));
+  const order = [...cars].sort((a, b) => a.place - b.place);
+  const leader = order[0];
+  const tower = order.map((c, i) => ({
+    position: c.place,
+    code: c.meta.code,
+    teamColor: c.meta.color,
+    gap: i === 0 ? (c.finished ? "FIN" : "LEADER") : `+${formatGap(c.gap)}`,
+    isFocus: c.meta.id === shot.focusId,
+    isPlayer: c.meta.isPlayer,
+  }));
+  const lapShown = leader.finished ? h.laps : Math.min(leader.lap + 1, h.laps);
+  const lap = leader.finished ? "FINISH" : lapShown === h.laps ? "FINAL LAP" : `LAP ${lapShown}/${h.laps}`;
+  const fc = cars.find((c) => c.meta.id === shot.focusId) || leader;
+  const ahead = order[order.indexOf(fc) - 1];
+  // Four seconds of the car's controls (on the player's car, the player's
+  // keys), read only while the onboard view shows them.
+  const k = frame.k;
+  const history = [];
+  const keys = fc.meta.isPlayer;
+  if (shot.mode === "onboard") {
+    for (let j = Math.max(0, k - Math.round(REPLAY_TRACE_MS / rec.sampleMs)); j <= k; j += 1) {
+      const c = rec.controls(j, fc.index);
+      history.push(keys
+        ? { throttle: c.keys.throttle ? 1 : 0, brake: c.keys.brake ? 1 : 0 }
+        : { throttle: c.throttle, brake: c.brake });
+    }
+  }
+  const now = rec.controls(k, fc.index);
+  const steer = keys ? (now.keys.right ? 1 : 0) - (now.keys.left ? 1 : 0) : fc.steer;
+  return {
+    time: r.time,
+    duration: rec.duration,
+    playing: r.playing,
+    speed: r.speed,
+    camera: r.camera,
+    mode: shot.mode,
+    director: shot.director,
+    track: h.trackName || state.track.name,
+    lap,
+    tower,
+    focus: {
+      id: fc.meta.id, name: fc.meta.name, code: fc.meta.code, number: fc.meta.number, team: fc.meta.team, color: fc.meta.color,
+      place: fc.place, isPlayer: fc.meta.isPlayer, finished: fc.finished,
+      interval: ahead && !fc.finished ? `+${formatGap(Math.max(0, fc.gap - ahead.gap))}` : "",
+      // As the race's speed panel shows it.
+      kph: Math.round(Math.abs(focus ? focus.speed : fc.speed) * KPH_PER_UNIT),
+    },
+    trace: {
+      throttle: history.length ? history[history.length - 1].throttle : 0,
+      brake: history.length ? history[history.length - 1].brake : 0,
+      steer,
+      history,
+      keys: fc.meta.isPlayer,
+    },
+  };
+}
+
+function drawReplay() {
+  // (Should the 3D renderer fail, back to the results: there is no 2D replay.)
+  if (worldView() !== "3d") {
+    exitReplay();
+    return;
+  }
+  const r = state.replay;
+  const rec = r.rec;
+  ctx.clearRect(0, 0, view.width, view.height);
+  showViewLoading(null);
+  const now = rec.header.t0 + r.time;
+  const frame = rec.frameAt(now);
+  const shot = replayShot();
+  const ghosts = replayGhosts(frame, now);
+  const focus = ghosts.find((g) => g.id === shot.focusId) || ghosts[0];
+  // Smoke and dust from the cars as they were (visual only), on the replay's clock.
+  const dt = Math.min(0.1, r.pendingDt);
+  r.pendingDt = 0;
+  if (dt > 0) {
+    ghosts.forEach((g) => { if (!g.finished) emitRacerParticles(g, dt, now, g.offroad); });
+    updateParticles(dt);
+  }
+  if (focus) {
+    render3dSafely(() => window.Render3D.render({
+      track: state.track,
+      player: focus,
+      racers: ghosts,
+      cameraHeading: focus.heading,
+      camPos: null,
+      roll: 0,
+      shake: { x: 0, y: 0 },
+      powerUps: replayPowerUps(frame, ghosts),
+      particles: state.particles,
+      now,
+      racing: false,
+      trackside: replayTrackside(frame, ghosts, now),
+      weather: rec.header.weather,
+      view: { mode: shot.mode, focusId: focus.id, alsoShow: rec.header.playerId, cut: r.cut },
+    }));
+  }
+  r.cut = false;
+  if (window.Screens) window.Screens.updateReplay(replayGraphics(frame, shot, focus));
+}
+
+function handleReplayKey(event) {
+  // Browser shortcuts (zoom, copy) are the browser's.
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const key = event.key;
+  const target = event.target;
+  // A focused control handles its own keys (Space and Enter on a button, the
+  // arrows on the seek bar).
+  const onButton = target && target.closest && target.closest("button");
+  const onRange = target && target.matches && target.matches("input[type=range]");
+  if ((onButton && (key === " " || key === "Enter")) || (onRange && key.startsWith("Arrow"))) return;
+  const lower = key.toLowerCase();
+  let handled = true;
+  if (key === " " || event.code === "Space") replayTogglePlay();
+  else if (key === "ArrowLeft") replaySeek(state.replay.time - REPLAY_SEEK_MS);
+  else if (key === "ArrowRight") replaySeek(state.replay.time + REPLAY_SEEK_MS);
+  else if (key === "ArrowUp") replayFocusStep(-1);
+  else if (key === "ArrowDown") replayFocusStep(1);
+  else if (key === "-" || key === "_") replayStepSpeed(-1);
+  else if (key === "=" || key === "+") replayStepSpeed(1);
+  else if (lower === "c") replaySetCamera(REPLAY_CAMERAS[(REPLAY_CAMERAS.indexOf(state.replay.camera) + 1) % REPLAY_CAMERAS.length]);
+  else if (lower === "x") exitReplay();
+  else handled = false;
+  if (handled) event.preventDefault();
 }
 
 function drawTrack(track) {
@@ -4121,8 +4628,10 @@ function updateParticles(dt) {
     if (particle.life <= 0) return false;
     particle.x += particle.vx * dt;
     particle.y += particle.vy * dt;
-    particle.vx *= 0.94;
-    particle.vy *= 0.94;
+    // (Damped by time, not per frame: the same at any frame rate.)
+    const damp = Math.pow(0.94, dt * 60);
+    particle.vx *= damp;
+    particle.vy *= damp;
     return true;
   });
 }
@@ -4682,7 +5191,7 @@ function drawDriverHud(track, player) {
 
 // Speed, bottom right: in the race and on a qualifying lap alike.
 function drawSpeedPanel(player) {
-  const kph = Math.round(Math.abs(player.speed) * 1.45);
+  const kph = Math.round(Math.abs(player.speed) * KPH_PER_UNIT);
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
   const sx = view.width - 208;
   const sy = view.height - 116;
@@ -4967,6 +5476,11 @@ function togglePause() {
 function handleEscapeKey() {
   // An open overlay (career, settings, phone note) closes first.
   if (window.Screens && window.Screens.closeOverlay()) return;
+  // Out of a replay, back to the results it came from.
+  if (state.phase === "replay") {
+    exitReplay();
+    return;
+  }
   // After a race or a cup there is nothing to pause, so Esc is the way home.
   if (state.phase === "results" || state.phase === "podium" || state.phase === "qualifyingResults") {
     resetToGarage();
@@ -5011,12 +5525,18 @@ function update(now) {
       updateQualifyingSim();
     } else if (state.phase === "qualifying") {
       updateQualifying(dt, now);
+    } else if (state.phase === "replay") {
+      updateReplayClock(dt);
     }
   }
 
   updateEngineAudio(getPlayer());
 
-  if (state.phase !== "garage") {
+  if (state.phase === "podium") {
+    drawPodiumScene();
+  } else if (state.phase === "replay" && state.replay) {
+    drawReplay();
+  } else if (state.phase !== "garage") {
     drawTrack(state.track);
     if (state.paused) drawPauseOverlay();
   } else {
@@ -5095,6 +5615,10 @@ function bindEvents() {
       handleEscapeKey();
       return;
     }
+    if (state.phase === "replay") {
+      if (!(window.Screens && window.Screens.isOverlayOpen())) handleReplayKey(event);
+      return;
+    }
     // Pit lane keys: arrows pick a driver, Enter starts the cup. Nothing else
     // happens on these keys while in the garage.
     if (state.phase === "garage") {
@@ -5118,6 +5642,12 @@ function bindEvents() {
     // Enter moves on from the qualifying classification (to the race) and
     // from the results (to the next race); the phase guards make a second
     // press -- or a click on the focused button -- harmless.
+    // On the results, Enter or Space on a focused button other than "Next
+    // race" (the replay, the pit lane) belongs to that button.
+    if (state.phase === "results" && (event.key === "Enter" || event.key === " ")) {
+      const control = event.target && event.target.closest ? event.target.closest("button, a") : null;
+      if (control && control.id !== "results-next") return;
+    }
     if (event.key === "Enter" && !event.repeat && !(window.Screens && window.Screens.isOverlayOpen())) {
       if (state.phase === "qualifyingResults") { event.preventDefault(); startRaceFromQualifying(); return; }
       if (state.phase === "results") { event.preventDefault(); nextRace(); return; }
@@ -5205,6 +5735,18 @@ window.Game = {
   isSoundOn: () => audio.enabled,
   toggleFullscreen,
   isFullscreen: isFullscreenActive,
+  replay: {
+    available: replayAvailable,
+    open: openReplay,
+    exit: exitReplay,
+    togglePlay: replayTogglePlay,
+    seek: replaySeek,
+    setSpeed: replaySetSpeed,
+    setCamera: replaySetCamera,
+    focusStep: replayFocusStep,
+    SPEEDS: REPLAY_SPEEDS,
+    CAMERAS: REPLAY_CAMERAS,
+  },
 };
 
 loadAudioPreference();
