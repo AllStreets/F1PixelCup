@@ -7,7 +7,7 @@ An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the H
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **All 24 circuits of 2025**, in calendar order, traced from the real layouts, with their real pit lanes from OpenStreetMap (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
+- **All 24 circuits of 2025**, in calendar order, traced from the real layouts, with their pit lanes placed from OpenStreetMap (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
 - **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
 - **Six calendar cups and a season**: the Opening, Spring, Summer, Classics, Autumn and Finale Cups, four races each in the order of the 2025 calendar, or the **2025 Season**, all 24 races for the drivers' and constructors' titles, saved after every race and resumed from the pit lane
 - **Weather that fits the place**: on Changeable, each race rains as often as it really does there, from Spa's one in two to almost never in the desert
@@ -150,11 +150,15 @@ of 2025, in calendar order, and the cup each is raced in:
 | 23 | Lusail International Circuit | Qatar | 5.380 km | Finale Cup |
 | 24 | Yas Marina Circuit | United Arab Emirates | 5.281 km | Finale Cup |
 
-Each one has its real pit lane and garages where OpenStreetMap maps them (Albert
-Park's pit building goes up each year, and Monza, Suzuka and Las Vegas have none
-mapped, so theirs come from the circuit's shape), its signature corners named on
-boards where OpenStreetMap names them (and never where the name is a sponsor's),
-its own ground, trees or city, sky, colour grade and weather odds, floodlights at
+Each one has its pit lane and garages beside the real pit lane's stretch, as
+near as room allows, where OpenStreetMap maps it, and on its real side where
+the widened road leaves room (at Shanghai, Barcelona, Monaco, Singapore, the
+Hungaroring, Zandvoort and Interlagos it doesn't, and the lane is across the
+road). Albert Park's pit building goes up each year, and Monza, Suzuka and Las
+Vegas have none mapped, so theirs come from the circuit's shape. Lap lengths
+are the outline data's. Each circuit has its signature corners named on boards
+where OpenStreetMap names them (and never where the name is a sponsor's), its
+own ground, trees or city, sky, colour grade and weather odds, floodlights at
 the night races, and the sea, lakes and skylines it is known for.
 
 
@@ -295,6 +299,7 @@ F1_Pixel_Cup/
 ├── game.js           # Racing, AI, items, audio, camera and the canvas HUD
 ├── game-data.js      # Teams, drivers, difficulties, circuits, cups, power-ups
 ├── career.js         # Career points, rating, best laps and the saved profile
+├── season.js         # The season: standings, countback, its save and resume
 ├── grid.js           # Starting grids and qualifying rules
 ├── powerups.js       # Power-up odds, limits and track-following shots
 ├── item-icons.js     # Power-up icons, shared by the HUD and the site
@@ -409,7 +414,9 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   3D car loads; 2D only when 3D fails) and `postfx-check.js` (graphics tiers, bursts, the
   flare, High keeping Low's exposure, adverts reading forward from both sides) and
   `trackside-check.js` (pit lanes and garages on every circuit, nothing over the track,
-  no print reading backwards, the Safety Car parking at its garage). Expected for each: every result true, errors [].
+  no print reading backwards, the Safety Car parking at its garage, floodlights at the night races)
+  and `season-check.js` (a season runs, saves after a race and resumes at the next, and starts
+  over only when asked twice). Expected for each: every result true, errors [].
   Every check minimises the test tool's own blank tab so only the window under test shows.
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with

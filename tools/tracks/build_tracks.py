@@ -112,7 +112,9 @@ def true_span(fine, points, length=None):
         run, total = arc_lengths(fine)
         span = lambda a, b: min((run[b] - run[a]) % total, (run[a] - run[b]) % total)
         if abs(span(i, j) - length) > 0.4 * length:
-            near = lambda q: [k for k in range(n) if math.dist(fine[k], q) < math.dist(fine[nearest_index(fine, q)], q) + 80]
+            def near(q):
+                closest = math.dist(fine[nearest_index(fine, q)], q)
+                return [k for k in range(n) if math.dist(fine[k], q) < closest + 80]
             i, j = min(((a, b) for a in near(points[0]) for b in near(points[-1])), key=lambda ab: abs(span(*ab) - length))
             if (j - i) % n > n // 2:
                 i, j = j, i

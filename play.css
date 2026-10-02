@@ -134,6 +134,7 @@ html, body { height: 100%; overflow: hidden; }
 .result-row.is-player { background: rgba(225, 6, 0, 0.18); }
 .result-row .is-fastest { color: #c77dff; }
 .results-table.constructors { margin-top: 22px; }
+.constructors .result-head:not(:first-child) { margin-top: 18px; }
 .constructors .result-row, .constructors .result-head { grid-template-columns: 3rem 4px minmax(0, 1fr) 4.5rem; }
 .new-season { justify-self: end; margin-top: 6px; }
 #results-career { margin-top: 6px; }

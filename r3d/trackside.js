@@ -51,7 +51,9 @@ export function buildMarshalPosts(course, posts, venue) {
   (posts || []).forEach((post) => {
     // Moved only back along the lap where the spot is taken, so a post still
     // watches the whole of its stretch; across the road only if both fail.
-    for (const [shift, across] of [0, -30, -60, -90, -120].map((s) => [s, 1]).concat([0, -30, -60, -90, -120].map((s) => [s, -1]))) {
+    const tries = [];
+    [1, -1].forEach((across) => [0, -30, -60, -90, -120].forEach((shift) => tries.push([shift, across])));
+    for (const [shift, across] of tries) {
       const p = course.sampleAt(((post.d + shift) % total + total) % total);
       const side = across * (p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1));
       const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
@@ -268,7 +270,10 @@ export function buildStarter(course) {
   const total = course.track.totalLength;
   let spot = null;
   // Further back, and a little further out, only where the nearer spots are taken.
-  for (const [back, out] of [20, 50, 80, 110, 140].map((b) => [b, 12]).concat([20, 60, 100, 140, 180, 220].map((b) => [b, 34]))) {
+  const tries = [];
+  [20, 50, 80, 110, 140].forEach((back) => tries.push([back, 12]));
+  [20, 60, 100, 140, 180, 220].forEach((back) => tries.push([back, 34]));
+  for (const [back, out] of tries) {
     const p = course.sampleAt(total - back);
     const off = side * ((side > 0 ? p.outerR : p.outerL) + out);
     const x = p.x + p.nx * off;

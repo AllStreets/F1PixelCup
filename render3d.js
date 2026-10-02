@@ -558,6 +558,11 @@ function auditVenue(track) {
       world.landmarks.traverse((o) => { if (o.name === "floodlights") n += o.userData.count; });
       return n;
     })(),
+    floodlightSpots: (() => {
+      let n = 0;
+      world.landmarks.traverse((o) => { if (o.name === "floodlights") n += o.userData.tries; });
+      return n;
+    })(),
   };
 }
 

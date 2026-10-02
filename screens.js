@@ -307,7 +307,7 @@
       ? `<span>Resume season · Race ${num(saved.nextRace)} of ${num(saved.races)} ›</span>`
       : `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
     $("season-hint").textContent = saved
-      ? `Saved: ${saved.driver} on ${saved.difficulty}. Resuming keeps its driver and settings.`
+      ? `Saved: ${saved.driver} on ${saved.difficulty}, ${saved.grid.toLowerCase()}, ${saved.weather.toLowerCase()} weather. Resuming keeps its driver and these settings.`
       : s.cups[s.selectedCup].season ? "All 24 races in calendar order, for the drivers' and constructors' titles. Saved after every race." : "";
     $("season-hint").classList.toggle("hidden", !s.cups[s.selectedCup].season);
     $("new-season").classList.toggle("hidden", !saved);
@@ -415,15 +415,22 @@
           <span class="${r.fastest ? "is-fastest" : ""}">${esc(r.bestLap)}</span>
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
         </div>`).join("")}`;
-    // The season's constructors' table, beneath.
+    // The season's tables, beneath: the drivers', then the constructors'.
+    const standings = summary.drivers || [];
     const teams = summary.constructors || [];
-    $("results-constructors").innerHTML = teams.length ? `
+    $("results-constructors").innerHTML = (standings.length ? `
+      <div class="result-head"><span>Pos</span><span></span><span>Drivers</span><span>Points</span></div>
+      ${standings.map((d) => `
+        <div class="result-row ${d.isPlayer ? "is-player" : ""}">
+          <b>${esc(ordinal(num(d.position)))}</b><i style="background:${esc(d.teamColor)}"></i>
+          <span>${esc(d.name)}</span><span>${num(d.points)}</span>
+        </div>`).join("")}` : "") + (teams.length ? `
       <div class="result-head"><span>Pos</span><span></span><span>Constructors</span><span>Points</span></div>
       ${teams.map((t) => `
         <div class="result-row ${t.isPlayer ? "is-player" : ""}">
           <b>${esc(ordinal(num(t.position)))}</b><i style="background:${esc(t.teamColor)}"></i>
           <span>${esc(t.name)}</span><span>${num(t.points)}</span>
-        </div>`).join("")}` : "";
+        </div>`).join("")}` : "");
     $("results-constructors").classList.toggle("hidden", !teams.length);
     renderStrip($("results-career"), summary.career);
     $("results-replay").hidden = !(window.Game && Game.replay && Game.replay.available());

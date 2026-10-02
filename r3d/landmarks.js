@@ -92,8 +92,8 @@ export const VENUES = {
     landmarks: ["kingFahdFountain"],
   },
   miami: {
-    // Round the stadium on Miami Gardens' flat lawns: palms, sun, the
-    // marina by turns 6 to 8.
+    // Round the stadium on Miami Gardens' flat lawns: palms, sun, and water
+    // in the infield (the real marina is a painted set by turns 6 to 8).
     ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", runoffTint: "#aaa69c",
     trees: [{ kind: "palm", count: 360, tint: "#4f8a3c", near: 90 }, { kind: "broadleaf", count: 160, tint: "#3f7a3a", near: 260, seed: 6 }],
     lake: { tint: "#38c2cc", count: 5 },
@@ -569,6 +569,7 @@ function floodlights(course, group, venue) {
   const every = 26;
   const { samples } = course;
   const parts = { poles: [], heads: [], pools: [] };
+  let open = 0;
   for (let i = 0; i < samples.length; i += every) {
     const p = samples[i];
     const side = (i / every) % 2 ? 1 : -1;
@@ -576,7 +577,10 @@ function floodlights(course, group, venue) {
     const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
-    if (course.occupied.blocked(x, z, 3) || course.clearance(x, z) < 8) continue;
+    // (No room at all where two stretches share their run-off.)
+    if (course.clearance(x, z) < 8) continue;
+    open += 1;
+    if (course.occupied.blocked(x, z, 3)) continue;
     course.occupied.add(x, z, 4);
     parts.poles.push(new THREE.CylinderGeometry(0.9, 1.3, 70, 6).translate(x, p.h + 35, z));
     // Lamp head sits behind the pole, never out over the run-off.
@@ -590,6 +594,9 @@ function floodlights(course, group, venue) {
   const poles = new THREE.Mesh(mergeGeometries(parts.poles), poleMat);
   poles.name = "floodlights";
   poles.userData.count = parts.poles.length;
+  // Out of how many spots with room by the barrier (for the checks: few
+  // taken by anything else).
+  poles.userData.tries = open;
   poles.castShadow = true;
   const heads = new THREE.Mesh(mergeGeometries(parts.heads), headMat);
   const pools = new THREE.Mesh(mergeGeometries(parts.pools), poolMat);
@@ -604,11 +611,15 @@ function floodlights(course, group, venue) {
 function coastline(course, group, { bearing, tint = "#2a6f96", sand = "#cdbb94" }) {
   const ux = Math.cos(bearing);
   const uz = Math.sin(bearing);
-  // The furthest the circuit reaches that way: its barriers, and the pit
-  // complex out to the back of the garages.
+  // The furthest the circuit reaches that way: its barriers, the pit
+  // complex out to the back of the garages, and the track data's grandstands,
+  // billboards and towers (they stand on land).
   let far = -Infinity;
   course.samples.forEach((p) => {
     far = Math.max(far, p.x * ux + p.y * uz + Math.max(p.outerL, p.outerR) + 60);
+  });
+  (course.track.decor || []).forEach((d) => {
+    far = Math.max(far, d.x * ux + d.y * uz + 90);
   });
   const shore = far + 40;
   // Remembered, so the hills and the skyline stay on land (wet).
@@ -632,7 +643,9 @@ function coastline(course, group, { bearing, tint = "#2a6f96", sand = "#cdbb94" 
   // Keep the trees and everything after out of the water: discs over the
   // sea as far as anything is ever placed (the trees' pad round the circuit).
   const reach = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 1600;
-  for (let d = shore - 40; d < shore + 1400; d += 120) {
+  // (Circles of 90 from 50 out: the claim starts at the beach, never inside
+  // the barriers, where the floodlights and marshal posts stand.)
+  for (let d = shore + 50; d < shore + 1400; d += 120) {
     for (let t = -reach; t <= reach; t += 120) {
       const [x, z] = at(d);
       course.occupied.add(x - uz * t, z + ux * t, 90);
@@ -907,14 +920,15 @@ const EXTRAS = {
       const r = Math.sqrt(rand()) * (disc.r - 30);
       const x = disc.x + Math.cos(a) * r;
       const z = disc.z + Math.sin(a) * r;
-      if (course.clearance(x, z, 120) < 45 || placed.some((p) => Math.hypot(p.x - x, p.z - z) < 30)) continue;
       const len = 18 + rand() * 26;
+      // Clear of the barriers and of each other, by their lengths.
+      if (course.clearance(x, z, 120) < 45 || placed.some((p) => Math.hypot(p.x - x, p.z - z) < (p.len + len) / 2 + 6)) continue;
       q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
       m.compose(new THREE.Vector3(x, 2.2, z), q, new THREE.Vector3(len, 4.5, len * 0.28));
       hulls.setMatrixAt(placed.length, m);
       m.compose(new THREE.Vector3(x, 6, z), q, new THREE.Vector3(len * 0.5, 3.5, len * 0.2));
       cabins.setMatrixAt(placed.length, m);
-      placed.push({ x, z });
+      placed.push({ x, z, len });
     }
     hulls.count = cabins.count = placed.length;
     hulls.castShadow = true;

@@ -116,23 +116,22 @@ test("a saved season comes back exactly; a broken save is ignored, never half-lo
   assert.equal(broken((x) => { x.results[0].fastest = "nobody"; }), null);
   assert.equal(broken((x) => { x.difficulty = "impossible"; }), null);
   assert.equal(broken((x) => { x.results = Array(9).fill(x.results[0]); }), null, "more races than the calendar");
+  // A finished season is nothing to resume (its save should be gone).
+  assert.equal(broken((x) => { x.results = Array(3).fill(x.results[0]); }), null, "a finished season");
   assert.ok(raw.runId);
 });
 
-test("resolveCup: the remembered cup by id; the old cups and old indices go to the cup with their first circuit", () => {
-  const cups = [
-    { id: "openingCup", circuitIds: ["albertpark", "shanghai", "suzuka", "bahrain"] },
-    { id: "springCup", circuitIds: ["jeddah", "miami", "imola", "monaco"] },
-    { id: "classicsCup", circuitIds: ["spa", "hungaroring", "zandvoort", "monza"] },
-    { id: "season", circuitIds: [] },
-  ];
+test("resolveCup: the remembered cup by id, anything else the first cup", () => {
+  const cups = [{ id: "openingCup" }, { id: "springCup" }, { id: "season" }];
   assert.equal(Season.resolveCup("springCup", cups), "springCup");
   assert.equal(Season.resolveCup("season", cups), "season");
-  assert.equal(Season.resolveCup("trophyCup", cups), "classicsCup");
-  assert.equal(Season.resolveCup("constructorCup", cups), "springCup");
-  assert.equal(Season.resolveCup("0", cups), "classicsCup");
-  assert.equal(Season.resolveCup("1", cups), "springCup");
-  assert.equal(Season.resolveCup("7", cups), "openingCup");
+  assert.equal(Season.resolveCup("trophyCup", cups), "openingCup");
+  assert.equal(Season.resolveCup("1", cups), "openingCup");
   assert.equal(Season.resolveCup(null, cups), "openingCup");
-  assert.equal(Season.resolveCup("anything", cups), "openingCup");
+});
+
+test("the season scores exactly as the cups do (game.js POINTS_TABLE)", () => {
+  const src = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "game.js"), "utf8");
+  const table = JSON.parse(src.match(/^const POINTS_TABLE = (\[[^\]]*\]);/m)[1]);
+  assert.deepEqual(table.filter((p) => p > 0), Season.POINTS);
 });

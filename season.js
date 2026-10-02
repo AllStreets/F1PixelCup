@@ -120,7 +120,8 @@
     const sameList = (a, b) => Array.isArray(a) && a.length === b.length && a.every((x, i) => x === b[i]);
     if (!sameList(raw.trackIds, trackIds) || !sameField(raw.field, field) || !field.includes(raw.driverId)) return null;
     if (!DIFFICULTIES.includes(raw.difficulty) || !GRID_MODES.includes(raw.gridMode) || !WEATHER_MODES.includes(raw.weatherMode)) return null;
-    if (typeof raw.runId !== "string" || !raw.runId || !Array.isArray(raw.results) || raw.results.length > trackIds.length) return null;
+    // (A finished season is nothing to resume: its save is cleared after the last race.)
+    if (typeof raw.runId !== "string" || !raw.runId || !Array.isArray(raw.results) || raw.results.length >= trackIds.length) return null;
     const ok = raw.results.every((r) => r && sameField(r.order, field) && (r.fastest === null || field.includes(r.fastest)));
     if (!ok) return null;
     let season = start({ ...raw, trackIds, field: raw.field, teamOf });
@@ -128,17 +129,11 @@
     return season;
   }
 
-  // The cup the pit lane remembers, by id. The two cups before the calendar
-  // (and the index a build may have kept for them) go to the calendar cup with
-  // their first circuit; anything else to the first cup.
-  const OLD_CUPS = { trophyCup: "monza", constructorCup: "monaco" };
-  const OLD_INDICES = ["trophyCup", "constructorCup"];
+  // The cup the pit lane remembers (f1pixelcup.cup, new with the calendar:
+  // no earlier build stored a cup), by id; anything else is the first cup.
   function resolveCup(stored, cups) {
     const ids = cups.map((c) => c.id);
-    if (ids.includes(stored)) return stored;
-    const old = OLD_CUPS[stored] ? stored : /^\d+$/.test(String(stored)) ? OLD_INDICES[Number(stored)] : null;
-    const home = old && cups.find((c) => (c.circuitIds || []).includes(OLD_CUPS[old]));
-    return home ? home.id : ids[0];
+    return ids.includes(stored) ? stored : ids[0];
   }
 
   return {

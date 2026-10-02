@@ -1,6 +1,8 @@
 // The two old cups became the calendar cups
-// (docs/superpowers/specs/2026-10-01-calendar-design.md, section 2): saved
-// careers carry over untouched, and the remembered cup finds its new home.
+// (docs/superpowers/specs/2026-10-01-calendar-design.md, section 2). A
+// regression guard: careers are keyed by circuit and driver, never by cup, so
+// a career saved in the old cups must keep loading exactly as it was and go on
+// counting in the new ones.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Career = require("../career.js");
@@ -76,10 +78,8 @@ test("racing on in a calendar cup adds to the old career", () => {
   assert.equal(summary.newBestLap.previousMs, was.bestLaps.monza.ms);
 });
 
-test("the remembered cup: the old cups go to the calendar cups that hold their first circuits", () => {
+test("the remembered cup is a cup of the calendar or the season, by id", () => {
   const cups = [...Data.CUP_DEFS, Data.SEASON];
-  assert.equal(Season.resolveCup("trophyCup", cups), "classicsCup");
-  assert.equal(Season.resolveCup("constructorCup", cups), "springCup");
   assert.equal(Season.resolveCup("season", cups), "season");
   assert.equal(Season.resolveCup("finaleCup", cups), "finaleCup");
   assert.equal(Season.resolveCup(null, cups), "openingCup");

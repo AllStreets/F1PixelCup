@@ -86,3 +86,15 @@ test("every grandstand knows where round the lap it stands beside", () => {
     });
   });
 });
+
+test("the pit lane is on its real side, except where the widened road leaves no room there", () => {
+  // Known and accepted: on these the real side can't take a lane that reaches
+  // the line clear of every other stretch (the README says so). A new one fails.
+  const OTHER_SIDE = ["shanghai", "barcelona", "monaco", "singapore", "hungaroring", "zandvoort", "interlagos"].sort();
+  const flipped = Object.entries(SHAPES).filter(([, s]) => s.pit.real && s.pit.side !== s.pit.real.side).map(([id]) => id).sort();
+  assert.deepEqual(flipped, OTHER_SIDE);
+  // Mapped in OpenStreetMap, the real pit lane is recorded; where none is
+  // mapped (Albert Park, Las Vegas, Monza, Suzuka), none is claimed.
+  Object.entries(SHAPES).forEach(([id, s]) => assert.equal(Boolean(s.pit.real), Boolean(OSM.pitLanes[id]), id));
+  assert.deepEqual(Object.keys(SHAPES).filter((id) => !OSM.pitLanes[id]).sort(), ["albertpark", "lasvegas", "monza", "suzuka"]);
+});

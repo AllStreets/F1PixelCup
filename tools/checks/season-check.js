@@ -63,7 +63,8 @@ async (page) => {
       && (total === 101 || total === 102)
       && JSON.stringify(shown) === JSON.stringify(table.map((r) => [r.driverId, r.points]))
       && !document.getElementById("results-constructors").classList.contains("hidden")
-      && document.querySelectorAll("#results-constructors .result-row").length === 10;
+      // The season's tables: the 20 drivers, then the 10 constructors.
+      && document.querySelectorAll("#results-constructors .result-row").length === 30;
     window.__seasonRun = saved.runId;
     return ok || JSON.stringify({ phase: state.phase, next: saved.nextRace, total, driver: saved.driverId });
   });
@@ -85,6 +86,18 @@ async (page) => {
     return ok || JSON.stringify({ race: state.raceIndex, track: state.track.id, driver: getPlayer().driver.id, diff: getDifficulty().id, run: state.cupRunId === before.run, same: table === before.table });
   }, before);
 
+  // Quit in the middle of race 2: it isn't counted, and the season resumes at race 2.
+  results.quitMidRaceResumesThere = await step(() => {
+    state.racers.forEach((r) => { r.isPlayer = false; });
+    state.phase = "race";
+    let now = 100000; state.raceStart = now; state.lastTick = now;
+    for (let t = 0; t < 8; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
+    Game.backToPitLane();
+    const s = Game.getPitLaneState();
+    // And the pit lane's own driver is back (the season raced Hamilton).
+    return (s.savedSeason && s.savedSeason.nextRace === 2 && s.driver.id === "leclerc") || JSON.stringify({ saved: s.savedSeason, driver: s.driver.id });
+  });
+
   // "New season" asks once more, then starts over at race 1 with a new run.
   results.newSeasonAsksFirst = await step((before) => {
     Game.backToPitLane();
@@ -101,11 +114,50 @@ async (page) => {
   results.brokenSaveIgnored = await step(() => {
     localStorage.setItem(Season.STORAGE_KEY, "{\"version\":1,\"results\":[1]}");
     const s = Game.getPitLaneState();
-    return s.savedSeason === null || JSON.stringify(s.savedSeason);
+    return (s.cups[s.selectedCup].season && s.savedSeason === null) || JSON.stringify({ season: s.cups[s.selectedCup].season, saved: s.savedSeason });
+  });
+
+  // With qualifying, a season's weekend starts with the qualifying lap.
+  results.qualifyingInASeason = await step(() => {
+    localStorage.removeItem(Season.STORAGE_KEY);
+    Game.selectGridMode("qualifying");
+    Game.startCup();
+    const ok = /qualifying/i.test(state.phase) && state.track.id === "albertpark" && state.cupGridMode === "qualifying";
+    const phase = state.phase;
+    Game.backToPitLane();
+    Game.selectGridMode("back");
+    return ok || JSON.stringify({ phase, track: state.track.id });
+  });
+
+  // The last race: run to the flag, the save is cleared, the championship is
+  // recorded in the career exactly once, and the podium names both champions.
+  results.lastRaceCrowns = await step(() => {
+    const ctx = { trackIds: SEASON.circuitIds, field: DRIVERS.map((d) => d.id), teamOf: Object.fromEntries(DRIVERS.map((d) => [d.id, d.teamId])) };
+    let season = Season.start({ runId: "check-final", driverId: "leclerc", difficulty: "pro", gridMode: "back", weatherMode: "dry", ...ctx });
+    for (let i = 0; i < 23; i += 1) season = Season.addRace(season, { order: [...ctx.field], fastest: null });
+    localStorage.setItem(Season.STORAGE_KEY, Season.serialize(season));
+    Game.startCup();
+    if (state.raceIndex !== 23 || state.track.id !== "yasmarina") return `resumed at ${state.raceIndex} ${state.track.id}`;
+    state.racers.forEach((r) => { r.isPlayer = false; });
+    state.phase = "race";
+    let now = 100000; state.raceStart = now; state.lastTick = now;
+    state.racers.forEach((r) => { r.lapStartAt = now; });
+    for (let t = 0; t < 900 && state.phase === "race"; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
+    const cleared = localStorage.getItem(Season.STORAGE_KEY) === null;
+    Game.nextRace();
+    const podium = state.phase === "podium";
+    const kicker = document.getElementById("podium-kicker").textContent;
+    const title = document.getElementById("podium-title").textContent;
+    const cups = Career.getDriver("leclerc").history.filter((h) => h.type === "cup" && h.cupRunId === "check-final").length;
+    Game.backToPitLane();
+    const ok = cleared && podium && cups === 1 && /2025 Season complete · Constructors' champions: /.test(kicker)
+      && (title === "World champion" || /^You finished/.test(title));
+    return ok || JSON.stringify({ cleared, podium, cups, kicker, title });
   });
   await step(() => {
     localStorage.removeItem(Season.STORAGE_KEY);
     localStorage.removeItem("f1pixelcup.cup");
+    Game.selectWeatherMode("dry");
     Game.selectDifficulty(1);
     Game.selectDriver(DRIVERS.findIndex((d) => d.id === "leclerc"));
   });

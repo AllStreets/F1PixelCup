@@ -8,17 +8,18 @@ feature are kept (five, evenly spaced along each way).
     python3 tools/tracks/fetch_osm.py            # fetches what is new
     python3 tools/tracks/fetch_osm.py --refresh  # fetches everything again
 
-Features already in osm-features.json are kept as they are (OpenStreetMap
-keeps being edited: a refetch moves points slightly, and every circuit built
-from them with them), unless --refresh.
+Features already in osm-features.json are kept as they are, unless
+--refresh: OpenStreetMap keeps being edited, and a refetch would move their
+points slightly, and every circuit built from them with it.
 
 Ways, by game circuit (ids from OpenStreetMap):
   pit lanes: the raceway tagged as the pit lane beside each start/finish
-  straight (several ways, end to end, where it is mapped in parts); the Monaco tunnel is Boulevard Louis II's tunnel section; the
-  signature corners are the raceway ways named for them.
+  straight (several ways, end to end, where it is mapped in parts);
+  the Monaco tunnel is Boulevard Louis II's tunnel section;
+  the signature corners are the raceway ways named for them.
 Monza, Suzuka, Albert Park (whose pit building goes up each year) and Las
-Vegas have no pit lane mapped as a raceway there; build_tracks.py finds theirs from the
-circuit's shape alone.
+Vegas have no pit lane mapped as a raceway there; build_tracks.py finds
+theirs from the circuit's shape alone.
 """
 import json
 import math
