@@ -40,6 +40,12 @@ PIT_LANES = {
     "jeddah": 1121870473,
     "miami": 1017340352,
     "imola": 196368195,
+    # Barcelona's is mapped in three: the way in, the lane, the way out.
+    "barcelona": (33742214, 178416729, 178416733),
+    "montreal": 413000959,
+    "redbullring": 289111668,
+    "hungaroring": 231417580,
+    "zandvoort": 38144527,
     "spa": 323851541,
     "silverstone": 227902927,  # the International (Wing) pit lane
     "monaco": 850261588,       # Voie des stands
@@ -65,6 +71,14 @@ CORNERS = {
         ((1025616641, 7920430), "PIRATELLA", ""),
         ((1025616657, 1021771400, 1025616656), "ACQUE MINERALI", ""),
         ((1025616650, 1021771404), "RIVAZZA", ""),
+    ],
+    # The Red Bull Ring's other corners carry sponsors' names: not these two.
+    "redbullring": [(822592403, "NIKI LAUDA KURVE", ""), (822592407, "RINDT", "")],
+    "zandvoort": [
+        (1311522212, "TARZANBOCHT", ""),
+        (1311522216, "HUGENHOLTZBOCHT", ""),
+        (1311566937, "SCHEIVLAK", ""),
+        (1311879069, "ARIE LUYENDYKBOCHT", ""),
     ],
 }
 # The start/finish line, where the source outline puts it somewhere else:

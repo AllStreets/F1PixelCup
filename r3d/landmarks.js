@@ -108,6 +108,50 @@ export const VENUES = {
     extras: [],
     landmarks: ["sennaMonument"],
   },
+  barcelona: {
+    // Dry Catalan hills round Montmeló, umbrella pines and scrub.
+    ground: "grass", groundTint: "#a7aa66", standColor: "#c60b1e", runoffTint: "#c2b49a", gravelTint: "#d9c9a3",
+    trees: [{ kind: "conifer", count: 700, tint: "#4a6a3a" }, { kind: "broadleaf", count: 260, tint: "#6a8048", near: 120, seed: 2 }],
+    hills: { tint: "#8f9a62", count: 16, height: [160, 360] },
+    extras: [],
+    landmarks: ["montmeloHills"],
+  },
+  montreal: {
+    // An island in the St Lawrence: the river to the east, the rowing basin
+    // to the west, the city across the water to the north-west.
+    ground: "grass", groundTint: "#7cab5e", standColor: "#d52b1e",
+    trees: [{ kind: "broadleaf", count: 520, tint: "#3f7a3a", near: 140 }, { kind: "conifer", count: 120, tint: "#2f5a34", near: 100, seed: 8 }],
+    coast: [{ bearing: 0, tint: "#2c6688", sand: "#a3a892" }, { bearing: Math.PI, tint: "#3a7896", sand: "#a3a892" }],
+    skyline: { arc: [Math.PI * 1.2, Math.PI * 1.55], count: 70, height: [90, 300] },
+    extras: ["coast", "skylineArc"],
+    landmarks: ["biosphere"],
+  },
+  redbullring: {
+    // High in the Styrian hills: steep green slopes and pine forest.
+    ground: "grass", groundTint: "#73ac52", standColor: "#2e5fa8",
+    trees: [{ kind: "conifer", count: 1300, tint: "#2a4f2e" }, { kind: "broadleaf", count: 260, tint: "#3f6e36", near: 120, seed: 4 }],
+    hills: { tint: "#4f7a48", count: 22, height: [320, 720] },
+    fogNear: 900, fogFar: 4400,
+    extras: [],
+    landmarks: ["hillsideStands"],
+  },
+  hungaroring: {
+    // A bowl in the dry hills east of Budapest: the crowd watches from the slopes.
+    ground: "grass", groundTint: "#9cad62", standColor: "#cd2a3e", runoffTint: "#c4b89c",
+    trees: [{ kind: "broadleaf", count: 900, tint: "#4d7a3c" }, { kind: "broadleaf", count: 200, tint: "#5a8444", near: 110, seed: 6 }],
+    hills: { tint: "#859c5c", count: 18, height: [120, 260] },
+    extras: [],
+    landmarks: ["valleyStands"],
+  },
+  zandvoort: {
+    // In the dunes by the North Sea, the beach just to the west.
+    ground: "grass", groundTint: "#aab37c", standColor: "#ff6a00", runoffTint: "#d2c6a2", gravelTint: "#e2d4ae",
+    trees: [{ kind: "conifer", count: 220, tint: "#4d6a45", near: 160 }],
+    hills: { tint: "#c4bd88", count: 40, height: [45, 110] },
+    coast: { bearing: Math.PI, tint: "#4b7489", sand: "#e4d6ad" },
+    extras: ["coast"],
+    landmarks: ["dunes"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -127,6 +171,11 @@ function addMesh(group, geo, mat, x, y, z, { cast = true, receive = true } = {})
 
 export function waterMaterial(tint = "#2a6f96") {
   return new THREE.MeshPhongMaterial({ color: color(tint), specular: 0x9fc4dd, shininess: 90 });
+}
+
+// Whether any of a round footprint lies in the sea (coastline).
+function wet(course, x, z, radius) {
+  return (course.seas || []).some((sea) => x * sea.ux + z * sea.uz + radius > sea.shore);
 }
 
 // Slide a big round thing (a hill, a tower, a bay) straight away from the
@@ -245,17 +294,22 @@ function cornerBoards(course, group, venue) {
     // The outside of the bend first (curve > 0 turns toward +n, so the
     // outside is -n), then the inside, along the corner.
     const tries = [];
-    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift])));
-    for (const [which, shift] of tries) {
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 1])));
+    // Then further back from the barrier, and then a smaller board (a
+    // hairpin with a grandstand round its outside: Zandvoort's Hugenholtz),
+    // where those are all taken.
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 44, 1])));
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 0.6])));
+    for (const [which, shift, back, size] of tries) {
       const p = course.sampleAt(((c.d + shift) % total + total) % total);
       const bend = course.sampleAt(c.d);
       const side = (bend.curve > 0 ? -1 : 1) * which;
-      const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
+      const off = side * ((side > 0 ? p.outerR : p.outerL) + back);
       const x = p.x + p.nx * off;
       const z = p.y + p.ny * off;
       const angle = Math.atan2(p.ty, p.tx);
-      if (!footprintClear(course, x, z, angle, 38, 4, 6) || course.occupied.blocked(x, z, 38)) continue;
-      course.occupied.add(x, z, 38);
+      if (!footprintClear(course, x, z, angle, 38 * size, 4, 6) || course.occupied.blocked(x, z, 38 * size)) continue;
+      course.occupied.add(x, z, 38 * size);
       const g = new THREE.Group();
       g.name = `corner:${c.board}`;
       const tex = canvasTexture(1024, 256, (cx, w, h) => {
@@ -281,6 +335,7 @@ function cornerBoards(course, group, venue) {
       addMesh(g, new THREE.BoxGeometry(74, 20, 1), std(0x2a2d34), 0, 20, 0);
       [-30, 30].forEach((u) => addMesh(g, new THREE.BoxGeometry(2, 12, 2), std(0x2a2d34), u, 5, 0));
       g.position.set(x, p.h, z);
+      g.scale.setScalar(size);
       // The board's face (+z) toward the road.
       g.rotation.y = Math.atan2(p.x - x, p.y - z);
       g.userData.corner = { board: c.board, d: c.d };
@@ -308,7 +363,7 @@ function hills(course, group, { tint, count, height, flat }, rand) {
     hill.scale.set(w, h, depth);
     // The icosahedron's footprint is at most its larger horizontal radius.
     const spot = pushClear(course, cx + Math.cos(a) * rx * d, cz + Math.sin(a) * rz * d, Math.max(w, depth));
-    if (!spot) continue;
+    if (!spot || wet(course, spot.x, spot.z, Math.max(w, depth))) continue;
     hill.position.set(spot.x, -h * 0.15, spot.z);
     hill.rotation.y = rand() * Math.PI;
     hill.receiveShadow = true;
@@ -421,7 +476,7 @@ function skyline(course, group, rand, { night, count = 90, arc = [0, Math.PI * 2
     const h = height[0] + rand() * (height[1] - height[0]);
     const depth = w * (0.6 + rand() * 0.8);
     const spot = pushClear(course, b.cx + Math.cos(a) * rx * d, b.cz + Math.sin(a) * rz * d, Math.hypot(w, depth) / 2, 60);
-    if (!spot) continue;
+    if (!spot || wet(course, spot.x, spot.z, Math.hypot(w, depth) / 2)) continue;
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
     m.compose(new THREE.Vector3(spot.x, h / 2, spot.z), q, new THREE.Vector3(w, h, depth));
     mesh.setMatrixAt(placed, m);
@@ -484,6 +539,48 @@ function floodlights(course, group, venue) {
   pools.userData.ground = true;
   pools.renderOrder = 1;
   group.add(poles, heads, pools);
+}
+
+// The sea along one side of the circuit, toward `bearing` (0 east, PI/2
+// south): everything past the circuit's furthest reach that way, with a beach
+// in front of it. Nothing grows in it.
+function coastline(course, group, { bearing, tint = "#2a6f96", sand = "#cdbb94" }) {
+  const ux = Math.cos(bearing);
+  const uz = Math.sin(bearing);
+  // The furthest the circuit reaches that way: its barriers, and the pit
+  // complex out to the back of the garages.
+  let far = -Infinity;
+  course.samples.forEach((p) => {
+    far = Math.max(far, p.x * ux + p.y * uz + Math.max(p.outerL, p.outerR) + 60);
+  });
+  const shore = far + 40;
+  // Remembered, so the hills and the skyline stay on land (wet).
+  (course.seas = course.seas || []).push({ ux, uz, shore });
+  const size = 40000;
+  const b = course.bounds;
+  const along = b.cx * ux + b.cz * uz;
+  const at = (dist) => [b.cx + ux * (dist - along), b.cz + uz * (dist - along)];
+  const [wx, wz] = at(shore + size / 2);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).rotateY(-bearing), waterMaterial(tint));
+  sea.position.set(wx, 0.08, wz);
+  sea.userData.ground = true;
+  sea.name = "sea";
+  group.add(sea);
+  const [sx, sz] = at(shore - 20);
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(60, size).rotateX(-Math.PI / 2).rotateY(-bearing), new THREE.MeshStandardMaterial({ color: color(sand), roughness: 1 }));
+  beach.position.set(sx, 0.05, sz);
+  beach.receiveShadow = true;
+  beach.userData.ground = true;
+  group.add(beach);
+  // Keep the trees and everything after out of the water: discs over the
+  // sea as far as anything is ever placed (the trees' pad round the circuit).
+  const reach = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 1600;
+  for (let d = shore - 40; d < shore + 1400; d += 120) {
+    for (let t = -reach; t <= reach; t += 120) {
+      const [x, z] = at(d);
+      course.occupied.add(x - uz * t, z + ux * t, 90);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -758,45 +855,10 @@ const EXTRAS = {
     parts.forEach((q) => course.occupied.add(q.x, q.z, q.r));
   },
 
-  // The sea along one side of the circuit (venue.coast: the bearing it lies
-  // toward, 0 east, PI/2 south): everything past the circuit's furthest
-  // reach that way, with a beach in front of it. Nothing grows in it.
+  // The sea (venue.coast: coastline's settings), on one side or several (an
+  // island: Montréal).
   coast(course, group, venue) {
-    const { bearing, tint = "#2a6f96", sand = "#cdbb94" } = venue.coast;
-    const ux = Math.cos(bearing);
-    const uz = Math.sin(bearing);
-    // The furthest the circuit reaches that way: its barriers, and the pit
-    // complex out to the back of the garages.
-    let far = -Infinity;
-    course.samples.forEach((p) => {
-      far = Math.max(far, p.x * ux + p.y * uz + Math.max(p.outerL, p.outerR) + 60);
-    });
-    const shore = far + 40;
-    const size = 40000;
-    const b = course.bounds;
-    const along = b.cx * ux + b.cz * uz;
-    const at = (dist) => [b.cx + ux * (dist - along), b.cz + uz * (dist - along)];
-    const [wx, wz] = at(shore + size / 2);
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).rotateY(-bearing), waterMaterial(tint));
-    sea.position.set(wx, 0.08, wz);
-    sea.userData.ground = true;
-    sea.name = "sea";
-    group.add(sea);
-    const [sx, sz] = at(shore - 20);
-    const beach = new THREE.Mesh(new THREE.PlaneGeometry(60, size).rotateX(-Math.PI / 2).rotateY(-bearing), new THREE.MeshStandardMaterial({ color: color(sand), roughness: 1 }));
-    beach.position.set(sx, 0.05, sz);
-    beach.receiveShadow = true;
-    beach.userData.ground = true;
-    group.add(beach);
-    // Keep the trees and everything after out of the water: discs over the
-    // sea as far as anything is ever placed (the trees' pad round the circuit).
-    const reach = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 1600;
-    for (let d = shore - 40; d < shore + 1400; d += 120) {
-      for (let t = -reach; t <= reach; t += 120) {
-        const [x, z] = at(d);
-        course.occupied.add(x - uz * t, z + ux * t, 90);
-      }
-    }
+    [].concat(venue.coast).forEach((shore) => coastline(course, group, shore));
   },
 
   // Towers on the horizon in one direction only (the venue's skyline: an arc

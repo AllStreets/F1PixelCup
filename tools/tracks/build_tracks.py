@@ -41,6 +41,11 @@ CIRCUITS = {
     "jeddah": ("sa-2021", False),
     "miami": ("us-2022", False),
     "imola": ("it-1953", False),
+    "barcelona": ("es-1991", False),
+    "montreal": ("ca-1978", False),
+    "redbullring": ("at-1969", False),
+    "hungaroring": ("hu-1986", False),
+    "zandvoort": ("nl-1948", False),
     "monza": ("it-1922", False),
     "spa": ("be-1925", False),
     "silverstone": ("gb-1948", False),
@@ -92,10 +97,12 @@ def true_span(fine, points, length=None):
     if (j - i) % n > n // 2:
         i, j = j, i
     if length:
-        # A pit lane runs beside its stretch, so the stretch is about as long
-        # as the lane. Where it is far out (an end nearer another stretch
-        # passing close by: Shanghai's back straight beside the pit entry),
-        # the ends are the points near them whose stretch matches best.
+        # A pit lane runs beside its stretch, and a corner is its stretch, so
+        # the stretch is about as long as the feature. Where it is far out (an
+        # end nearer another stretch passing close by: Shanghai's back
+        # straight beside the pit entry, the far side of Zandvoort's
+        # Hugenholtz hairpin), the ends are the points near them whose stretch
+        # matches best.
         run, total = arc_lengths(fine)
         span = lambda a, b: min((run[b] - run[a]) % total, (run[a] - run[b]) % total)
         if abs(span(i, j) - length) > 0.4 * length:
@@ -723,10 +730,21 @@ def main():
         corners = []
         for c in OSM["corners"].get(game_id, []):
             pts_c = to_scaled(c["points"])
-            i, j, _ = true_span(fine, pts_c)
+            # (A hairpin's ends lie close together: its length tells them apart.)
+            i, j, _ = true_span(fine, pts_c, c["metres"] * SCALE)
             # The middle, on the corner's own stretch.
             mid = nearest_index(fine, pts_c[2], [(i + k) % len(fine) for k in range((j - i) % len(fine) + 1)])
-            corners.append({"board": c["board"], "aka": c["aka"], "d": round(to_lap(mid), 1), "from": round(to_lap(i), 1), "to": round(to_lap(j), 1)})
+            d, lo, hi = to_lap(mid), to_lap(i), to_lap(j)
+            # Where the relaxation opened a hairpin out, both its ends land
+            # near its middle on the relaxed lap: then it keeps its real length
+            # (in the lap's units), either side of the middle in proportion.
+            want = c["metres"] * SCALE
+            span = lambda a, b: (b - a) % lap_len
+            if abs(span(lo, hi) - want) > 0.35 * want:
+                fine_run_c, fine_total_c = arc_lengths(fine)
+                before = (fine_run_c[mid] - fine_run_c[i]) % fine_total_c / ((fine_run_c[j] - fine_run_c[i]) % fine_total_c or 1)
+                lo, hi = (d - want * before) % lap_len, (d + want * (1 - before)) % lap_len
+            corners.append({"board": c["board"], "aka": c["aka"], "d": round(d, 1), "from": round(lo, 1), "to": round(hi, 1)})
         if corners:
             report["corners"] = ", ".join(f"{c['board']} {c['d']}" for c in corners)
         tunnel = None

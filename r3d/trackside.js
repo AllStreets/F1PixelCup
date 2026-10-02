@@ -267,9 +267,10 @@ export function buildStarter(course) {
   const side = lane ? -lane.side : -1;
   const total = course.track.totalLength;
   let spot = null;
-  for (const back of [20, 50, 80, 110, 140]) {
+  // Further back, and a little further out, only where the nearer spots are taken.
+  for (const [back, out] of [20, 50, 80, 110, 140].map((b) => [b, 12]).concat([20, 60, 100, 140, 180, 220].map((b) => [b, 34]))) {
     const p = course.sampleAt(total - back);
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + out);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
     if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;
