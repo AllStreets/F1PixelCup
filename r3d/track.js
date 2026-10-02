@@ -875,7 +875,8 @@ function buildDecorPiece(d, bg, venue, i) {
     g.add(m);
     return m;
   };
-  if (d.type === "grandstand" && venue.stand === "covered" && tracksideModel("grandstand")) return modelStand(venue, bg, i);
+  const standModel = STAND_MODELS[venue.stand];
+  if (d.type === "grandstand" && standModel && tracksideModel(standModel)) return modelStand(venue, bg, i, standModel);
   if (d.type === "grandstand") {
     // Centred on its footprint, seats rising away from the track.
     const len = 150;
@@ -927,9 +928,11 @@ function buildDecorPiece(d, bg, venue, i) {
 // row_k empties, with their seats) are kept for the 3D crowd (r3d/people.js);
 // the painted crowd on each row is what the stand shows from far away.
 export const STAND_SCALE = 6;
-function modelStand(venue, bg, i) {
+// Each venue's stand type (r3d/landmarks.js VENUES: stand), and its model.
+const STAND_MODELS = { covered: "grandstand", open: "grandstandOpen" };
+function modelStand(venue, bg, i, name) {
   const g = new THREE.Group();
-  const model = tracksideModel("grandstand").clone(true);
+  const model = tracksideModel(name).clone(true);
   model.scale.setScalar(STAND_SCALE);
   const seatColour = color(venue.standColor || bg.curbA, "#dc0000");
   // Only the seats (the venue's colour) and the glass (see-through) get

@@ -35,7 +35,9 @@ function waveCloth(cloth, t, strength) {
 
 const FLAG_COLOURS = { yellow: 0xffd400, green: 0x16a34a };
 
-export function buildMarshalPosts(course, posts, venue) {
+// `figures`: the marshal is drawn by r3d/people.js (a figure from the
+// people model) rather than here.
+export function buildMarshalPosts(course, posts, venue, { figures = false } = {}) {
   const group = new THREE.Group();
   group.name = "marshals";
   const hut = mat(0xf2f2f2);
@@ -70,8 +72,10 @@ export function buildMarshalPosts(course, posts, venue) {
       add(new THREE.BoxGeometry(9, 0.8, 8.5), roof, 0, deck + 7.4, 2.5);
       // The marshal, in orange, at the front of the platform (local -z faces
       // the road), the flag in hand.
-      add(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), orange, 2, deck + 2.3, -0.5);
-      add(new THREE.SphereGeometry(0.8, 10, 8), skin, 2, deck + 4.9, -0.5);
+      if (!figures) {
+        add(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), orange, 2, deck + 2.3, -0.5);
+        add(new THREE.SphereGeometry(0.8, 10, 8), skin, 2, deck + 4.9, -0.5);
+      }
       // The flag on its pole, held at the marshal's hand, swung to and fro.
       const hand = new THREE.Group();
       hand.position.set(2.9, deck + 3.6, -0.5);
@@ -86,7 +90,8 @@ export function buildMarshalPosts(course, posts, venue) {
       g.position.set(x, 0, z);
       // Local -z toward the road.
       g.rotation.y = Math.atan2(x - p.x, z - p.y);
-      g.userData.post = { index: post.index, d: post.d, flag, hand, flagMats, state: "none" };
+      // Where the marshal stands (local), for r3d/people.js.
+      g.userData.post = { index: post.index, d: post.d, flag, hand, flagMats, state: "none", standAt: new THREE.Vector3(1.6, deck + 0.3, -0.5) };
       group.add(g);
       return;
     }

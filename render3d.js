@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -157,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -622,7 +622,8 @@ function inspect() {
   const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
-  const trackside = { memory, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
+  const stats = { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: +frameStats.cpuMs.toFixed(2) };
+  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
   // Where each car was drawn (game x, y), and whether it was.
   const drawn = {};
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
@@ -875,13 +876,13 @@ function buildWorld(track) {
   const yachts = landmarks.getObjectByName("yachts");
   // Trackside life: the marshal posts (after everything else has claimed its
   // ground) and the starter by the line.
-  const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
+  const marshals = buildMarshalPosts(course, track.marshalPosts, venue, { figures: Boolean(tracksideModel("people")) });
   group.add(marshals);
   const starter = buildStarter(course);
   if (starter) group.add(starter);
   // The people (r3d/people.js): the crowd in the stands, the pit crews, the
   // photographers and the TV crew, after everything else has its ground.
-  const people = buildPeople(course, { decor, landmarks });
+  const people = buildPeople(course, { decor, landmarks, marshals });
   group.add(people);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
@@ -1208,8 +1209,30 @@ const lookTarget = new THREE.Vector3();
 // the first view also does the frame's own work (the cars, the power-ups, the
 // particles, the boxes, trackside life); each view has its own camera.
 let lastDt = 0;
+// What each frame drew (every view and pass), and the time its drawing
+// took on the main thread, for the checks' budgets.
+const frameStats = { calls: 0, triangles: 0, cpuMs: 0, building: { calls: 0, triangles: 0, cpuMs: 0 } };
+renderer.info.autoReset = false;
+
 function render(frame) {
   if (!api.ready) return null;
+  const started = performance.now();
+  if (frame.viewIndex === undefined || frame.viewIndex === 0) {
+    Object.assign(frameStats, frameStats.building);
+    renderer.info.reset();
+    frameStats.building = { calls: 0, triangles: 0, cpuMs: 0 };
+  }
+  try {
+    return drawFrame(frame);
+  } finally {
+    const b = frameStats.building;
+    b.calls = renderer.info.render.calls;
+    b.triangles = renderer.info.render.triangles;
+    b.cpuMs += performance.now() - started;
+  }
+}
+
+function drawFrame(frame) {
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
   const index = viewports && frame.viewIndex !== undefined ? frame.viewIndex : 0;
   const rect = viewports && frame.viewIndex !== undefined ? viewports[index] || null : null;
@@ -1635,6 +1658,27 @@ function auditItemBoxes(track) {
     });
   });
   return problems;
+}
+
+// Every yacht at a circuit, against the track: the least clearance over
+// its hull's footprint (it must be past the quays, on the water).
+function auditYachts(track) {
+  const world = ensureWorld(track);
+  const info = inspectYachts(world.yachts);
+  if (!info) return null;
+  let least = Infinity;
+  info.yachts.forEach((y) => {
+    const c = Math.cos(y.heading);
+    const s = Math.sin(y.heading);
+    for (const u of [-0.5, -0.25, 0, 0.25, 0.5]) {
+      for (const v of [-0.5, 0, 0.5]) {
+        const x = y.x + u * y.length * c - v * y.beam * s;
+        const z = y.z + u * y.length * s + v * y.beam * c;
+        least = Math.min(least, world.course.clearance(x, z, 600));
+      }
+    }
+  });
+  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least) };
 }
 
 // Every person placed at a circuit, against the track: none may stand

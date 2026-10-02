@@ -17,26 +17,27 @@ import { buildYachts } from "./yachts.js";
 
 export const VENUES = {
   monza: {
-    ground: "grass", groundTint: "#7fa865", standColor: "#dc0000",
+    ground: "grass", groundTint: "#7fa865", standColor: "#dc0000", stand: "open",
     trees: [{ kind: "broadleaf", count: 1300, tint: "#3d7535" }],
     hills: { tint: "#5d7d57", count: 16, height: [120, 260] },
     extras: ["monzaBanking"],
   },
   spa: {
-    ground: "grass", groundTint: "#5f8a4d", standColor: "#f2c200",
+    ground: "grass", groundTint: "#5f8a4d", standColor: "#f2c200", stand: "open",
     trees: [{ kind: "conifer", count: 2000, tint: "#1e4a2a" }, { kind: "conifer", count: 500, tint: "#24522c", near: 90, seed: 7 }],
     hills: { tint: "#2c5232", count: 22, height: [300, 650] },
     fogNear: 700, fogFar: 3200,
+    extras: ["spaPits"],
   },
   silverstone: {
-    ground: "grass", groundTint: "#86ad6a", standColor: "#0a2a6a",
+    ground: "grass", groundTint: "#86ad6a", standColor: "#0a2a6a", stand: "covered",
     trees: [{ kind: "broadleaf", count: 380, tint: "#4a7a3a" }],
     hills: { tint: "#6d8a62", count: 10, height: [80, 160] },
     pit: "wing",
-    extras: ["hangars"],
+    extras: ["silverstoneWing", "hangars"],
   },
   suzuka: {
-    ground: "grass", groundTint: "#76a55e", standColor: "#dc0000",
+    ground: "grass", groundTint: "#76a55e", standColor: "#dc0000", stand: "covered",
     trees: [{ kind: "broadleaf", count: 900, tint: "#2f6a36" }, { kind: "conifer", count: 300, tint: "#244f2c", seed: 3 }],
     hills: { tint: "#40704a", count: 18, height: [200, 420] },
     extras: ["ferrisWheel"],
@@ -53,21 +54,21 @@ export const VENUES = {
   singapore: {
     ground: "city", night: true, standColor: "#e03030", stand: "covered",
     trees: [{ kind: "broadleaf", count: 140, tint: "#2d5a3a", near: 80 }],
-    extras: ["marinaBaySands", "yachts", "singaporeCity", "flyer", "skyline", "floodlights"],
+    extras: ["marinaBaySands", "yachts", "flyer", "singaporeCity", "skyline", "floodlights"],
     // A few at anchor on Marina Bay, in front of Marina Bay Sands.
     harbour: { anchored: 6, anchorIn: "marinaBaySands", wind: 2.2 },
   },
   bahrain: {
-    ground: "sand", standColor: "#b8001f", runoffTint: "#b8a888", gravelTint: "#e0c89a",
+    ground: "sand", standColor: "#b8001f", stand: "covered", runoffTint: "#b8a888", gravelTint: "#e0c89a",
     trees: [{ kind: "palm", count: 170, tint: "#5e7a34", near: 140 }],
     hills: { tint: "#c9a36a", count: 26, height: [40, 110], flat: true },
     extras: ["sakhirTower", "floodlights"],
   },
   interlagos: {
-    ground: "grass", groundTint: "#79a562", standColor: "#009c3b",
+    ground: "grass", groundTint: "#79a562", standColor: "#009c3b", stand: "open",
     trees: [{ kind: "broadleaf", count: 650, tint: "#336c33" }],
     hills: { tint: "#56804c", count: 16, height: [160, 320] },
-    extras: ["lake", "skyline", "favela"],
+    extras: ["spTowers", "lake", "skyline", "favela"],
   },
 };
 
@@ -527,6 +528,8 @@ function dressLandmark(model, venue) {
     else {
       out = src.clone();
       if (src.name === "window_lit") Object.assign(out, { emissive: color(night ? "#ffe6c0" : "#000000"), emissiveIntensity: night ? 1.6 : 0 });
+      // The Flyer's rim: its lights at night.
+      if (src.name === "led") Object.assign(out, { emissive: color("#bfe4ff"), emissiveIntensity: night ? 1.3 : 0 });
       if (src.name === "pool") Object.assign(out, { emissive: color("#3fb4e8"), emissiveIntensity: night ? 1.4 : 0.1 });
       if (src.name === "glass") Object.assign(out, { roughness: 0.12, metalness: 0.5, emissive: color("#ffcf8a"), emissiveIntensity: night ? 0.35 : 0 });
       if (src.name === "gold") Object.assign(out, { metalness: 0.9, roughness: 0.3 });
@@ -617,6 +620,40 @@ function anchorsAround(course, share, spread, sides) {
   return out;
 }
 
+// A landmark from its model, placed with placeModel (its whole footprint,
+// or the named parts' rectangles), dressed for the venue. Returns it, or
+// null (no model, or no room: the caller falls back to its stand-in).
+function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps, margin, forecourt = false, gapFirst = false, step }) {
+  const template = tracksideModel(model);
+  if (!template) return null;
+  let rects;
+  if (parts) rects = partRects(template, parts);
+  else {
+    template.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(template);
+    rects = [{ x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z }];
+  }
+  const spot = placeModel(course, { rects, scale: LANDMARK_SCALE, gaps, anchors, margin, forecourt, gapFirst, step });
+  if (!spot) return null;
+  const made = template.clone(true);
+  dressLandmark(made, venue);
+  made.scale.setScalar(LANDMARK_SCALE);
+  made.position.set(spot.x, 0, spot.z);
+  made.rotation.y = spot.yaw;
+  made.name = `landmark:${name}`;
+  made.userData.landmark = { name, fromModel: true, yaw: spot.yaw, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  group.add(made);
+  return made;
+}
+
+// The middle of the pit lane's zone (a lap distance), or null.
+function pitMiddle(course) {
+  const lane = course.pitLane;
+  if (!lane) return null;
+  const inZone = course.samples.filter((p) => lane.outerAt(p.d) !== null);
+  return inZone.length ? inZone[Math.floor(inZone.length / 2)].d : null;
+}
+
 // The Casino de Monte-Carlo and the Hôtel de Paris, at Casino Square: about
 // a third of the lap, on the outside of the bend (else its inside), the
 // square paved in front of them.
@@ -696,8 +733,40 @@ function marinaBaySandsModel(course, group, venue) {
 // ---------------------------------------------------------------------------
 
 const EXTRAS = {
+  // Spa: the old pit building at the foot of Eau Rouge.
+  spaPits(course, group, venue) {
+    modelLandmark(course, group, venue, {
+      name: "spaPits", model: "spaPits", gaps: [10, 22, 40, 70, 110],
+      anchors: anchorsAround(course, 0.06, 40, () => [1, -1]),
+    });
+  },
+
+  // Silverstone: the Wing, the pit and paddock building, behind the garages.
+  silverstoneWing(course, group, venue) {
+    const mid = pitMiddle(course);
+    const side = course.pitLane ? course.pitLane.side : 1;
+    modelLandmark(course, group, venue, {
+      name: "silverstoneWing", model: "silverstoneWing", gaps: [10, 30, 60, 100, 160, 240], step: 20,
+      anchors: anchorsAround(course, (mid ?? 0) / course.track.totalLength, 40, () => [side, -side]),
+    });
+  },
+
+  // São Paulo: two of its towers on the skyline.
+  spTowers(course, group, venue) {
+    modelLandmark(course, group, venue, {
+      name: "spTowers", model: "spTowers", gaps: [380, 520, 700, 900], step: 30,
+      anchors: anchorsAround(course, 0.5, 200, () => [1, -1]),
+    });
+  },
+
   // The old high-speed banking, left standing in the park.
-  monzaBanking(course, group) {
+  monzaBanking(course, group, venue) {
+    // The old banking stands in the park inside the lap.
+    const lap = modelLandmark(course, group, venue, {
+      name: "monzaBanking", model: "monzaBanking", gaps: [40, 80, 140, 220, 320, 440], step: 24,
+      anchors: anchorsAround(course, 0.3, 90, (p) => (p.curve > 0 ? [1, -1] : [-1, 1])),
+    });
+    if (lap) return;
     const b = course.bounds;
     const spot = course.findSpot(b.cx + 200, b.cz - 200, 230, 1400, 20);
     if (!spot) return;
@@ -739,7 +808,13 @@ const EXTRAS = {
     }
   },
 
-  ferrisWheel(course, group) {
+  ferrisWheel(course, group, venue) {
+    // The amusement park's wheel, beyond the main straight.
+    const away = course.pitLane ? -course.pitLane.side : 1;
+    if (modelLandmark(course, group, venue, {
+      name: "suzukaWheel", model: "suzukaWheel", gaps: [40, 80, 140, 220, 320, 450],
+      anchors: anchorsAround(course, 0.0, 90, () => [away, -away]),
+    })) return null;
     const s = course.samples[0];
     const spot = course.findSpot(s.x + s.nx * 420, s.y + s.ny * 420, 80, 1200, 20);
     if (spot) return ferrisWheel(group, spot.x, spot.z, 70);
@@ -860,7 +935,11 @@ const EXTRAS = {
     }
   },
 
-  flyer(course, group) {
+  flyer(course, group, venue) {
+    if (modelLandmark(course, group, venue, {
+      name: "singaporeFlyer", model: "singaporeFlyer", gaps: [40, 90, 160, 260, 380, 520], step: 24,
+      anchors: anchorsAround(course, 0.12, 90, () => [1, -1]),
+    })) return null;
     const b = course.bounds;
     const spot = course.findSpot(b.maxX + 80, b.minZ + 100, 95, 1400, 20);
     return spot ? ferrisWheel(group, spot.x, spot.z, 80, { lit: true, rimColour: "#9fd8ff" }) : null;
@@ -874,7 +953,13 @@ const EXTRAS = {
     floodlights(course, group, venue);
   },
 
-  sakhirTower(course, group) {
+  sakhirTower(course, group, venue) {
+    // The VIP tower, behind the pits by the start.
+    const side = course.pitLane ? course.pitLane.side : 1;
+    if (modelLandmark(course, group, venue, {
+      name: "sakhirTower", model: "sakhirTower", gaps: [30, 60, 100, 160, 240, 340],
+      anchors: anchorsAround(course, (pitMiddle(course) ?? 0) / course.track.totalLength, 40, () => [side, -side]),
+    })) return;
     const s = course.samples[0];
     const spot = course.findSpot(s.x + s.nx * 220, s.y + s.ny * 220, 40, 1200, 16);
     if (!spot) return;

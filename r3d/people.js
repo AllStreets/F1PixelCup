@@ -182,8 +182,8 @@ function personMaterial(joints, { animated }) {
 // Instanced figures of one kind: their matrices, colours and pose attributes.
 // `materials` holds the world's person materials, one per kind and pose
 // (r3d/people.js owns them; render3d.js disposes them with the world).
-function instanced(kind, list, { animated, cast, materials }) {
-  const made = figureGeometry(kind);
+function instanced(kind, list, { animated, cast, materials, model = kind }) {
+  const made = figureGeometry(model);
   if (!made || !list.length) return null;
   const geometry = made.geometry.clone();
   const n = list.length;
@@ -199,7 +199,7 @@ function instanced(kind, list, { animated, cast, materials }) {
   attr("aTrousers", 3, rgb("trousers"));
   attr("aTrim", 3, rgb("trim"));
   attr("aPose", 4, (f, a, o) => { a[o] = f.seated ? 1 : 0; a[o + 1] = f.phase || 0; a[o + 2] = f.style || 0; a[o + 3] = f.eager || 0; });
-  const key = `${kind}:${animated ? 1 : 0}`;
+  const key = `${model}:${animated ? 1 : 0}`;
   if (!materials.has(key)) {
     const m = personMaterial(made.joints, { animated });
     m.userData.worldOwned = true;
@@ -417,11 +417,28 @@ function tvPlatform(course, rand, group) {
   return [];
 }
 
+// The marshals: one on each post's platform, in orange overalls (the crew
+// figure, its trim white), facing the road, the flag in the hand beside them
+// (r3d/trackside.js waves it).
+function marshalFigures(marshals, rand) {
+  if (!marshals) return [];
+  marshals.updateMatrixWorld(true);
+  return marshals.children.filter((g) => g.userData.post && g.userData.post.standAt).map((g) => {
+    const position = g.localToWorld(g.userData.post.standAt.clone());
+    const yaw = yawOf(g.matrixWorld) + Math.PI / 2;
+    return {
+      kind: "marshal", position, yaw, base: yaw,
+      skin: color(pick(rand, SKINS)), hair: color(pick(rand, HAIRS)),
+      shirt: color("#ff6a00"), trousers: color("#ff6a00"), trim: color("#f2f2f2"), phase: rand(), eager: 1,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 // Everything: after the decor, the landmarks (the garages) and the marshals
 // have claimed their ground. `decor` holds the stands r3d/track.js built.
-export function buildPeople(course, { decor, landmarks }) {
+export function buildPeople(course, { decor, landmarks, marshals }) {
   const group = new THREE.Group();
   group.name = "people";
   if (!tracksideModel("people")) {
@@ -435,6 +452,9 @@ export function buildPeople(course, { decor, landmarks }) {
   const crew = pitCrews(landmarks, rand);
   const snappers = photographers(course, rand);
   const tv = tvPlatform(course, rand, group);
+  const posts = marshalFigures(marshals, rand);
+  const still = instanced("marshal", posts, { animated: false, cast: true, materials, model: "crew" });
+  if (still) group.add(still);
   const watchers = [];
   [["crew", crew], ["photographer", snappers], ["camera_operator", tv]].forEach(([kind, list]) => {
     const mesh = instanced(kind, list, { animated: false, cast: true, materials });
@@ -448,7 +468,7 @@ export function buildPeople(course, { decor, landmarks }) {
     // Every figure placed, for the checks.
     figures: [
       ...stands.flatMap((s) => s.meshes.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.yaw, stand: true })))),
-      ...[...crew, ...snappers, ...tv].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform) })),
+      ...[...crew, ...snappers, ...tv, ...posts].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform) })),
     ],
   };
   return group;
