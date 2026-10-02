@@ -241,6 +241,9 @@ async (page) => {
     const c = document.getElementById("game3d");
     return (low === null && high && high.width === c.width && high.height === c.height) || JSON.stringify({ low, high, canvas: [c.width, c.height] });
   });
+  // (Back to a normal window first: a resize is refused while the window
+  // is still minimised or maximised, as a fresh headless window can be.)
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1180, height: 760 } });
   await p.waitForTimeout(600);
   results.frameFollowsResize = await step(() => {
@@ -248,6 +251,9 @@ async (page) => {
     const c = document.getElementById("game3d");
     return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Math.min(devicePixelRatio, 2))) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
   });
+  // (Back to a normal window first: a resize is refused while the window
+  // is still minimised or maximised, as a fresh headless window can be.)
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.waitForTimeout(400);
 
