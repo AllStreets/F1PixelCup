@@ -297,7 +297,7 @@ def eye_frame(side):
     return idx, c, r
 
 
-IRIS_R = 0.0059   # the visible iris, about 12 mm across
+IRIS_R = 0.0062   # the visible iris, about 12 mm across
 
 
 def ball(side):
@@ -784,15 +784,15 @@ def hair_styles(mats, surface):
     # A short crop: short at the sides, a little longer on top, lying from the crown.
     style("crop", lambda p, n: n * (0.004 + 0.008 * top_of(p)) + crown_flow(p, n) * 0.006 * top_of(p), crown_flow, crown_st, lumps=0.25)
     # Swept up and back: volume rising off the forehead, short at the sides.
-    style("swept", lambda p, n: n * (0.006 + 0.014 * top_of(p) + 0.022 * top_of(p) * front_of(p))
-          + back_flow(p, n) * 0.012 * top_of(p) + Z * 0.012 * front_of(p) * top_of(p), back_flow, back_st, ramp=0.035, lumps=0.4)
+    style("swept", lambda p, n: n * (0.005 + 0.009 * top_of(p) + 0.011 * top_of(p) * front_of(p))
+          + back_flow(p, n) * 0.014 * top_of(p) + Z * 0.006 * front_of(p) * top_of(p), back_flow, back_st, ramp=0.035, lumps=0.4)
     # Textured, a fringe brushed forward and over to the figure's right,
     # falling furthest just right of the middle of the forehead.
     textured_flow = lambda p, n: tangent((p - CROWN_PT) + X * 0.08 * front_of(p) - Y * 0.05 * front_of(p) - Z * 0.03, n)
-    style("textured", lambda p, n: n * (0.006 + 0.012 * top_of(p) + 0.004 * front_of(p)) + textured_flow(p, n) * 0.012 * top_of(p),
+    style("textured", lambda p, n: n * (0.005 + 0.009 * top_of(p) + 0.003 * front_of(p)) + textured_flow(p, n) * 0.014 * top_of(p),
           textured_flow, crown_st, lower=lambda phi: 0.024 * math.exp(-((phi + 0.22) / 0.42) ** 2), edge=0.018, lumps=0.5)
     # Curly: a deeper layer of tight curls.
-    style("curly", lambda p, n: n * (0.011 + 0.022 * top_of(p)), crown_flow, crown_st, lumps=0.5)
+    style("curly", lambda p, n: n * (0.009 + 0.017 * top_of(p)), crown_flow, crown_st, lumps=0.5)
     # Longer, swept back, down over the collar at the back.
     style("long_back", lambda p, n: n * (0.007 + 0.018 * top_of(p) + 0.008 * front_of(p) * top_of(p))
           + back_flow(p, n) * 0.02 * (0.3 + 0.7 * top_of(p)) + Z * 0.006 * front_of(p) * top_of(p),
@@ -871,7 +871,7 @@ def beards(mats, surface, L):
         "short_beard": (area, lambda v, n: n * (0.0025 + 0.002 * chin_w(v)) + down(v, n) * 0.0015, down, beard_st),
         "full_beard": (lambda v: min(1.0, area(v) * 1.3),
                        lambda v, n: n * (0.0055 + 0.006 * chin_w(v)) + down(v, n) * 0.004 - Z * 0.004 * chin_w(v), down, beard_st),
-        "moustache": (tache, lambda v, n: n * (0.003 + 0.001 * upper_lip(v) + 0.002 * chin_w(v)) + tache_flow(v, n) * 0.0025,
+        "moustache": (tache, lambda v, n: n * (0.0026 + 0.0008 * upper_lip(v) + 0.0016 * chin_w(v)) + tache_flow(v, n) * 0.0014,
                       tache_flow, beard_st),
     }
     return [skin_shell("beard", mats, "beard", surface, styles)]

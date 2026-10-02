@@ -204,7 +204,7 @@ function skinMaterial(look) {
 const HAIR_KINDS = {
   hair: { layers: 22, solid: 1, deep: 0.32, shine: 1, strands: [2800, 70], clumps: [230, 16] },
   beard: { layers: 12, solid: 0.4, deep: 0.55, shine: 0.5, strands: [2200, 160], clumps: [260, 30] },
-  brows: { layers: 6, solid: 0.05, deep: 0.7, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
+  brows: { layers: 6, solid: 0.25, deep: 0.7, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
 };
 const LAYERS = Object.fromEntries(Object.entries(HAIR_KINDS).map(([k, v]) => [k, v.layers]));
 const PATTERN = { straight: 0, curly: 1, braids: 2 };

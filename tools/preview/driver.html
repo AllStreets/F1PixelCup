@@ -7,7 +7,7 @@
   <title>Driver Studio</title>
   <!-- The driver figure, dressed by the game's own code (r3d/driver.js), in a
        studio: for the design review of docs/superpowers/specs/2026-10-01-driver-v2-design.md.
-       ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back|face|face3
+       ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back|podium|face|face3|side
        &head=none|helmet (bareheaded by default, docs/superpowers/specs/2026-10-01-driver-faces-design.md)
        &focus=<n> (the face cameras look at the nth driver) &grid=1 (every driver's head, five by four, named) -->
   <style>
@@ -99,12 +99,14 @@
       three: { pos: [4.1, 1.5, 2.9], at: [0, 0.98, 0] },
       close: { pos: [2.2, 1.62, 0.6], at: [0, 1.42, 0] },
       back: { pos: [-3.9, 1.6, 2.6], at: [0, 1.0, 0] },
+      // The whole figure with its arms up, as on the podium.
+      podium: { pos: [4.5, 1.6, 2.8], at: [0, 1.2, 0] },
       // Close on one face: straight on, and from three quarters.
       face: { pos: [1.05, 1.665, 0], at: [0, 1.635, 0], fov: 22 },
       face3: { pos: [0.86, 1.68, 0.6], at: [0, 1.635, 0], fov: 22 },
       side: { pos: [0.02, 1.6, 1.25], at: [0.02, 1.58, 0], fov: 22 },
       // The grid's cells: each head turned a little, its name below the chin.
-      grid: { pos: [1.0, 1.665, 0.22], at: [0.02, 1.645, 0], fov: 21 },
+      grid: { pos: [1.08, 1.68, 0.24], at: [0.02, 1.655, 0], fov: 21 },
     };
     // (&pos=x,y,z&at=x,y,z&fov=n sets a camera of one's own.)
     if (q.has("pos")) CAMS.own = { pos: q.get("pos").split(",").map(Number), at: (q.get("at") || "0,1.6,0").split(",").map(Number), fov: Number(q.get("fov") || 22) };
