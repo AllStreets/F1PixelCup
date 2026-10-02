@@ -32,7 +32,13 @@
     ...ONE_WAY,
     ...HERITAGE.map((h) => `ethnic_${h}`),
   ];
-  const HAIR_STYLES = ["crop", "swept", "textured", "curly", "long_back", "braids", "buzz"];
+  const HAIR_STYLES = ["crop", "swept", "textured", "curly", "long_back", "braids", "buzz", "side_part", "fringe", "messy"];
+  // How full a driver's hair is against his style's own (its depth scaled).
+  const HAIR_VOLUME = [0.6, 1.5];
+  // A driver's brows: how thick against a plain brow; how arched (-1 flat
+  // or falling, 1 high); how far the tail drops (0..1); how far toward the
+  // nose they start (0 close, 1 apart).
+  const BROW_SHAPE = { thickness: [0.5, 1.6], arch: [-1, 1], tail: [0, 1], gap: [0, 1] };
   const FACIAL_HAIR = ["none", "stubble", "short_beard", "full_beard", "moustache"];
   const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -45,6 +51,13 @@
     });
     if (!look.hair || !HAIR_STYLES.includes(look.hair.style)) out.push("unknown hair style");
     if (!look.hair || !HEX.test(look.hair.color || "")) out.push("hair colour is not a colour");
+    const vol = look.hair && look.hair.volume;
+    if (!(typeof vol === "number" && vol >= HAIR_VOLUME[0] && vol <= HAIR_VOLUME[1])) out.push("hair volume out of range");
+    const brows = look.brows || {};
+    Object.entries(BROW_SHAPE).forEach(([k, [lo, hi]]) => {
+      if (!(typeof brows[k] === "number" && brows[k] >= lo && brows[k] <= hi)) out.push(`brows' ${k} out of range`);
+    });
+    if (Object.keys(brows).some((k) => !(k in BROW_SHAPE))) out.push("unknown brow shape");
     if (!FACIAL_HAIR.includes(look.facialHair)) out.push("unknown facial hair");
     const her = look.heritage || {};
     const total = HERITAGE.reduce((n, h) => n + (her[h] || 0), 0);
@@ -76,5 +89,5 @@
     return w;
   }
 
-  return { TWO_WAY, ONE_WAY, HERITAGE, MORPH_KEYS, HAIR_STYLES, FACIAL_HAIR, checkLook, morphWeights };
+  return { TWO_WAY, ONE_WAY, HERITAGE, MORPH_KEYS, HAIR_STYLES, HAIR_VOLUME, BROW_SHAPE, FACIAL_HAIR, checkLook, morphWeights };
 }));

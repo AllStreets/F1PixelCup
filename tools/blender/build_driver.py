@@ -78,7 +78,7 @@ MATS = {
     "foil": mat("foil", (0.95, 0.75, 0.2), 1.0, 0.3),
     # The bare head (driver_head.py); each recoloured per driver.
     "skin": mat("skin", (0.62, 0.42, 0.32), 0.0, 0.5),
-    "eye_sclera": mat("eye_sclera", (0.74, 0.69, 0.65), 0.0, 0.25),
+    "eye_sclera": mat("eye_sclera", (0.66, 0.6, 0.56), 0.0, 0.25),
     "eye_iris": mat("eye_iris", (0.35, 0.45, 0.3), 0.0, 0.3),
     "eye_cornea": mat("eye_cornea", (1.0, 1.0, 1.0), 0.0, 0.02),
     "lashes": mat("lashes", (0.03, 0.025, 0.02), 0.0, 0.6),

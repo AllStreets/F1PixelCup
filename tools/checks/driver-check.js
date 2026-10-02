@@ -97,6 +97,8 @@ async (page) => {
       skin: l.face.skin,
       wantSkin: look.skin.toLowerCase(),
       keysMatch,
+      browsMatch: JSON.stringify(l.face.brows) === JSON.stringify([look.brows.thickness, look.brows.arch, look.brows.tail, look.brows.gap]),
+      volumeMatch: l.face.hairVolume === look.hair.volume,
     };
   }));
   results.bareByDefault = faces.every((f) => f.headwear === "none" && !f.helmetShown && f.shown.includes("head_skin")) || JSON.stringify(faces.map((f) => [f.id, f.headwear, f.helmetShown]));
@@ -104,6 +106,7 @@ async (page) => {
   results.ownFacialHair = faces.every((f) => f.beard === f.wantBeard && f.shown.includes("beard") === Boolean(f.wantBeard)) || JSON.stringify(faces.map((f) => [f.id, f.beard, f.wantBeard]));
   results.bunOnlyWithBraids = faces.every((f) => f.shown.includes("hair_bun") === f.braids) || JSON.stringify(faces.map((f) => [f.id, f.shown]));
   results.ownSkin = faces.every((f) => !f.missing && f.skin === f.wantSkin) || JSON.stringify(faces.map((f) => [f.id, f.skin, f.wantSkin]));
+  results.ownBrowsAndHairVolume = faces.every((f) => f.browsMatch && f.volumeMatch) || JSON.stringify(faces.map((f) => [f.id, f.browsMatch, f.volumeMatch]));
   results.ownFaceShape = faces.every((f) => f.keysMatch) || JSON.stringify(faces.map((f) => [f.id, f.keysMatch]));
   // The hair, brows and beard really follow each face: drawn as stacked
   // layers, from positions of each figure's own, moved off the shared shell

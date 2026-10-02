@@ -108,8 +108,10 @@ function skinMaterial(look) {
   const m = new THREE.MeshPhysicalMaterial({
     name: "skin",
     color: color(look.skin),
-    roughness: 0.48,
-    specularIntensity: 0.55,
+    // Skin's sheen is soft and broken: a rough base, a faint, warm specular.
+    roughness: 0.6,
+    specularIntensity: 0.4,
+    specularColor: new THREE.Color("#fff2ea"),
   });
   const uniforms = {
     stubble: { value: STUBBLE[look.facialHair] },
@@ -139,8 +141,14 @@ function skinMaterial(look) {
       .replace("#include <color_fragment>", `#include <color_fragment>
         {
           vec3 c = diffuseColor.rgb;
-          // Mottling, a centimetre or so across, and finer.
+          // Tone that varies as real skin's does: broad patches a few
+          // centimetres across shifting a little redder or more golden,
+          // mottling a centimetre across, and fine freckling.
+          vec3 hue = vec3(faceNoise(vSkinPos * 34.0), faceNoise(vSkinPos * 34.0 + 11.0), faceNoise(vSkinPos * 34.0 + 23.0)) - 0.5;
+          c *= 1.0 + vec3(0.07, 0.035, 0.05) * hue;
           c *= 0.95 + 0.06 * faceNoise(vSkinPos * 90.0) + 0.04 * faceNoise(vSkinPos * 420.0);
+          float freckle = smoothstep(0.72, 0.9, faceNoise(vSkinPos * 900.0)) * (1.0 - smoothstep(0.3, 1.0, length(fwidth(vSkinPos * 900.0))));
+          c *= 1.0 - 0.06 * freckle * vec3(0.7, 1.0, 1.2);
           // Warmth: cheeks, nose and ears a little redder.
           c = mix(c, c * vec3(1.06, 0.88, 0.86), vMasks.b * 0.45);
           // The lips: darker and redder, a soft edge.
@@ -166,9 +174,11 @@ function skinMaterial(look) {
         reflectedLight.indirectDiffuse *= vAO;
         reflectedLight.indirectSpecular *= vAO * vAO;`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
-        // Glossier on the lips and down the nose, drier on the cheeks.
-        roughnessFactor = mix(roughnessFactor, 0.36, smoothstep(0.0, 0.6, vMasks.r));
-        roughnessFactor *= 0.9 + 0.2 * faceNoise(vSkinPos * 300.0);`)
+        // Glossier on the lips and the nose, drier on the cheeks, and broken
+        // up at the scale of the pores, never one even sheen.
+        roughnessFactor = mix(roughnessFactor, 0.4, smoothstep(0.0, 0.6, vMasks.r));
+        roughnessFactor -= 0.07 * vMasks.b * (1.0 - vMasks.a);
+        roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.14 * faceNoise(vSkinPos * 1400.0 + 5.0);`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
         {
           // Pores: a fine bump a few hundredths of a millimetre deep, faded
@@ -182,7 +192,8 @@ function skinMaterial(look) {
           normal = normalize(abs(det) * normal - grad * 0.00003 * fade);
         }`)
       .replace("#include <lights_physical_pars_fragment>", THREE.ShaderChunk.lights_physical_pars_fragment.replace(WRAP_FROM, `{
-          vec3 wrapW = vec3(0.34, 0.14, 0.09);
+          // (Wider in red: light goes furthest through skin in red.)
+          vec3 wrapW = vec3(0.42, 0.17, 0.1);
           float wrapNL = dot(geometryNormal, directLight.direction);
           vec3 wrapped = clamp((vec3(wrapNL) + wrapW) / (1.0 + wrapW), 0.0, 1.0);
           reflectedLight.directDiffuse += directLight.color * wrapped * BRDF_Lambert( material.diffuseContribution ) * ( 1.0 - F );
@@ -209,23 +220,29 @@ function skinMaterial(look) {
 const HAIR_KINDS = {
   hair: { layers: 22, solid: 1, deep: 0.32, shine: 1, strands: [2800, 70], clumps: [230, 16] },
   beard: { layers: 12, solid: 0.4, deep: 0.55, shine: 0.5, strands: [2200, 160], clumps: [260, 30] },
-  brows: { layers: 6, solid: 0.25, deep: 0.7, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
+  brows: { layers: 6, solid: 0.2, deep: 0.75, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
 };
 const LAYERS = Object.fromEntries(Object.entries(HAIR_KINDS).map(([k, v]) => [k, v.layers]));
 const PATTERN = { straight: 0, curly: 1, braids: 2 };
-function hairMaterial(name, hex, pattern = "straight") {
+function hairMaterial(name, hex, pattern = "straight", opts = {}) {
   const kind = HAIR_KINDS[name];
   // A faint sheen of the hair's own colour off the room, not a grey haze.
   const m = new THREE.MeshPhysicalMaterial({ name, color: color(hex), roughness: 0.75, metalness: 0, specularIntensity: 0.22, specularColor: color(hex).lerp(new THREE.Color(1, 1, 1), 0.3) });
   m.alphaToCoverage = true;
   m.side = THREE.DoubleSide;
+  const brows = name === "brows";
+  // Brows are drawn to the driver's own shape inside their roomy patch.
+  if (brows) m.defines = { HAIR_BROWS: "" };
+  const b = opts.brows || { thickness: 1, arch: 0, tail: 0.5, gap: 0.5 };
   const uniforms = {
     hairTint: { value: color(hex) },
     hairLayers: { value: kind.layers },
     hairPattern: { value: PATTERN[pattern] },
     hairSolid: { value: kind.solid },
     hairDeep: { value: kind.deep },
-    hairShine: { value: kind.shine },
+    hairShine: { value: kind.shine * (pattern === "braids" ? 1.6 : 1) },
+    hairVolume: { value: opts.volume || 1 },
+    browShape: { value: new THREE.Vector4(b.thickness, b.arch, b.tail, b.gap) },
     strandScale: { value: new THREE.Vector2(...kind.strands) },
     clumpScale: { value: new THREE.Vector2(...kind.clumps) },
   };
@@ -238,12 +255,17 @@ function hairMaterial(name, hex, pattern = "straight") {
         attribute vec3 _flow;
         attribute vec3 _hair;
         uniform float hairLayers;
+        uniform float hairVolume;
         varying float vLayer;
         varying vec3 vHair;
-        varying vec3 vFlowV;`)
+        varying vec3 vFlowV;
+        #ifdef HAIR_BROWS
+          attribute vec3 _brow;
+          varying vec3 vBrow;
+        #endif`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>
         // (The build's vectors are in Blender's axes, Z up; ours are Y up.)
-        vec3 tipY = vec3(_tip.x, _tip.z, -_tip.y);
+        vec3 tipY = vec3(_tip.x, _tip.z, -_tip.y) * hairVolume;
         vec3 flowY = vec3(_flow.x, _flow.z, -_flow.y);
         float h = hairLayers > 1.0 ? float(gl_InstanceID) / (hairLayers - 1.0) : 0.0;
         // A strand rises off the skin and bends over: the lean along the
@@ -252,7 +274,10 @@ function hairMaterial(name, hex, pattern = "straight") {
         transformed += rise * h + (tipY - rise) * h * h;
         vLayer = h;
         vHair = _hair;
-        vFlowV = normalize((modelViewMatrix * vec4(flowY, 0.0)).xyz);`);
+        vFlowV = normalize((modelViewMatrix * vec4(flowY, 0.0)).xyz);
+        #ifdef HAIR_BROWS
+          vBrow = _brow;
+        #endif`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
         uniform vec3 hairTint;
@@ -260,23 +285,35 @@ function hairMaterial(name, hex, pattern = "straight") {
         uniform float hairSolid;
         uniform float hairShine;
         uniform float hairDeep;
+        uniform vec4 browShape;
         uniform vec2 strandScale;
         uniform vec2 clumpScale;
         varying float vLayer;
         varying vec3 vHair;
         varying vec3 vFlowV;
+        #ifdef HAIR_BROWS
+          varying vec3 vBrow;
+        #endif
         ${NOISE}
+        // A braided row's cross-section (0 at the parting, 1 on its crown)
+        // and where along its chain of crossing locks this is (0..1).
+        float braidRow(vec2 st, out float chain, out float side) {
+          float across = fract(st.x * 95.0) - 0.5;
+          side = sign(across);
+          chain = fract(st.y * 140.0 + abs(across) * 1.6 + step(0.0, across) * 0.5);
+          return sqrt(max(0.0, 1.0 - pow(abs(across) / 0.42, 2.0)));
+        }
         float hairStrands(vec2 st, out float clump) {
           vec2 s = st * strandScale;
           if (hairPattern > 1.5) {
-            // Braids: rows about a centimetre across, each a chain of
-            // crossing locks.
-            float row = st.x * 95.0;
-            float across = fract(row) - 0.5;
-            float chain = fract(st.y * 140.0 + abs(across) * 1.8 + step(0.0, across) * 0.5);
-            clump = 1.0 - smoothstep(0.32, 0.5, abs(across));
-            float lock = smoothstep(0.0, 0.25, chain) * (1.0 - smoothstep(0.75, 1.0, chain));
-            return clamp(lock * 0.8 + 0.25 * faceNoise(vec3(s, 1.0)), 0.0, 1.0) * clump;
+            // Braids: each lock a twist of fine strands lying across the
+            // row at a slant, a darker crease where two locks cross.
+            float chain, side;
+            clump = braidRow(st, chain, side);
+            float lock = smoothstep(0.0, 0.2, chain) * (1.0 - smoothstep(0.8, 1.0, chain));
+            vec2 slant = vec2(st.x * 0.6 + side * st.y * 0.8, st.y * 0.6 - side * st.x * 0.8) * strandScale.x * 0.8;
+            float fine = faceNoise(vec3(slant.x, slant.y * 0.08, 1.0));
+            return clamp(0.35 + 0.45 * lock + 0.3 * fine, 0.0, 1.0);
           }
           if (hairPattern > 0.5) {
             // Curls: tight coils, a couple of millimetres round.
@@ -289,7 +326,33 @@ function hairMaterial(name, hex, pattern = "straight") {
           clump = faceNoise(vec3(st * clumpScale, 9.0));
           return n;
         }`)
+      .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
+        if (hairPattern > 1.5) {
+          // The braids' relief: each row raised, each lock rounded, lit as
+          // the shape they are (a bump from their height).
+          float chain, side;
+          float row = braidRow(vHair.yz, chain, side);
+          float hgt = 0.0035 * row + 0.0012 * row * sin(3.14159 * chain);
+          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          vec3 grad = sign(det) * (dFdx(hgt) * r1 + dFdy(hgt) * r2);
+          float fade = 1.0 - smoothstep(0.5, 1.5, length(fwidth(vHair.yz * 95.0)));
+          normal = normalize(abs(det) * normal - grad * fade);
+        }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
+        float hairEdge = vHair.x;
+        #ifdef HAIR_BROWS
+          // The driver's own brow: its middle line arched and its tail
+          // dropped by its shape; its depth tapering to the tail; its inner
+          // end further from the nose or closer.
+          float u = vBrow.x;
+          float mid = 0.0035 * browShape.y * sin(3.14159 * clamp(u / 0.72, 0.0, 1.0)) - 0.004 * browShape.z * smoothstep(0.6, 1.0, u);
+          float halfH = 0.0052 * browShape.x * (1.0 - 0.55 * max(0.0, u - 0.35) / 0.65) * (0.75 + 0.25 * smoothstep(0.0, 0.2, u));
+          float start = 0.02 + 0.12 * browShape.w;
+          // (Sparser toward the edges, so its outline is hairs, not a line.)
+          hairEdge = (1.0 - smoothstep(0.25, 1.25, abs(vBrow.y - mid) / halfH)) * smoothstep(start, start + 0.16, u) * (1.0 - smoothstep(0.8, 1.0, u));
+        #endif
         float hairClump;
         float strand = hairStrands(vHair.yz, hairClump);
         // Smaller than a pixel, the strands blur to their average. (Not to a
@@ -298,15 +361,22 @@ function hairMaterial(name, hex, pattern = "straight") {
         strand = mix(strand, 0.5, blur);
         // Fewer strands reach each layer out; clumps reach furthest. At the
         // hair's edge they thin out to the skin.
-        float density = smoothstep(0.0, 1.0, vHair.x);
+        float density = smoothstep(0.0, 1.0, hairEdge);
         float need = pow(vLayer, 1.6) * (0.72 - 0.36 * hairClump) + (1.0 - density) * 0.85 + (1.0 - hairSolid) * 0.45;
+        if (hairPattern > 1.5) {
+          // A braid stands only as high as its row: the layers above the
+          // row's curve are bare, the partings between rows only a line of
+          // roots.
+          need = (vLayer > hairClump * 0.98 + 0.02 ? 2.0 : 0.0) + (1.0 - density) * 0.85;
+        }
         // (Blurred, the step from strands to none is a soft band, so a far
         // hairline or brow fades out rather than stops.)
         float aa = mix(max(fwidth(strand), 0.02), 0.12, blur);
         diffuseColor.a = smoothstep(need - aa, need + aa, strand);
-        if (vHair.x <= 0.0 || diffuseColor.a < 0.02) discard;
+        if (hairEdge <= 0.0 || diffuseColor.a < 0.02) discard;
         // Self-shadowed down in the hair; each strand a slightly different tone.
-        diffuseColor.rgb *= mix(hairDeep, 1.0, pow(vLayer, 0.7)) * mix(0.8, 1.15, faceNoise(vec3(vHair.yz * strandScale * 0.5, 2.0)));`)
+        diffuseColor.rgb *= mix(hairDeep, 1.0, pow(vLayer, 0.7)) * mix(0.8, 1.15, faceNoise(vec3(vHair.yz * strandScale * 0.5, 2.0)));
+        if (hairPattern > 1.5) diffuseColor.rgb *= mix(0.45, 1.0, smoothstep(0.0, 0.5, hairClump));`)
       .replace("#include <lights_physical_pars_fragment>", THREE.ShaderChunk.lights_physical_pars_fragment.replace(WRAP_FROM, `{
           // Light scatters through hair: a soft wrap in place of Lambert.
           float wrapNL = dot(geometryNormal, directLight.direction);
@@ -322,7 +392,7 @@ function hairMaterial(name, hex, pattern = "straight") {
           reflectedLight.directSpecular += directLight.color * shadow * (s1 * 0.045 + s2 * 0.14 * hairTint) * (0.4 + 0.6 * vLayer) * hairShine;
         }`));
   };
-  m.customProgramCacheKey = () => "driver-hair";
+  m.customProgramCacheKey = () => (brows ? "driver-hair-brows" : "driver-hair");
   return m;
 }
 
@@ -475,7 +545,7 @@ function dress(model, driver, team, look) {
         out.dispose();
         const hex = { hair: look.hair.color, beard: look.beardColor, brows: look.brow }[m.name];
         const pattern = m.name === "hair" && (look.hair.style === "curly" || look.hair.style === "braids") ? look.hair.style : "straight";
-        out = hairMaterial(m.name, hex, pattern);
+        out = hairMaterial(m.name, hex, pattern, { volume: m.name === "hair" ? look.hair.volume : 1, brows: m.name === "brows" ? look.brows : null });
       }
     }
     made.set(m.name, out);
@@ -578,6 +648,9 @@ export function buildDriver(driver, team, options = {}) {
       hairColor: hex("hair"),
       eyes: hex("eye_iris"),
       stubble: materials.has("skin") && materials.get("skin").userData.uniforms ? materials.get("skin").userData.uniforms.stubble.value : null,
+      // The brows' shape and the hair's fullness the shaders really draw.
+      brows: materials.has("brows") && materials.get("brows").userData.uniforms ? materials.get("brows").userData.uniforms.browShape.value.toArray() : null,
+      hairVolume: materials.has("hair") && materials.get("hair").userData.uniforms ? materials.get("hair").userData.uniforms.hairVolume.value : null,
       keys,
     };
   }

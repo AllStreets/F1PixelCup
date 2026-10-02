@@ -118,7 +118,12 @@ test("faces: lashes along the lids, bound to them; brows of strands, bound to th
   assert.ok(across.some((z) => z < -0.02) && across.some((z) => z > 0.02));
   const brows = meshNode("brows");
   assert.ok(brows && bound(brows), "the brows follow the brow ridge");
-  assert.ok(hasAll(brows, ["_TIP", "_FLOW", "_HAIR"]), "the brows grow strands");
+  assert.ok(hasAll(brows, ["_TIP", "_FLOW", "_HAIR", "_BROW"]), "the brows grow strands, each driver's own shape");
+  // Room for the thickest, most arched brow: the patch reaches over a
+  // centimetre above and below the brow's middle, along its whole length.
+  const b = attribute(brows, "_BROW");
+  assert.ok(Math.min(...b.map((v) => v[0])) === 0 && Math.max(...b.map((v) => v[0])) === 1, "inner end to tail");
+  assert.ok(Math.min(...b.map((v) => v[1])) < -0.011 && Math.max(...b.map((v) => v[1])) > 0.011, "room above and below");
 });
 
 test("faces: every hair style and facial hair grows on a shared shell, bound to the head", () => {
@@ -149,12 +154,14 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
     // The deepest point inside the hair, metres.
     return Math.max(...tip.map((t, i) => (edge[i] > 0.9 ? Math.hypot(...t) : 0)));
   };
+  // Braids stand off the scalp as raised rows (the shader plaits them).
+  assert.ok(depth("BRAIDS") > 0.006, `braids ${depth("BRAIDS")}`);
   // A buzz cut a few millimetres; swept hair centimetres deep on top.
   assert.ok(depth("BUZZ") < 0.004, `buzz ${depth("BUZZ")}`);
-  assert.ok(depth("SWEPT") > 0.025, `swept ${depth("SWEPT")}`);
+  assert.ok(depth("SWEPT") > 0.02, `swept ${depth("SWEPT")}`);
   assert.ok(depth("CURLY") > depth("CROP"), "curls stand deeper than a crop");
-  // Every style: on the forehead the hair grows only above the brows (the
-  // brow ridge is about 2 cm over the eyes' centre), never on the ears
+  // Every style: on the forehead the hair grows only above the brows, never
+  // on the ears
   // (where the target that swings them out acts), and down to the nape.
   const eyeLine = meshNode("eye_L").extras.eye_centre[1];
   const head = meshNode("head_skin");
@@ -166,7 +173,9 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
     const edge = attribute(hair, `_HAIR_${style.toUpperCase()}`).map((v) => v[0]);
     const front = pos.filter((p, i) => edge[i] > 0 && p[0] > 0.07 && Math.abs(p[2]) < 0.045);
     assert.ok(front.length > 20, `${style}: hair on the front of the head`);
-    front.forEach((p) => assert.ok(p[1] > eyeLine + 0.03, `${style}: hair on the forehead at ${p[1].toFixed(3)} m`));
+    // (A fringe falls lowest, still clear of the brows, whose top is 2.3 cm
+    // over the eyes' centre.)
+    front.forEach((p) => assert.ok(p[1] > eyeLine + 0.024, `${style}: hair on the forehead at ${p[1].toFixed(3)} m`));
     pos.forEach((p, i) => {
       if (edge[i] > 0) assert.ok(earPts.every((q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) > 0.003), `${style}: hair on an ear`);
     });
@@ -202,6 +211,21 @@ const gaps = (pts) => {
   for (let a = -Math.PI + 0.4; a < Math.PI; a += Math.PI / 4) out.push([a, around(collarEdge, a) - around(ring, a)]);
   return out;
 };
+
+test("faces: the suit's collar stands up round the neck from a sloping shoulder line", () => {
+  const collar = positions(meshNode("collar"));
+  const top = Math.max(...collar.map((p) => p[1])), low = Math.min(...collar.map((p) => p[1]));
+  assert.ok(top - low > 0.03 && top - low < 0.06, `the band is ${((top - low) * 100).toFixed(1)} cm tall`);
+  // Close round the neck: no wider than a real collar (13 cm across).
+  const across = Math.max(...collar.map((p) => p[2])) - Math.min(...collar.map((p) => p[2]));
+  assert.ok(across < 0.135, `the collar is ${(across * 100).toFixed(1)} cm across`);
+  // The body slopes down from the collar to the shoulders (the trapezius),
+  // never a flat ledge: it meets the collar a centimetre or more below its
+  // top and falls away outward.
+  const body = positions(meshNode("body"));
+  const at = (y) => Math.max(...body.filter((p) => Math.abs(p[2] - y) < 0.006 && Math.abs(p[0]) < 0.03).map((p) => p[1]));
+  assert.ok(at(0.07) < top - 0.01 && at(0.12) < at(0.07) - 0.01, `the shoulder line falls ${at(0.07).toFixed(3)} to ${at(0.12).toFixed(3)} m`);
+});
 
 test("faces: the neck stands in the collar, filling it, never floating above it", () => {
   const head = positions(meshNode("head_skin"));

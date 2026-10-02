@@ -52,17 +52,18 @@ Each is a thin shell laid on the skin, bound to the head's surface (`_BIND`: thr
 ```js
 look: {
   skin: "#c58c6a",          // base skin tone
-  hair: { style: "swept", color: "#2a1d15" },
+  hair: { style: "swept", color: "#2a1d15", volume: 1 },   // volume 0.6..1.5
   facialHair: "none" | "stubble" | "short_beard" | "full_beard" | "moustache",
   beardColor: "#2a1d15",
   brow: "#24180f",
+  brows: { thickness: 1, arch: 0, tail: 0.5, gap: 0.5 },   // thickness 0.5..1.6, arch -1..1, tail and gap 0..1
   eyes: "#4f6b4a",          // iris
   heritage: { african: 0, asian: 0, caucasian: 1 },   // MakeHuman's ethnic blend, summing to 1
   shape: { jaw_width: 0.3, nose_length: 0.2, ... },     // each -1..1 (unipolar ones 0..1)
 }
 ```
 
-Worked out from each driver's public appearance in 2025 (public photos as reference only, nothing private), each with a line describing the appearance it is drawn from. A likeness, never a caricature: no shape slider past 0.7. `heritage` is MakeHuman's shape blend, used only where it clearly shapes the face. Leclerc and Hamilton get the most care: Leclerc's dark brown hair swept up and back, clean shaven, green eyes, a long lean face with a defined jaw, a long straight nose, thick straight brows set low and ears that stand out a little; Hamilton's braids tied back into a bun, his moustache joined to a short beard on the chin and along the jaw, his skin tone, high cheekbones, broad nose and full lips. `faces.js` (pure, UMD) holds the vocabulary, checks a look and turns its shape into the morph weights.
+Worked out from each driver's public appearance in 2025 (public photos as reference only, nothing private), each with a line describing the appearance it is drawn from. A likeness, never a caricature: no shape slider past 0.85 (raised from 0.7 after the user's review asked for more specific features). `heritage` is MakeHuman's shape blend, used only where it clearly shapes the face. Leclerc and Hamilton get the most care: Leclerc's dark brown hair swept back, clean shaven, green eyes, a long lean face with a defined jaw, a long straight nose, thick straight brows set low and ears that stand out a little; Hamilton's braids tied back into a bun, his moustache joined to a short beard on the chin and along the jaw, his skin tone, high cheekbones, broad nose and full lips. `faces.js` (pure, UMD) holds the vocabulary, checks a look and turns its shape into the morph weights.
 
 ## In three.js (`r3d/driver.js`)
 
@@ -90,3 +91,12 @@ Adds `head=none|helmet` (default none), the cameras `face` (front close-up of on
   - the figure's height and the existing tests still hold; the file stays under 4 MB;
   - every driver has a complete `look`, colours are valid, styles exist, `heritage` sums to 1, every shape value is a known key and in range and at most 0.7; no two faces alike; every style and facial hair is worn by somebody; the showcase pair's looks.
 - **Browser** (`tools/checks/driver-check.js`): bareheaded figures show their own look (the hair style and facial hair drawn, the bun only with braids, the skin colour, the morph influences match the data); the hair is drawn in layers and follows each face: each hair vertex exactly where its head triangle's morphed corners put it, and each eye where its keys move and scale it (a bigger eye bigger); the helmet option shows the helmet with the driver's own texture and hides the face; the grid of twenty loads; no errors.
+
+## After the user's review (2026-10-02)
+
+The user's notes on the first faces, and what changed:
+
+- **The neck:** the suit's collar is now a band of its own (`collar`, the trim colour), standing up 4 to 5 cm round the neck and rolled over at its top, rising from a shoulder line that slopes down from it like the trapezius under the suit (the body's top is slimmer, its neck loft narrower). The neck is fitted inside the collar's lip, so it rises straight into the collar instead of flaring into the shoulders. Checked from front, side and three quarters, and in every pose.
+- **More specific likenesses:** every look's shape sliders pushed further apart (at most 0.85), from each driver's public photos (reference only). Three more hair styles (`side_part`, with a thin line of scalp at the part; `fringe`, a straight fringe with an uneven edge; `messy`, tousled locks), and `hair.volume` (0.6 to 1.5) scales a style's depth per driver. Each driver has his own brows, `brows: { thickness, arch, tail, gap }`: the brow patch is roomy (`_BROW`: how far along the brow, and how far above or below its middle) and the shader draws the driver's brow inside it, its edge broken into hairs. No two drivers share hair and brows.
+- **Less plastic skin:** a rougher base and a softer, warm specular; roughness broken up at the pores' scale; broad patches of tone a few centimetres across shifting a little redder or more golden, finer mottling and faint freckling; the light's wrap through the skin wider in red.
+- **Hamilton:** the beard trimmed closer (half the depth, a narrower jawline strip). The braids are raised rows (7.5 mm at their crown): each row's cross-section is round, the layers above it bare, the partings between rows a line of roots; each lock a twist of fine slanted strands, a darker crease where two cross, lit with a bump from the rows' height and a stronger hair highlight.

@@ -558,7 +558,7 @@ def lashes(mats, surface):
                 ks.append(k)
                 k = (k + step) % len(rim)
             ks.append(outer)
-            length = 0.0068 if upper else 0.003
+            length = 0.0062 if upper else 0.0022
             rows = []
             for n, k in enumerate(ks):
                 t = n / (len(ks) - 1)
@@ -740,6 +740,7 @@ def scalp_region(v, ear=0.0):
 
 
 CROWN_PT = Vector((-0.03, 0.0, 1.757))  # the whorl, back of the crown
+PART_Y = 0.024                          # a side part, on the figure's left
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 
 
@@ -779,7 +780,7 @@ def hair_styles(mats, surface):
     braids are tied into ("hair_bun")."""
     styles = {}
 
-    def style(name, tip, flow, st, lower=lambda phi: 0.0, edge=0.012, ramp=0.025, lumps=0.0):
+    def style(name, tip, flow, st, lower=lambda phi: 0.0, edge=0.012, ramp=0.025, lumps=0.0, cut=None):
         # The hair is thinner at its edge, its full depth only `ramp` in:
         # it grows out of the hairline, never stands up from it like a wall.
         # And it lies in locks a couple of centimetres across, some fuller
@@ -787,15 +788,17 @@ def hair_styles(mats, surface):
         def tip_(p, n):
             lock = 1 + lumps * (noise3(p * 55.0) + 0.5 * noise3(p * 120.0, 2))
             return tip(p, n) * lock * (0.3 + 0.7 * smoothstep(0.0, ramp, hairline_depth(p, lower)))
-        styles[name] = (lambda v: hairline_depth(v, lower) / edge, tip_, flow, st)
+        # (`cut`: a further edge inside the hair, such as a part, 0 on it.)
+        region = lambda v: min(hairline_depth(v, lower) / edge, cut(v) if cut else 9.0)
+        styles[name] = (region, tip_, flow, st)
 
     # A buzz cut: a few millimetres all over.
     style("buzz", lambda p, n: n * 0.0022, crown_flow, crown_st, edge=0.005)
     # A short crop: short at the sides, a little longer on top, lying from the crown.
     style("crop", lambda p, n: n * (0.004 + 0.008 * top_of(p)) + crown_flow(p, n) * 0.006 * top_of(p), crown_flow, crown_st, lumps=0.25)
     # Swept up and back: volume rising off the forehead, short at the sides.
-    style("swept", lambda p, n: n * (0.005 + 0.009 * top_of(p) + 0.011 * top_of(p) * front_of(p))
-          + back_flow(p, n) * 0.014 * top_of(p) + Z * 0.006 * front_of(p) * top_of(p), back_flow, back_st, ramp=0.035, lumps=0.4)
+    style("swept", lambda p, n: n * (0.005 + 0.009 * top_of(p) + 0.006 * top_of(p) * front_of(p))
+          + back_flow(p, n) * 0.016 * top_of(p) + Z * 0.002 * front_of(p) * top_of(p), back_flow, back_st, ramp=0.035, lumps=0.4)
     # Textured, a fringe brushed forward and over to the figure's right,
     # falling furthest just right of the middle of the forehead.
     textured_flow = lambda p, n: tangent((p - CROWN_PT) + X * 0.08 * front_of(p) - Y * 0.05 * front_of(p) - Z * 0.03, n)
@@ -807,8 +810,27 @@ def hair_styles(mats, surface):
     style("long_back", lambda p, n: n * (0.007 + 0.018 * top_of(p) + 0.008 * front_of(p) * top_of(p))
           + back_flow(p, n) * 0.02 * (0.3 + 0.7 * top_of(p)) + Z * 0.006 * front_of(p) * top_of(p),
           back_flow, back_st, lower=lambda phi: 0.03 * smoothstep(1.9, 2.6, abs(phi)), lumps=0.35)
-    # Braids: rows from the hairline straight back, into a bun.
-    style("braids", lambda p, n: n * 0.0045, lambda p, n: tangent(-X - Z * 0.4 * (1 - top_of(p)), n), back_st, edge=0.006)
+    # Braids: rows from the hairline straight back, into a bun. (The shader
+    # raises each row and plaits it; this is the rows' full height.)
+    style("braids", lambda p, n: n * 0.0075, lambda p, n: tangent(-X - Z * 0.4 * (1 - top_of(p)), n), back_st, edge=0.006)
+    # A side part on the figure's left: from the part the hair is combed
+    # across the top to the right and down, and down to the left; a thin
+    # line of scalp along the part.
+    def side_flow(p, n):
+        right = PART_Y - p.y
+        return tangent(-Y * math.copysign(1.0, right) * (0.3 + top_of(p)) - X * 0.35 - Z * 0.5 * (1 - top_of(p)), n)
+    part = lambda p: 9.0 if p.x < -0.02 or p.z < 1.7 else (abs(p.y - PART_Y) - 0.0012) / 0.0035
+    style("side_part", lambda p, n: n * (0.005 + 0.01 * top_of(p) + 0.006 * top_of(p) * front_of(p) * smoothstep(0.0, 0.03, PART_Y - p.y))
+          + side_flow(p, n) * 0.014 * top_of(p), side_flow, lambda p: (p.x, abs(p.y - PART_Y)), lumps=0.3, cut=part)
+    # A straight fringe, combed forward from the crown over the forehead.
+    fringe_flow = lambda p, n: tangent((p - CROWN_PT) + X * 0.12 * front_of(p) - Z * 0.05 * front_of(p), n)
+    style("fringe", lambda p, n: n * (0.006 + 0.01 * top_of(p)) + fringe_flow(p, n) * 0.016 * (0.4 + 0.6 * top_of(p)),
+          fringe_flow, crown_st, lower=lambda phi: (0.026 + 0.008 * math.sin(phi * 23.0) * math.sin(phi * 9.0 + 1.0)) * (1 - smoothstep(0.55, 0.95, abs(phi))),
+          edge=0.022, lumps=0.55)
+    # Tousled: fuller, the locks lying every which way.
+    messy_flow = lambda p, n: tangent((p - CROWN_PT).normalized() + Vector((noise3(p * 40.0, 4), noise3(p * 40.0, 5), noise3(p * 40.0, 6))) * 1.3, n)
+    style("messy", lambda p, n: n * (0.008 + 0.014 * top_of(p)) + messy_flow(p, n) * 0.01 * top_of(p), messy_flow, crown_st,
+          lower=lambda phi: 0.012 * (1 - smoothstep(0.4, 0.9, abs(phi))), lumps=0.85)
     return [skin_shell("hair", mats, "hair", surface, styles, cuts=1), bun(mats, surface)]
 
 
@@ -871,9 +893,9 @@ def beards(mats, surface, L):
     on_chin = lambda v: (1 - smoothstep(0.03, 0.038, abs(v.y))) * (1 - smoothstep(mouth.z - 0.011, mouth.z - 0.006, v.z)) * smoothstep(chin.z - 0.014, chin.z - 0.006, v.z)
 
     def jawline(v):
-        # A strip about a centimetre deep along the jaw's edge.
-        top = (chin.z + 0.012) * (1 - side(v)) + (ear.z - 0.038) * side(v)
-        low = top - 0.02
+        # A narrow strip along the jaw's edge, trimmed tidy.
+        top = (chin.z + 0.006) * (1 - side(v)) + (ear.z - 0.044) * side(v)
+        low = top - 0.011
         return (1 - smoothstep(top - 0.004, top + 0.004, v.z)) * smoothstep(low - 0.004, low + 0.004, v.z)
     tache = lambda v: area(v) * min(1.0, max(upper_lip(v), corners(v), on_chin(v), jawline(v)))
     tache_flow = lambda v, n: tangent(-Z + Y * (1.0 if v.y > 0 else -1.0) * 0.8 * upper_lip(v) + X * 0.3, n)
@@ -881,7 +903,7 @@ def beards(mats, surface, L):
         "short_beard": (area, lambda v, n: n * (0.0025 + 0.002 * chin_w(v)) + down(v, n) * 0.0015, down, beard_st),
         "full_beard": (lambda v: min(1.0, area(v) * 1.3),
                        lambda v, n: n * (0.0055 + 0.006 * chin_w(v)) + down(v, n) * 0.004 - Z * 0.004 * chin_w(v), down, beard_st),
-        "moustache": (tache, lambda v, n: n * (0.0026 + 0.0008 * upper_lip(v) + 0.0016 * chin_w(v)) + tache_flow(v, n) * 0.0014,
+        "moustache": (tache, lambda v, n: n * (0.0014 + 0.0005 * upper_lip(v) + 0.0006 * chin_w(v)) + tache_flow(v, n) * 0.0004,
                       tache_flow, beard_st),
     }
     return [skin_shell("beard", mats, "beard", surface, styles)]
@@ -890,31 +912,34 @@ def beards(mats, surface, L):
 # --- Brows ---------------------------------------------------------------------------
 def brows(mats, surface, L):
     """A patch over each brow ridge for the brow's hairs: rising near the
-    nose, lying outward along the arch. _HAIR's edge is the brow's shape:
-    fullest a third of the way out, tapering to the tail."""
+    nose, lying outward along the arch. The patch is roomy; each driver's
+    brow is drawn inside it by its own shape (r3d/driver.js), from _BROW:
+    how far along the brow, 0 at its inner end and 1 at its tail, and how
+    far above (or below) its middle line, metres. _HAIR's edge is a plain
+    brow's shape, for what draws without one."""
     eye_c = L["eye"]
     bm = bmesh.new()
     data = []
-    cols, rows = 32, 8
+    cols, rows = 32, 12
     for sgn in (1, -1):
         grid = []
         for i in range(cols + 1):
             t = i / cols
             y = sgn * (0.007 + (abs(eye_c.y) + 0.03 - 0.007) * t)
-            # A man's brow: nearly straight, rising a little to two thirds of
-            # the way out, the tail dropping a little.
-            zc = eye_c.z + 0.0172 + 0.0035 * math.sin(math.pi * min(1.0, t / 1.3)) - 0.005 * max(0.0, t - 0.75) / 0.25
+            # The middle line: nearly straight, rising a little to two thirds
+            # of the way out, the tail dropping a little.
+            zc = eye_c.z + 0.0172 + 0.002 * math.sin(math.pi * min(1.0, t / 1.3)) - 0.003 * max(0.0, t - 0.75) / 0.25
             half = 0.0056 * (1 - 0.5 * max(0.0, t - 0.4) / 0.6) * (0.8 + 0.2 * smoothstep(0.0, 0.15, t))
             col = []
             for j in range(rows + 1):
-                s = j / rows * 2 - 1
-                z = zc + s * (half + 0.0025)
+                vm = (j / rows * 2 - 1) * BROW_ROOM
+                z = zc + vm
                 hit = surface.ray(Vector((0.35, y, z)), Vector((-1, 0, 0)))
                 if hit is None:
                     raise RuntimeError("a brow missed the face")
                 loc, n, tri, w = hit
-                # Inside the brow's shape: across its height, and at its two ends.
-                e = (1 - smoothstep(0.35, 1.0, abs(s) * (half + 0.0025) / half)) * smoothstep(0.0, 0.16, t) * (1 - smoothstep(0.86, 1.0, t))
+                # A plain brow: inside its height, and between its two ends.
+                e = (1 - smoothstep(0.35, 1.0, abs(vm) / half)) * smoothstep(0.0, 0.16, t) * (1 - smoothstep(0.86, 1.0, t))
                 # Near the nose the hairs stand up, further out they lie outward.
                 rise = 1 - smoothstep(0.05, 0.35, t)
                 f = tangent(Y * sgn * (1 - rise) + Z * (rise * 1.3 + 0.25), n)
@@ -922,9 +947,9 @@ def brows(mats, surface, L):
                 # Strand coordinates on the brow itself (metres along it and
                 # across it), turned with the hairs: across the brow where
                 # they stand up, along it where they lie outward.
-                um, vm = t * (abs(eye_c.y) + 0.023), s * (half + 0.0025)
+                um = t * (abs(eye_c.y) + 0.023)
                 data.append({"tip": n * 0.001 + f * 0.0026, "flow": f, "edge": e,
-                             "st": (vm + (um - vm) * rise, um + (vm - um) * rise), "bind": (tri, w)})
+                             "st": (vm + (um - vm) * rise, um + (vm - um) * rise), "bind": (tri, w), "brow": (t, vm, 0.0)})
             grid.append(col)
         for i in range(cols):
             for j in range(rows):
@@ -933,7 +958,15 @@ def brows(mats, surface, L):
     me = bpy.data.meshes.new("brows")
     bm.to_mesh(me)
     bm.free()
+    brow = me.attributes.new("_BROW", "FLOAT_VECTOR", "POINT")
+    for k, rec in enumerate(data):
+        brow.data[k].vector = rec["brow"]
     return attach(me, data, mats, "brows", "brows")
+
+
+# How far the brow's patch reaches above and below its middle line: room for
+# the thickest, most arched brow a look may ask for (faces.js).
+BROW_ROOM = 0.0125
 
 
 def build(mats, collar_pts=None):

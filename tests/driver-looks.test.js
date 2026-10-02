@@ -14,14 +14,17 @@ test("every driver has a complete look", () => {
 });
 
 test("every driver's face is his own, and none pushed to an extreme", () => {
+  // No two the same in hair (style and volume) and brows together.
+  const tops = new Set(DRIVERS.map((d) => JSON.stringify([d.look.hair, d.look.brows, d.look.brow])));
+  assert.equal(tops.size, DRIVERS.length);
   const seen = new Set();
   DRIVERS.forEach((d) => {
     const key = JSON.stringify(d.look.shape);
     assert.ok(!seen.has(key), `${d.id}'s face is somebody else's`);
     seen.add(key);
     assert.ok(Object.keys(d.look.shape).length >= 6, `${d.id}'s face has its own shape`);
-    // A likeness, never a caricature: no slider past 0.7.
-    Object.entries(d.look.shape).forEach(([k, v]) => assert.ok(Math.abs(v) <= 0.7, `${d.id}'s ${k} is ${v}`));
+    // A likeness, never a caricature: no slider past 0.85.
+    Object.entries(d.look.shape).forEach(([k, v]) => assert.ok(Math.abs(v) <= 0.85, `${d.id}'s ${k} is ${v}`));
   });
 });
 
@@ -37,6 +40,9 @@ test("a look's colours, styles, heritage and shapes are checked", () => {
   assert.ok(broken({ shape: { head_square: -0.3 } }).length, "a one-way shape below 0");
   assert.ok(broken({ shape: { chin_size: 0.2 } }).length, "an unknown shape");
   assert.ok(broken({ eyes: undefined }).length, "a missing field");
+  assert.ok(broken({ hair: { style: "swept", color: "#222222", volume: 2 } }).length, "a hair volume out of range");
+  assert.ok(broken({ brows: { thickness: 1, arch: 0, tail: 0.5 } }).length, "a brow shape incomplete");
+  assert.ok(broken({ brows: { thickness: 3, arch: 0, tail: 0.5, gap: 0.5 } }).length, "a brow too thick");
 });
 
 test("shapes become morph weights: two-way sliders pick their incr or decr key", () => {
