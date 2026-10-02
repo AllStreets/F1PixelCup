@@ -52,12 +52,17 @@
     if (!look.hair || !HAIR_STYLES.includes(look.hair.style)) out.push("unknown hair style");
     if (!look.hair || !HEX.test(look.hair.color || "")) out.push("hair colour is not a colour");
     const vol = look.hair && look.hair.volume;
-    if (!(typeof vol === "number" && vol >= HAIR_VOLUME[0] && vol <= HAIR_VOLUME[1])) out.push("hair volume out of range");
-    const brows = look.brows || {};
-    Object.entries(BROW_SHAPE).forEach(([k, [lo, hi]]) => {
-      if (!(typeof brows[k] === "number" && brows[k] >= lo && brows[k] <= hi)) out.push(`brows' ${k} out of range`);
-    });
-    if (Object.keys(brows).some((k) => !(k in BROW_SHAPE))) out.push("unknown brow shape");
+    if (look.hair && vol === undefined) out.push("no hair volume");
+    else if (!(typeof vol === "number" && vol >= HAIR_VOLUME[0] && vol <= HAIR_VOLUME[1])) out.push("hair volume out of range");
+    if (look.hair && Object.keys(look.hair).some((k) => !["style", "color", "volume"].includes(k))) out.push("unknown hair key");
+    const brows = look.brows;
+    if (!brows || typeof brows !== "object") out.push("no brows");
+    else {
+      Object.entries(BROW_SHAPE).forEach(([k, [lo, hi]]) => {
+        if (!(typeof brows[k] === "number" && brows[k] >= lo && brows[k] <= hi)) out.push(`brows' ${k} out of range`);
+      });
+      if (Object.keys(brows).some((k) => !(k in BROW_SHAPE))) out.push("unknown brow shape");
+    }
     if (!FACIAL_HAIR.includes(look.facialHair)) out.push("unknown facial hair");
     const her = look.heritage || {};
     const total = HERITAGE.reduce((n, h) => n + (her[h] || 0), 0);

@@ -144,8 +144,10 @@ function skinMaterial(look) {
           // Tone that varies as real skin's does: broad patches a few
           // centimetres across shifting a little redder or more golden,
           // mottling a centimetre across, and fine freckling.
-          vec3 hue = vec3(faceNoise(vSkinPos * 34.0), faceNoise(vSkinPos * 34.0 + 11.0), faceNoise(vSkinPos * 34.0 + 23.0)) - 0.5;
-          c *= 1.0 + vec3(0.07, 0.035, 0.05) * hue;
+          // (Two noises along two directions of colour: redder, and more
+          // golden; never greenish or bluish.)
+          float redder = faceNoise(vSkinPos * 34.0) - 0.5, golden = faceNoise(vSkinPos * 34.0 + 11.0) - 0.5;
+          c *= 1.0 + redder * vec3(0.06, -0.01, -0.03) + golden * vec3(0.03, 0.02, -0.04);
           c *= 0.95 + 0.06 * faceNoise(vSkinPos * 90.0) + 0.04 * faceNoise(vSkinPos * 420.0);
           float freckle = smoothstep(0.72, 0.9, faceNoise(vSkinPos * 900.0)) * (1.0 - smoothstep(0.3, 1.0, length(fwidth(vSkinPos * 900.0))));
           c *= 1.0 - 0.06 * freckle * vec3(0.7, 1.0, 1.2);
@@ -174,11 +176,12 @@ function skinMaterial(look) {
         reflectedLight.indirectDiffuse *= vAO;
         reflectedLight.indirectSpecular *= vAO * vAO;`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
-        // Glossier on the lips and the nose, drier on the cheeks, and broken
-        // up at the scale of the pores, never one even sheen.
+        // Glossier on the lips, and broken up down to the pores' scale,
+        // never one even sheen (the finest part faded out where it is
+        // smaller than a pixel, so it never shimmers).
         roughnessFactor = mix(roughnessFactor, 0.4, smoothstep(0.0, 0.6, vMasks.r));
-        roughnessFactor -= 0.07 * vMasks.b * (1.0 - vMasks.a);
-        roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.14 * faceNoise(vSkinPos * 1400.0 + 5.0);`)
+        float poreFade = 1.0 - smoothstep(0.3, 0.9, length(fwidth(vSkinPos * 1400.0)));
+        roughnessFactor *= 0.82 + 0.22 * faceNoise(vSkinPos * 300.0) + 0.14 * poreFade * (faceNoise(vSkinPos * 1400.0 + 5.0) - 0.5) + 0.07;`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>
         {
           // Pores: a fine bump a few hundredths of a millimetre deep, faded
@@ -335,7 +338,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
           float hgt = 0.0035 * row + 0.0012 * row * sin(3.14159 * chain);
           vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
           vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
-          float det = dot(dpx, r1);
+          float det = dot(dpx, r1) * faceDirection;
           vec3 grad = sign(det) * (dFdx(hgt) * r1 + dFdy(hgt) * r2);
           float fade = 1.0 - smoothstep(0.5, 1.5, length(fwidth(vHair.yz * 95.0)));
           normal = normalize(abs(det) * normal - grad * fade);

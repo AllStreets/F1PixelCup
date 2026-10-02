@@ -631,7 +631,7 @@ def attach(me, data, mats, material, name, variants=None):
     return ob
 
 
-def skin_shell(name, mats, material, surface, styles, cuts=0):
+def skin_shell(name, mats, material, surface, styles, cuts=0, planes=()):
     """One shell on the head's own faces for several styles, wherever any of
     them grows hair. styles: {name: (region, tip, flow, st)}, where region(v)
     is 0 at that style's edge, 1 well inside it and below 0 outside, so its
@@ -639,7 +639,9 @@ def skin_shell(name, mats, material, surface, styles, cuts=0):
     out what is outside); tip(v, n), the offset to the hair's outer surface;
     flow(v, n), the way it lies; st(v), its strand coordinates. Subdivided
     `cuts` times, rounded, where the head's faces are large (the scalp's are
-    about 1.5 cm)."""
+    about 1.5 cm). `planes`: (point, normal, where(centre)) cut into the
+    shell's faces, so an edge inside the hair (a part) is drawn exactly, not
+    smeared across a face."""
     faces = [f for f in HEAD["faces"] if all(i in surface.used for i in f)]
     edge = {i: max(r(VERTS[i]) for r, _, _, _ in styles.values()) for i in surface.used}
     faces = [f for f in faces if max(edge[i] for i in f) > 0.0]
@@ -651,6 +653,10 @@ def skin_shell(name, mats, material, surface, styles, cuts=0):
         bm.faces.new([vs[local[i]] for i in f])
     if cuts:
         bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=cuts, use_grid_fill=True, smooth=1.0)
+    for co, no, where in planes:
+        fs = [f for f in bm.faces if where(f.calc_center_median())]
+        geom = list({v for f in fs for v in f.verts}) + list({e for f in fs for e in f.edges}) + fs
+        bmesh.ops.bisect_plane(bm, geom=geom, plane_co=co, plane_no=no, dist=1e-6)
     data = []
     for v in bm.verts:
         loc, n, tri, w = surface.nearest(v.co)
@@ -741,6 +747,12 @@ def scalp_region(v, ear=0.0):
 
 CROWN_PT = Vector((-0.03, 0.0, 1.757))  # the whorl, back of the crown
 PART_Y = 0.024                          # a side part, on the figure's left
+PART_HALF = 0.0012                      # half the part's line of scalp
+
+
+def on_part(p):
+    """Along the side part: from the front of the head back to the crown."""
+    return p.x >= -0.02 and p.z >= 1.7
 X, Y, Z = Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1))
 
 
@@ -819,19 +831,25 @@ def hair_styles(mats, surface):
     def side_flow(p, n):
         right = PART_Y - p.y
         return tangent(-Y * math.copysign(1.0, right) * (0.3 + top_of(p)) - X * 0.35 - Z * 0.5 * (1 - top_of(p)), n)
-    part = lambda p: 9.0 if p.x < -0.02 or p.z < 1.7 else (abs(p.y - PART_Y) - 0.0012) / 0.0035
+    # (The shell is cut along the part's middle and its two edges, so the line
+    # of scalp is exact; see hair_styles' return.)
+    part = lambda p: 9.0 if not on_part(p) else (abs(p.y - PART_Y) - PART_HALF) / 0.0035
+    # Strands run away from the part across the top, then down the sides.
+    side_st = lambda p: (p.x, abs(p.y - PART_Y) * top_of(p) + (1.76 - p.z) * (1 - top_of(p)))
     style("side_part", lambda p, n: n * (0.005 + 0.01 * top_of(p) + 0.006 * top_of(p) * front_of(p) * smoothstep(0.0, 0.03, PART_Y - p.y))
-          + side_flow(p, n) * 0.014 * top_of(p), side_flow, lambda p: (p.x, abs(p.y - PART_Y)), lumps=0.3, cut=part)
+          + side_flow(p, n) * 0.014 * top_of(p), side_flow, side_st, lumps=0.3, cut=part)
     # A straight fringe, combed forward from the crown over the forehead.
     fringe_flow = lambda p, n: tangent((p - CROWN_PT) + X * 0.12 * front_of(p) - Z * 0.05 * front_of(p), n)
     style("fringe", lambda p, n: n * (0.006 + 0.01 * top_of(p)) + fringe_flow(p, n) * 0.016 * (0.4 + 0.6 * top_of(p)),
-          fringe_flow, crown_st, lower=lambda phi: (0.026 + 0.008 * math.sin(phi * 23.0) * math.sin(phi * 9.0 + 1.0)) * (1 - smoothstep(0.55, 0.95, abs(phi))),
+          fringe_flow, crown_st, lower=lambda phi: (0.018 + 0.006 * math.sin(phi * 23.0) * math.sin(phi * 9.0 + 1.0)) * (1 - smoothstep(0.55, 0.95, abs(phi))),
           edge=0.022, lumps=0.55)
     # Tousled: fuller, the locks lying every which way.
     messy_flow = lambda p, n: tangent((p - CROWN_PT).normalized() + Vector((noise3(p * 40.0, 4), noise3(p * 40.0, 5), noise3(p * 40.0, 6))) * 1.3, n)
     style("messy", lambda p, n: n * (0.008 + 0.014 * top_of(p)) + messy_flow(p, n) * 0.01 * top_of(p), messy_flow, crown_st,
           lower=lambda phi: 0.012 * (1 - smoothstep(0.4, 0.9, abs(phi))), lumps=0.85)
-    return [skin_shell("hair", mats, "hair", surface, styles, cuts=1), bun(mats, surface)]
+    near_part = lambda c: c.x > -0.03 and c.z > 1.69 and abs(c.y - PART_Y) < 0.012
+    planes = [(Vector((0, PART_Y + d, 0)), Y, near_part) for d in (-PART_HALF, 0.0, PART_HALF)]
+    return [skin_shell("hair", mats, "hair", surface, styles, cuts=1, planes=planes), bun(mats, surface)]
 
 
 def bun(mats, surface):
@@ -965,8 +983,10 @@ def brows(mats, surface, L):
 
 
 # How far the brow's patch reaches above and below its middle line: room for
-# the thickest, most arched brow a look may ask for (faces.js).
-BROW_ROOM = 0.0125
+# the thickest, most arched brow a look may ask for (faces.js's BROW_SHAPE:
+# r3d/driver.js draws hairs up to 3.5 mm of arch plus 1.25 times a half
+# height of 8.3 mm, 1.39 cm).
+BROW_ROOM = 0.0145
 
 
 def build(mats, collar_pts=None):

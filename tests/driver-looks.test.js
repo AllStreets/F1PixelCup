@@ -15,7 +15,7 @@ test("every driver has a complete look", () => {
 
 test("every driver's face is his own, and none pushed to an extreme", () => {
   // No two the same in hair (style and volume) and brows together.
-  const tops = new Set(DRIVERS.map((d) => JSON.stringify([d.look.hair, d.look.brows, d.look.brow])));
+  const tops = new Set(DRIVERS.map((d) => JSON.stringify([d.look.hair.style, d.look.hair.volume, d.look.brows])));
   assert.equal(tops.size, DRIVERS.length);
   const seen = new Set();
   DRIVERS.forEach((d) => {
@@ -28,21 +28,30 @@ test("every driver's face is his own, and none pushed to an extreme", () => {
   });
 });
 
-test("a look's colours, styles, heritage and shapes are checked", () => {
+test("a look's colours, styles, heritage, shapes, hair and brows are checked", () => {
   const good = DRIVERS.find((d) => d.id === "leclerc").look;
   assert.deepEqual(Faces.checkLook(good), []);
-  const broken = (patch) => Faces.checkLook({ ...good, ...patch });
-  assert.ok(broken({ skin: "tan" }).length, "a colour must be a hex colour");
-  assert.ok(broken({ hair: { style: "mohican", color: "#222222" } }).length, "unknown hair style");
-  assert.ok(broken({ facialHair: "goatee" }).length, "unknown facial hair");
-  assert.ok(broken({ heritage: { african: 0.5, asian: 0, caucasian: 0.2 } }).length, "heritage sums to 1");
-  assert.ok(broken({ shape: { jaw_width: 1.4 } }).length, "a shape out of range");
-  assert.ok(broken({ shape: { head_square: -0.3 } }).length, "a one-way shape below 0");
-  assert.ok(broken({ shape: { chin_size: 0.2 } }).length, "an unknown shape");
-  assert.ok(broken({ eyes: undefined }).length, "a missing field");
-  assert.ok(broken({ hair: { style: "swept", color: "#222222", volume: 2 } }).length, "a hair volume out of range");
-  assert.ok(broken({ brows: { thickness: 1, arch: 0, tail: 0.5 } }).length, "a brow shape incomplete");
-  assert.ok(broken({ brows: { thickness: 3, arch: 0, tail: 0.5, gap: 0.5 } }).length, "a brow too thick");
+  // Each broken look is refused for that reason, and only that one.
+  const refused = (patch, why) => assert.deepEqual(Faces.checkLook({ ...good, ...patch }), [why], why);
+  const hair = (h) => ({ hair: { ...good.hair, ...h } });
+  const brows = (b) => ({ brows: { ...good.brows, ...b } });
+  refused({ skin: "tan" }, "skin is not a colour");
+  refused(hair({ style: "mohican" }), "unknown hair style");
+  refused({ facialHair: "goatee" }, "unknown facial hair");
+  refused({ heritage: { african: 0.5, asian: 0, caucasian: 0.2 } }, "heritage must be shares summing to 1");
+  refused({ shape: { jaw_width: 1.4 } }, "jaw_width out of -1..1");
+  refused({ shape: { head_square: -0.3 } }, "head_square out of 0..1");
+  refused({ shape: { chin_size: 0.2 } }, "unknown shape chin_size");
+  refused({ eyes: undefined }, "eyes is not a colour");
+  refused(hair({ volume: 2 }), "hair volume out of range");
+  refused(hair({ volume: 0.4 }), "hair volume out of range");
+  refused({ hair: { style: good.hair.style, color: good.hair.color } }, "no hair volume");
+  refused(hair({ volumn: 1 }), "unknown hair key");
+  refused({ brows: undefined }, "no brows");
+  refused(brows({ thickness: 3 }), "brows' thickness out of range");
+  refused(brows({ arch: "high" }), "brows' arch out of range");
+  refused({ brows: { thickness: 1, arch: 0, tail: 0.5 } }, "brows' gap out of range");
+  refused(brows({ curl: 1 }), "unknown brow shape");
 });
 
 test("shapes become morph weights: two-way sliders pick their incr or decr key", () => {

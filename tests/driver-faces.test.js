@@ -98,6 +98,12 @@ test("faces: real eyes (sclera, iris, cornea) that follow the face's keys", () =
   assert.ok(meshNode("eye_L").extras.eye_centre[2] < 0 && meshNode("eye_R").extras.eye_centre[2] > 0);
 });
 
+// How far a brow's hairs reach above its patch's middle line, at most, for a
+// thickness and an arch (r3d/driver.js's brow shader: the arch lifts the
+// line by up to 3.5 mm, the half height is 5.2 mm times the thickness, the
+// hairs thin out to 1.25 half heights).
+const browReach = (thickness, arch) => 0.0035 * Math.max(0, arch) + 1.25 * 0.0052 * thickness;
+
 // Bound to the head: each vertex names three head vertices (_BIND, their _VID)
 // and its barycentric weights on them (_BARY), so it follows the head's shape.
 // Every id is one of the head's own vertices and the weights sum to 1.
@@ -119,11 +125,12 @@ test("faces: lashes along the lids, bound to them; brows of strands, bound to th
   const brows = meshNode("brows");
   assert.ok(brows && bound(brows), "the brows follow the brow ridge");
   assert.ok(hasAll(brows, ["_TIP", "_FLOW", "_HAIR", "_BROW"]), "the brows grow strands, each driver's own shape");
-  // Room for the thickest, most arched brow: the patch reaches over a
-  // centimetre above and below the brow's middle, along its whole length.
+  // Room for the thickest, most arched brow a look may have: r3d/driver.js
+  // draws hairs out to its middle line's arch plus 1.25 half heights.
   const b = attribute(brows, "_BROW");
   assert.ok(Math.min(...b.map((v) => v[0])) === 0 && Math.max(...b.map((v) => v[0])) === 1, "inner end to tail");
-  assert.ok(Math.min(...b.map((v) => v[1])) < -0.011 && Math.max(...b.map((v) => v[1])) > 0.011, "room above and below");
+  const reach = browReach(Faces.BROW_SHAPE.thickness[1], Faces.BROW_SHAPE.arch[1]);
+  assert.ok(Math.min(...b.map((v) => v[1])) < -reach && Math.max(...b.map((v) => v[1])) > reach, `room above and below for ${reach}`);
 });
 
 test("faces: every hair style and facial hair grows on a shared shell, bound to the head", () => {
@@ -161,8 +168,8 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
   assert.ok(depth("SWEPT") > 0.02, `swept ${depth("SWEPT")}`);
   assert.ok(depth("CURLY") > depth("CROP"), "curls stand deeper than a crop");
   // Every style: on the forehead the hair grows only above the brows, never
-  // on the ears
-  // (where the target that swings them out acts), and down to the nape.
+  // on the ears (where the target that swings them out acts), and down to
+  // the nape.
   const eyeLine = meshNode("eye_L").extras.eye_centre[1];
   const head = meshNode("head_skin");
   const ear = targetNames(head).indexOf("ear_out_incr");
@@ -173,8 +180,8 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
     const edge = attribute(hair, `_HAIR_${style.toUpperCase()}`).map((v) => v[0]);
     const front = pos.filter((p, i) => edge[i] > 0 && p[0] > 0.07 && Math.abs(p[2]) < 0.045);
     assert.ok(front.length > 20, `${style}: hair on the front of the head`);
-    // (A fringe falls lowest, still clear of the brows, whose top is 2.3 cm
-    // over the eyes' centre.)
+    // (Above a plain brow's top, 2.3 cm over the eyes' centre; a fringe's
+    // reach against each driver's own brows is checked below.)
     front.forEach((p) => assert.ok(p[1] > eyeLine + 0.024, `${style}: hair on the forehead at ${p[1].toFixed(3)} m`));
     pos.forEach((p, i) => {
       if (edge[i] > 0) assert.ok(earPts.every((q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) > 0.003), `${style}: hair on an ear`);
@@ -237,6 +244,36 @@ test("faces: the neck stands in the collar, filling it, never floating above it"
   assert.ok(top > 1.72 && top < 1.80, `the crown is at ${top.toFixed(3)} m`);
   // At the collar's top edge, the neck is just inside it all the way round.
   gaps(head).forEach(([a, gap]) => assert.ok(gap > 0 && gap < 0.005, `a gap of ${(gap * 1000).toFixed(1)} mm round the neck at ${a.toFixed(2)}`));
+});
+
+test("faces: a fringe falls clear of its own driver's brows; a side part is a clean line", () => {
+  const hair = meshNode("hair");
+  const pos = positions(hair);
+  const eyeLine = meshNode("eye_L").extras.eye_centre[1];
+  const { DRIVERS } = require("../game-data.js");
+  const edge = attribute(hair, "_HAIR_FRINGE").map((v) => v[0]);
+  const tip = attribute(hair, "_TIP_FRINGE");
+  DRIVERS.filter((d) => d.look.hair.style === "fringe").forEach((d) => {
+    // The brow's top: the patch's middle line (1.72 cm over the eyes,
+    // arching up to 2 mm more) plus the driver's own reach.
+    const browTop = eyeLine + 0.0172 + 0.002 + browReach(d.look.brows.thickness, d.look.brows.arch);
+    pos.forEach((p, i) => {
+      if (edge[i] <= 0 || p[0] < 0.07 || Math.abs(p[2]) > 0.045) return;
+      // (glTF's Y is Blender's Z: the tip's height is its third component.)
+      const lowest = p[1] + Math.min(0, tip[i][2] * d.look.hair.volume);
+      assert.ok(lowest > browTop, `${d.id}'s fringe reaches ${lowest.toFixed(4)} m, his brows ${browTop.toFixed(4)} m`);
+    });
+  });
+  // The part: along its whole length the shell has vertices on the part's
+  // middle and both its edges, and the hair stops there (edge 0 or less),
+  // so the line of scalp is drawn exactly.
+  const part = attribute(hair, "_HAIR_SIDE_PART").map((v) => v[0]);
+  const partZ = -0.024; // the figure's left, Blender's +Y
+  const on = pos.map((p, i) => [p, part[i]]).filter(([p]) => Math.abs(p[2] - partZ) < 0.0001 && p[1] > 1.72 && p[0] > -0.015);
+  assert.ok(on.length >= 8, `${on.length} vertices on the part`);
+  on.forEach(([p, e]) => assert.ok(e < 0, `bare scalp on the part at ${p[0].toFixed(3)}`));
+  const xs = on.map(([p]) => p[0]).sort((a, b) => a - b);
+  for (let k = 1; k < xs.length; k += 1) assert.ok(xs[k] - xs[k - 1] < 0.02, `the part runs unbroken (a gap at ${xs[k - 1].toFixed(3)})`);
 });
 
 // The head as a driver's look shapes it: the rest shape plus each morph
