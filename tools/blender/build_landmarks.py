@@ -732,13 +732,20 @@ def check(name, root, budget, size_check):
     size_check(lo, hi)
 
 
-def export(root, filename):
+def export(root, filename, uvs=True):
+    """`uvs=False` leaves the UVs out: only the facade shader reads them, and
+    a model without one downloads a quarter lighter."""
     if not OUT:
         return
     os.makedirs(OUT, exist_ok=True)
     bpy.ops.object.select_all(action="DESELECT")
     for o in subtree(root):
         o.select_set(True)
+        if not uvs and o.type == "MESH":
+            if any(m and m.name == "facade" for m in o.data.materials):
+                raise RuntimeError(f"{o.name} has a facade, which needs its UVs")
+            while o.data.uv_layers:
+                o.data.uv_layers.remove(o.data.uv_layers[0])
     path = os.path.join(OUT, filename)
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_yup=True,
                               export_extras=True, export_texcoords=True, export_normals=True, export_animations=False)
@@ -805,7 +812,7 @@ def casino_size(lo, hi):
 
 root = build_casino()
 check("casino", root, 40000, casino_size)
-export(root, "casino.glb")
+export(root, "casino.glb", uvs=False)
 preview(root, "casino", [("front", (40, 95, 16), (-8, 0, 14)), ("square", (10, 140, 45), (-15, 10, 10))])
 
 
@@ -827,5 +834,5 @@ def stand_size(lo, hi):
 
 root = build_grandstand()
 check("grandstand", root, 12000, stand_size)
-export(root, "grandstand.glb")
+export(root, "grandstand.glb", uvs=False)
 preview(root, "grandstand", [("front", (14, 24, 6), (0, 0, 4)), ("side", (30, 6, 5), (0, 0, 4))])
