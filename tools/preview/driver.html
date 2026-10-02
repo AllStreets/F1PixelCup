@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>Driver Studio</title>
+  <!-- The driver figure, dressed by the game's own code (r3d/driver.js), in a
+       studio: for the design review of docs/superpowers/specs/2026-10-01-driver-v2-design.md.
+       ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #121316; overflow: hidden; font-family: "Trebuchet MS", system-ui, sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    #plates { position: fixed; inset: 0; pointer-events: none; }
+    .plate { position: absolute; bottom: 4vh; transform: translateX(-50%); white-space: nowrap; color: #f2f2f2; text-align: center; letter-spacing: 0.04em; text-shadow: 0 2px 8px rgba(0,0,0,0.6); }
+    .plate b { display: block; font-size: clamp(16px, 2.2vw, 30px); font-style: italic; }
+    .plate span { font-size: clamp(11px, 1.1vw, 15px); opacity: 0.75; text-transform: uppercase; }
+    .plate i { display: inline-block; width: 28px; height: 4px; margin: 6px auto 0; border-radius: 2px; }
+    #poses { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+    #poses button { background: rgba(255,255,255,0.08); color: #eee; border: 1px solid rgba(255,255,255,0.18); border-radius: 18px; padding: 6px 14px; cursor: pointer; font: inherit; }
+    #poses button.on { background: #e10600; border-color: #e10600; }
+    body.still #poses { display: none; }
+  </style>
+  <script type="importmap">
+    { "imports": {
+      "three": "../../vendor/three/three.module.min.js",
+      "three/addons/": "../../vendor/three/addons/"
+    } }
+  </script>
+  <script src="../../game-data.js"></script>
+</head>
+<body>
+  <div id="poses"></div>
+  <div id="plates"></div>
+  <script type="module">
+    import * as THREE from "three";
+    import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+    import { loadDriver, buildDriver, POSES } from "../../r3d/driver.js";
+
+    const q = new URLSearchParams(location.search);
+    const ids = (q.get("drivers") || "leclerc,hamilton").split(",");
+    const still = q.has("t");
+    if (still) document.body.classList.add("still");
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.92;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    document.body.prepend(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color("#16171b");
+    scene.fog = new THREE.Fog("#16171b", 9, 22);
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.55;
+
+    // A cyclorama: the floor curving up into the wall behind, so there is no horizon line.
+    const floorGeo = new THREE.PlaneGeometry(40, 40);
+    const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({ color: "#2a2b30", roughness: 0.85 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(1.6, 64), new THREE.MeshStandardMaterial({ color: "#3a3b42", roughness: 0.55, metalness: 0.1 }));
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.002;
+    disc.receiveShadow = true;
+    scene.add(disc);
+
+    const key = new THREE.DirectionalLight("#fff1dc", 2.6);
+    key.position.set(4, 5, 2.5);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -2; key.shadow.camera.right = 2; key.shadow.camera.top = 3; key.shadow.camera.bottom = -1;
+    key.shadow.bias = -0.0004;
+    key.shadow.normalBias = 0.02;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight("#9cc4ff", 2.4);
+    rim.position.set(-4, 3, -2);
+    scene.add(rim);
+    const fill = new THREE.HemisphereLight("#d8e2ff", "#2a2420", 0.6);
+    scene.add(fill);
+
+    const camera = new THREE.PerspectiveCamera(28, 1, 0.05, 60);
+    const CAMS = {
+      front: { pos: [5.2, 1.25, 0], at: [0, 0.98, 0] },
+      three: { pos: [4.1, 1.5, 2.9], at: [0, 0.98, 0] },
+      close: { pos: [2.2, 1.62, 0.6], at: [0, 1.42, 0] },
+      back: { pos: [-3.9, 1.6, 2.6], at: [0, 1.0, 0] },
+    };
+    const cam = CAMS[q.get("cam")] || CAMS.front;
+    camera.position.set(...cam.pos);
+    camera.lookAt(new THREE.Vector3(...cam.at));
+
+    const figures = [];
+    // Each plate under its own figure, wherever the camera is.
+    function placePlates() {
+      camera.updateMatrixWorld();
+      figures.forEach((f) => {
+        const p = f.root.position.clone().project(camera);
+        f.plate.style.left = `${(p.x * 0.5 + 0.5) * 100}%`;
+      });
+    }
+    function resize() {
+      const w = innerWidth, h = innerHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      placePlates();
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    window.preview = { ready: false, figures, looks: () => figures.map((f) => f.looks()) };
+
+    loadDriver(() => {
+      const spacing = 0.95;
+      ids.forEach((id, i) => {
+        const driver = DRIVERS.find((d) => d.id === id);
+        const team = getTeamForDriver(driver);
+        const fig = buildDriver(driver, team);
+        // The figure faces +X: toward the front camera.
+        fig.root.position.z = (i - (ids.length - 1) / 2) * spacing * -1;
+        scene.add(fig.root);
+        figures.push(fig);
+        const plate = document.createElement("div");
+        plate.className = "plate";
+        plate.innerHTML = `<b>${driver.name}</b><span>${team.name} · #${driver.number}</span><br><i style="background:${team.body}"></i>`;
+        document.getElementById("plates").append(plate);
+        fig.plate = plate;
+      });
+      const bar = document.getElementById("poses");
+      POSES.forEach((p) => {
+        const b = document.createElement("button");
+        b.textContent = p.replace("_", " ");
+        b.onclick = () => setPose(p);
+        b.dataset.pose = p;
+        bar.append(b);
+      });
+      placePlates();
+      setPose(q.get("pose") || "stand");
+      if (still) {
+        // A still frame: the pose held at time t, rendered once.
+        figures.forEach((f) => f.update(Number(q.get("t"))));
+        renderer.render(scene, camera);
+      } else {
+        renderer.setAnimationLoop(() => {
+          const now = performance.now();
+          const dt = Math.min(0.1, (now - last) / 1000);
+          last = now;
+          figures.forEach((f) => f.update(dt));
+          renderer.render(scene, camera);
+        });
+      }
+      window.preview.ready = true;
+    }, (err) => { window.preview.error = String(err); }, "../../assets/driver.glb");
+
+    let last = performance.now();
+    function setPose(p) {
+      figures.forEach((f) => f.play(p, still ? 0 : 0.35));
+      document.querySelectorAll("#poses button").forEach((b) => b.classList.toggle("on", b.dataset.pose === p));
+    }
+    window.preview.setPose = setPose;
+  </script>
+</body>
+</html>

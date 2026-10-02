@@ -145,6 +145,49 @@ html, body { height: 100%; overflow: hidden; }
 .podium-step span { color: var(--muted); font-size: 0.85rem; }
 .podium-step.is-player strong { color: var(--red); }
 
+/* The ceremony in 3D (r3d/podium.js): the screen opens up over the scene, the
+   title on a broadcast-style band at the top, Continue at the bottom, and the
+   2D steps give way to name plates under each driver (Screens.placePodium). */
+.podium-plates { display: none; }
+#podium-screen.is-3d { background: none; backdrop-filter: none; padding: 0; align-items: stretch; justify-content: stretch; pointer-events: none; }
+#podium-screen.is-3d .overlay-card {
+  width: 100%; max-height: none; overflow: visible; background: none; border: 0; padding: 0;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+/* The steps stay for screen readers (the plates are drawn for the eye). */
+#podium-screen.is-3d .podium { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+#podium-screen.is-3d .podium-head, #podium-screen.is-3d .podium-foot { pointer-events: auto; }
+#podium-screen.is-3d .podium-head {
+  padding: clamp(14px, 3vh, 30px) clamp(16px, 4vw, 56px) clamp(28px, 6vh, 60px);
+  background: radial-gradient(ellipse 58% 100% at 0 0, rgba(4, 5, 10, 0.9) 35%, rgba(4, 5, 10, 0));
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+#podium-screen.is-3d .podium-head .career-strip { max-width: min(520px, 100%); margin-top: 10px; padding: 0.5em 0.8em; font-size: 0.85rem; line-height: 1.45; background: rgba(10, 8, 14, 0.62); }
+#podium-screen.is-3d .overlay-title { margin: 4px 0 0; }
+#podium-screen.is-3d .podium-foot {
+  padding: clamp(26px, 6vh, 60px) clamp(16px, 4vw, 56px) clamp(14px, 3vh, 28px);
+  background: linear-gradient(0deg, rgba(4, 5, 10, 0.5), rgba(4, 5, 10, 0));
+}
+#podium-screen.is-3d .podium-foot { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 10px 20px; }
+#podium-screen.is-3d .podium-foot .overlay-actions { margin: 0 0 0 auto; }
+#podium-screen.is-3d .podium-plates { display: block; position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+#podium-screen.is-3d .podium-plate { opacity: 0; transition: opacity 0.5s ease-out; }
+#podium-screen.is-3d.plates-in .podium-plate { opacity: 1; }
+.podium-plate {
+  position: absolute; left: 0; top: 0; display: grid; grid-template-columns: auto auto; column-gap: 10px; align-items: baseline;
+  max-width: min(30vw, 300px); padding: 8px 14px 9px; line-height: 1.15;
+  background: linear-gradient(160deg, rgba(14, 14, 22, 0.88), rgba(21, 21, 31, 0.82));
+  border-top: 3px solid var(--team); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+.podium-plate b { grid-row: span 2; font: italic 900 clamp(1.1rem, 2.2vw, 1.9rem)/1 var(--font); color: #fff; }
+.podium-plate.p1 b { color: #e3b54a; }
+.podium-plate strong { font: italic 900 clamp(0.8rem, 1.35vw, 1.15rem)/1.1 var(--font); text-transform: uppercase; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-plate span { font-size: clamp(0.66rem, 0.95vw, 0.82rem); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-plate em { grid-column: 2; font: 700 clamp(0.7rem, 1vw, 0.88rem)/1.2 var(--font); font-style: normal; color: #fff; }
+.podium-plate.is-player strong { color: #ff4a3d; }
+/* Narrow: two plates to a row (the winner's below), so each can be wider. */
+@media (max-width: 560px) { .podium-plate { max-width: calc(50vw - 20px); } }
+
 .career-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 16px; }
 .career-tier { font: italic 900 2.4rem/1 var(--font); text-transform: uppercase; }
 .career-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin: 16px 0; }

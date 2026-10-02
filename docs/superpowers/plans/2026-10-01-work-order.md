@@ -94,16 +94,16 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
 
 The spec is written: `docs/superpowers/specs/2026-09-30-podium-design.md`. It uses the driver figure from item 0 and the people from Stage J.
 
-- [ ] Plan, then build `r3d/podium.js`:
+- [x] Plan, then build `r3d/podium.js`:
   - the set: three steps, a backdrop with the game's own mark, banners in team colours;
   - the three real cup winners, dressed;
   - the timeline: stand, arms up, trophy, spray;
   - confetti and champagne spray;
   - an orbiting camera.
   - Hook it into `showPodium` (`game.js`) and the podium screen (`screens.js`), with name plates over the 3D scene. The 2D steps stay as the fallback.
-- [ ] `tools/checks/podium-check.js`, as the spec lists.
-- [ ] **[REVIEW]** the ceremony: screenshots at each beat, with Leclerc and Hamilton on the podium, and if possible a short screen recording. Wait for the user's yes.
-- [ ] A fresh reviewer, then fix everything. Merge and push.
+- [x] `tools/checks/podium-check.js`, as the spec lists.
+- [x] **[REVIEW]** the ceremony: screenshots at each beat, with Leclerc and Hamilton on the podium, and if possible a short screen recording. Approved by the user on 2026-10-02.
+- [x] A fresh reviewer, then fix everything. Merge and push.
 
 ## 3. Stage L: the full 2025 calendar, as 4-race cups
 
@@ -168,8 +168,8 @@ After everything else is planned, per the user's instruction.
 
 From the master to-do, unchanged.
 
-- [ ] Record the inputs and state on the fixed-step clock and play them back deterministically. Trackside, onboard and helicopter cameras, with broadcast graphics. A replay button on the results screen.
-- [ ] A Node test that a recording replays bit-identically; a browser check that the replay's positions match the race. Review, merge and push.
+- [x] Record the inputs and state on the fixed-step clock and play them back deterministically. Trackside, onboard and helicopter cameras, with broadcast graphics. A replay button on the results screen.
+- [x] A Node test that a recording replays bit-identically; a browser check that the replay's positions match the race. Review, merge and push.
 
 ## 7. Stage N: two-player split-screen
 
