@@ -50,10 +50,10 @@ export function buildMarshalPosts(course, posts, venue) {
   const total = course.track.totalLength;
   (posts || []).forEach((post) => {
     // Moved only back along the lap where the spot is taken, so a post still
-    // watches the whole of its stretch.
-    for (const shift of [0, -30, -60, -90, -120]) {
+    // watches the whole of its stretch; across the road only if both fail.
+    for (const [shift, across] of [0, -30, -60, -90, -120].map((s) => [s, 1]).concat([0, -30, -60, -90, -120].map((s) => [s, -1]))) {
       const p = course.sampleAt(((post.d + shift) % total + total) % total);
-      const side = p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1);
+      const side = across * (p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1));
       const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
       const x = p.x + p.nx * off;
       const z = p.y + p.ny * off;

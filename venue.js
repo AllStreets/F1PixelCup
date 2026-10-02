@@ -67,7 +67,7 @@
 
   // Circuits lit by floodlight towers all the way round (r3d/landmarks.js
   // VENUES, "floodlights"): the lights' mains hum is always faintly there.
-  const FLOODLIT = ["singapore", "bahrain"];
+  const FLOODLIT = ["singapore", "bahrain", "jeddah"];
 
   return { RAMP, CROWD_REACH, UNDER_BRIDGE, FLOODLIT, delta, reverbAt, crowdAt, reverbZones };
 }));

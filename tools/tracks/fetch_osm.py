@@ -5,18 +5,25 @@ is (c) OpenStreetMap contributors, available under the Open Database Licence
 (ODbL): https://www.openstreetmap.org/copyright. Only a handful of points per
 feature are kept (five, evenly spaced along each way).
 
-    python3 tools/tracks/fetch_osm.py
+    python3 tools/tracks/fetch_osm.py            # fetches what is new
+    python3 tools/tracks/fetch_osm.py --refresh  # fetches everything again
+
+Features already in osm-features.json are kept as they are (OpenStreetMap
+keeps being edited: a refetch moves points slightly, and every circuit built
+from them with them), unless --refresh.
 
 Ways, by game circuit (ids from OpenStreetMap):
   pit lanes: the raceway tagged as the pit lane beside each start/finish
-  straight; the Monaco tunnel is Boulevard Louis II's tunnel section; the
+  straight (several ways, end to end, where it is mapped in parts); the Monaco tunnel is Boulevard Louis II's tunnel section; the
   signature corners are the raceway ways named for them.
-Monza and Suzuka have no pit lane mapped as a raceway there; build_tracks.py
-finds theirs from the circuit's shape alone.
+Monza, Suzuka and Albert Park (whose pit building goes up each year) have no
+pit lane mapped as a raceway there; build_tracks.py finds theirs from the
+circuit's shape alone.
 """
 import json
 import math
 import os
+import sys
 import time
 import urllib.parse
 import urllib.request
@@ -29,6 +36,10 @@ ENDPOINTS = [
 ]
 
 PIT_LANES = {
+    "shanghai": 107371138,
+    "jeddah": 1121870473,
+    "miami": 1017340352,
+    "imola": 196368195,
     "spa": 323851541,
     "silverstone": 227902927,  # the International (Wing) pit lane
     "monaco": 850261588,       # Voie des stands
@@ -47,6 +58,14 @@ CORNERS = {
     "suzuka": [(183391652, "130R", "")],
     # The S is two ways in OpenStreetMap: turn 1, then turn 2.
     "interlagos": [((189535473, 807691487), "S DO SENNA", "")],
+    # Imola's corners are mapped turn by turn (refs 2 to 19).
+    "imola": [
+        ((1025616638, 1025616639, 1021771405), "TAMBURELLO", ""),
+        (1021771395, "TOSA", ""),
+        ((1025616641, 7920430), "PIRATELLA", ""),
+        ((1025616657, 1021771400, 1025616656), "ACQUE MINERALI", ""),
+        ((1025616650, 1021771404), "RIVAZZA", ""),
+    ],
 }
 # The start/finish line, where the source outline puts it somewhere else:
 # level with the middle of the real pit lane.
@@ -77,13 +96,34 @@ def five_points(geometry):
     return out, round(run[-1])
 
 
+def joined(ways, wid, label):
+    """One line through a feature mapped as several ways, end to end."""
+    geometry = []
+    for i in (list(wid) if isinstance(wid, tuple) else [wid]):
+        g = ways[i]["geometry"]
+        if geometry and (g[-1]["lat"], g[-1]["lon"]) == (geometry[-1]["lat"], geometry[-1]["lon"]):
+            g = g[::-1]
+        # Each way must carry on from the one before.
+        assert not geometry or (g[0]["lat"], g[0]["lon"]) == (geometry[-1]["lat"], geometry[-1]["lon"]), f"{label}: way {i} does not join the one before"
+        geometry += g if not geometry else g[1:]
+    return geometry
+
+
 def main():
     ways_of = lambda w: list(w) if isinstance(w, tuple) else [w]
-    ids = list(PIT_LANES.values()) + list(TUNNELS.values()) + [i for cs in CORNERS.values() for c in cs for i in ways_of(c[0])]
+    path = os.path.join(HERE, "osm-features.json")
+    old = {} if "--refresh" in sys.argv or not os.path.exists(path) else json.load(open(path))
+    # What is already fetched, for the same way(s), stays as it is.
+    have = lambda kind, gid, ways: kind in old and gid in old[kind] and old[kind][gid]["way"] in (ways, ways_of(ways))
+    have_corners = lambda gid, corners: "corners" in old and gid in old["corners"] and [
+        (c["way"], c["board"], c["aka"]) for c in old["corners"][gid]] == [(ways_of(w), b, a) for w, b, a in corners]
+    ids = [i for g, w in PIT_LANES.items() if not have("pitLanes", g, w) for i in ways_of(w)]
+    ids += [w for g, w in TUNNELS.items() if not have("tunnels", g, w)]
+    ids += [i for g, cs in CORNERS.items() if not have_corners(g, cs) for c in cs for i in ways_of(c[0])]
+    data = {"elements": []} if not ids else None
     query = f"[out:json][timeout:60];way(id:{','.join(map(str, ids))});out geom;"
-    data = None
     # The public Overpass servers are often busy: try each, a few times.
-    for attempt in range(3):
+    for attempt in range(3 if data is None else 0):
         for server in ENDPOINTS:
             url = server + "?" + urllib.parse.urlencode({"data": query})
             req = urllib.request.Request(url, headers={"User-Agent": "F1PixelCup-build/1.0"})
@@ -101,24 +141,27 @@ def main():
     out = {"attribution": "© OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright)",
            "pitLanes": {}, "tunnels": {}, "corners": {}, "lineAtPitMiddle": LINE_AT_PIT_MIDDLE}
     for gid, wid in PIT_LANES.items():
-        points, length = five_points(ways[wid]["geometry"])
-        out["pitLanes"][gid] = {"way": wid, "name": ways[wid]["tags"].get("name", ""), "metres": length, "points": points}
+        if have("pitLanes", gid, wid):
+            out["pitLanes"][gid] = old["pitLanes"][gid]
+            continue
+        points, length = five_points(joined(ways, wid, gid))
+        out["pitLanes"][gid] = {"way": wid if isinstance(wid, int) else ways_of(wid), "name": ways[ways_of(wid)[0]]["tags"].get("name", ""), "metres": length, "points": points}
     for gid, wid in TUNNELS.items():
+        if have("tunnels", gid, wid):
+            out["tunnels"][gid] = old["tunnels"][gid]
+            continue
         points, length = five_points(ways[wid]["geometry"])
         out["tunnels"][gid] = {"way": wid, "name": ways[wid]["tags"].get("name", ""), "metres": length, "points": points}
     for gid, corners in CORNERS.items():
+        if have_corners(gid, corners):
+            out["corners"][gid] = old["corners"][gid]
+            continue
         out["corners"][gid] = []
         for wid, board, aka in corners:
             # A corner mapped as several ways, end to end: one line through them.
-            geometry = []
-            for i in ways_of(wid):
-                g = ways[i]["geometry"]
-                if geometry and (g[-1]["lat"], g[-1]["lon"]) == (geometry[-1]["lat"], geometry[-1]["lon"]):
-                    g = g[::-1]
-                geometry += g if not geometry else g[1:]
-            points, length = five_points(geometry)
+            points, length = five_points(joined(ways, wid, board))
             out["corners"][gid].append({"way": ways_of(wid), "name": ways[ways_of(wid)[0]]["tags"].get("name", ""), "board": board, "aka": aka, "metres": length, "points": points})
-    with open(os.path.join(HERE, "osm-features.json"), "w") as f:
+    with open(path, "w") as f:
         json.dump(out, f, indent=1)
         f.write("\n")
 

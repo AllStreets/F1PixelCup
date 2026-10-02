@@ -62,6 +62,52 @@ export const VENUES = {
     hills: { tint: "#56804c", count: 16, height: [160, 320] },
     extras: ["lake", "skyline", "favela"],
   },
+  // The 2025 calendar's other circuits (docs/superpowers/specs/2026-10-01-calendar-design.md).
+  // `landmarks` names what Stage J builds there; nothing here draws it yet.
+  albertpark: {
+    // Parkland round Albert Park Lake, Melbourne's towers to the north.
+    ground: "grass", groundTint: "#7fae62", standColor: "#1d5fa8",
+    trees: [{ kind: "broadleaf", count: 900, tint: "#4f7d45" }, { kind: "broadleaf", count: 260, tint: "#5d8a4a", near: 80, seed: 5 }, { kind: "palm", count: 40, tint: "#56803e", near: 50, seed: 9 }],
+    lake: { tint: "#3d7fa6", count: 140 },
+    skyline: { arc: [Math.PI * 1.2, Math.PI * 1.8], count: 90, height: [110, 340] },
+    extras: ["infieldLake", "skylineArc"],
+    landmarks: ["melbourneSkyline"],
+  },
+  shanghai: {
+    // Flat ground in Jiading, a hazy afternoon, the city far to the south-east.
+    ground: "grass", groundTint: "#88a86c", standColor: "#c8102e", runoffTint: "#bdb8ae",
+    trees: [{ kind: "broadleaf", count: 520, tint: "#4a7244" }, { kind: "broadleaf", count: 200, tint: "#557a48", near: 70, seed: 4 }],
+    skyline: { arc: [Math.PI * 0.05, Math.PI * 0.5], count: 70, height: [90, 300] },
+    extras: ["skylineArc"],
+    fogNear: 900, fogFar: 3800,
+    landmarks: ["shanghaiGrandstand"],
+  },
+  jeddah: {
+    // At night on the Corniche: the Red Sea to the west, the city to the east.
+    ground: "city", night: true, standColor: "#00843d", runoffTint: "#9a968e",
+    trees: [{ kind: "palm", count: 240, tint: "#4e7a3a", near: 70 }],
+    coast: { bearing: Math.PI, tint: "#14506e" },
+    skyline: { arc: [-Math.PI * 0.35, Math.PI * 0.35], count: 90, height: [70, 280] },
+    extras: ["coast", "skylineArc", "floodlights"],
+    landmarks: ["kingFahdFountain"],
+  },
+  miami: {
+    // Round the stadium on Miami Gardens' flat lawns: palms, sun, the
+    // marina by turns 6 to 8.
+    ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", runoffTint: "#aaa69c",
+    trees: [{ kind: "palm", count: 360, tint: "#4f8a3c", near: 90 }, { kind: "broadleaf", count: 160, tint: "#3f7a3a", near: 260, seed: 6 }],
+    lake: { tint: "#38c2cc", count: 5 },
+    extras: ["infieldLake"],
+    landmarks: ["miamiStadium"],
+  },
+  imola: {
+    // Parkland under the Apennine foothills, trees to the barriers.
+    ground: "grass", groundTint: "#78a25a", standColor: "#d40000",
+    trees: [{ kind: "broadleaf", count: 1500, tint: "#3c6e34" }, { kind: "conifer", count: 320, tint: "#2f5a30", near: 70, seed: 3 }],
+    hills: { tint: "#5d8551", count: 18, height: [180, 380] },
+    extras: [],
+    landmarks: ["sennaMonument"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -221,7 +267,7 @@ function cornerBoards(course, group, venue) {
         cx.textAlign = "center";
         cx.textBaseline = "middle";
         cx.font = `900 italic ${c.aka ? 104 : 124}px Trebuchet MS, sans-serif`;
-        cx.fillText(c.board, w / 2, c.aka ? 96 : 118);
+        cx.fillText(c.board, w / 2, c.aka ? 96 : 118, w - 48);
         if (c.aka) {
           cx.font = "700 58px Trebuchet MS, sans-serif";
           cx.fillStyle = "#c9ced6";
@@ -410,30 +456,34 @@ function floodlights(course, group, venue) {
   const poolMat = new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: venue.night ? 0.32 : 0.14, toneMapped: false });
   const every = 26;
   const { samples } = course;
+  const parts = { poles: [], heads: [], pools: [] };
   for (let i = 0; i < samples.length; i += every) {
     const p = samples[i];
     const side = (i / every) % 2 ? 1 : -1;
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + 9);
+    // Past the barrier (it stands 2 beyond the run-off's edge) by 10.
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
     if (course.occupied.blocked(x, z, 3) || course.clearance(x, z) < 8) continue;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 70, 6), poleMat);
-    pole.position.set(x, p.h + 35, z);
-    group.add(pole);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 4), headMat);
+    course.occupied.add(x, z, 4);
+    parts.poles.push(new THREE.CylinderGeometry(0.9, 1.3, 70, 6).translate(x, p.h + 35, z));
     // Lamp head sits behind the pole, never out over the run-off.
-    head.position.set(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3);
-    head.rotation.y = -Math.atan2(p.ty, p.tx);
-    group.add(head);
+    parts.heads.push(new THREE.BoxGeometry(10, 3, 4).rotateY(-Math.atan2(p.ty, p.tx)).translate(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3));
     // Its light falls across the near half of the road.
-    const pool = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), poolMat);
     const reach = side * course.width * 0.35;
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.set(p.x + p.nx * reach, p.h + 0.3, p.y + p.ny * reach);
-    pool.userData.ground = true;
-    pool.renderOrder = 1;
-    group.add(pool);
+    parts.pools.push(new THREE.PlaneGeometry(110, 110).rotateX(-Math.PI / 2).translate(p.x + p.nx * reach, p.h + 0.3, p.y + p.ny * reach));
   }
+  if (!parts.poles.length) return;
+  // One mesh each for the poles, the lamps and the pools of light.
+  const poles = new THREE.Mesh(mergeGeometries(parts.poles), poleMat);
+  poles.name = "floodlights";
+  poles.userData.count = parts.poles.length;
+  poles.castShadow = true;
+  const heads = new THREE.Mesh(mergeGeometries(parts.heads), headMat);
+  const pools = new THREE.Mesh(mergeGeometries(parts.pools), poolMat);
+  pools.userData.ground = true;
+  pools.renderOrder = 1;
+  group.add(poles, heads, pools);
 }
 
 // ---------------------------------------------------------------------------
@@ -666,6 +716,94 @@ const EXTRAS = {
     mesh.count = placed;
     mesh.castShadow = true;
     group.add(mesh);
+  },
+
+  // A lake filling the circuit's infield (Albert Park): overlapping discs,
+  // the largest that fit first, each clear of the barriers, so the water
+  // takes the infield's shape.
+  infieldLake(course, group, venue, rand) {
+    const { tint = "#3a789e", count = 40 } = venue.lake || {};
+    const ring = course.samples;
+    const inside = (x, z) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+        const a = ring[i];
+        const b = ring[j];
+        if ((a.y > z) !== (b.y > z) && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const b = course.bounds;
+    const parts = [];
+    for (const r of [320, 260, 210, 170, 130, 100, 75]) {
+      for (let t = 0; t < 900 && parts.length < count; t += 1) {
+        const x = b.minX + rand() * (b.maxX - b.minX);
+        const z = b.minZ + rand() * (b.maxZ - b.minZ);
+        if (!inside(x, z) || course.clearance(x, z, r + 120) < r + 45) continue;
+        // Join the water already there where it can (one lake, not puddles).
+        if (parts.length && !parts.some((q) => Math.hypot(q.x - x, q.z - z) < (q.r + r) * 0.9)) continue;
+        // Round the stands and towers already standing in the infield.
+        if (course.occupied.blocked(x, z, r + 8)) continue;
+        parts.push({ x, z, r });
+      }
+    }
+    if (!parts.length) return;
+    const discs = parts.map((q) => new THREE.CircleGeometry(q.r, 40).rotateX(-Math.PI / 2).translate(q.x, 0.1, q.z));
+    const lake = new THREE.Mesh(mergeGeometries(discs), waterMaterial(tint));
+    lake.userData.ground = true;
+    lake.name = "lake";
+    group.add(lake);
+    // Nothing else stands in the water. (Claimed once all the discs are
+    // placed: they overlap each other.)
+    parts.forEach((q) => course.occupied.add(q.x, q.z, q.r));
+  },
+
+  // The sea along one side of the circuit (venue.coast: the bearing it lies
+  // toward, 0 east, PI/2 south): everything past the circuit's furthest
+  // reach that way, with a beach in front of it. Nothing grows in it.
+  coast(course, group, venue) {
+    const { bearing, tint = "#2a6f96", sand = "#cdbb94" } = venue.coast;
+    const ux = Math.cos(bearing);
+    const uz = Math.sin(bearing);
+    // The furthest the circuit reaches that way: its barriers, and the pit
+    // complex out to the back of the garages.
+    let far = -Infinity;
+    course.samples.forEach((p) => {
+      far = Math.max(far, p.x * ux + p.y * uz + Math.max(p.outerL, p.outerR) + 60);
+    });
+    const shore = far + 40;
+    const size = 40000;
+    const b = course.bounds;
+    const along = b.cx * ux + b.cz * uz;
+    const at = (dist) => [b.cx + ux * (dist - along), b.cz + uz * (dist - along)];
+    const [wx, wz] = at(shore + size / 2);
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).rotateY(-bearing), waterMaterial(tint));
+    sea.position.set(wx, 0.08, wz);
+    sea.userData.ground = true;
+    sea.name = "sea";
+    group.add(sea);
+    const [sx, sz] = at(shore - 20);
+    const beach = new THREE.Mesh(new THREE.PlaneGeometry(60, size).rotateX(-Math.PI / 2).rotateY(-bearing), new THREE.MeshStandardMaterial({ color: color(sand), roughness: 1 }));
+    beach.position.set(sx, 0.05, sz);
+    beach.receiveShadow = true;
+    beach.userData.ground = true;
+    group.add(beach);
+    // Keep the trees and everything after out of the water: discs over the
+    // sea as far as anything is ever placed (the trees' pad round the circuit).
+    const reach = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 1600;
+    for (let d = shore - 40; d < shore + 1400; d += 120) {
+      for (let t = -reach; t <= reach; t += 120) {
+        const [x, z] = at(d);
+        course.occupied.add(x - uz * t, z + ux * t, 90);
+      }
+    }
+  },
+
+  // Towers on the horizon in one direction only (the venue's skyline: an arc
+  // of bearings, 0 east, PI/2 south).
+  skylineArc(course, group, venue, rand) {
+    const { arc, count, height } = venue.skyline;
+    skyline(course, group, rand, { night: Boolean(venue.night), count, arc, height });
   },
 };
 

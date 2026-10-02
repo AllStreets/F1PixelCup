@@ -75,22 +75,31 @@ const DIFFICULTIES = [
   },
 ];
 
-// Circuits in cup order. lengthM is the real lap length in metres, from the
-// bacinger/f1-circuits data the outlines come from.
+// Circuits in the order of the 2025 calendar
+// (docs/superpowers/specs/2026-10-01-calendar-design.md). lengthM is the real
+// lap length in metres, from the bacinger/f1-circuits data the outlines come
+// from; rainChance is how often Changeable weather rains there (weather.js).
 const CIRCUITS = [
-  { id: "monza", name: "Autodromo di Monza", country: "Italy", theme: "Italian speed temple", lengthM: 5793, laps: 5, roadWidth: 33, bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" } },
-  { id: "spa", name: "Circuit de Spa-Francorchamps", country: "Belgium", theme: "Belgian forest circuit", lengthM: 7004, laps: 5, roadWidth: 33, bg: { sky: "#6a8faf", grass: "#2d5a27", accent: "#c8d8e8", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1a3a1a", horizonB: "#3a6a35", curbA: "#dc0000", curbB: "#ffffff", sun: "#ddeeff" } },
-  { id: "silverstone", name: "Silverstone Circuit", country: "Great Britain", theme: "British airfield classic", lengthM: 5891, laps: 5, roadWidth: 33, bg: { sky: "#aac8e0", grass: "#4c8840", accent: "#e8f0e0", road: "#505058", shoulder: "#c0b8a8", horizonA: "#304828", horizonB: "#5a7848", curbA: "#dc0000", curbB: "#ffffff", sun: "#d8e8f0" } },
-  { id: "suzuka", name: "Suzuka International Racing Course", country: "Japan", theme: "Japanese technical masterpiece", lengthM: 5807, laps: 5, roadWidth: 33, bg: { sky: "#9fd0e8", grass: "#3a7a38", accent: "#ffeedd", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1e4a1e", horizonB: "#408040", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" } },
-  { id: "monaco", name: "Circuit de Monaco", country: "Monaco", theme: "Street circuit showpiece", lengthM: 3337, laps: 5, roadWidth: 33, bg: { sky: "#4db8e8", grass: "#3a6a88", accent: "#ffeedd", road: "#505060", shoulder: "#c8c0b8", horizonA: "#184858", horizonB: "#3878a8", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" } },
-  { id: "singapore", name: "Marina Bay Street Circuit", country: "Singapore", theme: "Night city circuit", lengthM: 4928, laps: 5, roadWidth: 33, bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" } },
-  { id: "bahrain", name: "Bahrain International Circuit", country: "Bahrain", theme: "Desert twilight circuit", lengthM: 5412, laps: 5, roadWidth: 33, bg: { sky: "#cc8833", grass: "#8a6a3a", accent: "#ffe8aa", road: "#585050", shoulder: "#c8b888", horizonA: "#6a4820", horizonB: "#aa7838", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcc44" } },
-  { id: "interlagos", name: "Autódromo José Carlos Pace", country: "Brazil", theme: "Brazilian passion circuit", lengthM: 4309, laps: 5, roadWidth: 33, bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" } },
+  { id: "albertpark", name: "Albert Park Circuit", country: "Australia", theme: "Melbourne parkland lakeside", lengthM: 5278, laps: 5, roadWidth: 33, rainChance: 0.2, bg: { sky: "#78b4e4", grass: "#5c9a46", accent: "#ffe8b0", road: "#4a4a52", shoulder: "#c4bca8", horizonA: "#2c5a34", horizonB: "#5a9450", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c0" } },
+  { id: "shanghai", name: "Shanghai International Circuit", country: "China", theme: "Spiralling modern classic", lengthM: 5451, laps: 5, roadWidth: 33, rainChance: 0.3, bg: { sky: "#aecbe2", grass: "#5e8c4e", accent: "#f0e4c8", road: "#4c4c54", shoulder: "#c0bab0", horizonA: "#46604a", horizonB: "#7a9a78", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff2d8" } },
+  { id: "suzuka", name: "Suzuka International Racing Course", country: "Japan", theme: "Japanese technical masterpiece", lengthM: 5807, laps: 5, roadWidth: 33, rainChance: 0.3, bg: { sky: "#9fd0e8", grass: "#3a7a38", accent: "#ffeedd", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1e4a1e", horizonB: "#408040", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" } },
+  { id: "bahrain", name: "Bahrain International Circuit", country: "Bahrain", theme: "Desert twilight circuit", lengthM: 5412, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#cc8833", grass: "#8a6a3a", accent: "#ffe8aa", road: "#585050", shoulder: "#c8b888", horizonA: "#6a4820", horizonB: "#aa7838", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcc44" } },
+  { id: "jeddah", name: "Jeddah Corniche Circuit", country: "Saudi Arabia", theme: "Night street circuit on the Red Sea", lengthM: 6175, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0b1026", grass: "#2a2a36", accent: "#7fe0c0", road: "#3a3846", shoulder: "#58545e", horizonA: "#0a0c22", horizonB: "#1a2048", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffd9a0" } },
+  { id: "miami", name: "Miami International Autodrome", country: "United States", theme: "Stadium circuit in the sun", lengthM: 5412, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#5ab6f0", grass: "#6aa84a", accent: "#ffd27f", road: "#4a4a54", shoulder: "#c6bea8", horizonA: "#2a6a6a", horizonB: "#5ab0a0", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff1c4" } },
+  { id: "imola", name: "Autodromo Enzo e Dino Ferrari", country: "Italy", theme: "Old-school parkland classic", lengthM: 4909, laps: 5, roadWidth: 33, rainChance: 0.3, bg: { sky: "#8cc0e6", grass: "#4f8a40", accent: "#ffe7a8", road: "#48484f", shoulder: "#c2b9a6", horizonA: "#2c5a2c", horizonB: "#5a8a4c", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffeec0" } },
+  { id: "monaco", name: "Circuit de Monaco", country: "Monaco", theme: "Street circuit showpiece", lengthM: 3337, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#4db8e8", grass: "#3a6a88", accent: "#ffeedd", road: "#505060", shoulder: "#c8c0b8", horizonA: "#184858", horizonB: "#3878a8", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8aa" } },
+  { id: "silverstone", name: "Silverstone Circuit", country: "Great Britain", theme: "British airfield classic", lengthM: 5891, laps: 5, roadWidth: 33, rainChance: 0.35, bg: { sky: "#aac8e0", grass: "#4c8840", accent: "#e8f0e0", road: "#505058", shoulder: "#c0b8a8", horizonA: "#304828", horizonB: "#5a7848", curbA: "#dc0000", curbB: "#ffffff", sun: "#d8e8f0" } },
+  { id: "spa", name: "Circuit de Spa-Francorchamps", country: "Belgium", theme: "Belgian forest circuit", lengthM: 7004, laps: 5, roadWidth: 33, rainChance: 0.5, bg: { sky: "#6a8faf", grass: "#2d5a27", accent: "#c8d8e8", road: "#484850", shoulder: "#b8b0a0", horizonA: "#1a3a1a", horizonB: "#3a6a35", curbA: "#dc0000", curbB: "#ffffff", sun: "#ddeeff" } },
+  { id: "monza", name: "Autodromo di Monza", country: "Italy", theme: "Italian speed temple", lengthM: 5793, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#87ceeb", grass: "#4a8c3f", accent: "#ffe08a", road: "#484850", shoulder: "#c8c0b0", horizonA: "#2a5a30", horizonB: "#5a9a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe08a" } },
+  { id: "singapore", name: "Marina Bay Street Circuit", country: "Singapore", theme: "Night city circuit", lengthM: 4928, laps: 5, roadWidth: 33, rainChance: 0.25, bg: { sky: "#0a0a1e", grass: "#1a1a3a", accent: "#ffa500", road: "#3a3848", shoulder: "#545060", horizonA: "#0a0a28", horizonB: "#1a1a50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ff8800" } },
+  { id: "interlagos", name: "Autódromo José Carlos Pace", country: "Brazil", theme: "Brazilian passion circuit", lengthM: 4309, laps: 5, roadWidth: 33, rainChance: 0.4, bg: { sky: "#5598cc", grass: "#3c7838", accent: "#ffe8aa", road: "#484850", shoulder: "#b0a898", horizonA: "#1e4820", horizonB: "#3a7838", curbA: "#009c3b", curbB: "#ffdf00", sun: "#ffdd44" } },
 ];
 
 const CUP_DEFS = [
   { id: "trophyCup", name: "Trophy Cup", icon: "Trophy Cup", circuitIds: ["monza", "spa", "silverstone", "suzuka"] },
   { id: "constructorCup", name: "Constructor Cup", icon: "Constructor Cup", circuitIds: ["monaco", "singapore", "bahrain", "interlagos"] },
+  { id: "openingCup", name: "Opening Cup", icon: "Opening Cup", circuitIds: ["albertpark", "shanghai", "suzuka", "bahrain"] },
+  { id: "springCup", name: "Spring Cup", icon: "Spring Cup", circuitIds: ["jeddah", "miami", "imola", "monaco"] },
 ];
 
 // The eight power-ups, common to rare (the same order as PowerUps.ITEM_ORDER).
@@ -133,6 +142,7 @@ const SHOT_DRIVERS = {
     overtakeMode: "piastri", stewardPenalty: "russell", formationLap: "alonso", safetyCar: "albon",
   },
   circuits: {
+    albertpark: "leclerc", shanghai: "hamilton", jeddah: "alonso", miami: "antonelli", imola: "lawson",
     monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
     monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
   },

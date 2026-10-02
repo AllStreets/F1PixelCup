@@ -430,7 +430,7 @@ async (page) => {
     });
     const race = {};
     [0, 2].forEach((ti) => {
-      race[TRACKS[ti].id] = [0, 1, 2].map((diff) => {
+      race[CUPS[0].tracks[ti].id] = [0, 1, 2].map((diff) => {
         seedRandom(31 + ti);
         // A race uses the difficulty the cup started with.
         state.difficulty = diff;

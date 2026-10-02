@@ -548,6 +548,12 @@ function auditVenue(track) {
     starter: world.starter ? { clear: Math.round(world.course.clearance(world.starter.position.x, world.starter.position.z)) } : null,
     tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
     bridges,
+    // The floodlight towers standing round the lap (night and dusk races).
+    floodlights: (() => {
+      let n = 0;
+      world.landmarks.traverse((o) => { if (o.name === "floodlights") n += o.userData.count; });
+      return n;
+    })(),
   };
 }
 

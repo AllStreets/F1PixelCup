@@ -757,9 +757,11 @@ function selectWeatherMode(mode) {
 }
 
 // A race's weather, from the cup's choice: seeded by the cup run, so its
-// qualifying and its race share it, and it never rerolls.
+// qualifying and its race share it, and it never rerolls. Changeable rains
+// as often as it really does at that circuit.
 function setRaceWeather(index) {
-  state.weather = Weather.raceWeather(state.cupWeatherMode, hashSeed(`${state.cupRunId || "run"}:weather`), index);
+  const track = getActiveCup().tracks[index];
+  state.weather = Weather.raceWeather(state.cupWeatherMode, hashSeed(`${state.cupRunId || "run"}:weather`), index, track && track.rainChance);
 }
 
 function loadGridPreference() {

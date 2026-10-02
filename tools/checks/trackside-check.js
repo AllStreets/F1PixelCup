@@ -117,6 +117,9 @@ async (page) => {
       if (c.id === "monaco" && (!v.tunnel || !(v.tunnel.roof >= 30))) bad.push(`monaco: tunnel ${JSON.stringify(v.tunnel)}`);
       v.bridges.forEach((z) => { if (z.height > 0.5 || z.deckAbove > 60) bad.push(`${c.id}: bridge zone ${JSON.stringify(z)}`); });
       if (c.id === "suzuka" && v.bridges.length !== 1) bad.push("suzuka: no bridge zone");
+      // Lit all the way round: a tower every few hundred along the lap.
+      if (Venue.FLOODLIT.includes(c.id) && !(v.floodlights >= L / 600)) bad.push(`${c.id}: ${v.floodlights} floodlights`);
+      if (!Venue.FLOODLIT.includes(c.id) && v.floodlights) bad.push(`${c.id}: floodlights on a day circuit`);
     });
     return bad.length === 0 || JSON.stringify(bad);
   });

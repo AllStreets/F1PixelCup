@@ -31,6 +31,11 @@ const GRADES = {
   singapore: { gain: [1.05, 1.0, 0.96], lift: [0, 0.01, 0.02], contrast: 1.08, saturation: 1.1, night: true },
   bahrain: { gain: [1.06, 1.0, 0.9], lift: [0.01, 0.005, 0], contrast: 1.05, saturation: 1.05, haze: 1 },
   interlagos: { gain: [1.02, 1.02, 0.98], lift: [0, 0, 0], contrast: 1.05, saturation: 1.1 },
+  albertpark: { gain: [1.02, 1.01, 0.97], lift: [0, 0, 0.004], contrast: 1.05, saturation: 1.12 },
+  shanghai: { gain: [1.01, 1.0, 0.97], lift: [0.012, 0.012, 0.014], contrast: 1.02, saturation: 0.94 },
+  jeddah: { gain: [1.04, 1.0, 0.95], lift: [0.004, 0.01, 0.02], contrast: 1.08, saturation: 1.12, night: true },
+  miami: { gain: [1.03, 1.01, 0.97], lift: [0, 0, 0], contrast: 1.06, saturation: 1.18 },
+  imola: { gain: [1.0, 1.02, 0.97], lift: [0, 0.004, 0], contrast: 1.05, saturation: 1.06 },
 };
 const NEUTRAL = { gain: [1, 1, 1], lift: [0, 0, 0], contrast: 1, saturation: 1 };
 

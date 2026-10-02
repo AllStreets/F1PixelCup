@@ -236,7 +236,7 @@
     $("weather-hint").textContent = s.weatherMode === "wet"
       ? "Every race in the rain: less grip in the corners, longer braking."
       : s.weatherMode === "changeable"
-        ? "Each race has a one-in-three chance of rain."
+        ? "Each race rains as often as it really does there: Spa one in two, the desert almost never."
         : "Dry races all cup.";
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     $("driver-strip").innerHTML = s.drivers.map((d) => `

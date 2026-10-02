@@ -12,6 +12,9 @@ vm.runInNewContext(`${source}\nthis.TRACK_SHAPES = TRACK_SHAPES;`, sandbox);
 const SHAPES = JSON.parse(JSON.stringify(sandbox.TRACK_SHAPES));
 // The road's half-width in the game: roadWidth 33 x TRACK_WIDTH_SCALE 1.5.
 const W = 49.5;
+// The street circuits (narrower run-off), as the track builder has them.
+const STREET = new Set(JSON.parse(fs.readFileSync(path.join(root, "tools", "tracks", "build_tracks.py"), "utf8")
+  .match(/^STREET = \{([^}]*)\}/m)[1].replace(/^/, "[").replace(/$/, "]")));
 
 // The lap as the game builds it: segments between the points, closing the loop.
 function lapOf(points) {
@@ -100,12 +103,17 @@ test("the pit wall leaves the mouths open and runs where the lane has cleared it
   assert.equal(lane.outerAt(0), W + Pit.WORK_OUT);
 });
 
+test("the renderer and the track builder agree on the street circuits", () => {
+  const track = fs.readFileSync(path.join(root, "r3d", "track.js"), "utf8").match(/^const STREET = new Set\((\[[^\]]*\])\);/m)[1];
+  assert.deepEqual([...new Set(JSON.parse(track))].sort(), [...STREET].sort());
+  assert.ok(STREET.has("monaco") && STREET.has("jeddah"));
+});
+
 test("every pit complex is clear of every other stretch of the lap, run-off and barrier included", () => {
   // The same rule as build_tracks.py: beyond the other stretch's road edge
   // by its run-off and barrier with room to spare; the street circuits' run-off
   // is narrower. The other stretches are followed every 5, not just at their
   // points.
-  const STREET = new Set(["monaco", "singapore"]);
   Object.entries(SHAPES).forEach(([id, shape]) => {
     const { total, at } = lapOf(shape.points);
     const lane = Pit.lane(shape.pit, total, W);

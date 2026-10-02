@@ -21,7 +21,7 @@ export const SAMPLE_STEP = 6;
 export const BRIDGE_HEIGHT = 26;
 const BRIDGE_FLAT = 110;   // half-length of the level bridge deck
 const BRIDGE_RAMP = 360;   // length of each ramp
-const STREET = new Set(["monaco", "singapore"]);
+const STREET = new Set(["monaco", "singapore", "jeddah", "miami"]);
 
 const smooth = (t) => t * t * (3 - 2 * t);
 
