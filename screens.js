@@ -48,7 +48,7 @@
           <p id="weather-hint" class="choice-hint"></p>
           <div class="choice-row"><span class="choice-label" id="players-label">Players</span><span id="players-pills" role="group" aria-labelledby="players-label" aria-describedby="players-hint"></span></div>
           <div id="second-driver" class="choice-row second-driver" hidden>
-            <span class="choice-label" id="second-label">2P driver</span>
+            <span class="choice-label" id="second-label">P2 driver</span>
             <span class="second-pick" role="group" aria-labelledby="second-label">
               <button class="pill" data-second="-1" type="button" aria-label="Previous driver for player 2">‹</button>
               <span id="second-name" class="second-name" aria-live="polite"></span>
@@ -298,7 +298,7 @@
     $("grid-hint").textContent = s.players === 2
       ? (s.gridMode === "qualifying"
         ? "Before every race: one flying lap each, both at once, sets your grid and pays career points."
-        : "1P and 2P start every race side by side on the last row and fight through the field.")
+        : "P1 and P2 start every race side by side on the last row and fight through the field.")
       : s.gridMode === "qualifying"
         ? "Before every race: one flying lap sets your grid, and pays career points."
         : "You start every race last and fight through the field.";
@@ -317,7 +317,7 @@
     $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
     $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
     $("players-hint").textContent = s.players === 2
-      ? `Split screen. 1P: ${s.keys.p1}, Left Shift to drift, Space for power-ups. 2P: the arrows, Right Shift to drift, and ${s.keys.p2Item} (left of Right Shift) for power-ups. Gamepads work too: the first is 1P's, the second 2P's.`
+      ? `Split screen. P1: ${s.keys.p1}, Left Shift to drift, Space for power-ups. P2: the arrows, Right Shift to drift, and ${s.keys.p2Item} (left of Right Shift) for power-ups. Gamepads work too: the first is P1's, the second P2's.`
       : "One player, the whole screen.";
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
@@ -384,12 +384,12 @@
     $("tower").innerHTML = top.map(row).join("") + (extra.length ? `<div class="tower-gap"></div>${extra.map(row).join("")}` : "");
   }
 
-  // A two-player race's 1P and 2P tags, in each player's colour.
+  // A two-player race's P1 and P2 tags, in each player's colour.
   function tagHtml(r) {
-    return r.tag === "1P" || r.tag === "2P" ? ` <small class="ptag">${r.tag}</small>` : "";
+    return r.tag === "P1" || r.tag === "P2" ? ` <small class="ptag">${r.tag}</small>` : "";
   }
   function tagClass(r) {
-    return r.tag === "2P" ? " is-p2" : r.tag === "1P" ? " is-p1" : "";
+    return r.tag === "P2" ? " is-p2" : r.tag === "P1" ? " is-p1" : "";
   }
 
   function pushFeed(message) {

@@ -1293,7 +1293,7 @@ function finishQualifying() {
         : place === 1 ? `Pole position! ${formatLapTime(timeMs)}.` : `You qualified ${formatOrdinal(place)} · ${formatLapTime(timeMs)}.`;
   };
   const note = second
-    ? `1P ${surnameOf(player.driver.name)}: ${noteFor(player, q.playerTimeMs, q.aborted)} 2P ${surnameOf(second.driver.name)}: ${noteFor(second, q.secondTimeMs, q.secondAborted)}`
+    ? `P1 ${surnameOf(player.driver.name)}: ${noteFor(player, q.playerTimeMs, q.aborted)} P2 ${surnameOf(second.driver.name)}: ${noteFor(second, q.secondTimeMs, q.secondAborted)}`
     : noteFor(player, q.playerTimeMs, q.aborted);
   addFeed(note);
   if (!window.Screens) return;
@@ -1450,7 +1450,7 @@ function startCup() {
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
     : state.cupPlayers === 2
-      ? `Lights out soon. ${getActiveCup().name} grid is forming: 1P and 2P start from the back.`
+      ? `Lights out soon. ${getActiveCup().name} grid is forming: P1 and P2 start from the back.`
       : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(0);
@@ -1562,18 +1562,18 @@ function humanEntry(slot = 0) {
   return state.cupEntries.find((entry) => entry.isPlayer && (entry.player || 1) === slot + 1);
 }
 
-// "1P" or "2P" for a human's entry in a two-player cup; "" otherwise.
+// "P1" or "P2" for a human's entry in a two-player cup; "" otherwise.
 function entryTag(entry) {
-  return state.cupPlayers === 2 && entry && entry.isPlayer ? `${entry.player || 1}P` : "";
+  return state.cupPlayers === 2 && entry && entry.isPlayer ? `P${entry.player || 1}` : "";
 }
 
 function twoPlayerSession() {
   return state.cupPlayers === 2 && state.phase !== "garage";
 }
 
-// "1P: " and "2P: " before a player's own news, in a two-player session.
+// "P1: " and "P2: " before a player's own news, in a two-player session.
 function playerTag(racer) {
-  return twoPlayerSession() && isHuman(racer) ? `${(racer.playerSlot || 0) + 1}P` : "";
+  return twoPlayerSession() && isHuman(racer) ? `P${(racer.playerSlot || 0) + 1}` : "";
 }
 
 // One player's controls this step: their keys and their pad together.
@@ -3513,7 +3513,7 @@ function replayGraphics(frame, shot, focus) {
     gap: i === 0 ? (c.finished ? "FIN" : "LEADER") : `+${formatGap(c.gap)}`,
     isFocus: c.meta.id === shot.focusId,
     isPlayer: c.meta.isPlayer,
-    tag: h.players && c.meta.player ? `${c.meta.player}P` : "",
+    tag: h.players && c.meta.player ? `P${c.meta.player}` : "",
   }));
   const lapShown = leader.finished ? h.laps : Math.min(leader.lap + 1, h.laps);
   const lap = leader.finished ? "FINISH" : lapShown === h.laps ? "FINAL LAP" : `LAP ${lapShown}/${h.laps}`;
@@ -3549,7 +3549,7 @@ function replayGraphics(frame, shot, focus) {
     tower,
     focus: {
       id: fc.meta.id, name: fc.meta.name, code: fc.meta.code, number: fc.meta.number, team: fc.meta.team, color: fc.meta.color,
-      place: fc.place, isPlayer: fc.meta.isPlayer, finished: fc.finished, tag: h.players && fc.meta.player ? `${fc.meta.player}P` : "",
+      place: fc.place, isPlayer: fc.meta.isPlayer, finished: fc.finished, tag: h.players && fc.meta.player ? `P${fc.meta.player}` : "",
       interval: ahead && !fc.finished ? `+${formatGap(Math.max(0, fc.gap - ahead.gap))}` : "",
       // As the race's speed panel shows it.
       kph: Math.round(Math.abs(focus ? focus.speed : fc.speed) * KPH_PER_UNIT),
@@ -3748,12 +3748,12 @@ function drawSplit(track) {
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
 }
 
-// The player tag at the top of each split view: 1P or 2P in the player's
+// The player tag at the top of each split view: P1 or P2 in the player's
 // colour, and the driver's code.
 const PLAYER_COLOURS = ["#75d5ff", "#ff7ac6"];
 function drawPlayerTag(player) {
   const slot = player.playerSlot || 0;
-  const text = `${slot + 1}P · ${player.driver.code}`;
+  const text = `P${slot + 1} · ${player.driver.code}`;
   ctx.save();
   ctx.font = "bold 14px Trebuchet MS";
   const w = Math.ceil(ctx.measureText(text).width) + 26;
@@ -5682,7 +5682,7 @@ function drawDriverHud(track, player) {
     ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
     ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
     ctx.font = "bold 15px Trebuchet MS";
-    const waiting = `You finished P${player.finishPosition} · ${(other.playerSlot || 0) + 1}P still racing`;
+    const waiting = `You finished P${player.finishPosition} · Player ${(other.playerSlot || 0) + 1} still racing`;
     if (drawingView.hud) drawingView.hud.waiting = waiting;
     ctx.fillText(waiting, view.width / 2, 288);
     ctx.textAlign = "left";
@@ -5759,7 +5759,7 @@ function hudItemState(player, now) {
   }
   const key = player.currentItem;
   if (!key || key === "none") return null;
-  // The player's own key (2P's is the one left of Right Shift), and their
+  // The player's own key (P2's is the one left of Right Shift), and their
   // pad's button when one is in (the left face button: X on one make of pad,
   // a square on another).
   const slot = player.playerSlot || 0;

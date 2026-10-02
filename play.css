@@ -387,7 +387,7 @@ html, body { height: 100%; overflow: hidden; }
   .bc-tower { width: 12.5em; }
 }
 
-/* ---- Two-player split screen: player 2's driver, and the 1P / 2P tags ---- */
+/* ---- Two-player split screen: player 2's driver, and the P1 / P2 tags ---- */
 .second-driver[hidden] { display: none; }
 .second-pick { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .second-name { display: inline-flex; align-items: center; gap: 0.4em; font-weight: 700; min-width: 0; }

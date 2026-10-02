@@ -67,7 +67,7 @@ async (page) => {
     document.querySelector('[data-second="1"]').click();
     const stepped = Game.getPitLaneState().secondDriver.id !== Game.getPitLaneState().driver.id;
     const hint = /Right Shift/.test(document.getElementById("players-hint").textContent)
-      && /1P and 2P/.test(document.getElementById("grid-hint").textContent);
+      && /P1 and P2/.test(document.getElementById("grid-hint").textContent);
     return (shown && first !== second && moved && stepped && hint) || JSON.stringify({ shown, first, second, moved, stepped, hint });
   });
 
@@ -280,7 +280,7 @@ async (page) => {
   });
   info.race = race;
   results.raceCreditsBoth = (race.phase === "results" && race.players && race.players.length === 2 && race.p2Index >= 0 && race.keys2 && race.keys2.throttle === true
-    && race.rows.length === 2 && race.rows.some((r) => /1P/.test(r)) && race.rows.some((r) => /2P/.test(r))
+    && race.rows.length === 2 && race.rows.some((r) => /P1/.test(r)) && race.rows.some((r) => /P2/.test(r))
     && race.names.every((n) => race.strip.includes(`${n}:`))) || JSON.stringify(race).slice(0, 600);
 
   // The replay opens and plays after a two-player race, full screen, on the players' cars.
@@ -295,7 +295,7 @@ async (page) => {
     const label = document.getElementById("bc-trace-label").textContent;
     const scissor = Render3D.inspect().scissor;
     const ok = opened && state.phase === "replay" && view && view.mode === "onboard" && view.focusId === state.humanIds[1]
-      && Render3D.inspect().split === null && scissor === false && label === "2P inputs";
+      && Render3D.inspect().split === null && scissor === false && label === "P2 inputs";
     return ok || JSON.stringify({ opened, phase: state.phase, view, label, scissor });
   });
   const replayBars = await windowBars();
@@ -397,7 +397,7 @@ async (page) => {
     p1.isPlayer = true; p2.isPlayer = true;
     const q = state.qualifying;
     const rows = [...document.querySelectorAll("#qualifying-screen .quali-row")];
-    const tags = rows.map((r) => r.textContent).filter((t) => /[12]P/.test(t)).length;
+    const tags = rows.map((r) => r.textContent).filter((t) => /P[12]\b/.test(t)).length;
     const ok = keysClear && apart && ghost.throttle === 1 && ghost.brake === 0 && state.phase === "qualifyingResults"
       && q.playerTimeMs > 10000 && q.secondTimeMs > 10000 && rows.length === 20 && tags === 2
       && q.order.includes(p1.driver.id) && q.order.includes(p2.driver.id);
