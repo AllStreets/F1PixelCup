@@ -30,7 +30,10 @@ async (page) => {
   results.seasonOnOffer = await step(() => {
     const cups = Game.getPitLaneState().cups;
     const season = cups.find((c) => c.season);
+    const shown = (() => { Game.selectCup(cups.indexOf(season)); return document.getElementById("cup-circuits").textContent; })();
+    Game.selectCup(0);
     const ok = cups.length === 7 && season && season.name === "2025 Season" && season.circuits.length === 24
+      && shown === `24 rounds: ${CIRCUITS[0].name} to ${CIRCUITS[23].name}`
       && season.circuits[0] === CIRCUITS[0].name && season.circuits[23] === CIRCUITS[23].name;
     return ok || JSON.stringify(cups.map((c) => [c.name, c.circuits.length]));
   });

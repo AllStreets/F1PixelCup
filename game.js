@@ -6316,7 +6316,9 @@ function drawGarageScene() {
   if (mode === "loading") return;
   // In 3D the car turns on the showroom floor behind this canvas.
   if (mode === "3d") {
-    const shown = render3dSafely(() => window.Render3D.renderGarage(team, driver, performance.now()));
+    // The car turns in the pit lane's open space, never under its controls.
+    const area = window.Screens && window.Screens.showroomArea ? window.Screens.showroomArea() : undefined;
+    const shown = render3dSafely(() => window.Render3D.renderGarage(team, driver, performance.now(), area));
     if (shown.ok && shown.value) return;
   }
   // Only when 3D is unavailable: the team's showroom photo (taken from the

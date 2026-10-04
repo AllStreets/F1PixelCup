@@ -313,7 +313,11 @@
       : s.weatherMode === "changeable"
         ? "Each race rains as often as it really does there: Spa one in two, the desert almost never."
         : "Dry races all cup.";
-    $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
+    // A cup's four circuits; the season's 24 in one line, first to last.
+    const circuits = s.cups[s.selectedCup].circuits;
+    $("cup-circuits").innerHTML = s.cups[s.selectedCup].season
+      ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0])} to ${esc(circuits[circuits.length - 1])}</li>`
+      : circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     // One player or two (split screen); player 2's driver and both key sets.
     $("players-pills").innerHTML = [[1, "1 player"], [2, "2 players"]].map(([n, label]) => `
       <button class="pill ${n === s.players ? "is-on" : ""}" data-players="${n}" type="button" aria-pressed="${n === s.players}">${label}</button>`).join("");
@@ -681,6 +685,69 @@
     return podiumLayout;
   }
 
+  // The showroom: the largest open stretch of the pit lane, clear of all its
+  // controls, where the car turns (Render3D.renderGarage fits the car into
+  // it). Null where there is no room for a car worth seeing: it is not drawn
+  // rather than drawn under the controls. Measured again only when the
+  // layout changes.
+  const SHOWROOM_PARTS = "#pitlane .pitlane-top, #pitlane .choice-row, #pitlane .choice-hint, #pitlane .cup-circuits, #pitlane .new-season, #pitlane .pitlane-driver, #pitlane #driver-strip, #pitlane #start-cup";
+  const SHOWROOM_GAP = 14;
+  const SHOWROOM_CELL = 12;
+  // A car seen from the showroom camera is about this much wider than tall.
+  const SHOWROOM_ASPECT = 2.3;
+  let showroom = null;
+  function showroomArea() {
+    const pit = $("pitlane");
+    if (!pit || pit.classList.contains("hidden") || openOverlay) return null;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const boxes = [...document.querySelectorAll(SHOWROOM_PARTS)]
+      .filter((el) => !el.hidden && !el.classList.contains("hidden") && el.getClientRects().length)
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const key = `${W}x${H}|${boxes.map((r) => `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)},${Math.round(r.bottom)}`).join(";")}`;
+    if (showroom && showroom.key === key) return showroom.area;
+    // Free cells on a grid over the window, then the largest rectangle of
+    // them that holds the biggest car.
+    const cols = Math.floor((W - 2 * SHOWROOM_GAP) / SHOWROOM_CELL);
+    const rows = Math.floor((H - 2 * SHOWROOM_GAP) / SHOWROOM_CELL);
+    const free = [];
+    for (let y = 0; y < rows; y += 1) {
+      const top = SHOWROOM_GAP + y * SHOWROOM_CELL;
+      const row = [];
+      for (let x = 0; x < cols; x += 1) {
+        const left = SHOWROOM_GAP + x * SHOWROOM_CELL;
+        row.push(!boxes.some((r) => left < r.right + SHOWROOM_GAP && left + SHOWROOM_CELL > r.left - SHOWROOM_GAP
+          && top < r.bottom + SHOWROOM_GAP && top + SHOWROOM_CELL > r.top - SHOWROOM_GAP));
+      }
+      free.push(row);
+    }
+    let best = null;
+    const run = new Array(cols).fill(true);
+    for (let y0 = 0; y0 < rows; y0 += 1) {
+      run.fill(true);
+      for (let y1 = y0; y1 < rows; y1 += 1) {
+        for (let x = 0; x < cols; x += 1) run[x] = run[x] && free[y1][x];
+        const h = (y1 - y0 + 1) * SHOWROOM_CELL;
+        let start = -1;
+        for (let x = 0; x <= cols; x += 1) {
+          if (x < cols && run[x]) { if (start < 0) start = x; continue; }
+          if (start >= 0) {
+            const w = (x - start) * SHOWROOM_CELL;
+            const size = Math.min(w / SHOWROOM_ASPECT, h);
+            if (!best || size > best.size) best = { size, left: SHOWROOM_GAP + start * SHOWROOM_CELL, top: SHOWROOM_GAP + y0 * SHOWROOM_CELL, width: w, height: h };
+            start = -1;
+          }
+        }
+      }
+    }
+    const area = best && best.width >= 160 && best.height >= 70
+      ? { left: best.left, top: best.top, right: best.left + best.width, bottom: best.top + best.height }
+      : null;
+    showroom = { key, area };
+    return area;
+  }
+
   // The title's box as drawn over the 3D scene (kicker and title as far as
   // their text runs, the career strip as a panel), for the ceremony to keep
   // the wall's title clear of. Measured in the 3D layout, once per size.
@@ -989,7 +1056,7 @@
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
-    showQualifying, showPodium, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showQualifying, showPodium, placePodium, podiumReserve, showroomArea, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());
