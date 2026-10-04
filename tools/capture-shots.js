@@ -363,7 +363,7 @@ async (page) => {
       await p.waitForTimeout(seconds * 1000);
       await dayShot(name);
     }
-    // The pit lane, two players picked: the choices and the car (16:9).
+    // The pit lane, two players picked: the whole screen, at 1600x900.
     await sizeTo(1600, 900);
     await freshGame();
     await p.evaluate((DAY) => {
@@ -373,7 +373,7 @@ async (page) => {
       renderGarage();
     }, DAY);
     await p.waitForTimeout(1500);
-    await dayShot("split-pitlane", { x: 480, y: 20, width: 1120, height: 630 });
+    await dayShot("split-pitlane");
   }
   await context.close();
   return written;
