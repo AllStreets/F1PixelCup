@@ -157,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => ids.forEach((id) => venueModelsSettled(id)), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A venue's models all in (or failed): its own, and its type of stand's.
 function venueModelsSettled(id) {
@@ -1284,15 +1284,11 @@ function drawFrame(frame) {
     lastDt = dt;
   }
   resize();
-  // The venue's own models still on their way: nothing built yet (it would
-  // only be built again when they land), the loading panel up.
-  if (!venueModelsSettled(track.id)) {
-    useViewport(null);
-    renderer.setRenderTarget(null);
-    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
-    renderer.clear();
-    return { onKerb: false };
-  }
+  // (The venue's own models still on their way, the circuit is built at once
+  // with its stand-ins, so there is always a picture behind the results and
+  // the handoffs; prepare() holds the race until they are in, and the
+  // circuit is built again with them. A cup fetches its circuits' models from
+  // its start, so that is rare.)
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would

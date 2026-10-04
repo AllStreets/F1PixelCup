@@ -72,7 +72,10 @@ function load(name, files) {
   }
   loading[name] = new Promise((resolve) => {
     let done = false;
-    let lastProgress = performance.now();
+    // How long the download has been silent, counted only in the watch's
+    // own on-time seconds: a busy page (building a circuit, say) holds its
+    // events back, and that is not the network's silence.
+    let silent = 0;
     const settle = (ok, scene, why) => {
       if (done) return;
       done = true;
@@ -87,19 +90,31 @@ function load(name, files) {
     // Each chunk that arrives is progress: a slow connection keeps the loader
     // up (game.js) rather than calling the download stalled.
     const progress = () => {
-      lastProgress = performance.now();
-      if (window.Render3DBoot) window.Render3DBoot.progressAt = lastProgress;
+      silent = 0;
+      if (window.Render3DBoot) window.Render3DBoot.progressAt = performance.now();
     };
-    // (Time the page itself was busy, building a circuit say, is not the
-    // download's silence: the watch only counts while it is ticking.)
     let lastTick = performance.now();
     const watch = setInterval(() => {
       const now = performance.now();
-      if (now - lastTick > 3000) lastProgress += now - lastTick;
+      silent += Math.min(now - lastTick, 1100);
       lastTick = now;
-      if (now - lastProgress > STALL_MS) settle(false, null, "the download stalled");
+      if (silent > STALL_MS) {
+        if (tries < 2) attempt();
+        else settle(false, null, "the download stalled");
+      }
     }, 1000);
-    loader.load(files[name], (gltf) => settle(true, gltf.scene), progress, (error) => settle(false, null, error));
+    // A download that fails or stalls is tried once more before the model
+    // counts as failed.
+    let tries = 0;
+    const attempt = () => {
+      tries += 1;
+      silent = 0;
+      loader.load(`${files[name]}${tries > 1 ? `?retry=${tries}` : ""}`, (gltf) => settle(true, gltf.scene), progress, (error) => {
+        if (tries < 2) attempt();
+        else settle(false, null, error);
+      });
+    };
+    attempt();
   });
   return loading[name];
 }

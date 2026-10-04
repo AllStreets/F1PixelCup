@@ -1590,6 +1590,10 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players
   state.cupPlayers = players;
   releaseAllKeys();
   buildCupEntries();
+  // The cup's circuits' trackside models, fetched from the start: the next
+  // circuit's are in before its loading panel.
+  const cupTracks = (CUPS[state.activeCupIndex] || { tracks: [] }).tracks.map((t) => t.id);
+  if (window.Render3D && window.Render3D.preloadVenues) window.Render3D.preloadVenues(cupTracks);
   // A season resumed: the standings so far.
   if (state.season) applySeasonStandings();
   // One id per cup attempt ties its races to its cup bonus (see career.js);
