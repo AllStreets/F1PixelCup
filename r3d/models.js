@@ -6,8 +6,9 @@
 //   car, and the renderer is ready once it has loaded or failed;
 // - each venue's own models (its landmarks, its yachts) load when its circuit
 //   is prepared: Render3D.prepare() waits for them behind the loading panel,
-//   so everything that draws is in the scene when its shaders compile. After
-//   the core, the rest load quietly in the background, one venue at a time.
+//   so everything that draws is in the scene when its shaders compile. Only
+//   the venue raced loads (24 venues' landmarks would be a lot to download
+//   and hold for one race); loadAllVenueModels is for the checks.
 // A model that fails to load leaves its procedural stand-in in place.
 
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -17,7 +18,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
 export const LANDMARK_SCALE = 2.5;
 
-const FILES = {
+export const FILES = {
   casino: "./assets/landmarks/casino.glb",
   marinaBaySands: "./assets/landmarks/marina_bay_sands.glb",
   singaporeFlyer: "./assets/landmarks/singapore_flyer.glb",
@@ -27,6 +28,25 @@ const FILES = {
   silverstoneWing: "./assets/landmarks/silverstone_wing.glb",
   sakhirTower: "./assets/landmarks/sakhir_tower.glb",
   spTowers: "./assets/landmarks/sp_towers.glb",
+  // The 2025 calendar's other venues (tools/blender/build_landmarks_2025.py).
+  melbourneSkyline: "./assets/landmarks/melbourne_skyline.glb",
+  shanghaiGrandstand: "./assets/landmarks/shanghai_grandstand.glb",
+  jeddahFountain: "./assets/landmarks/jeddah_fountain.glb",
+  miamiStadium: "./assets/landmarks/miami_stadium.glb",
+  hillside: "./assets/landmarks/hillside.glb",
+  barcelonaGrandstand: "./assets/landmarks/barcelona_grandstand.glb",
+  biosphere: "./assets/landmarks/biosphere.glb",
+  spielbergBull: "./assets/landmarks/spielberg_bull.glb",
+  hugenholtz: "./assets/landmarks/hugenholtz.glb",
+  flameTowers: "./assets/landmarks/flame_towers.glb",
+  bakuOldCity: "./assets/landmarks/baku_old_city.glb",
+  cotaTower: "./assets/landmarks/cota_tower.glb",
+  foroSol: "./assets/landmarks/foro_sol.glb",
+  vegasSphere: "./assets/landmarks/vegas_sphere.glb",
+  vegasStrip: "./assets/landmarks/vegas_strip.glb",
+  losailGrandstand: "./assets/landmarks/losail_grandstand.glb",
+  lusailTowers: "./assets/landmarks/lusail_towers.glb",
+  yasHotel: "./assets/landmarks/yas_hotel.glb",
   grandstand: "./assets/landmarks/grandstand.glb",
   grandstandOpen: "./assets/landmarks/grandstand_open.glb",
   people: "./assets/people.glb",
@@ -44,6 +64,22 @@ export const VENUE_MODELS = {
   silverstone: ["silverstoneWing"],
   bahrain: ["sakhirTower"],
   interlagos: ["spTowers"],
+  albertpark: ["melbourneSkyline"],
+  shanghai: ["shanghaiGrandstand"],
+  jeddah: ["jeddahFountain", "yachts"],
+  miami: ["miamiStadium", "yachts"],
+  imola: ["hillside"],
+  barcelona: ["barcelonaGrandstand"],
+  montreal: ["biosphere"],
+  redbullring: ["spielbergBull", "hillside"],
+  hungaroring: ["hillside"],
+  zandvoort: ["hugenholtz"],
+  baku: ["flameTowers", "bakuOldCity", "yachts"],
+  cota: ["cotaTower", "hillside"],
+  mexico: ["foroSol"],
+  lasvegas: ["vegasSphere", "vegasStrip"],
+  losail: ["losailGrandstand", "lusailTowers"],
+  yasmarina: ["yasHotel", "yachts"],
 };
 
 const templates = {};
@@ -88,17 +124,17 @@ function load(name, files) {
   return loading[name];
 }
 
-// Calls done() once every core model has loaded or failed, then starts the
-// venues' models in the background.
+// Calls done() once every core model has loaded or failed. A venue's own
+// models load when its circuit is prepared (venueModelsSettled).
 export function loadTracksideModels(done, files = FILES) {
   Promise.all(CORE_MODELS.map((n) => load(n, files))).then(() => {
     settled = true;
     done();
-    loadAllVenueModels(files);
   });
 }
 
-// Every venue's models, a venue at a time; resolves when all have settled.
+// Every venue's models, a venue at a time; resolves when all have settled
+// (for the checks, which visit every circuit).
 let everything = null;
 export function loadAllVenueModels(files = FILES) {
   if (!everything) {
