@@ -50,7 +50,8 @@ test("a look's colours, styles, heritage, shapes, hair and brows are checked", (
   refused({ brows: undefined }, "no brows");
   refused(brows({ thickness: 3 }), "brows' thickness out of range");
   refused(brows({ arch: "high" }), "brows' arch out of range");
-  refused({ brows: { thickness: 1, arch: 0, tail: 0.5 } }, "brows' gap out of range");
+  refused({ brows: { thickness: 1, arch: 0, tail: 0.5, density: 0.8 } }, "brows' gap out of range");
+  refused(brows({ density: 0.1 }), "brows' density out of range");
   refused(brows({ curl: 1 }), "unknown brow shape");
 });
 

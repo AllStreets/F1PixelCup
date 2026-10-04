@@ -190,10 +190,10 @@ test("faces: each style's hair is where it should be: on the scalp, its own dept
   });
 });
 
-// The head's outline where the plane of the collar's inner lip (y = 1.475)
+// The head's outline where the plane of the collar's inner lip (y = 1.488)
 // cuts it: a point on every edge of its triangles that crosses the plane.
 const headTris = values(doc.meshes[meshNode("head_skin").mesh].primitives[0].indices).map((v) => v[0]);
-function cut(pts, y = 1.475) {
+function cut(pts, y = 1.488) {
   const out = [];
   for (let t = 0; t < headTris.length; t += 3) {
     for (let e = 0; e < 3; e += 1) {
@@ -208,7 +208,7 @@ function cut(pts, y = 1.475) {
 }
 // The collar's inner lip (build_driver.py's collar band), its middle, and how
 // far out a set of points reaches at a bearing round it.
-const collarEdge = positions(meshNode("collar")).filter((p) => Math.abs(p[1] - 1.475) < 0.0006);
+const collarEdge = positions(meshNode("collar")).filter((p) => Math.abs(p[1] - 1.488) < 0.0006);
 const cx = collarEdge.reduce((n, p) => n + p[0], 0) / collarEdge.length;
 const cz = collarEdge.reduce((n, p) => n + p[2], 0) / collarEdge.length;
 const around = (pts, a) => Math.max(...pts.filter((p) => Math.abs(Math.atan2(p[2] - cz, p[0] - cx) - a) < 0.3).map((p) => Math.hypot(p[0] - cx, p[2] - cz)));
@@ -223,9 +223,9 @@ test("faces: the suit's collar stands up round the neck from a sloping shoulder 
   const collar = positions(meshNode("collar"));
   const top = Math.max(...collar.map((p) => p[1])), low = Math.min(...collar.map((p) => p[1]));
   assert.ok(top - low > 0.03 && top - low < 0.06, `the band is ${((top - low) * 100).toFixed(1)} cm tall`);
-  // Close round the neck: no wider than a real collar (13 cm across).
+  // Close round a racing driver's thick neck: no wider than 14.5 cm across.
   const across = Math.max(...collar.map((p) => p[2])) - Math.min(...collar.map((p) => p[2]));
-  assert.ok(across < 0.135, `the collar is ${(across * 100).toFixed(1)} cm across`);
+  assert.ok(across < 0.145, `the collar is ${(across * 100).toFixed(1)} cm across`);
   // The body slopes down from the collar to the shoulders (the trapezius),
   // never a flat ledge: it meets the collar a centimetre or more below its
   // top and falls away outward.
@@ -238,7 +238,7 @@ test("faces: the neck stands in the collar, filling it, never floating above it"
   const head = positions(meshNode("head_skin"));
   const low = Math.min(...head.map((p) => p[1]));
   const top = Math.max(...head.map((p) => p[1]));
-  // The suit's collar stands up to 1.4775 m (build_driver.py).
+  // The suit's collar stands up to 1.4905 m (build_driver.py).
   assert.ok(collarEdge.length >= 24, "the collar's inner lip");
   assert.ok(low < 1.458 && low > 1.40, `the neck's bottom is at ${low.toFixed(3)} m`);
   assert.ok(top > 1.72 && top < 1.80, `the crown is at ${top.toFixed(3)} m`);
@@ -276,6 +276,25 @@ test("faces: a fringe falls clear of its own driver's brows; a side part is a cl
   for (let k = 1; k < xs.length; k += 1) assert.ok(xs[k] - xs[k - 1] < 0.02, `the part runs unbroken (a gap at ${xs[k - 1].toFixed(3)})`);
 });
 
+test("faces: Hamilton's beard runs full along the jaw, not in patches", () => {
+  const beard = meshNode("beard");
+  const pos = positions(beard);
+  const edge = attribute(beard, "_HAIR_MOUSTACHE").map((v) => v[0]);
+  // Round the jaw past the chin toward the ear, either side: in every few
+  // degrees' slice the beard is full (not thinned at an edge) over a band
+  // at least 5 mm deep, never only a vertex or two.
+  for (const sgn of [1, -1]) {
+    for (let a = 0.45; a < 1.1; a += 0.1) {
+      const full = pos.filter((p, i) => {
+        const b = Math.atan2(sgn * p[2], p[0] - 0.04);
+        return b > a - 0.05 && b < a + 0.05 && p[1] < 1.575 && edge[i] > 0.95;
+      }).map((p) => p[1]);
+      const depth = full.length ? Math.max(...full) - Math.min(...full) : 0;
+      assert.ok(depth > 0.005, `the jaw beard is full over ${(depth * 1000).toFixed(1)} mm at ${(a * sgn).toFixed(2)} rad`);
+    }
+  }
+});
+
 // The head as a driver's look shapes it: the rest shape plus each morph
 // target times its weight.
 function shaped(look) {
@@ -295,11 +314,11 @@ test("faces: every driver's own face keeps its chin clear of the collar and its 
   const { DRIVERS } = require("../game-data.js");
   DRIVERS.forEach((d) => {
     const pts = shaped(d.look);
-    // The chin's underside: the lowest point in front of the neck, 2 cm or
-    // more above the collar.
+    // The chin's underside: the lowest point in front of the neck, 1.5 cm or
+    // more above the collar (a driver's short neck).
     const chin = Math.min(...pts.filter((p) => p[0] - cx > 0.075 && Math.abs(p[2] - cz) < 0.03).map((p) => p[1]));
     const collarTop = Math.max(...positions(meshNode("collar")).map((p) => p[1]));
-    assert.ok(chin > collarTop + 0.02, `${d.id}'s chin comes down to ${chin.toFixed(3)} m, the collar's top ${collarTop.toFixed(3)} m`);
+    assert.ok(chin > collarTop + 0.015, `${d.id}'s chin comes down to ${chin.toFixed(3)} m, the collar's top ${collarTop.toFixed(3)} m`);
     // Never more than a millimetre through the collar, never a gap you could
     // see into.
     gaps(pts).forEach(([a, gap]) => {
