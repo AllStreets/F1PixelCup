@@ -423,6 +423,7 @@
     hideMain();
     $("results-kicker").textContent = summary.kicker;
     $("results-title").textContent = summary.title;
+    podiumLoading(false);
     $("results-next").innerHTML = `<span>${esc(summary.nextLabel)} ›</span>`;
     $("results-table").innerHTML = `
       <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
@@ -603,7 +604,9 @@
     $("qualifying-screen").querySelector('[data-action="race"]').focus();
   }
 
-  function showPodium(summary) {
+  // options.threeD: the ceremony is ready and draws this frame; the screen
+  // opens over it at once (never the 2D steps first).
+  function showPodium(summary, { threeD = false } = {}) {
     hideMain();
     $("podium-kicker").textContent = summary.kicker;
     $("podium-title").textContent = summary.title;
@@ -619,11 +622,44 @@
       <div class="podium-plate p${num(p.place)} ${p.isPlayer ? "is-player" : ""}" data-place="${num(p.place)}" style="--team:${esc(p.teamColor)}">
         <b>${esc(ordinal(num(p.place)))}</b><strong>${esc(p.name)}</strong><span>${esc(p.team)}</span><em>${num(p.points)} pts</em>
       </div>`).join("");
-    placePodium(null);
     renderStrip($("podium-career"), summary.career);
     podiumLayout = null;
     podiumHead = null;
+    // Measured again whenever a plate or the title changes size (a font
+    // arriving, a window settling), not only when the window's size does.
+    if (typeof ResizeObserver === "function") {
+      if (!podiumSizes) podiumSizes = new ResizeObserver(() => { podiumLayout = null; podiumHead = null; });
+      podiumSizes.disconnect();
+      [...document.querySelectorAll("#podium-plates .podium-plate"), $("podium-kicker"), $("podium-title"), $("podium-career")].forEach((el) => podiumSizes.observe(el));
+    }
+    const screen = $("podium-screen");
+    screen.classList.toggle("is-3d", threeD);
+    screen.classList.remove("plates-in");
     show("podium-screen");
+  }
+
+  // Show podium pressed while the ceremony is still being readied: the
+  // button says so (and can't be pressed again) until it opens.
+  // (aria-disabled, not disabled: the button keeps the keyboard's focus; the
+  // game ignores presses while it waits. The replay can't be opened meanwhile.)
+  function podiumLoading(on) {
+    const next = $("results-next");
+    if (!next) return;
+    if (on && !next.dataset.label) {
+      next.dataset.label = next.innerHTML;
+      next.innerHTML = "<span>Readying the podium…</span>";
+    } else if (!on && next.dataset.label) {
+      next.innerHTML = next.dataset.label;
+      delete next.dataset.label;
+    }
+    if (on) {
+      next.setAttribute("aria-disabled", "true");
+      next.setAttribute("aria-busy", "true");
+    } else {
+      next.removeAttribute("aria-disabled");
+      next.removeAttribute("aria-busy");
+    }
+    $("results-replay").disabled = on;
   }
 
   // anchors: [{ place, x, y }] in the window's pixels, from the 3D scene; null
@@ -632,6 +668,7 @@
   // What placePodium measures (the title's foot, the buttons, each plate's
   // size), read once per window size and content rather than every frame.
   let podiumLayout = null;
+  let podiumSizes = null;
   function measurePodium(screen) {
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -700,26 +737,38 @@
     // inside the window. If the window is too narrow for all three in a row,
     // the winner's drops below the other two.
     const gap = 8;
-    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
-    if (room) {
-      for (let i = 1; i < placed.length; i += 1) {
-        const l = placed[i - 1];
-        const r = placed[i];
+    // A row of plates, left to right: pushed apart where they would touch,
+    // and kept inside the window.
+    const spread = (row) => {
+      for (let i = 1; i < row.length; i += 1) {
+        const l = row[i - 1];
+        const r = row[i];
         r.x = Math.max(r.x, l.x + l.w / 2 + gap + r.w / 2);
       }
-      const last = placed[placed.length - 1];
+      const last = row[row.length - 1];
       last.x = Math.min(last.x, W - margin - last.w / 2);
-      for (let i = placed.length - 2; i >= 0; i -= 1) {
-        const l = placed[i];
-        const r = placed[i + 1];
+      for (let i = row.length - 2; i >= 0; i -= 1) {
+        const l = row[i];
+        const r = row[i + 1];
         l.x = Math.min(l.x, r.x - r.w / 2 - gap - l.w / 2);
       }
-      placed[0].x = Math.max(placed[0].x, margin + placed[0].w / 2);
+      row[0].x = Math.max(row[0].x, margin + row[0].w / 2);
+    };
+    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
+    if (room) {
+      spread(placed);
     } else {
-      placed.forEach((p) => { p.x = Math.max(margin + p.w / 2, Math.min(W - margin - p.w / 2, p.x)); });
       const winner = placed.find((p) => p.place === 1);
       const others = placed.filter((p) => p !== winner);
-      if (winner) winner.y = Math.max(...others.map((p) => p.y + p.h + gap));
+      if (others.length) spread(others);
+      if (winner) {
+        winner.x = Math.max(margin + winner.w / 2, Math.min(W - margin - winner.w / 2, winner.x));
+        winner.y = Math.max(...others.map((p) => p.y + p.h + gap));
+      }
+      // Side by side on one line, the two above the winner's.
+      const top = Math.max(...others.map((p) => p.y));
+      others.forEach((p) => { p.y = top; });
+      if (winner) winner.y = Math.max(winner.y, top + Math.max(...others.map((p) => p.h)) + gap);
     }
     placed.forEach((p) => {
       // Clear of the buttons when it would sit over them.
@@ -947,7 +996,7 @@
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
-    showQualifying, showPodium, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showQualifying, showPodium, podiumLoading, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

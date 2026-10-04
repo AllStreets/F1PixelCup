@@ -148,6 +148,8 @@ html, body { height: 100%; overflow: hidden; }
 /* The ceremony in 3D (r3d/podium.js): the screen opens up over the scene, the
    title on a broadcast-style band at the top, Continue at the bottom, and the
    2D steps give way to name plates under each driver (Screens.placePodium). */
+/* Show podium pressed while the ceremony readies (Screens.podiumLoading). */
+#results-next[aria-disabled="true"] { opacity: 0.78; cursor: progress; }
 .podium-plates { display: none; }
 #podium-screen.is-3d { background: none; backdrop-filter: none; padding: 0; align-items: stretch; justify-content: stretch; pointer-events: none; }
 #podium-screen.is-3d .overlay-card {
