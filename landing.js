@@ -95,7 +95,7 @@
         <header class="choices-head">
           <p class="kicker">Or race your way</p>
           <h3 id="race-choices-title" class="it-title">Random, custom or one race</h3>
-          <p>Pick <b>Race</b> in the pit lane: a cup, the season, a random cup, a custom cup or a single race. Difficulty, the grid, the weather and two players work in all three as in any cup, and every race counts in your driver's career and best laps.</p>
+          <p>Pick <b>Race</b> in the pit lane: a cup, the season, a random cup, a custom cup or a single race. Difficulty, the grid, the weather and two players work in the random cup, the custom cup and the single race as in any cup, and every race counts in your driver's career and best laps.</p>
         </header>
         <div class="choices-shots">
           <figure><img src="./assets/shots/choices-pitlane.jpg" alt="The pit lane with a random cup drawn: four circuits shown before the start, and Reroll" loading="lazy"><figcaption>A random cup, drawn before the start</figcaption></figure>

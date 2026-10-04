@@ -50,7 +50,7 @@ A `?race=random` (or `custom`, `single`, `season`, `cup`) link picks the Race ch
 ## 3. The custom cup
 
 - **The circuit picker** is an overlay (like Career and Settings: a dialog, focus kept inside, Esc closes it). A search box at the top, then the running order, then every circuit as a card.
-- **Search** matches the circuit's name, country, theme and id, ignoring case and accents ("montreal", "Sao Paulo" and "jose" all find theirs), as the player types. No match: "No circuit matches ‘…’."
+- **Search** matches the start of any word of the circuit's name, short name, places (the cities and names its race goes by: São Paulo, Abu Dhabi, Melbourne, USA, UK), country, theme and id, ignoring case and accents ("montreal", "Sao Paulo" and "jose" all find theirs; "usa" never finds Lusail), as the player types. No match: "No circuit matches ‘…’."
 - **Each card** is the circuit's own map (its outline, drawn by `trackmap.js`, the same as the site's cards), its name and country, and the calendar cup it belongs to. A chosen card shows its place in the order. Clicking a card adds it to the end of the order, or takes it out; a fifth can't be added until one is taken out (the cards say "Four chosen" in their hint).
 - **The running order:** four numbered slots. Each chosen circuit has buttons to move it earlier or later, and to remove it. Empty slots say "Pick a circuit".
 - **Done** closes the picker. A "Clear" button empties the order.
@@ -79,7 +79,8 @@ A random cup, a custom cup and a single race are run by the same code as a calen
 | Cup bonus (top three, × difficulty) | yes | yes | no (one race is not a cup; its race points count) |
 | Podium | the 3D podium, the cup's top three | same | the race's top three, as a Grand Prix podium |
 
-- The results' kicker reads "Race 2 of 4 · Random Cup" (or "Single race" for a single race), and their last column is the cup's points ("Cup"), or "Points" for a single race.
+- The results' kicker reads "Race 2 of 4 · Random Cup" (or "Single race" for a single race), and their last column is the cup's points ("Cup"), or "Total" for a single race (its race points and the fastest lap's).
+- A single race's standings are its finishing order, so the podium's title gives the place the player really finished.
 - The single race's podium: the kicker "Single race · <circuit>", the title "Race winner" (or "You finished 4th"; two players as in a cup), the wall names the circuit's country. The career strip shows the race's own career lines (no cup bonus line).
 - The podium's step colours: each new id gets its own (`Ceremony.cupColour`).
 - Leaving mid-cup works as in any cup: finished races count, the cup bonus only at the end.

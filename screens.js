@@ -255,6 +255,12 @@
         closeOverlay();
       } else {
         Game.toggleCustomCircuit(target.dataset.pick);
+        // A fifth: nothing to add; say why again.
+        if (target.getAttribute("aria-disabled") === "true") {
+          const count = $("circuit-count");
+          count.textContent = "";
+          requestAnimationFrame(() => { count.textContent = `All ${Game.getPitLaneState().race.cupSize} chosen. Take one out to swap it for another.`; });
+        }
       }
     }
     else if (target.dataset.move !== undefined) {
@@ -395,7 +401,8 @@
     $("second-driver").hidden = players !== 2;
     $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
     $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
-    $("players-hint").classList.toggle("is-plain", players !== 2);
+    // (Plain: only says what the pill does; the season's reason stays.)
+    $("players-hint").classList.toggle("is-plain", players !== 2 && !seasonPicked);
     $("players-hint").textContent = seasonPicked
       ? "The season is one player's championship."
       : s.players === 2
@@ -492,9 +499,9 @@
   function restorePickerFocus(was) {
     if (!was || openOverlay !== "circuits-screen" || $("circuits-screen").contains(document.activeElement)) return;
     let el = was.id ? $(was.id) : [...$("circuits-screen").querySelectorAll(`[data-${was.key}]`)].find((n) => n.dataset[was.key] === was.value);
-    // A move button at the end of the order, now disabled, or a removed slot:
-    // the search box.
-    if (!el || el.disabled) el = $("circuit-search");
+    // A move button at the end of the order, now disabled, a removed slot,
+    // or Clear once there is nothing to clear: the search box.
+    if (!el || el.disabled || el.hidden || !el.getClientRects().length) el = $("circuit-search");
     el.focus({ preventScroll: true });
   }
 
@@ -534,8 +541,11 @@
     const full = !single && race.custom.length >= race.cupSize;
     $("circuit-cards").innerHTML = found.length ? found.map((c) => {
       const slot = single ? (race.single.circuitId === c.id ? 1 : 0) : race.custom.indexOf(c.id) + 1;
+      // Four chosen: the rest can't be added until one is taken out.
+      const label = `${c.name}, ${c.country}${slot && !single ? `, race ${slot}` : ""}`;
       return `<button class="circuit-card ${slot ? "is-on" : ""} ${full && !slot ? "is-full" : ""}" data-pick="${esc(c.id)}" type="button" aria-pressed="${Boolean(slot)}"
-        title="${esc(c.name)}">${outline(c.id)}${slot && !single ? `<b class="cc-slot" aria-label="Race ${slot}">${slot}</b>` : ""}
+        aria-label="${esc(label)}"${full && !slot ? ' aria-disabled="true"' : ""}
+        title="${esc(c.name)}">${outline(c.id)}${slot && !single ? `<b class="cc-slot" aria-hidden="true">${slot}</b>` : ""}
         <strong>${esc(c.name)}</strong><span>${esc(c.country)}${c.cup ? ` · ${esc(c.cup)}` : ""}</span></button>`;
     }).join("") : `<p class="muted picker-empty">No circuit matches ‘${esc(query.trim())}’.</p>`;
     restorePickerFocus(was);

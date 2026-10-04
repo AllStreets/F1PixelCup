@@ -104,6 +104,7 @@
 
   // One place earlier (dir -1) or later (1); off either end it stays.
   function move(ids, index, dir) {
+    if (!Number.isInteger(index)) return [...ids];
     const to = index + (dir < 0 ? -1 : 1);
     if (index < 0 || index >= ids.length || to < 0 || to >= ids.length) return [...ids];
     const out = [...ids];
@@ -112,20 +113,22 @@
   }
 
   // Lower case, accents off: "José" finds "jose" and the other way round.
-  const fold = (text) => String(text || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const fold = (text) => String(text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-  // Every word of the query somewhere in the circuit's name, short name,
-  // country, theme or id. The best matches lead: the id itself, then a whole word of the
-  // name or country, then the rest, each in the order given.
+  // Every word of the query starts a word of the circuit's name, short name,
+  // places (the cities and names its race goes by), country, theme or id:
+  // "rodr" finds Rodríguez, but "usa" never finds Lusail. The best matches
+  // lead: the id itself, then a whole word of the name, places or country,
+  // then the rest, each in the order given.
   function search(circuits, query) {
-    const words = fold(query).split(/\s+/).filter(Boolean);
+    const words = fold(query).split(/[^a-z0-9]+/).filter(Boolean);
     if (!words.length) return [...circuits];
     const whole = words.join(" ");
     return circuits
       .map((c, i) => {
-        const hay = fold(`${c.name} ${c.short || ""} ${c.country} ${c.theme || ""} ${c.id}`);
-        if (!words.every((w) => hay.includes(w))) return null;
-        const named = fold(`${c.name} ${c.short || ""} ${c.country}`).split(/[^a-z0-9]+/);
+        const hay = fold(`${c.name} ${c.short || ""} ${c.places || ""} ${c.country} ${c.theme || ""} ${c.id}`).split(/[^a-z0-9]+/);
+        if (!words.every((w) => hay.some((h) => h.startsWith(w)))) return null;
+        const named = fold(`${c.name} ${c.short || ""} ${c.places || ""} ${c.country}`).split(/[^a-z0-9]+/);
         const rank = fold(c.id) === whole ? 2 : words.some((w) => named.includes(w)) ? 1 : 0;
         return { c, i, rank };
       })

@@ -354,8 +354,9 @@ const state = {
   drawSeeds: { cup: 1, single: 1 },
   customIds: [],
   single: { pick: "random", circuitId: null },
-  // The cup being raced when it is one of those (a snapshot: the pit lane's
-  // choices can't change it); null for a calendar cup or the season.
+  // The cup being raced (a snapshot taken at the start: the pit lane's
+  // choices can't change it). getActiveCup reads it when activeCupIndex is
+  // -1 (a random cup, a custom cup or a single race).
   activeCup: null,
   // The season being raced (season.js), and whether "New season" is asking
   // once more before it throws a saved one away.
@@ -1800,12 +1801,13 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players
   state.cupGridMode = gridMode;
   state.cupWeatherMode = weatherMode;
   state.qualifying = null;
+  const gridName = getActiveCup().single ? "The grid" : `${getActiveCup().name} grid`;
   if (state.season && raceIndex > 0) addFeed(`${getActiveCup().name} resumed: race ${raceIndex + 1} of ${getActiveCup().tracks.length}.`);
   addFeed(state.cupGridMode === "qualifying"
-    ? `${getActiveCup().name}: qualifying sets every grid.`
+    ? (getActiveCup().single ? "Qualifying sets the grid." : `${getActiveCup().name}: qualifying sets every grid.`)
     : state.cupPlayers === 2
-      ? `Lights out soon. ${getActiveCup().name} grid is forming: P1 and P2 start from the back.`
-      : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
+      ? `Lights out soon. ${gridName} is forming: P1 and P2 start from the back.`
+      : `Lights out soon. ${gridName} is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(raceIndex);
 }
@@ -3513,6 +3515,13 @@ function finalizeRace() {
   state.lastSecondRaceCareer = recordSecondPlayerRace(finishers, fastest);
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
+  // A single race's standings are its finishing order (the drivers out of
+  // the points are level on nothing, and the fastest lap's point can't lift
+  // a driver past the one who beat them to the flag).
+  if (getActiveCup().single) {
+    const order = finishers.map((racer) => racer.driver.id);
+    state.cupEntries.sort((a, b) => order.indexOf(a.driver.id) - order.indexOf(b.driver.id));
+  }
   if (state.season && getActiveCup().season) {
     // The season moves on and is saved: quit now and it resumes at the next race.
     try {
@@ -3572,7 +3581,8 @@ function showResults(finishers) {
   if (state.raceIndex === activeCup.tracks.length - 1 && !state.quittingToPitLane) beginPodium();
   if (!window.Screens) return;
   window.Screens.showResults({
-    pointsLabel: activeCup.season ? "Season" : activeCup.single ? "Points" : "Cup",
+    // (A single race's total is its race points and the fastest lap's.)
+    pointsLabel: activeCup.season ? "Season" : activeCup.single ? "Total" : "Cup",
     constructors: activeCup.season && state.season ? constructorRows() : null,
     drivers: activeCup.season && state.season ? driverRows() : null,
     kicker: activeCup.single ? activeCup.name : `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,

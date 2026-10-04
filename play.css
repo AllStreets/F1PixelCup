@@ -78,10 +78,10 @@ html, body { height: 100%; overflow: hidden; }
 .driver-tile.is-on { outline: 2px solid #fff; outline-offset: 2px; }
 #start-cup { grid-area: start; justify-self: end; align-self: end; font-size: clamp(1rem, 1.6vw, 1.35rem); }
 
-/* A short window: the hints that only repeat the pill picked are left out
-   (the race's, the season's and the two players' keys stay), so the strip
-   and Start stay on screen. */
-@media (max-height: 800px) and (min-width: 761px) {
+/* A very short window: the grid and weather hints are left out, and the
+   players' unless it says something (the season's reason, the two players'
+   keys); the race's and the season's stay. */
+@media (max-height: 680px) and (min-width: 761px) {
   #grid-hint, #weather-hint, #players-hint.is-plain { display: none; }
   .pitlane-choices { gap: 7px; }
 }
@@ -503,7 +503,9 @@ body[data-split="side"] .ticker { left: 25%; max-width: 44vw; }
 .picker-empty { grid-column: 1 / -1; margin: 18px 0; }
 .picker-card .overlay-actions { margin-top: 14px; }
 .picker-card .overlay-actions [hidden] { display: none; }
-@media (max-width: 760px) {
+@media (max-width: 1000px) {
   .circuit-order { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
   .circuit-cards { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); max-height: none; }
 }

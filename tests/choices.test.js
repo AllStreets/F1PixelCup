@@ -140,10 +140,13 @@ test("the picker's order: move earlier or later, off the ends it stays", () => {
   assert.deepEqual(Choices.move(ids, 0, -1), ids);
   assert.deepEqual(Choices.move(ids, 3, 1), ids);
   assert.deepEqual(Choices.move(ids, 9, 1), ids);
+  assert.deepEqual(Choices.move(ids, NaN, 1), ids);
+  assert.deepEqual(Choices.move(ids, 1.5, 1), ids);
+  assert.deepEqual(Choices.move(ids, "1", 1), ids);
   assert.deepEqual(ids, ["spa", "monza", "monaco", "suzuka"]);
 });
 
-test("search: name, short name, country, theme and id, any case, accents or none", () => {
+test("search: name, short name, places, country, theme and id, any case, accents or none", () => {
   const find = (q) => Choices.search(Data.CIRCUITS, q).map((c) => c.id);
   assert.equal(find("").length, Data.CIRCUITS.length);
   assert.equal(find("   ").length, Data.CIRCUITS.length);
@@ -160,6 +163,15 @@ test("search: name, short name, country, theme and id, any case, accents or none
   // The name the place goes by, too.
   assert.deepEqual(find("austin"), ["cota"]);
   assert.deepEqual(find("montreal"), ["montreal"]);
+  // And the places the races are named for (the spec: "Sao Paulo" finds Interlagos).
+  assert.deepEqual(find("Sao Paulo"), ["interlagos"]);
+  assert.deepEqual(find("abu dhabi"), ["yasmarina"]);
+  assert.deepEqual(find("melbourne"), ["albertpark"]);
+  // Whole words or their starts, never the middle of a word: USA is not
+  // Lusail, UK is not Suzuka.
+  assert.deepEqual(find("usa").sort(), ["cota", "lasvegas", "miami"]);
+  assert.deepEqual(find("uk"), ["silverstone"]);
+  assert.deepEqual(find("rodr"), ["mexico"]);
   assert.ok(find("night").includes("singapore"));
   assert.deepEqual(find("nurburgring"), []);
   // Every word must match somewhere.

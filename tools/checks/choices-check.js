@@ -25,8 +25,10 @@ async (page) => {
     await p.waitForFunction(() => window.Game && window.Screens && document.getElementById("pitlane"), null, { timeout: 30000 });
     // Every car on autopilot, to the flag; the results come up.
     await p.evaluate(() => {
-      window.__runRace = () => {
+      // slow: player 1's car at 60% of its pace, to finish out of the points.
+      window.__runRace = (slow = false) => {
         state.racers.forEach((r) => { r.isPlayer = false; });
+        if (slow) state.racers.filter((r) => r.id === state.playerId).forEach((r) => { r.physics.maxSpeed *= 0.6; });
         state.phase = "race";
         let now = 100000;
         state.raceStart = now; state.lastTick = now;
@@ -98,6 +100,9 @@ async (page) => {
     }
     return /Show podium/.test(document.getElementById("results-next").textContent) || document.getElementById("results-next").textContent;
   });
+  // (The ceremony is readied behind the results; a loaded machine can take
+  // longer than the game's own wait, so the check waits for it first.)
+  await p.waitForFunction(() => worldView() !== "3d" || state.podiumReady === "ready", null, { timeout: 60000 }).catch(() => {});
   await step(() => Game.nextRace());
   await p.waitForFunction(() => state.phase === "podium", null, { timeout: 30000 }).catch(() => {});
   results.randomPodium = await step(() => {
@@ -206,7 +211,7 @@ async (page) => {
     return ok || JSON.stringify({ id: getActiveCup().id, track: state.track.id, shown, diff: getDifficulty().id, weather: state.weather });
   }, single2);
   results.singleRaceToPodium = await step(() => {
-    const phase = window.__runRace();
+    const phase = window.__runRace(true);
     const kicker = document.getElementById("results-kicker").textContent;
     const next = document.getElementById("results-next").textContent;
     return (phase === "results" && /Single race/.test(kicker) && /Show podium/.test(next)) || JSON.stringify({ phase, kicker, next });
@@ -218,8 +223,16 @@ async (page) => {
     const h = Career.getDriver(window.__run.driver).history.filter((e) => e.cupRunId === window.__run.id);
     const races = h.filter((e) => e.type === "race" && e.cupId === "singleRace").length;
     const cups = h.filter((e) => e.type === "cup").length;
-    const ok = state.phase === "podium" && kicker === `Single race · ${getActiveCup().tracks[0].name}` && races === 1 && cups === 0;
-    return ok || JSON.stringify({ phase: state.phase, kicker, races, cups });
+    // The title is the place the player finished the race in (out of the
+    // points here, where everyone level on nothing must not be put in name order).
+    const at = (h.find((e) => e.type === "race") || {}).position;
+    const title = document.getElementById("podium-title").textContent;
+    const want = at === 1 ? "Race winner" : `You finished ${formatOrdinal(at)}`;
+    // The career strip: the race's own lines, no cup bonus.
+    const strip = document.getElementById("podium-career").textContent;
+    const ok = state.phase === "podium" && kicker === `Single race · ${getActiveCup().tracks[0].name}` && races === 1 && cups === 0
+      && at > 10 && title === want && /career points/.test(strip) && !/bonus/i.test(strip);
+    return ok || JSON.stringify({ phase: state.phase, kicker, races, cups, at, title, want, strip });
   });
   await step(() => { Game.backToPitLane(); Game.selectDifficulty(1); Game.selectWeatherMode("dry"); });
 
@@ -255,7 +268,6 @@ async (page) => {
       if (phase !== "results") return `race ${i + 1} ended in ${phase}`;
       if (i < 3) Game.nextRace();
     }
-    recordPlayerCup();
     const counts = runs.map(([driver, run]) => {
       const h = Career.getDriver(driver).history.filter((e) => e.cupRunId === run);
       return [h.filter((e) => e.type === "race" && e.cupId === "customCup").length, h.filter((e) => e.type === "cup" && e.cupId === "customCup").length];
