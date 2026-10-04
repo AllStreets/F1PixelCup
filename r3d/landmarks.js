@@ -813,7 +813,7 @@ function dressLandmark(model, venue) {
       if (src.name === "sand") Object.assign(out, { color: color(venue.gravelTint || "#ddd0a8"), roughness: 1 });
       if (src.name === "bronze") Object.assign(out, { metalness: 0.85, roughness: 0.34 });
       // A fountain's water: white, half see-through, lit from below at night.
-      if (src.name === "spray") Object.assign(out, { transparent: true, opacity: 0.7, depthWrite: false, roughness: 0.4, metalness: 0, emissive: color("#dfeaff"), emissiveIntensity: night ? 0.6 : 0.12 });
+      if (src.name === "spray") Object.assign(out, { transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.4, metalness: 0, emissive: color("#eef4ff"), emissiveIntensity: night ? 0.9 : 0.15 });
       if (src.name === "mist") Object.assign(out, { transparent: true, opacity: 0.16, depthWrite: false, roughness: 0.6, metalness: 0, emissive: color("#dfeaff"), emissiveIntensity: night ? 0.22 : 0.05 });
       // The Yas gridshell's lights at night.
       if (src.name === "gridshell") Object.assign(out, { emissive: color("#7d6bff"), emissiveIntensity: night ? 1.4 : 0 });
@@ -1092,7 +1092,9 @@ const SITES = {
   bakuOldCity: (c) => ({ anchors: anchorsAround(c, 0.33, 80, insideFirst(c)), parts: ["walls", "maiden_tower"], gaps: [6, 10, 16, 24, 36, 55, 80], step: 12, gapFirst: true , faceTrack: true}),
   cotaTower: (c) => ({ anchors: anchorsAround(c, 0.8, 60, insideFirst(c)), gaps: [30, 60, 100, 160, 240], step: 16 }),
   foroSol: (c) => ({ anchors: anchorsAround(c, 0.88, 30, outsideFirst), gaps: [6, 12, 20, 32, 50, 80, 120], step: 14, gapFirst: true , faceTrack: true}),
-  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [30, 60, 110, 180, 260, 360], step: 24 }),
+  // Close by the track, its ground in front kept clear (the Strip's blocks
+  // fill in round it, not in front of it).
+  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30 }),
   losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true , faceTrack: true}),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),

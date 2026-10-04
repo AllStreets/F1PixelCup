@@ -479,7 +479,7 @@ def build_fountain():
     # The fall: a sheath of mist round the jet, widest where the water turns
     # at the top, drifting downwind (+x) as it falls back to the sea.
     fall = []
-    for z, r, lean in ((4.0, 14.0, 34.0), (50, 20.0, 30.0), (120, 24.0, 22.0), (180, 24.0, 13.0), (225, 20.0, 6.0), (252, 11.0, 1.0)):
+    for z, r, lean in ((4.0, 8.0, 30.0), (50, 11.0, 27.0), (120, 14.0, 20.0), (180, 15.5, 12.0), (225, 15.0, 6.0), (254, 10.0, 1.0)):
         fall.append([(lean * (z / 250) ** 0.5 + r * math.cos(2 * math.pi * i / 20) * (1.0 + 0.25 * math.cos(2 * math.pi * i / 20)), r * math.sin(2 * math.pi * i / 20) * 0.9, z) for i in range(20)])
     inner = [[(x * 0.92 + 0.0, y * 0.92, z + 1.5) for x, y, z in ring] for ring in fall]
     for r0, r1 in zip(fall, fall[1:]):
@@ -1111,14 +1111,13 @@ def planet(v):
     g = Matrix.Rotation(0.35, 3, "X") @ Matrix.Rotation(-0.5, 3, "Z") @ c
     land = (math.sin(3.1 * g.x + 1.3) * math.sin(2.7 * g.y + 0.4) * math.sin(3.4 * g.z + 2.1)
             + 0.45 * math.sin(6.3 * g.x - 1.1) * math.sin(5.8 * g.z + 0.7) + 0.25 * math.sin(9.1 * g.y + 2.4))
-    cloud = 0.5 + 0.5 * math.sin(7.0 * g.z + 3.0 * math.sin(4.0 * g.x + 2.0 * g.y))
-    if land > 0.2:
-        col = Vector((0.22, 0.42, 0.18)).lerp(Vector((0.62, 0.52, 0.32)), min(1.0, (land - 0.2) * 2.5))
-    else:
-        col = Vector((0.02, 0.12, 0.42)).lerp(Vector((0.05, 0.3, 0.62)), max(0.0, land + 0.6))
-    if g.z > 0.86 or g.z < -0.88:
-        col = Vector((0.92, 0.95, 1.0))
-    col = col.lerp(Vector((0.95, 0.96, 1.0)), max(0.0, cloud - 0.72) * 2.6)
+    cloud = 0.5 + 0.5 * math.sin(4.0 * g.z + 2.0 * math.sin(3.0 * g.x + 1.5 * g.y))
+    ocean = Vector((0.02, 0.12, 0.42)).lerp(Vector((0.05, 0.3, 0.62)), max(0.0, min(1.0, land + 0.6)))
+    ground = Vector((0.22, 0.42, 0.18)).lerp(Vector((0.62, 0.52, 0.32)), max(0.0, min(1.0, (land - 0.2) * 2.5)))
+    # Soft edges everywhere: the screen is sampled at its vertices.
+    col = ocean.lerp(ground, smooth((land - 0.05) / 0.35))
+    col = col.lerp(Vector((0.92, 0.95, 1.0)), smooth((abs(g.z) - 0.8) / 0.15))
+    col = col.lerp(Vector((0.95, 0.96, 1.0)), smooth((cloud - 0.62) / 0.3) * 0.85)
     # The limb darkens toward the edge of the disc as seen from the front.
     lit = 0.35 + 0.65 * max(0.0, c.y * 0.8 + c.x * 0.3 + 0.2)
     return tuple(min(1.0, x * lit) for x in col)
@@ -1159,7 +1158,9 @@ def build_strip():
     arc = [(-120 + math.sin(a) * 150, 150 - math.cos(a) * 150 - 140) for a in [math.radians(-12 + 24 * k / 12) for k in range(13)]]
     back = [(-120 + math.sin(a) * 170, 150 - math.cos(a) * 170 - 140) for a in [math.radians(-12 + 24 * k / 12) for k in range(13)]]
     facade_tower(c, list(reversed(arc)) + back, 0, 187, "facade_bronze")
-    c.box((-150, -40, 0), (-90, 8, 12), "dark_glass")
+    # Its crown: a band of light round the top, and a podium at its foot.
+    c.prism([(x * 1.0, y) for x, y in list(reversed(arc)) + back], 187, 190, "window_lit")
+    c.box((-150, -150, 0), (-90, -126, 14), "dark_glass")
     c.finish(parent=root)
     y = Mesh("y_tower")
     for k in range(3):
@@ -1169,6 +1170,7 @@ def build_strip():
         L, W = 52.0, 11.0
         pts = [(px * W, py * W), (px * W + ux * L, py * W + uy * L), (-px * W + ux * L, -py * W + uy * L), (-px * W, -py * W)]
         facade_tower(y, [(30 + x, -40 + yy) for x, yy in pts], 0, 120.0 - 8 * k, "facade_bronze")
+        y.prism([(30 + x, -40 + yy) for x, yy in pts], 120.0 - 8 * k, 122.0 - 8 * k, "window_lit")
     y.prism([(30 + 13 * math.cos(2 * math.pi * k / 6), -40 + 13 * math.sin(2 * math.pi * k / 6)) for k in range(6)], 0, 124.0, "facade_bronze")
     y.finish(parent=root)
     n = Mesh("needle")

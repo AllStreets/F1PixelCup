@@ -87,13 +87,14 @@ async (page) => {
       && card.querySelector("a.go-btn").getAttribute("href") === "./play.html?cup=season";
   });
   out.teams = await p.locator("#grid .team-card").count();
-  // The trackside world: six screenshots, every one loaded, each with its alt
-  // text and caption, linked from the top bar.
+  // The trackside world: twelve screenshots (six of them the 2025 venues'
+  // landmarks), every one loaded, each with its alt text and caption, linked
+  // from the top bar.
   out.tracksideShots = await p.evaluate(async () => {
     const imgs = [...document.querySelectorAll("#trackside .trackside-card img")];
     imgs.forEach((i) => { i.loading = "eager"; });
     await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; }))));
-    const ok = imgs.length === 6 && imgs.every((i) => i.naturalWidth > 0 && i.alt.length > 20 && i.closest("figure").querySelector("figcaption b"));
+    const ok = imgs.length === 12 && imgs.filter((i) => /trackside-(sphere|flames|biosphere|austin|forosol|miami)\.jpg$/.test(i.src)).length === 6 && imgs.every((i) => i.naturalWidth > 0 && i.alt.length > 20 && i.closest("figure").querySelector("figcaption b"));
     return ok && document.querySelectorAll('nav a[href="#trackside"]').length === 1 || imgs.map((i) => `${i.src.split("/").pop()}:${i.naturalWidth}`).join(",");
   });
   out.newPlayer = (await p.locator("#career-summary").innerText()).toLowerCase().includes("starts");

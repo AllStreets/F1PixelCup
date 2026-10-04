@@ -5,7 +5,7 @@ Stage J (`2026-10-01-trackside-blender-design.md`) gave the original eight venue
 ## 1. Conventions (unchanged from Stage J)
 
 - Real metres in Blender, Z up, the front toward +Y (the circuit side; three.js -Z). Drawn at `LANDMARK_SCALE` (2.5 units a metre), the city's scale.
-- Materials by role, named in the GLB and dressed in `r3d/landmarks.js` (`dressLandmark`). New roles: `screen` (an LED surface painted by its vertex colours, unlit, glowing: the Sphere), `spray` (a fountain's water, white and translucent), `grass` and `sand` (landforms), `bronze` (a sculpture), `gridshell` (the Yas hotel's lit lattice), `red_steel` (the Austin tower).
+- Materials by role, named in the GLB and dressed in `r3d/landmarks.js` (`dressLandmark`). New roles: `screen` (an LED surface painted by its vertex colours, unlit, glowing: the Sphere), `spray` and `mist` (a fountain's jet and the softer water falling round it, translucent), `grass` and `sand` (landforms, in the venue's own ground colour), `bronze` (a sculpture), `gridshell` (the Yas hotel's lit lattice), `red_steel` (the Austin tower), `facade_blue` and `facade_bronze` (the window shader with blue or bronze glass), `crowd` (the rows of fans in a landmark's stands and on the banks: the painted crowd texture, a row to a step, by the UVs in metres), `seat` (in the venue's stand colour).
 - No logos, no trademarks, no text, no sponsor marks. Shapes from public photographs, used only as reference.
 - Budgets: a landmark up to 40,000 triangles. Every mesh closed and facing outward (the Node test from Stage J covers every file in `assets/landmarks/`).
 - **Nothing over the track.** Where the real building spans the circuit (the Yas hotel's bridge, Shanghai's bridge building), the span is left out and the halves stand either side.
@@ -24,7 +24,7 @@ A new script, separate from `build_landmarks.py` (which another stage edits), wi
 | Barcelona | `barcelona_grandstand.glb` | The main grandstand opposite the pits: about 240 m of two tiers under a roof cantilevered from steel trusses |
 | Montréal | `biosphere.glb` | The Biosphère: a 76 m geodesic sphere cut at 62 m, a double lattice (triangles outside, hexagons in), on its plinth |
 | Red Bull Ring | `spielberg_bull.glb` | The steel bull: a charging bull about 16 m long, head down and horns forward, on a rock plinth (generic, no mark) |
-| Zandvoort | `hugenholtz.glb` | The Hugenholtz bowl: terraces curving round the outside of the hairpin on their dune |
+| Zandvoort | `hugenholtz.glb` | The Hugenholtz bowl: terraces curving round on their dune, in six pieces so the ground is claimed piece by piece. At the city's scale the bowl is larger than the circuit's own map has room for round the hairpin itself, so it stands on the dunes nearest it that are clear and face the track |
 | Baku | `flame_towers.glb` | The Flame Towers on the hill: three glass towers of curved, flame-shaped plan (182, 165 and 152 m) tapering to their tips |
 | Baku | `baku_old_city.glb` | The old city's walls (crenellated, with round towers) along the circuit, and the Maiden Tower (29.5 m, its buttress) behind them |
 | Circuit of the Americas | `cota_tower.glb` | The observation tower: 77 m, its deck at 70 m, the red steel tubes falling from its top in a veil to the stage below |
@@ -33,7 +33,7 @@ A new script, separate from `build_landmarks.py` (which another stage edits), wi
 | Las Vegas | `vegas_strip.glb` | Strip towers: a curved bronze-glass slab, a Y-plan gold-glass tower, and the 350 m observation tower with its pod |
 | Losail | `losail_grandstand.glb` | The floodlit main grandstand: a long covered stand under a scalloped white canopy on masts, its floodlight pylons |
 | Losail | `lusail_towers.glb` | Lusail's twin crescent towers (about 200 m) on the skyline |
-| Yas Marina | `yas_hotel.glb` | Half of the hotel the circuit runs through: a curved 12-storey block under the lit gridshell; placed either side of the track (the bridge between the halves left out) |
+| Yas Marina | `yas_hotel.glb` | Half of the hotel the circuit runs through: a curved 12-storey block under the lit gridshell. Both halves are placed either side of the track where there is room (the bridge between them left out); Yas's infield is too narrow for the second half at the city's scale, so the marina-side half stands alone |
 
 Each is checked in the build (budget, on the ground, its size) and in Node (`tests/landmark-models-2025.test.js`: its parts, materials, sizes and budget, and that every mesh faces outward).
 
@@ -41,8 +41,8 @@ Each is checked in the build (budget, on the ground, its size) and in Node (`tes
 
 - **Venue settings** (`r3d/landmarks.js` `VENUES`): each new venue's `extras` gains its landmark builders; its `stand` type is set (covered or open, as Stage J did); harbour venues list their `harbour`.
 - **Stand types:** covered at Shanghai, Jeddah, Barcelona, Circuit of the Americas, Mexico City, Losail and Yas Marina; open terraces at Albert Park, Miami, Imola, Montréal, the Red Bull Ring, the Hungaroring, Zandvoort, Baku and Las Vegas (temporary or hillside stands).
-- **Placement:** each landmark through `placeModel` (its parts' rectangles claimed, never over the circuit, never over what is placed), at the lap share or corner where it is in life (the Hugenholtz bowl at its board's corner, Tosa at Tosa, the bowl opposite the pits, Baku's walls along the old city, the Strip to the west). The skyline pieces stand far back on their bearing; the fountain stands out at sea, past the shore.
-- **Yachts** (`r3d/yachts.js`): `harbour.anchorIn` also takes `"sea"` (at anchor offshore, past the coast's shore) and `"lake"` (berthed in the infield water, all bows one way: Yas Marina's marina and Miami's painted marina). Baku's bay and Jeddah's yacht club anchor at sea. The fleet stays on its water: `auditYachts` reports any hull out of its water.
+- **Placement:** each landmark through `placeModel` (its parts' rectangles claimed, never over the circuit, never over what is placed, never in the sea), at the lap share or corner where it is in life (Tosa at Tosa, the Niki Lauda bank at Spielberg's first corner, Austin's at Turn 1, the main grandstands opposite the pits, Baku's walls along the old city, the Strip to the west). Stands and banks face the track they watch (`faceTrack`: no other stretch nearer their back than their front). The skyline pieces stand far back on their bearing; the fountain stands out at sea, past the shore.
+- **Yachts** (`r3d/yachts.js`): `harbour.anchorIn` also takes `"sea"` (at anchor offshore, past the coast's shore, clear of the fountain) and `"lake"` (berthed in the infield water, all bows one way: Miami's painted marina). Baku's bay, Jeddah's yacht club and Yas Marina (whose infield has no room for a marina at this scale) anchor at sea. The fleet stays on its water: `auditYachts` reports any hull out of its water.
 - **Loading only the current venue:** the venue's models load when its circuit is prepared (behind the loading panel). The background load of every venue's models after the core is dropped: with 24 venues it would download and hold every landmark of the calendar. `Render3D.loadAllModels()` stays for the checks.
 - **Performance:** each venue's landmarks within the budget; the frame-time check runs every circuit on all three tiers.
 
