@@ -731,26 +731,37 @@
     // inside the window. If the window is too narrow for all three in a row,
     // the winner's drops below the other two.
     const gap = 8;
-    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
-    if (room) {
-      for (let i = 1; i < placed.length; i += 1) {
-        const l = placed[i - 1];
-        const r = placed[i];
+    // A row of plates (sorted by x), pushed apart where they would touch and
+    // kept inside the window.
+    const spread = (row) => {
+      for (let i = 1; i < row.length; i += 1) {
+        const l = row[i - 1];
+        const r = row[i];
         r.x = Math.max(r.x, l.x + l.w / 2 + gap + r.w / 2);
       }
-      const last = placed[placed.length - 1];
+      const last = row[row.length - 1];
       last.x = Math.min(last.x, W - margin - last.w / 2);
-      for (let i = placed.length - 2; i >= 0; i -= 1) {
-        const l = placed[i];
-        const r = placed[i + 1];
+      for (let i = row.length - 2; i >= 0; i -= 1) {
+        const l = row[i];
+        const r = row[i + 1];
         l.x = Math.min(l.x, r.x - r.w / 2 - gap - l.w / 2);
       }
-      placed[0].x = Math.max(placed[0].x, margin + placed[0].w / 2);
+      row[0].x = Math.max(row[0].x, margin + row[0].w / 2);
+    };
+    const room = placed.reduce((sum, p) => sum + p.w, 0) + gap * (placed.length - 1) <= W - margin * 2;
+    if (room) {
+      spread(placed);
     } else {
-      placed.forEach((p) => { p.x = Math.max(margin + p.w / 2, Math.min(W - margin - p.w / 2, p.x)); });
+      // The other two side by side (apart, as above), the winner's below them.
       const winner = placed.find((p) => p.place === 1);
       const others = placed.filter((p) => p !== winner);
-      if (winner) winner.y = Math.max(...others.map((p) => p.y + p.h + gap));
+      if (winner) winner.x = Math.max(margin + winner.w / 2, Math.min(W - margin - winner.w / 2, winner.x));
+      if (others.length) {
+        spread(others);
+        const top = Math.max(...others.map((p) => p.y));
+        others.forEach((p) => { p.y = top; });
+        if (winner) winner.y = top + Math.max(...others.map((p) => p.h)) + gap;
+      }
     }
     placed.forEach((p) => {
       // Clear of the buttons when it would sit over them.

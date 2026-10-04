@@ -185,7 +185,7 @@ html, body { height: 100%; overflow: hidden; }
 }
 .podium-plate b { grid-row: span 2; font: italic 900 clamp(1.1rem, 2.2vw, 1.9rem)/1 var(--font); color: #fff; }
 .podium-plate.p1 b { color: #e3b54a; }
-.podium-plate strong { font: italic 900 clamp(0.8rem, 1.35vw, 1.15rem)/1.1 var(--font); text-transform: uppercase; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.podium-plate strong { font: italic 900 clamp(0.8rem, 1.35vw, 1.15rem)/1.1 var(--font); text-transform: uppercase; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0.14em; }
 .podium-plate span { font-size: clamp(0.66rem, 0.95vw, 0.82rem); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .podium-plate em { grid-column: 2; font: 700 clamp(0.7rem, 1vw, 0.88rem)/1.2 var(--font); font-style: normal; color: #fff; }
 .podium-plate.is-player strong { color: #ff4a3d; }

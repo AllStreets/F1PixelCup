@@ -217,7 +217,7 @@ model is unavailable it falls back to the original pseudo-3D canvas renderer.
   - Ambient occlusion baked into the model.
 
   Each team has its own paint scheme after its 2025 car (a split lower flank, a nose-to-tail fade, a pinstripe, a painted nose), plus the driver's number on the nose and engine cover and their helmet design. Wheels roll and steer, and the DRS flap opens.
-- **Blender-built drivers** (`assets/driver.glb`): a jointed figure in a race suit and gloves, with the car's helmet shell (so each driver's design carries over). Poses: stand, wave, arms up, trophy and champagne spray. They are for the podium ceremony.
+- **Blender-built drivers** (`assets/driver.glb`): a jointed figure in a race suit and gloves. Poses: stand, wave, arms up, trophy and champagne spray. They are for the podium ceremony, where they stand bareheaded with their own faces.
 - **The circuit** is extruded from the physics centreline: tarmac, kerbs only
   where it bends, gravel traps on the outside of corners, run-off that narrows
   wherever another stretch of the lap is close, advertising barriers, catch
@@ -422,7 +422,10 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   game; resize them afterwards with
   `sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg` and
   `sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team}-*.jpg` and
-  `sips -Z 960 assets/shots/items/*.jpg`. Set `globalThis.CAPTURE_PARTS = ["items"]`
+  `sips -Z 960 assets/shots/items/*.jpg` and `sips -Z 360 assets/shots/helmets/*.jpg`. The race-day
+  shots (parts `replay`, `podium` and `split`, in `assets/shots/race-day/`) get an 800 px copy each,
+  `sips -Z 800 -s formatOptions 74 <shot>.jpg --out <shot>-800.jpg`, then
+  `sips -Z 1600 -s formatOptions 76 <shot>.jpg`. Set `globalThis.CAPTURE_PARTS = ["items"]`
   first to retake only the power-up shots (posed in a paused race on a clear
   straight, with a hand-placed photo camera). Who drives in each shot is
   `SHOT_DRIVERS` in `game-data.js` -- Leclerc first, Hamilton second, then the

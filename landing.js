@@ -6,7 +6,7 @@
   const $ = (id) => document.getElementById(id);
 
   function lapTime(ms) {
-    if (!ms || ms <= 0) return "—";
+    if (!ms || ms <= 0) return "-:--.---";
     const total = Math.round(ms) / 1000;
     const minutes = Math.floor(total / 60);
     return `${minutes}:${(total - minutes * 60).toFixed(3).padStart(6, "0")}`;
@@ -16,7 +16,7 @@
   function guardImages() {
     document.querySelectorAll("img").forEach((img) => {
       const fail = () => {
-        const holder = img.closest(".hero, .circuit-shot, .season-shot, .team-shot, .pu-shot");
+        const holder = img.closest(".hero, .circuit-shot, .season-shot, .team-shot, .pu-shot, .feature-main, .thumb");
         if (holder) holder.classList.add("no-shot");
         img.remove();
       };
@@ -99,7 +99,7 @@
     if (list.length === 0) {
       $("career-summary").innerHTML = `
         <div><span class="career-tier">F4</span></div>
-        <p>Every driver has their own career, and each one starts at <strong>1200 · F4</strong>. Race as Leclerc and it's Leclerc's career that climbs — his points, rating, poles and best lap on every circuit — while Hamilton's waits for you. Saved in this browser.</p>
+        <p>Every driver has their own career, and each one starts at <strong>1200 · F4</strong>. Race as Leclerc and it's Leclerc's career that climbs (his points, rating, poles and best lap on every circuit) while Hamilton's waits for you. Saved in this browser.</p>
         <p><a class="go-btn" href="./play.html"><span>Start your first career ›</span></a></p>`;
       return;
     }
@@ -175,6 +175,126 @@
     $("pu-odds-note").textContent = `Chances for each item box. The column is set by your gap to the leader, not your place: close behind the leader you roll like a front-runner. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and no new Steward Penalty comes out of a box while one is on track.`;
   }
 
+  // Race day: a gallery per feature, every picture the game's own
+  // (tools/capture-shots.js, parts replay, podium and split). The strip's
+  // buttons show each picture large; the first is the one shown at load.
+  // Who is in the pictures is SHOT_DRIVERS.raceDay, so the alt text names them.
+  function raceDayShots() {
+    const day = SHOT_DRIVERS.raceDay;
+    const name = (id) => (DRIVERS.find((d) => d.id === id) || { name: "A driver" }).name;
+    const [first, second, third] = day.podium;
+    const [p1, p2] = day.players;
+    return {
+      replays: [
+        { file: "replay-trackside", label: "Trackside", caption: `${shotCar(day.replay)} in the pack at Monaco`,
+          alt: `Replay from a trackside camera: ${shotCar(day.replay)} in the pack at Monaco, with the timing tower, the lower third and the replay controls` },
+        { file: "replay-onboard", label: "Onboard", caption: `Onboard with ${name(day.onboard)}: the throttle and brake trace and the steering`,
+          alt: `Replay onboard ${shotCar(day.onboard)} at Monaco, with ${name(day.onboard)}'s throttle and brake trace and steering bar` },
+        { file: "replay-helicopter", label: "Helicopter", caption: `The helicopter over the field, following ${name(day.replay)}`,
+          alt: `Replay from the helicopter: the field at Monaco from above, following ${shotCar(day.replay)}` },
+        { file: "replay-director", label: "Director", caption: "The director cuts to a battle in the pack",
+          alt: "Replay, the director's cut: a battle for position through a Monaco corner, with the broadcast graphics" },
+      ],
+      podium: [
+        { file: "podium-spray", label: "Champagne", caption: `${name(first)}, ${name(second)} and ${name(third)} spray the champagne`,
+          alt: `The podium: ${name(first)} on the top step, ${name(second)} second and ${name(third)} third, bareheaded in their team suits, spraying champagne` },
+        { file: "podium-arms", label: "Arms up", caption: "Arms up, each one stepping forward",
+          alt: `The podium: ${name(first)}, ${name(second)} and ${name(third)} with their arms raised, name plates below` },
+        { file: "podium-trophy", label: "Trophy", caption: `${name(first)} lifts the trophy under the confetti`,
+          alt: `${name(first)} lifts the trophy between ${name(second)} and ${name(third)} as confetti falls` },
+        { file: "podium-orbit", label: "Orbit", caption: "The camera orbits as the confetti settles",
+          alt: `The camera orbiting the podium, ${name(first)} on the top step, confetti on the steps` },
+      ],
+      "two-player": [
+        { file: "split-spa", label: "Split screen", caption: `${name(p1)} as P1 (top) and ${name(p2)} as P2 at Eau Rouge`,
+          alt: `Split screen at Spa: ${name(p1)} as P1 in the top view and ${name(p2)} as P2 below, each with their own HUD` },
+        { file: "split-monaco-wet", label: "In the rain", caption: "P1 and P2 at Monaco in the wet",
+          alt: `Split screen at Monaco in the rain: ${name(p1)} as P1 above, ${name(p2)} as P2 below, spray off every car` },
+        { file: "split-side-by-side", label: "Side by side", w: 1600, h: 700, caption: "Side by side on a wide window",
+          alt: `On a wide window the views sit side by side: ${name(p1)} as P1 on the left, ${name(p2)} as P2 on the right, at Spa` },
+        { file: "split-pitlane", label: "Pit lane", caption: `2 players picked, ${name(p2)} as P2's driver`,
+          alt: `The pit lane with 2 players picked and ${name(p2)} chosen as P2's driver` },
+      ],
+    };
+  }
+
+  function renderRaceDay() {
+    const shots = raceDayShots();
+    const base = "./assets/shots/race-day/";
+    const sources = (s) => ({ src: `${base}${s.file}.jpg`, srcset: `${base}${s.file}-800.jpg 800w, ${base}${s.file}.jpg 1600w` });
+    // The gallery is the wider of two columns (at most about 780 px), or the
+    // full width once they stack; a thumbnail is a quarter of it (half on phones).
+    const MAIN_SIZES = "(max-width: 900px) 92vw, min(48vw, 780px)";
+    const THUMB_SIZES = "(max-width: 520px) 46vw, (max-width: 900px) 23vw, 190px";
+    const GROUP_LABELS = { replays: "Replay pictures", podium: "Podium pictures", "two-player": "Two-player pictures" };
+    const size = (s) => ({ w: s.w || 1600, h: s.h || 900 });
+    document.querySelectorAll("[data-gallery]").forEach((holder) => {
+      const list = shots[holder.dataset.gallery] || [];
+      if (!list.length) return;
+      const lead = list[0];
+      holder.innerHTML = `
+        <figure class="feature-main">
+          <img src="${esc(sources(lead).src)}" srcset="${esc(sources(lead).srcset)}" sizes="${MAIN_SIZES}" width="${size(lead).w}" height="${size(lead).h}" alt="${esc(lead.alt)}" loading="lazy" decoding="async">
+          <figcaption aria-live="polite"><span class="cap-tag">${esc(lead.label)}</span><span class="cap-text">${esc(lead.caption)}</span></figcaption>
+        </figure>
+        <div class="feature-strip" role="group" aria-label="${esc(GROUP_LABELS[holder.dataset.gallery] || "Pictures")}">${list.map((s, i) => `
+          <button class="thumb${i === 0 ? " is-on" : ""}" type="button" aria-pressed="${i === 0}" data-index="${i}">
+            <img src="${esc(base + s.file)}-400.jpg" srcset="${esc(base + s.file)}-400.jpg 400w, ${esc(base + s.file)}-800.jpg 800w" sizes="${THUMB_SIZES}" width="400" height="${Math.round(400 * size(s).h / size(s).w)}" alt="" loading="lazy" decoding="async">
+            <span>${esc(s.label)}</span>
+          </button>`).join("")}
+        </div>`;
+      const figure = holder.querySelector(".feature-main");
+      holder.querySelectorAll(".thumb").forEach((button) => button.addEventListener("click", () => {
+        const s = list[Number(button.dataset.index)];
+        let img = figure.querySelector("img");
+        // A picture that failed to load was taken out (guardImages): the next
+        // one gets a new image, with the same fallback.
+        if (!img) {
+          img = Object.assign(document.createElement("img"), { sizes: MAIN_SIZES, loading: "lazy", decoding: "async" });
+          img.addEventListener("error", () => { img.remove(); figure.classList.add("no-shot"); }, { once: true });
+          figure.classList.remove("no-shot");
+          figure.prepend(img);
+        }
+        Object.assign(img, { srcset: sources(s).srcset, src: sources(s).src, alt: s.alt, width: size(s).w, height: size(s).h });
+        figure.querySelector(".cap-tag").textContent = s.label;
+        figure.querySelector(".cap-text").textContent = s.caption;
+        holder.querySelectorAll(".thumb").forEach((b) => {
+          b.classList.toggle("is-on", b === button);
+          b.setAttribute("aria-pressed", String(b === button));
+        });
+      }));
+    });
+  }
+
+  // The two players' keys, drawn from the game's own bindings (TwoPlayer.KEYS):
+  // the four driving keys as a cluster, drift and power-up below. The game
+  // reads keys by position, so these are their places on a QWERTY keyboard.
+  const KEY_LABELS = { KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", ShiftLeft: "Left Shift", Space: "Space",
+    ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", ShiftRight: "Right Shift", Slash: "/" };
+  const ACTION_NAMES = { throttle: "Throttle", brake: "Brake, then reverse", left: "Steer left", right: "Steer right", drift: "Drift", item: "Power-up" };
+
+  function renderKeymaps() {
+    if (!window.TwoPlayer) return;
+    const label = (code) => KEY_LABELS[code] || code;
+    const key = (set, action, extra = "") => `<kbd class="key key-${action}" data-action="${action}" title="${esc(ACTION_NAMES[action])}">${set[action].map((c) => esc(label(c))).join(" ")}${extra}</kbd>`;
+    const html = TwoPlayer.KEYS.map((set, i) => {
+      // Left Shift is drawn before Space, and / before Right Shift, as they sit on the keyboard.
+      const lower = i === 0
+        ? key(set, "drift", "<small>Drift</small>") + key(set, "item", "<small>Power-up</small>")
+        : key(set, "item", "<small>Power-up</small>") + key(set, "drift", "<small>Drift</small>");
+      return `<div class="keymap-col" data-player="${i + 1}" aria-hidden="true">
+        <p class="keymap-tag">P${i + 1}</p>
+        <div class="key-cluster">${key(set, "throttle")}${key(set, "left")}${key(set, "brake")}${key(set, "right")}</div>
+        <div class="key-row">${lower}</div>
+      </div>`;
+    }).join("");
+    const spoken = TwoPlayer.KEYS.map((set, i) => `P${i + 1} drives with ${["throttle", "left", "brake", "right"].map((a) => set[a].map(label).join(" or ")).join(" ")}, ${set.drift.map(label).join(" or ")} to drift and ${set.item.map(label).join(" or ")} for power-ups`).join("; ");
+    document.querySelectorAll("[data-keymap]").forEach((el) => {
+      el.innerHTML = `<p class="visually-hidden">Two-player keys: ${esc(spoken)}.</p>${html}
+        <p class="keymap-note">Keys go by their place on the keyboard (on AZERTY, P1 drives with Z Q S D); P2's power-up key is the one just left of Right Shift.</p>`;
+    });
+  }
+
   function guardPlayOnPhones() {
     if (window.Device) Device.guardPlayLinks(document, window);
   }
@@ -200,6 +320,8 @@
   renderCareer();
   renderGrid();
   renderPowerUps();
+  renderRaceDay();
+  renderKeymaps();
   guardImages();
   guardPlayOnPhones();
 }());

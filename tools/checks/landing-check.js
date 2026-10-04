@@ -4,7 +4,10 @@
 // puOddsCell true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
 // yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
-// (the site never loads the 3D engine); every noSideScroll true; errors [].
+// (the site never loads the 3D engine); every noSideScroll true; the race-day values
+// (raceDay, raceDayImages, raceDayAlts, raceDayGallery, replayCopyTrue, twoPlayerKeys, raceDayLayout1600,
+// raceDayLayout1000, raceDayLayout390), every navOneLine (870 to 1900) and every *TextClean true;
+// errors [] (a window the browser would not size counts as an error).
 // Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
@@ -25,8 +28,35 @@ async (page) => {
     await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
     await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
     await p.waitForTimeout(400);
+    // The window really is that size (a size the browser refuses would test another).
+    const got = await p.evaluate(() => [innerWidth, innerHeight]);
+    if (Math.abs(got[0] - width) > 2) errors.push(`window ${width}x${height} came out ${got.join("x")}`);
   };
   const noSideScroll = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
+  // Everything a reader can see or hear (title, description, text, alt and
+  // aria labels, titles): no em dash, and the players are P1 and P2, never 1P or 2P.
+  const textClean = (pg) => pg.evaluate(() => {
+    const text = [document.title, document.querySelector('meta[name="description"]')?.content || "", document.body.textContent,
+      ...[...document.querySelectorAll("[alt], [aria-label], [title]")].map((e) => `${e.getAttribute("alt") || ""} ${e.getAttribute("aria-label") || ""} ${e.getAttribute("title") || ""}`)].join(" ");
+    const bad = [text.includes("—") && "em dash", /\b[12]P\b/.test(text) && "1P/2P"].filter(Boolean);
+    return bad.length ? bad.join(", ") : true;
+  });
+  // Each race-day block's parts (main shot, copy, strip) never overlap: side by
+  // side wants the shot and the copy beside each other, stacked one above the other.
+  const raceDayLayout = (want) => p.evaluate((want) => {
+    const blocks = [...document.querySelectorAll("#race-day .feature")];
+    if (blocks.length !== 3) return "no blocks";
+    for (const b of blocks) {
+      const [m, c, s] = [".feature-main", ".feature-copy", ".feature-strip"].map((sel) => b.querySelector(sel).getBoundingClientRect());
+      const apart = (a, z) => a.right <= z.left + 1 || z.right <= a.left + 1 || a.bottom <= z.top + 1 || z.bottom <= a.top + 1;
+      if (!apart(m, c) || !apart(m, s) || !apart(c, s)) return `${b.id}: overlap`;
+      if ([m, c, s].some((r) => r.left < -1 || r.right > innerWidth + 1)) return `${b.id}: off screen`;
+      const beside = (c.left >= m.right - 1 || c.right <= m.left + 1) && c.top < m.bottom && m.top < c.bottom;
+      const stacked = c.top >= m.bottom - 1 || c.bottom <= m.top + 1;
+      if (want === "beside" ? !beside : !stacked) return `${b.id}: not ${want}`;
+    }
+    return true;
+  }, want);
 
   await size(1440, 900);
   await p.goto(`http://localhost:8765/?${Date.now()}`);
@@ -100,6 +130,92 @@ async (page) => {
   out.heroFromData = await p.evaluate(() => document.querySelector("#hero img").alt.startsWith(`${DRIVERS.find((d) => d.id === SHOT_DRIVERS.hero).name}'s Ferrari`));
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
+  // Race day: replays, the podium and two players, each a block with a main
+  // shot and a strip of four that picks it (docs/superpowers/specs/2026-10-01-site-showcase-design.md).
+  const BLOCKS = ["replays", "podium", "two-player"];
+  out.raceDay = await p.evaluate((blocks) => Boolean(document.querySelector('nav a[href="#race-day"]'))
+    && blocks.every((id) => {
+      const b = document.querySelector(`#race-day #${id}`);
+      return Boolean(b) && b.querySelectorAll(".feature-main img").length === 1 && b.querySelectorAll(".feature-strip button img").length === 4
+        && Boolean(document.querySelector(`#hero a[href="#${id}"]`));
+    }), BLOCKS);
+  // Every shot loads (each scrolled to, as they're lazy), and is lazy and sized.
+  out.raceDayImages = await p.evaluate(async () => {
+    const imgs = [...document.querySelectorAll("#race-day img")];
+    for (const i of imgs) {
+      i.scrollIntoView({ block: "center", behavior: "instant" });
+      if (!i.complete) await Promise.race([new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }), new Promise((r) => setTimeout(r, 4000))]);
+    }
+    window.scrollTo({ top: 0, behavior: "instant" });
+    // Every file a srcset offers exists (most are never loaded at this size).
+    const offered = (i) => [i.getAttribute("src"), ...(i.getAttribute("srcset") || "").split(",").map((c) => c.trim().split(/\s+/)[0])];
+    // (A thumbnail's full-size picture is what its click shows: the -400 file's 1600 one.)
+    const urls = [...new Set(imgs.flatMap((i) => [...offered(i), i.closest(".thumb") ? i.getAttribute("src").replace("-400.jpg", ".jpg") : null]).filter(Boolean))];
+    const missing = [];
+    for (const u of urls) { if (!(await fetch(u, { method: "HEAD" })).ok) missing.push(u); }
+    // Its width and height say the picture's real shape (to the pixel; a srcset
+    // image reports its size scaled to the slot, rounded).
+    const shaped = (i) => Math.abs(i.naturalHeight - (i.naturalWidth * Number(i.getAttribute("height"))) / Number(i.getAttribute("width"))) <= 1;
+    const bad = imgs.filter((i) => !(i.complete && i.naturalWidth > 0 && i.loading === "lazy" && i.decoding === "async" && shaped(i))).map((i) => i.getAttribute("src"));
+    return (imgs.length === 15 && bad.length === 0 && missing.length === 0 && urls.length >= 36) || JSON.stringify({ n: imgs.length, bad, missing, urls: urls.length });
+  });
+  // Leclerc is in every block's main shot; Hamilton is in the section too.
+  out.raceDayAlts = await p.evaluate((blocks) => blocks.every((id) => (document.querySelector(`#${id} .feature-main img`)?.alt || "").includes("Charles Leclerc"))
+    && [...document.querySelectorAll("#race-day img")].some((i) => i.alt.includes("Lewis Hamilton")), BLOCKS);
+  // The replay copy says what the game has: its speeds (REPLAY_SPEEDS in
+  // game.js), its four cameras and the results screen's button, read from the
+  // game's own source.
+  out.replayCopyTrue = await p.evaluate(async () => {
+    const block = document.getElementById("replays");
+    if (!block) return false;
+    const game = await (await fetch(`./game.js?${Date.now()}`)).text();
+    const screens = await (await fetch(`./screens.js?${Date.now()}`)).text();
+    const speeds = JSON.parse(game.match(/const REPLAY_SPEEDS = (\[[^\]]*\])/)[1]);
+    const button = screens.match(/id="results-replay"[^>]*>([^<]+)</)[1].trim();
+    const cameras = JSON.parse(game.match(/const REPLAY_CAMERAS = (\[[^\]]*\])/)[1]);
+    const copy = block.textContent;
+    return copy.includes(`${speeds[0]}x to ${speeds[speeds.length - 1]}x`) && copy.includes(button) && cameras.length === 4
+      && cameras.every((c) => copy.includes(c[0].toUpperCase() + c.slice(1)));
+  });
+  // The two key maps (in the block and in How to play) show each player's
+  // keys as the game binds them (TwoPlayer.KEYS), tagged P1 and P2.
+  out.twoPlayerKeys = await p.evaluate(() => {
+    if (!window.TwoPlayer) return "twoplayer.js not loaded";
+    // The check's own record of each key's QWERTY name (independent of landing.js).
+    const LABEL = { KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", ShiftLeft: "Left Shift", Space: "Space",
+      ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", ShiftRight: "Right Shift", Slash: "/" };
+    const maps = [...document.querySelectorAll(".keymap")];
+    return maps.length === 2 && maps.some((m) => m.closest("#two-player")) && maps.some((m) => m.closest("#how-to-play"))
+      && maps.every((m) => [0, 1].every((pl) => {
+        const col = m.querySelector(`[data-player="${pl + 1}"]`);
+        return Boolean(col) && col.querySelector(".keymap-tag").textContent.trim() === `P${pl + 1}`
+          && Object.entries(TwoPlayer.KEYS[pl]).every(([action, codes]) => {
+            const cell = col.querySelector(`[data-action="${action}"]`);
+            return Boolean(cell) && codes.every((c) => cell.textContent.includes(LABEL[c]));
+          });
+      }));
+  });
+  // A thumbnail shows its picture large: the main shot, its alt and its
+  // caption change, and only that thumbnail is pressed.
+  out.raceDayGallery = await p.evaluate(async () => {
+    const block = document.getElementById("podium");
+    const thumbs = block ? [...block.querySelectorAll(".feature-strip button")] : [];
+    const main = block && block.querySelector(".feature-main img");
+    if (thumbs.length !== 4 || !main) return false;
+    block.scrollIntoView({ block: "center", behavior: "instant" });
+    const before = { src: main.currentSrc || main.src, alt: main.alt, cap: block.querySelector("figcaption").textContent };
+    thumbs[2].click();
+    await new Promise((r) => { main.addEventListener("load", r, { once: true }); setTimeout(r, 4000); });
+    const after = { src: main.currentSrc || main.src, attr: main.getAttribute("src"), alt: main.alt, cap: block.querySelector("figcaption").textContent };
+    const pressed = thumbs.map((t) => t.getAttribute("aria-pressed")).join(",");
+    thumbs[0].click();
+    window.scrollTo({ top: 0, behavior: "instant" });
+    return (after.src !== before.src && after.src.includes("podium-trophy") && after.attr.includes("podium-trophy") && after.alt !== before.alt && after.cap !== before.cap
+      && main.naturalWidth > 0 && pressed === "false,false,true,false" && thumbs[0].getAttribute("aria-pressed") === "true")
+      || JSON.stringify({ before, after, pressed, nw: main.naturalWidth });
+  });
+  out.indexTextClean = await textClean(p);
+
   await clearProfiles();
   await p.evaluate(() => localStorage.setItem("f1pixelcup.profile", JSON.stringify({ version: 1, careerPoints: 276, rating: 1309, ratedRaces: 4,
     totals: { races: 4, wins: "<img src=x onerror=window.__xss=1>", podiums: 4, cupsCompleted: 1, cupsWon: 1, poles: 2 },
@@ -156,9 +272,19 @@ async (page) => {
     && JSON.parse(localStorage.getItem("f1pixelcup.profile.v2")).version === 2, v1);
   await clearProfiles();
 
-  for (const [w, h] of [[1000, 700], [1900, 760], [560, 800]]) {
+  for (const [w, h] of [[1600, 900], [1000, 700], [900, 700], [870, 700], [1900, 760], [560, 800], [390, 844]]) {
     await size(w, h);
     out[`noSideScroll${w}`] = await noSideScroll();
+    // Where the top nav shows, its links sit on one line between the wordmark and Play.
+    if (w >= 870) {
+      out[`navOneLine${w}`] = await p.evaluate(() => {
+        const r = (s) => document.querySelector(s).getBoundingClientRect();
+        const links = [...document.querySelectorAll(".topnav a")].map((a) => a.getBoundingClientRect());
+        return links.every((l) => l.height < 20 && Math.abs(l.top - links[0].top) < 2)
+          && r(".wordmark").right < r(".topnav").left && r(".topnav").right < r(".topbar .go-btn").left;
+      });
+    }
+    if ([1600, 1000, 390].includes(w)) out[`raceDayLayout${w}`] = await raceDayLayout(w === 390 ? "stacked" : "beside");
     if (w === 560) {
       out.puPhoneOneColumn = await p.evaluate(() => {
         const cards = [...document.querySelectorAll("#power-ups .pu-card")];
@@ -248,11 +374,13 @@ async (page) => {
         && /Red Bull in rounds 3–24/.test(card("tsunoda")) && /Career to the end of 2025: 24 starts · 0 wins/.test(card("antonelli"));
     });
     out.driversFooter = await footerOk();
+    out.driversTextClean = await textClean(g);
     await g.goto(`http://localhost:8765/teams.html?${Date.now()}`);
     await g.waitForTimeout(1200);
     out.teamCards = await g.locator("#team-cards .team-card").count();
     out.teamImages = await imagesOk();
     out.teamsFooter = await footerOk();
+    out.teamsTextClean = await textClean(g);
     // The way between the pages works: the cross-link and the top nav.
     await g.locator('.grid-links a[href="./drivers.html"]').click();
     await g.waitForURL(/drivers\.html/);
