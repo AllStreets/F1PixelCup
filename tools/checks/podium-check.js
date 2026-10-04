@@ -28,40 +28,142 @@ async (page) => {
   await sizeTo(1600, 900);
 
   // A cup, its races finished in a shuffled order each time and scored by the
-  // game; the podium is reached through the last results screen's Next.
-  const runCup = () => p.evaluate(() => {
-    let seed = 20261001;
-    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
-    state.gridMode = "back";
-    startCup();
-    for (let race = 0; race < 4; race += 1) {
-      const order = [...state.racers].map((r) => ({ r, k: rnd() })).sort((a, b) => a.k - b.k).map((x) => x.r);
-      order.forEach((r, i) => {
-        r.finished = true;
-        r.finishPosition = i + 1;
-        r.finishTime = 300000 + i * 1700;
-        r.bestLapTime = 61000 + i * 250;
-      });
-      state.phase = "race";
-      state.resultsQueued = true;
-      finalizeRace();
-      nextRace();
+  // game (one player or two); the podium is reached through the last results
+  // screen's Show podium, pressed as a player would: at once ("instant": a
+  // click in the same moment the results appear, so the ceremony can't be
+  // ready yet), or clicked or Enter after `hold` ms on the results. From the
+  // press on (a listener notes it), every frame as painted is sampled: the 2D
+  // steps never show and nothing is blank. Each frame is either the results
+  // with the race still drawn behind them, or the podium screen over the
+  // ceremony drawing that frame.
+  const runCup = async ({ via = "click", hold = 0, players = 1, escape = false } = {}) => {
+    const before = await p.evaluate(({ instant, players }) => {
+      window.__podiumFrames = [];
+      window.__pressed = false;
+      const press = (e) => {
+        if (e.type === "keydown" && e.key !== "Enter") return;
+        if (e.target && e.target.closest && e.target.closest("#results-next")) window.__pressed = true;
+      };
+      document.addEventListener("click", press, true);
+      document.addEventListener("keydown", press, true);
+      const visible = (id) => { const el = document.getElementById(id); return Boolean(el) && !el.classList.contains("hidden") && el.getClientRects().length > 0; };
+      const seen = () => {
+        const screen = document.getElementById("podium-screen");
+        // (In 3D they stay in the page for screen readers, clipped to nothing.)
+        const box = document.getElementById("podium-scene").getBoundingClientRect();
+        const steps = box.width > 2 && box.height > 2 && document.querySelectorAll("#podium-scene .podium-step").length > 0;
+        const st = Render3D.podium.inspect();
+        return {
+          results: visible("results-screen"),
+          raceWorld: st.raceWorld,
+          podium: visible("podium-screen"),
+          is3d: screen.classList.contains("is-3d"),
+          steps: visible("podium-screen") && steps,
+          drawing: Boolean(st.drawing && st.started),
+          blank: st.blank || 0,
+          t: st.t,
+          busy: document.getElementById("results-next").getAttribute("aria-busy") === "true",
+        };
+      };
+      const t0 = performance.now();
+      let firstDraw = 0;
+      const tick = () => {
+        // After every animation-frame callback of this frame (the game's
+        // update included): what this frame paints.
+        setTimeout(() => {
+          if (window.__pressed) {
+            const f = seen();
+            window.__podiumFrames.push(f);
+            if (f.drawing && !firstDraw) firstDraw = performance.now();
+          }
+          if (performance.now() - t0 < 40000 && (!firstDraw || performance.now() - firstDraw < 1000)) requestAnimationFrame(tick);
+          else {
+            document.removeEventListener("click", press, true);
+            document.removeEventListener("keydown", press, true);
+          }
+        }, 0);
+      };
+      requestAnimationFrame(tick);
+
+      let seed = 20261001;
+      const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+      Game.selectPlayers(players);
+      state.gridMode = "back";
+      startCup();
+      for (let race = 0; race < 4; race += 1) {
+        const order = [...state.racers].map((r) => ({ r, k: rnd() })).sort((a, b) => a.k - b.k).map((x) => x.r);
+        order.forEach((r, i) => {
+          r.finished = true;
+          r.finishPosition = i + 1;
+          r.finishTime = 300000 + i * 1700;
+          r.bestLapTime = 61000 + i * 250;
+        });
+        state.phase = "race";
+        state.resultsQueued = true;
+        finalizeRace();
+        if (race < 3) nextRace();
+      }
+      if (instant) document.getElementById("results-next").click();
+      return { top: state.cupEntries.slice(0, 3).map((e) => e.driver.id), humans: state.humanIds.length };
+    }, { instant: via === "instant", players });
+    if (escape) {
+      // Esc while it readies: home to the pit lane, the ceremony let go, the
+      // button itself again.
+      const waiting = await p.evaluate(() => state.podiumWaiting);
+      await p.keyboard.press("Escape");
+      await p.waitForTimeout(300);
+      return p.evaluate((w) => {
+        const b = document.getElementById("results-next");
+        const pod = Render3D.podium.inspect();
+        return (w && state.phase === "garage" && !state.podiumWaiting && pod.active === false
+          && !b.hasAttribute("aria-disabled") && !b.hasAttribute("aria-busy") && !/Readying/.test(b.textContent)
+          && !document.getElementById("results-replay").disabled
+          && document.getElementById("podium-screen").classList.contains("hidden"))
+          || JSON.stringify({ waiting: w, phase: state.phase, active: pod.active, button: b.outerHTML });
+      }, waiting);
     }
-    const screen = document.getElementById("podium-screen");
+    if (via !== "instant") {
+      await p.waitForTimeout(hold);
+      if (via === "click") await p.click("#results-next");
+      else {
+        await p.focus("#results-next");
+        await p.keyboard.press("Enter");
+      }
+    }
+    await p.waitForFunction(() => state.phase === "podium", null, { timeout: 30000 });
+    await p.waitForFunction(() => {
+      const f = window.__podiumFrames;
+      return f.length && f[f.length - 1].drawing && f.filter((x) => x.drawing).length > 30;
+    }, null, { timeout: 30000 }).catch(() => {});
+    const frames = await p.evaluate(() => window.__podiumFrames);
+    const bad = frames.map((f, i) => [i, f]).filter(([, f]) => f.steps
+      || (f.podium && !(f.is3d && f.drawing && f.blank === 0))
+      || (!f.podium && !(f.results && f.raceWorld))
+      || (f.podium && f.raceWorld));
+    const first = frames.find((f) => f.drawing);
     return {
-      phase: state.phase,
-      top: state.cupEntries.slice(0, 3).map((e) => e.driver.id),
-      // Right away, before the ceremony can draw: the 2D steps.
-      stepsWhileLoading: !screen.classList.contains("hidden") && !screen.classList.contains("is-3d")
-        && document.querySelectorAll("#podium-scene .podium-step").length === 3,
+      ...before,
+      phase: await p.evaluate(() => state.phase),
+      straightIn: (frames.length > 20 && bad.length === 0 && Boolean(first) && first.t < 0.25)
+        || `${frames.length} frames, first drawn at t ${first ? first.t.toFixed(2) : "never"}; bad: ${bad.slice(0, 4).map(([i, f]) => `#${i} ${["results", "raceWorld", "podium", "is3d", "steps", "drawing"].filter((k) => f[k]).join("+")} blank ${f.blank}`).join("; ")}`,
+      waited: frames.filter((f) => f.results).length,
+      busyShown: frames.some((f) => f.busy),
     };
-  });
+  };
 
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && (Render3D.ready || Render3D.failed), null, { timeout: 60000 });
-  const cup = await runCup();
+  // Pressed at once: the ceremony can't be ready yet, so the results wait
+  // (the button saying so, the race still behind them) and then it opens
+  // straight onto the scene's first frame.
+  const cup = await runCup({ via: "instant" });
   results.podiumReached = cup.phase === "podium";
-  results.stepsWhileLoading = cup.stepsWhileLoading;
+  results.pressStraightIntoCeremony = cup.straightIn;
+  results.waitShownOnButton = (cup.waited > 0 && cup.busyShown) || `${cup.waited} frames waiting, busy ${cup.busyShown}`;
+  results.buttonBackAfter = await p.evaluate(() => {
+    const b = document.getElementById("results-next");
+    return (!b.hasAttribute("aria-disabled") && !b.hasAttribute("aria-busy") && !document.getElementById("results-replay").disabled && !/Readying/.test(b.textContent)) || b.outerHTML;
+  });
   const drawn = await p.waitForFunction(() => Render3D.podium && Render3D.podium.inspect().drawing, null, { timeout: 30000 }).then(() => true, () => false);
   results.ceremonyDraws = drawn || await p.evaluate(() => JSON.stringify({ phase: state.phase, view: Render3D.ready, podium: Render3D.podium && Render3D.podium.inspect() }).slice(0, 400));
   // The state of the first frame at or after t, read in the same call that
@@ -201,10 +303,34 @@ async (page) => {
     for (const [w, h] of [[700, 900], [1000, 600], [380, 800], [1600, 640], [1280, 1024]]) {
       await sizeTo(w, h);
       await p.waitForTimeout(700);
-      const s = await plates();
-      results[`plates${w}x${h}`] = (onScreen(s) && noOverlap(s) && s.canvas[0] === s.w && s.canvas[1] === s.h) || JSON.stringify(s.plates.map((x) => x.r)).slice(0, 300);
+      // Sampled over the orbit (the plates follow the camera), not once.
+      let worst = null;
+      for (let k = 0; k < 16 && !worst; k += 1) {
+        const s = await plates();
+        if (!(onScreen(s) && noOverlap(s) && s.canvas[0] === s.w && s.canvas[1] === s.h)) worst = s;
+        await p.waitForTimeout(250);
+      }
+      results[`plates${w}x${h}`] = !worst || JSON.stringify({ win: [worst.w, worst.h], canvas: worst.canvas, plates: worst.plates.map((x) => [x.r.left, x.r.top, x.r.right, x.r.bottom, x.o]) }).slice(0, 900);
       results[`titlesApart${w}x${h}`] = await titleClear();
     }
+    // The placing itself, at the narrowest: wherever the camera puts the
+    // drivers (anchors set here, one placement read back before the next
+    // frame), the plates never touch and stay on screen.
+    await sizeTo(380, 800);
+    await p.waitForTimeout(500);
+    results.narrowPlatesAnyAnchors = await p.evaluate(() => {
+      const W = innerWidth;
+      const H = innerHeight;
+      const fails = [];
+      for (const [a2, a1, a3] of [[150, 190, 230], [60, 190, 330], [180, 190, 200], [10, 190, 370], [200, 100, 120], [190, 190, 190]]) {
+        Screens.placePodium([{ place: 1, x: a1, y: 560 }, { place: 2, x: a2, y: 540 }, { place: 3, x: a3, y: 580 }], true);
+        const r = [...document.querySelectorAll(".podium-plate")].map((el) => el.getBoundingClientRect());
+        const on = r.every((b) => b.left >= 0 && b.top >= 0 && b.right <= W && b.bottom <= H);
+        const apart = r.every((a, i) => r.every((b, j) => i === j || a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top));
+        if (!on || !apart) fails.push([a2, a1, a3, r.map((b) => [Math.round(b.left), Math.round(b.top), Math.round(b.right), Math.round(b.bottom)])]);
+      }
+      return fails.length === 0 || JSON.stringify(fails).slice(0, 600);
+    });
     await sizeTo(1600, 900);
 
     // The race's own effects are released while the ceremony has the screen.
@@ -243,7 +369,10 @@ async (page) => {
     // Low: fewer pieces and no spray.
     const before = await p.evaluate(() => Render3D.graphics().choice);
     await p.evaluate(() => Render3D.setGraphics("low"));
-    await runCup();
+    // Enter this time, after a while on the results: ready by then, it
+    // opens on the press.
+    const enter = await runCup({ via: "enter", hold: 5000 });
+    results.enterStraightIntoCeremony = (enter.straightIn === true && enter.waited <= 1) || `${enter.straightIn}, waited ${enter.waited} frames`;
     const low = await at(10.4).catch(() => null);
     results.lowTier = Boolean(low) && low.tier === "low" && low.confetti.count === 120 && low.spray.pool === 0 && low.spray.live === 0;
     await p.evaluate((c) => { Render3D.setGraphics(c); resetToGarage(); }, before);
@@ -262,6 +391,12 @@ async (page) => {
       || JSON.stringify({ platesUp, cams: calm.map((st) => st.camera), confetti: calm[1].confetti, spray: calm[2].spray });
     await p.emulateMedia({ reducedMotion: null });
     await p.evaluate(() => resetToGarage());
+
+    // Esc while the ceremony readies; then a two-player cup, pressed at once.
+    results.escapeWhileReadying = await runCup({ via: "instant", escape: true });
+    const two = await runCup({ via: "instant", players: 2 });
+    results.twoPlayersStraightIntoCeremony = (two.humans === 2 && two.straightIn === true) || `${two.humans} players: ${two.straightIn}`;
+    await p.evaluate(() => { resetToGarage(); Game.selectPlayers(1); });
   }
 
   // Without 3D: the 2D steps, as before.

@@ -349,6 +349,11 @@ const state = {
   cupEntries: [],
   lastTimestamp: 0,
   resultsQueued: false,
+  // The cup's podium ceremony, readied behind the last results (updatePodium).
+  podiumReady: "none",
+  podiumWaiting: false,
+  podiumWaitedMs: 0,
+  quittingToPitLane: false,
   resultTimeoutAt: 0,
   flagOutAt: 0,
   finalLapAt: 0,
@@ -3167,10 +3172,12 @@ function showResults(finishers) {
     racer.bestLapTime && (!best || racer.bestLapTime < best.bestLapTime) ? racer : best
   ), null);
   state.phase = "results";
-  // The cup's last race: the podium's drivers start loading now.
-  if (state.raceIndex === activeCup.tracks.length - 1 && worldView() === "3d" && window.Render3D.podium) {
-    render3dSafely(() => window.Render3D.podium.preload());
-  }
+  // The cup's last race: the ceremony (its drivers, set and shaders) is
+  // readied now, behind the results, so Show podium opens straight onto it.
+  // (Not when the player is quitting to the pit lane from here.)
+  stopPodiumWait();
+  state.podiumReady = "none";
+  if (state.raceIndex === activeCup.tracks.length - 1 && !state.quittingToPitLane) beginPodium();
   if (!window.Screens) return;
   window.Screens.showResults({
     kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
@@ -3198,11 +3205,9 @@ function showResults(finishers) {
   });
 }
 
-function showPodium() {
+// The cup's top three and the screen's words. scene: what the 3D ceremony needs.
+function podiumSummary() {
   const activeCup = getActiveCup();
-  recordPlayerCup();
-  state.phase = "podium";
-  if (!window.Screens) return;
   const playerPlace = state.cupEntries.indexOf(humanEntry(0)) + 1;
   const secondEntry = humanEntry(1);
   const secondPlace = state.cupEntries.indexOf(secondEntry) + 1;
@@ -3223,18 +3228,107 @@ function showPodium() {
     : playerPlace === 1 || secondPlace === 1
       ? `Cup winner: ${name(playerPlace === 1 ? humanEntry(0) : secondEntry)}`
       : `${name(humanEntry(0))} ${formatOrdinal(playerPlace)} · ${name(secondEntry)} ${formatOrdinal(secondPlace)}`;
-  window.Screens.showPodium({
+  return {
     kicker: `${activeCup.name} complete`,
     title,
     podium,
-    career: bothCareers(careerForCup(state.lastCupCareer, playerPlace), secondEntry ? careerForCup(state.lastSecondCupCareer, secondPlace, secondEntry) : null),
-  });
-  // The ceremony in 3D (r3d/podium.js): the cup's real top three. Until it
-  // can draw, the screen's 2D steps stand in.
-  state.podium3d = false;
-  if (worldView() === "3d" && window.Render3D.podium) {
-    render3dSafely(() => window.Render3D.podium.begin({ cup: { id: activeCup.id, name: activeCup.name }, podium }));
+    playerPlace,
+    secondPlace,
+    secondEntry,
+    scene: { cup: { id: activeCup.id, name: activeCup.name }, podium },
+  };
+}
+
+// Where the ceremony stands, as last stepped: "ready", "loading", "failed"
+// or "none" (no ceremony or no 3D). Stepped once a frame (updatePodium).
+function podiumApi() {
+  return worldView() === "3d" && window.Render3D && window.Render3D.podium ? window.Render3D.podium : null;
+}
+
+// One step of readying the ceremony. An error in it costs only the ceremony
+// (the 2D steps stand in), never the race drawn behind the results.
+function stepPodium() {
+  const api = podiumApi();
+  if (!api) return "none";
+  try {
+    return api.prepare();
+  } catch (error) {
+    console.warn("The podium ceremony failed to build; the podium stays 2D.", error);
+    try { api.end(); } catch (ignored) { /* already gone */ }
+    return "failed";
   }
+}
+
+function beginPodium() {
+  const api = podiumApi();
+  if (!api) return;
+  try {
+    api.begin(podiumSummary().scene);
+  } catch (error) {
+    console.warn("The podium ceremony failed to build; the podium stays 2D.", error);
+  }
+}
+
+// Show podium (the button, Enter, either player): straight onto the 3D
+// ceremony's first frame. While it is still being readied the results stay
+// up (the race behind them) and the button says so; the 2D steps only come
+// when 3D can't draw it (no 3D, the drivers failed, or 15 s of frames pass).
+const PODIUM_WAIT_MS = 15000;
+function requestPodium() {
+  if (state.phase !== "results" || state.podiumWaiting) return;
+  if (state.podiumReady === "none" && podiumApi()) {
+    beginPodium();
+    state.podiumReady = stepPodium();
+  }
+  if (state.podiumReady === "loading") {
+    state.podiumWaiting = true;
+    state.podiumWaitedMs = 0;
+    if (window.Screens && window.Screens.podiumLoading) window.Screens.podiumLoading(true);
+    return;
+  }
+  showPodium();
+}
+
+// Each frame while the cup's last results (or their replay) are up: a step of
+// readying the ceremony, and a waiting Show podium goes as soon as it can
+// draw. The wait counts frames' time, so a hidden tab doesn't run it out.
+function updatePodium(dt) {
+  if (state.phase !== "results" && state.phase !== "replay") {
+    if (state.podiumWaiting && state.phase !== "podium") stopPodiumWait();
+    return;
+  }
+  state.podiumReady = stepPodium();
+  if (!state.podiumWaiting || state.phase !== "results") return;
+  state.podiumWaitedMs += dt * 1000;
+  if (state.podiumReady !== "loading" || state.podiumWaitedMs > PODIUM_WAIT_MS) showPodium();
+}
+
+function stopPodiumWait() {
+  state.podiumWaiting = false;
+  state.podiumWaitedMs = 0;
+  if (window.Screens && window.Screens.podiumLoading) window.Screens.podiumLoading(false);
+}
+
+function showPodium() {
+  recordPlayerCup();
+  state.phase = "podium";
+  // No circuit is built from here on (the race's world is let go).
+  state.preparing = null;
+  stopPodiumWait();
+  // With the ceremony ready the screen opens over it (no 2D steps first); its
+  // first frame is drawn in this same animation frame. Without it, the 2D
+  // steps, and they stay: an unready ceremony is let go, never swapped in later.
+  const threeD = state.podiumReady === "ready";
+  if (!threeD && podiumApi()) render3dSafely(() => podiumApi().end());
+  if (!window.Screens) return;
+  const summary = podiumSummary();
+  window.Screens.showPodium({
+    kicker: summary.kicker,
+    title: summary.title,
+    podium: summary.podium,
+    career: bothCareers(careerForCup(state.lastCupCareer, summary.playerPlace), summary.secondEntry ? careerForCup(state.lastSecondCupCareer, summary.secondPlace, summary.secondEntry) : null),
+  }, { threeD });
+  state.podium3d = threeD;
 }
 
 // The podium phase's frame: the ceremony behind the screen, its name plates
@@ -3260,7 +3354,7 @@ function nextRace() {
   // must not skip a race in progress.
   if (state.phase !== "results") return;
   if (state.raceIndex >= getActiveCup().tracks.length - 1) {
-    showPodium();
+    requestPodium();
     return;
   }
   state.raceIndex += 1;
@@ -3281,7 +3375,12 @@ function quitToPitLane() {
   if (state.phase === "race" && people.length && people.every((racer) => racer.finished) && !state.resultsQueued) {
     state.resultsQueued = true;
     completeRemainingFinishers(raceNow());
-    finalizeRace();
+    state.quittingToPitLane = true;
+    try {
+      finalizeRace();
+    } finally {
+      state.quittingToPitLane = false;
+    }
   }
   resetToGarage();
 }
@@ -3297,6 +3396,8 @@ function resetToGarage() {
   // The ceremony stops and frees its drivers, set and effects.
   if (window.Render3D && window.Render3D.podium) render3dSafely(() => window.Render3D.podium.end());
   state.podium3d = false;
+  stopPodiumWait();
+  state.podiumReady = "none";
   state.raceIndex = 0;
   state.track = getSelectedCup().tracks[0];
   // Nothing run from the pit lane is wet.
@@ -3349,7 +3450,7 @@ function replayAvailable() {
 }
 
 function openReplay() {
-  if (state.phase !== "results" || !replayAvailable()) return false;
+  if (state.phase !== "results" || state.podiumWaiting || !replayAvailable()) return false;
   const rec = state.recording;
   if (!state.replay || state.replay.rec !== rec) {
     state.replay = { rec, shots: Replay.directorShots(rec), ghosts: new Map() };
@@ -6109,6 +6210,7 @@ function update(now) {
 
   updateEngineAudio(getPlayer(), splitActive() ? humanBySlot(1) : null);
 
+  updatePodium(dt);
   if (state.phase === "podium") {
     drawPodiumScene();
   } else if (state.phase === "replay" && state.replay) {

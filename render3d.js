@@ -1657,31 +1657,40 @@ function renderGarage(kart, driver, now) {
 }
 
 // ---------------------------------------------------------------------------
-// The podium ceremony (r3d/podium.js): its own scene, drawn while the podium
-// screen is up. begin() builds it and compiles it in the background; frame()
-// draws nothing (drawing: false, the page keeps its 2D steps) until it can
-// draw without a stall; end() frees it all.
+// The podium ceremony (r3d/podium.js): its own scene. begin() builds it and
+// prepare() (each frame) compiles it in the background behind the cup's last
+// results, the race still drawn; the page opens the podium screen once
+// prepare() says "ready", and frame() then draws it from its first frame. The
+// first frame() (the podium phase) frees the race's world and effects, also
+// when the page shows its 2D steps instead. end() frees it all.
 // ---------------------------------------------------------------------------
 
-const ceremony = { podium: null, fx: null, size: "", driverLoading: false, last: null };
+// raceGone: the podium phase has the screen (the race's world and effects
+// are freed). blank: frames of the podium phase with a ceremony that didn't draw.
+const ceremony = { podium: null, fx: null, size: "", driverLoading: false, driverFailed: false, last: null, raceGone: false, blank: 0 };
 
-// The race's own effects hold full-size buffers; while the ceremony (with
-// effects of its own) has the screen, they are released.
+// The race's own effects hold full-size buffers; once the podium has the
+// screen they are released (until the pit lane).
 function raceFxTier() {
-  return ceremony.podium ? "low" : currentTier();
+  return ceremony.raceGone ? "low" : currentTier();
 }
 
 // The driver model, fetched ahead (the cup's last results screen asks).
 function podiumPreload() {
   if (driverLoaded() || ceremony.driverLoading) return;
   ceremony.driverLoading = true;
+  ceremony.driverFailed = false;
   loadDriver(() => { ceremony.driverLoading = false; }, (error) => {
     ceremony.driverLoading = false;
+    ceremony.driverFailed = true;
     console.warn("Driver model failed to load; the podium stays 2D.", error);
   });
 }
 
 // summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
+// Builds the ceremony and starts compiling it; nothing of the race is freed
+// until it first draws (podiumFrame), so it can be readied behind the cup's
+// last results.
 function podiumBegin(summary) {
   const entries = summary.podium.map((p) => {
     const driver = DRIVERS.find((d) => d.id === p.driverId);
@@ -1691,14 +1700,9 @@ function podiumBegin(summary) {
     podiumEnd();
     return false;
   }
-  // A ceremony already up gives way; the race's effects stay released.
+  // A ceremony already up gives way.
   podiumEnd(false);
   podiumPreload();
-  // The race's circuit is done with: free it now, as the pit lane would.
-  if (current) {
-    disposeWorld(current);
-    current = null;
-  }
   const tier = currentTier();
   const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment });
   const fx = createPostFx(renderer, podium.scene, podium.camera);
@@ -1708,17 +1712,17 @@ function podiumBegin(summary) {
   ceremony.fx = fx;
   ceremony.size = "";
   ceremony.last = podium;
-  postfx.setTier(raceFxTier());
+  ceremony.blank = 0;
   return true;
 }
 
-// reserve: the page's title box over the picture (CSS px), kept clear of the wall's.
-function podiumFrame(now, reserve = null) {
+// The ceremony sized to the window (CSS px), then a step of its building and
+// compiling. "ready" once it can draw its first frame without a stall;
+// "loading" until then; "failed" if the drivers can't be had; "none" if no
+// ceremony was begun. Safe to call every frame from any phase: it draws nothing.
+function podiumPrepare() {
   const podium = ceremony.podium;
-  if (!podium || !api.ready) return { drawing: false };
-  podium.setReserve(reserve);
-  resize();
-  useViewport(null);
+  if (!podium || !api.ready) return "none";
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
   const dpr = renderer.getPixelRatio();
@@ -1728,7 +1732,33 @@ function podiumFrame(now, reserve = null) {
     podium.setSize(w, h);
     ceremony.fx.setSize(w, h, dpr);
   }
-  if (!podium.prepare()) {
+  if (podium.prepare()) return "ready";
+  return ceremony.driverFailed && !driverLoaded() ? "failed" : "loading";
+}
+
+// reserve: the page's title box over the picture (CSS px), kept clear of the wall's.
+// Called every frame of the podium phase (with or without a ceremony).
+function podiumFrame(now, reserve = null) {
+  if (!api.ready) return { drawing: false };
+  if (!ceremony.raceGone) {
+    // The podium has the screen: the race's circuit and effects are done with.
+    ceremony.raceGone = true;
+    if (current) {
+      disposeWorld(current);
+      current = null;
+    }
+    postfx.setTier(raceFxTier());
+  }
+  const podium = ceremony.podium;
+  if (!podium) return { drawing: false };
+  podium.setReserve(reserve);
+  resize();
+  useViewport(null);
+  const ready = podiumPrepare() === "ready";
+  const w = canvas2d.clientWidth || canvas2d.width;
+  const h = canvas2d.clientHeight || canvas2d.height;
+  if (!ready) {
+    ceremony.blank += 1;
     renderer.setRenderTarget(null);
     renderer.setClearColor(0x06070b, 1);
     renderer.clear();
@@ -1741,19 +1771,22 @@ function podiumFrame(now, reserve = null) {
 
 // restore: give the race's effects back (not when a new ceremony follows).
 function podiumEnd(restore = true) {
-  const had = Boolean(ceremony.podium);
   if (ceremony.podium) ceremony.podium.dispose();
   if (ceremony.fx) ceremony.fx.dispose();
   ceremony.podium = null;
   ceremony.fx = null;
-  if (had && restore) postfx.setTier(raceFxTier());
+  if (restore && ceremony.raceGone) {
+    ceremony.raceGone = false;
+    postfx.setTier(raceFxTier());
+  }
 }
 
 function podiumInspect() {
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs ? renderer.info.programs.length : null };
   const racePostfx = postfx.inspect().frame;
-  if (!ceremony.podium) return { active: false, memory, racePostfx, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
-  return { active: true, memory, racePostfx, ...ceremony.podium.inspect(), owned: ceremony.podium.owned(), title: ceremony.title || null };
+  const raceWorld = Boolean(current);
+  if (!ceremony.podium) return { active: false, memory, racePostfx, raceWorld, lastDisposed: ceremony.last ? ceremony.last.isDisposed() : null };
+  return { active: true, started: ceremony.raceGone, blank: ceremony.blank, memory, racePostfx, raceWorld, ...ceremony.podium.inspect(), owned: ceremony.podium.owned(), title: ceremony.title || null };
 }
 
 // Where the wall's title would be on screen at time t, at this window's size.
@@ -1762,4 +1795,4 @@ function podiumTitleAt(t) {
   return ceremony.podium.titleRect(canvas2d.clientWidth || canvas2d.width, canvas2d.clientHeight || canvas2d.height, t);
 }
 
-api.podium = { preload: podiumPreload, begin: podiumBegin, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };
+api.podium = { preload: podiumPreload, begin: podiumBegin, prepare: podiumPrepare, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };

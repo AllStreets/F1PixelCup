@@ -423,6 +423,7 @@
     hideMain();
     $("results-kicker").textContent = summary.kicker;
     $("results-title").textContent = summary.title;
+    podiumLoading(false);
     $("results-next").innerHTML = `<span>${esc(summary.nextLabel)} ›</span>`;
     $("results-table").innerHTML = `
       <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
@@ -603,7 +604,9 @@
     $("qualifying-screen").querySelector('[data-action="race"]').focus();
   }
 
-  function showPodium(summary) {
+  // options.threeD: the ceremony is ready and draws this frame; the screen
+  // opens over it at once (never the 2D steps first).
+  function showPodium(summary, { threeD = false } = {}) {
     hideMain();
     $("podium-kicker").textContent = summary.kicker;
     $("podium-title").textContent = summary.title;
@@ -619,11 +622,44 @@
       <div class="podium-plate p${num(p.place)} ${p.isPlayer ? "is-player" : ""}" data-place="${num(p.place)}" style="--team:${esc(p.teamColor)}">
         <b>${esc(ordinal(num(p.place)))}</b><strong>${esc(p.name)}</strong><span>${esc(p.team)}</span><em>${num(p.points)} pts</em>
       </div>`).join("");
-    placePodium(null);
     renderStrip($("podium-career"), summary.career);
     podiumLayout = null;
     podiumHead = null;
+    // Measured again whenever a plate or the title changes size (a font
+    // arriving, a window settling), not only when the window's size does.
+    if (typeof ResizeObserver === "function") {
+      if (!podiumSizes) podiumSizes = new ResizeObserver(() => { podiumLayout = null; podiumHead = null; });
+      podiumSizes.disconnect();
+      [...document.querySelectorAll("#podium-plates .podium-plate"), $("podium-kicker"), $("podium-title"), $("podium-career")].forEach((el) => podiumSizes.observe(el));
+    }
+    const screen = $("podium-screen");
+    screen.classList.toggle("is-3d", threeD);
+    screen.classList.remove("plates-in");
     show("podium-screen");
+  }
+
+  // Show podium pressed while the ceremony is still being readied: the
+  // button says so (and can't be pressed again) until it opens.
+  // (aria-disabled, not disabled: the button keeps the keyboard's focus; the
+  // game ignores presses while it waits. The replay can't be opened meanwhile.)
+  function podiumLoading(on) {
+    const next = $("results-next");
+    if (!next) return;
+    if (on && !next.dataset.label) {
+      next.dataset.label = next.innerHTML;
+      next.innerHTML = "<span>Readying the podium…</span>";
+    } else if (!on && next.dataset.label) {
+      next.innerHTML = next.dataset.label;
+      delete next.dataset.label;
+    }
+    if (on) {
+      next.setAttribute("aria-disabled", "true");
+      next.setAttribute("aria-busy", "true");
+    } else {
+      next.removeAttribute("aria-disabled");
+      next.removeAttribute("aria-busy");
+    }
+    $("results-replay").disabled = on;
   }
 
   // anchors: [{ place, x, y }] in the window's pixels, from the 3D scene; null
@@ -632,6 +668,7 @@
   // What placePodium measures (the title's foot, the buttons, each plate's
   // size), read once per window size and content rather than every frame.
   let podiumLayout = null;
+  let podiumSizes = null;
   function measurePodium(screen) {
     const W = window.innerWidth;
     const H = window.innerHeight;
@@ -958,7 +995,7 @@
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
-    showQualifying, showPodium, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showQualifying, showPodium, podiumLoading, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());
