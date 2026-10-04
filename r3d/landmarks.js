@@ -716,10 +716,11 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         // instead of its pattern: no shimmer, no noise far away; nearer, the
         // frames' edges soften by a pixel's width so they never alias.
         float fw = max(fwidth(cell.x), fwidth(cell.y));
-        float glassIn = smoothstep(0.04 - fw, 0.09 + fw, f.x) * smoothstep(0.04 - fw, 0.09 + fw, 1.0 - f.x)
+        // (Slim mullions, broad floor slabs: the floors read as bands.)
+        float glassIn = smoothstep(0.015 - fw, 0.04 + fw, f.x) * smoothstep(0.015 - fw, 0.04 + fw, 1.0 - f.x)
           * smoothstep(0.16 - fw, 0.24 + fw, f.y) * smoothstep(0.03 - fw, 0.08 + fw, 1.0 - f.y);
         float farAway = smoothstep(0.22, 0.55, fw);
-        float glassShare = 0.72;
+        float glassShare = 0.78;
         float inset = mix(glassIn, glassShare, farAway);
         diffuseColor.rgb = mix(uSlab, uGlass, inset);
         // The walls darken toward the ground (the light reaches less of them).
@@ -729,14 +730,24 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         float floorH = facadeHash(vec2(room.y * 0.37, 7.1));
         float roomH = facadeHash(room + floor(vFacade.x / 37.0));
         float lit = step(mix(roomH, floorH, uFloors), uLit) * step(5.0, vFacade.y);
-        float level = 0.7 + 0.15 * facadeHash(vec2(room.y, 3.3)) + 0.15 * roomH;
-        float on = mix(lit * level * glassIn, uLit * 0.72 * glassShare, farAway);`)
+        // A lit room is not a lamp-bright tile: its curtains drawn part way
+        // (the light across some of the glass, softened at its edge), lit
+        // brighter low in the room than at the ceiling, each its own
+        // brightness; the unlit glass carries the glow of the lit around it
+        // a little (Chicago's window shading, in spirit).
+        float curtain = 0.35 + 0.65 * facadeHash(room * 2.3 + 1.7);
+        float side = facadeHash(room + 4.4) < 0.5 ? f.x : 1.0 - f.x;
+        float drawn = smoothstep(curtain + 0.06 + fw, curtain - 0.06 - fw, side);
+        float glow = mix(1.0, 0.7, smoothstep(0.24, 0.95, f.y));
+        float level = (0.45 + 0.4 * roomH) * glow;
+        float near = lit * level * glassIn * mix(0.25, 1.0, drawn);
+        float on = mix(near, uLit * 0.42 * glassShare, farAway);`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
         // The unlit rooms keep a faint glow from the corridors.
-        totalEmissiveRadiance += (roomLight * on * 0.62 + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
+        totalEmissiveRadiance += (roomLight * on * 0.55 + vec3(0.05, 0.045, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v4-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
+  m.customProgramCacheKey = () => `facade-v6-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
   return m;
 }
 
@@ -748,7 +759,7 @@ function dressLandmark(model, venue) {
     if (made.has(src.name)) return made.get(src.name);
     let out;
     // At night the glass reads dark and the rooms carry the tower.
-    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#1b283a", slab: "#4b535f", lit: 0.72, floors: 0.3 } : {});
+    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#22303f", slab: "#3a4049", lit: 0.5, floors: 0.45 } : {});
     else {
       out = src.clone();
       if (src.name === "window_lit") Object.assign(out, { emissive: color(night ? "#ffe6c0" : "#000000"), emissiveIntensity: night ? 1.6 : 0 });
@@ -1174,9 +1185,15 @@ const EXTRAS = {
   },
 
   flyer(course, group, venue) {
+    // Where it really stands: beside the pit building by the start, on the
+    // pit side (Marina Bay Sands is across the water on the other), as near
+    // the circuit as the garages allow, the ground between kept clear of the
+    // city's blocks so it is seen from the track.
+    const side = course.pitLane ? course.pitLane.side : 1;
     if (modelLandmark(course, group, venue, {
-      name: "singaporeFlyer", model: "singaporeFlyer", gaps: [40, 90, 160, 260, 380, 520], step: 24,
-      anchors: anchorsAround(course, 0.12, 90, () => [1, -1]),
+      name: "singaporeFlyer", model: "singaporeFlyer", gaps: [30, 60, 100, 150, 220, 320, 440], step: 24,
+      forecourt: true, gapFirst: true,
+      anchors: anchorsAround(course, 0.0, 60, () => [side]),
     })) return null;
     const b = course.bounds;
     const spot = course.findSpot(b.maxX + 80, b.minZ + 100, 95, 1400, 20);
