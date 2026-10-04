@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -158,6 +158,12 @@ scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
 const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+
+// A venue's models all in (or failed): its own, and its type of stand's.
+function venueModelsSettled(id) {
+  const stand = STAND_MODELS[(VENUES[id] || {}).stand];
+  return modelsSettled(id, stand ? [stand] : []);
+}
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {

@@ -75,7 +75,7 @@ export const VENUES = {
   // `landmarks` names what Stage J builds there; nothing here draws it yet.
   albertpark: {
     // Parkland round Albert Park Lake, Melbourne's towers to the north.
-    ground: "grass", groundTint: "#7fae62", standColor: "#1d5fa8",
+    ground: "grass", groundTint: "#7fae62", standColor: "#1d5fa8", stand: "covered",
     trees: [{ kind: "broadleaf", count: 900, tint: "#4f7d45" }, { kind: "broadleaf", count: 260, tint: "#5d8a4a", near: 80, seed: 5 }, { kind: "palm", count: 40, tint: "#56803e", near: 50, seed: 9 }],
     lake: { tint: "#3d7fa6", count: 140 },
     skyline: { arc: [Math.PI * 1.2, Math.PI * 1.8], count: 90, height: [110, 340] },
@@ -84,7 +84,7 @@ export const VENUES = {
   },
   shanghai: {
     // Flat ground in Jiading, a hazy afternoon, the city far to the south-east.
-    ground: "grass", groundTint: "#88a86c", standColor: "#c8102e", runoffTint: "#bdb8ae",
+    ground: "grass", groundTint: "#88a86c", standColor: "#c8102e", stand: "covered", runoffTint: "#bdb8ae",
     trees: [{ kind: "broadleaf", count: 520, tint: "#4a7244" }, { kind: "broadleaf", count: 200, tint: "#557a48", near: 70, seed: 4 }],
     skyline: { arc: [Math.PI * 0.05, Math.PI * 0.5], count: 70, height: [90, 300] },
     extras: ["skylineArc"],
@@ -93,7 +93,7 @@ export const VENUES = {
   },
   jeddah: {
     // At night on the Corniche: the Red Sea to the west, the city to the east.
-    ground: "city", night: true, standColor: "#00843d", runoffTint: "#9a968e",
+    ground: "city", night: true, standColor: "#00843d", stand: "covered", runoffTint: "#9a968e",
     trees: [{ kind: "palm", count: 240, tint: "#4e7a3a", near: 70 }],
     coast: { bearing: Math.PI, tint: "#14506e" },
     skyline: { arc: [-Math.PI * 0.35, Math.PI * 0.35], count: 90, height: [70, 280] },
@@ -103,7 +103,7 @@ export const VENUES = {
   miami: {
     // Round the stadium on Miami Gardens' flat lawns: palms, sun, and water
     // in the infield (the real marina is a painted set by turns 6 to 8).
-    ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", runoffTint: "#aaa69c",
+    ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", stand: "covered", runoffTint: "#aaa69c",
     trees: [{ kind: "palm", count: 360, tint: "#4f8a3c", near: 90 }, { kind: "broadleaf", count: 160, tint: "#3f7a3a", near: 260, seed: 6 }],
     lake: { tint: "#38c2cc", count: 5 },
     extras: ["infieldLake"],
@@ -111,7 +111,7 @@ export const VENUES = {
   },
   imola: {
     // Parkland under the Apennine foothills, trees to the barriers.
-    ground: "grass", groundTint: "#78a25a", standColor: "#d40000",
+    ground: "grass", groundTint: "#78a25a", standColor: "#d40000", stand: "open",
     trees: [{ kind: "broadleaf", count: 1500, tint: "#3c6e34" }, { kind: "conifer", count: 320, tint: "#2f5a30", near: 70, seed: 3 }],
     hills: { tint: "#5d8551", count: 18, height: [180, 380] },
     extras: [],
@@ -119,7 +119,7 @@ export const VENUES = {
   },
   barcelona: {
     // Dry Catalan hills round Montmeló, umbrella pines and scrub.
-    ground: "grass", groundTint: "#a7aa66", standColor: "#c60b1e", runoffTint: "#c2b49a", gravelTint: "#d9c9a3",
+    ground: "grass", groundTint: "#a7aa66", standColor: "#c60b1e", stand: "covered", runoffTint: "#c2b49a", gravelTint: "#d9c9a3",
     trees: [{ kind: "conifer", count: 700, tint: "#4a6a3a" }, { kind: "broadleaf", count: 260, tint: "#6a8048", near: 120, seed: 2 }],
     hills: { tint: "#8f9a62", count: 16, height: [160, 360] },
     extras: [],
@@ -128,7 +128,7 @@ export const VENUES = {
   montreal: {
     // An island in the St Lawrence: the river to the east, the rowing basin
     // to the west, the city across the water to the north-west.
-    ground: "grass", groundTint: "#7cab5e", standColor: "#d52b1e",
+    ground: "grass", groundTint: "#7cab5e", standColor: "#d52b1e", stand: "open",
     trees: [{ kind: "broadleaf", count: 520, tint: "#3f7a3a", near: 140 }, { kind: "conifer", count: 120, tint: "#2f5a34", near: 100, seed: 8 }],
     coast: [{ bearing: 0, tint: "#2c6688", sand: "#a3a892" }, { bearing: Math.PI, tint: "#3a7896", sand: "#a3a892" }],
     skyline: { arc: [Math.PI * 1.2, Math.PI * 1.55], count: 70, height: [90, 300] },
@@ -137,7 +137,7 @@ export const VENUES = {
   },
   redbullring: {
     // High in the Styrian hills: steep green slopes and pine forest.
-    ground: "grass", groundTint: "#73ac52", standColor: "#2e5fa8",
+    ground: "grass", groundTint: "#73ac52", standColor: "#2e5fa8", stand: "open",
     trees: [{ kind: "conifer", count: 1300, tint: "#2a4f2e" }, { kind: "broadleaf", count: 260, tint: "#3f6e36", near: 120, seed: 4 }],
     hills: { tint: "#4f7a48", count: 22, height: [320, 720] },
     fogNear: 900, fogFar: 4400,
@@ -146,7 +146,7 @@ export const VENUES = {
   },
   hungaroring: {
     // A bowl in the dry hills east of Budapest: the crowd watches from the slopes.
-    ground: "grass", groundTint: "#9cad62", standColor: "#cd2a3e", runoffTint: "#c4b89c",
+    ground: "grass", groundTint: "#9cad62", standColor: "#cd2a3e", stand: "open", runoffTint: "#c4b89c",
     trees: [{ kind: "broadleaf", count: 900, tint: "#4d7a3c" }, { kind: "broadleaf", count: 200, tint: "#5a8444", near: 110, seed: 6 }],
     hills: { tint: "#859c5c", count: 18, height: [120, 260] },
     extras: [],
@@ -154,7 +154,7 @@ export const VENUES = {
   },
   zandvoort: {
     // In the dunes by the North Sea, the beach just to the west.
-    ground: "grass", groundTint: "#aab37c", standColor: "#ff6a00", runoffTint: "#d2c6a2", gravelTint: "#e2d4ae",
+    ground: "grass", groundTint: "#aab37c", standColor: "#ff6a00", stand: "open", runoffTint: "#d2c6a2", gravelTint: "#e2d4ae",
     trees: [{ kind: "conifer", count: 220, tint: "#4d6a45", near: 160 }],
     hills: { tint: "#c4bd88", count: 40, height: [45, 110] },
     coast: { bearing: Math.PI, tint: "#4b7489", sand: "#e4d6ad" },
@@ -164,7 +164,7 @@ export const VENUES = {
   baku: {
     // Through the old city and along the Caspian boulevard: stone, sea,
     // towers on the hill.
-    ground: "city", standColor: "#00b5e2", runoffTint: "#b3a98f",
+    ground: "city", standColor: "#00b5e2", stand: "covered", runoffTint: "#b3a98f",
     trees: [{ kind: "palm", count: 90, tint: "#56803e", near: 50 }, { kind: "broadleaf", count: 140, tint: "#4a7340", near: 60, seed: 3 }],
     coast: { bearing: Math.PI * 0.38, tint: "#2f6d8c", sand: "#c8bfa4" },
     skyline: { arc: [Math.PI * 0.9, Math.PI * 1.45], count: 110, height: [70, 260] },
@@ -173,7 +173,7 @@ export const VENUES = {
   },
   cota: {
     // Texas hill country outside Austin: dry grass, live oaks, big skies.
-    ground: "grass", groundTint: "#a9a964", standColor: "#bf0a30", runoffTint: "#c4b394",
+    ground: "grass", groundTint: "#a9a964", standColor: "#bf0a30", stand: "covered", runoffTint: "#c4b394",
     trees: [{ kind: "broadleaf", count: 700, tint: "#566f3a" }, { kind: "broadleaf", count: 160, tint: "#61783f", near: 140, seed: 5 }],
     hills: { tint: "#9a9a62", count: 14, height: [90, 200], flat: true },
     skyline: { arc: [Math.PI * 1.15, Math.PI * 1.4], count: 40, height: [80, 260] },
@@ -183,7 +183,7 @@ export const VENUES = {
   mexico: {
     // A sports park in the middle of the city: towers all round, the stadium
     // the last corners run through.
-    ground: "grass", groundTint: "#8dab5c", standColor: "#006847", runoffTint: "#bdb39a",
+    ground: "grass", groundTint: "#8dab5c", standColor: "#006847", stand: "covered", runoffTint: "#bdb39a",
     trees: [{ kind: "broadleaf", count: 600, tint: "#4a7a3c" }, { kind: "palm", count: 60, tint: "#58803e", near: 90, seed: 7 }],
     skyline: { arc: [0, Math.PI * 2], count: 150, height: [50, 210] },
     extras: ["skylineArc"],
@@ -192,7 +192,7 @@ export const VENUES = {
   lasvegas: {
     // Saturday night on the Strip: the resorts lit up along the west side,
     // the city's towers all round.
-    ground: "city", night: true, standColor: "#7a3cff", runoffTint: "#8c8896",
+    ground: "city", night: true, standColor: "#7a3cff", stand: "covered", runoffTint: "#8c8896",
     trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
     skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] },
     extras: ["vegasStrip", "skylineArc", "floodlights"],
@@ -200,7 +200,7 @@ export const VENUES = {
   },
   losail: {
     // Under the lights in the desert north of Doha, Lusail's towers to the south.
-    ground: "sand", night: true, standColor: "#8a1538", runoffTint: "#a89a80", gravelTint: "#c8b48a",
+    ground: "sand", night: true, standColor: "#8a1538", stand: "covered", runoffTint: "#a89a80", gravelTint: "#c8b48a",
     trees: [{ kind: "palm", count: 110, tint: "#4e7234", near: 80 }],
     hills: { tint: "#a08a64", count: 14, height: [30, 80], flat: true },
     skyline: { arc: [Math.PI * 0.3, Math.PI * 0.7], count: 70, height: [80, 300] },
@@ -210,7 +210,7 @@ export const VENUES = {
   yasmarina: {
     // Night at the marina on Yas Island: water and yachts beside the track,
     // the open water to the west.
-    ground: "city", night: true, standColor: "#00732f", runoffTint: "#8f8a80",
+    ground: "city", night: true, standColor: "#00732f", stand: "covered", runoffTint: "#8f8a80",
     trees: [{ kind: "palm", count: 220, tint: "#4e7a3a", near: 70 }],
     lake: { tint: "#123a5a", count: 40 },
     coast: { bearing: Math.PI * 0.85, tint: "#0f3352", sand: "#a89c80" },

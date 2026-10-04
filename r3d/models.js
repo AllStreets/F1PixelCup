@@ -2,15 +2,20 @@
 // build_people.py, build_yachts.py; docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
 //
 // Two sets:
-// - the core (the people and the stands, at every circuit) loads with the
-//   car, and the renderer is ready once it has loaded or failed;
-// - each venue's own models (its landmarks, its yachts) load when its circuit
-//   is prepared: Render3D.prepare() waits for them behind the loading panel,
-//   so everything that draws is in the scene when its shaders compile. After
-//   the core, the rest load quietly in the background, one venue at a time.
-// A model that fails to load leaves its procedural stand-in in place.
+// - the core (the people, at every circuit) loads with the car, and the
+//   renderer is ready once it has loaded or failed;
+// - each venue's own models (its landmarks, its yachts, its type of stand)
+//   load when its circuit is prepared, and only then: Render3D.prepare()
+//   waits for them behind the loading panel, so everything that draws is in
+//   the scene when its shaders compile, and a slow connection fetches only
+//   what the race in front of it shows.
+// The models are compressed (tools/compress-models.mjs): meshoptimizer's
+// decoder, as three.js ships it, unpacks them. A model that fails to load
+// leaves its procedural stand-in in place.
 
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
+import { Float32BufferAttribute } from "three";
 
 // Landmarks (and the yachts) are drawn at the city's scale: its windows are
 // 8 units a storey (buildingMaterial), about 2.5 units a metre
@@ -33,7 +38,9 @@ const FILES = {
   yachts: "./assets/yachts.glb",
 };
 
-export const CORE_MODELS = ["people", "grandstand", "grandstandOpen"];
+export const CORE_MODELS = ["people"];
+// The stand each type of venue builds (r3d/landmarks.js VENUES: stand).
+export const STAND_MODELS = { covered: "grandstand", open: "grandstandOpen" };
 // Each venue's own (a venue not listed has none).
 export const VENUE_MODELS = {
   monaco: ["casino", "yachts"],
@@ -59,7 +66,10 @@ export const STALL_MS = 20000;
 
 function load(name, files) {
   if (loading[name]) return loading[name];
-  loader = loader || new GLTFLoader();
+  if (!loader) {
+    loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+  }
   loading[name] = new Promise((resolve) => {
     let done = false;
     let lastProgress = performance.now();
@@ -80,41 +90,51 @@ function load(name, files) {
       lastProgress = performance.now();
       if (window.Render3DBoot) window.Render3DBoot.progressAt = lastProgress;
     };
+    // (Time the page itself was busy, building a circuit say, is not the
+    // download's silence: the watch only counts while it is ticking.)
+    let lastTick = performance.now();
     const watch = setInterval(() => {
-      if (performance.now() - lastProgress > STALL_MS) settle(false, null, "the download stalled");
+      const now = performance.now();
+      if (now - lastTick > 3000) lastProgress += now - lastTick;
+      lastTick = now;
+      if (now - lastProgress > STALL_MS) settle(false, null, "the download stalled");
     }, 1000);
     loader.load(files[name], (gltf) => settle(true, gltf.scene), progress, (error) => settle(false, null, error));
   });
   return loading[name];
 }
 
-// Calls done() once every core model has loaded or failed, then starts the
-// venues' models in the background.
+// Calls done() once every core model has loaded or failed.
 export function loadTracksideModels(done, files = FILES) {
   Promise.all(CORE_MODELS.map((n) => load(n, files))).then(() => {
     settled = true;
     done();
-    loadAllVenueModels(files);
   });
 }
 
-// Every venue's models, a venue at a time; resolves when all have settled.
-let everything = null;
+// Every venue's models (for the checks, which audit every circuit);
+// resolves when all have settled.
 export function loadAllVenueModels(files = FILES) {
-  if (!everything) {
-    everything = Object.values(VENUE_MODELS).reduce(
-      (chain, names) => chain.then(() => Promise.all(names.map((n) => load(n, files)))),
-      Promise.resolve(),
-    );
-  }
-  return everything;
+  return Promise.all([...Object.values(VENUE_MODELS).flat(), ...Object.values(STAND_MODELS)].map((n) => load(n, files)));
 }
 
 // Has a venue's every model loaded or failed? Starts any not yet asked for.
-export function venueModelsSettled(venueId, files = FILES) {
-  const names = VENUE_MODELS[venueId] || [];
+// `extra`: more it needs (its stand's model).
+export function venueModelsSettled(venueId, extra = [], files = FILES) {
+  const names = [...(VENUE_MODELS[venueId] || []), ...extra];
   names.forEach((n) => load(n, files));
   return names.every((n) => n in templates || failed.includes(n));
+}
+
+// An attribute as plain floats, its values unpacked (a compressed model's are
+// quantized integers), ready to be transformed and merged.
+export function floats(attribute) {
+  const n = attribute.count;
+  const size = attribute.itemSize;
+  const out = new Float32Array(n * size);
+  const get = [attribute.getX, attribute.getY, attribute.getZ, attribute.getW];
+  for (let i = 0; i < n; i += 1) for (let k = 0; k < size; k += 1) out[i * size + k] = get[k].call(attribute, i);
+  return new Float32BufferAttribute(out, size);
 }
 
 // A loaded model's scene, or null (not loaded, or failed).

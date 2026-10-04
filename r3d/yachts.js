@@ -21,7 +21,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { tracksideModel, LANDMARK_SCALE } from "./models.js";
+import { tracksideModel, LANDMARK_SCALE, floats } from "./models.js";
 import { footprintClear } from "./track.js";
 import { color } from "./textures.js";
 
@@ -42,13 +42,15 @@ function kindGeometry(name) {
   const node = root && root.getObjectByName(name);
   if (!node) return null;
   node.updateMatrixWorld(true);
-  const inverse = node.matrixWorld.clone().invert();
+  // In the model's own frame: the node's parent's (a compressed model keeps
+  // its unpacking scale and offset on the node itself).
+  const inverse = node.parent ? node.parent.matrixWorld.clone().invert() : new THREE.Matrix4();
   const parts = [];
   node.traverse((m) => {
     if (!m.isMesh) return;
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", m.geometry.attributes.position.clone());
-    g.setAttribute("normal", m.geometry.attributes.normal.clone());
+    g.setAttribute("position", floats(m.geometry.attributes.position));
+    g.setAttribute("normal", floats(m.geometry.attributes.normal));
     if (m.geometry.index) g.setIndex(m.geometry.index.clone());
     const role = new Float32Array(g.attributes.position.count).fill(Math.max(0, ROLES.indexOf(m.material.name)));
     g.setAttribute("aRole", new THREE.BufferAttribute(role, 1));

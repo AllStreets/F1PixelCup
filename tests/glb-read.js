@@ -3,11 +3,42 @@
 // transforms), triangle count and triangles. (Not a test file itself.)
 const fs = require("node:fs");
 
+// The trackside models ship compressed (EXT_meshopt_compression and
+// KHR_mesh_quantization, tools/compress-models.mjs): the game's own decoder
+// (vendor/three/addons/libs/meshopt_decoder.module.js) unpacks them here too.
+// Call `await ready()` once (a test file's before()) before load().
+let decoder = null;
+async function ready() {
+  if (decoder) return;
+  const url = require("node:url").pathToFileURL(require("node:path").join(__dirname, "..", "vendor", "three", "addons", "libs", "meshopt_decoder.module.js")).href;
+  decoder = (await import(url)).MeshoptDecoder;
+  await decoder.ready;
+}
+
 function load(file) {
   const buf = fs.readFileSync(file);
   const jsonLength = buf.readUInt32LE(12);
   const doc = JSON.parse(buf.subarray(20, 20 + jsonLength).toString("utf8"));
-  const bin = buf.subarray(20 + jsonLength + 8);
+  let bin = buf.subarray(20 + jsonLength + 8);
+  // Compressed views, unpacked into a buffer of their own (appended).
+  const packed = doc.bufferViews.filter((v) => v.extensions && v.extensions.EXT_meshopt_compression);
+  if (packed.length) {
+    if (!decoder) throw new Error("compressed model: call glb-read's ready() first");
+    const parts = [bin];
+    let at = bin.length;
+    packed.forEach((v) => {
+      const m = v.extensions.EXT_meshopt_compression;
+      const source = bin.subarray(m.byteOffset || 0, (m.byteOffset || 0) + m.byteLength);
+      const out = new Uint8Array(m.count * m.byteStride);
+      decoder.decodeGltfBuffer(out, m.count, m.byteStride, source, m.mode, m.filter);
+      v.byteOffset = at;
+      v.byteLength = out.length;
+      delete v.extensions;
+      parts.push(Buffer.from(out));
+      at += out.length;
+    });
+    bin = Buffer.concat(parts);
+  }
   return { doc, bin };
 }
 
@@ -16,9 +47,13 @@ const READ = {
   5126: (b, o) => b.readFloatLE(o),
   5125: (b, o) => b.readUInt32LE(o),
   5123: (b, o) => b.readUInt16LE(o),
+  5122: (b, o) => b.readInt16LE(o),
   5121: (b, o) => b.readUInt8(o),
+  5120: (b, o) => b.readInt8(o),
 };
-const BYTES = { 5126: 4, 5125: 4, 5123: 2, 5121: 1 };
+const BYTES = { 5126: 4, 5125: 4, 5123: 2, 5122: 2, 5121: 1, 5120: 1 };
+// Normalized integers to their values (glTF's rules).
+const NORM = { 5123: (v) => v / 65535, 5122: (v) => Math.max(v / 32767, -1), 5121: (v) => v / 255, 5120: (v) => Math.max(v / 127, -1) };
 
 // An accessor's values, one array per element.
 function read({ doc, bin }, index) {
@@ -27,8 +62,18 @@ function read({ doc, bin }, index) {
   const size = SIZE[a.type];
   const base = (view.byteOffset || 0) + (a.byteOffset || 0);
   const stride = view.byteStride || size * BYTES[a.componentType];
-  const get = READ[a.componentType];
+  const raw = READ[a.componentType];
+  const get = a.normalized ? (b, o) => NORM[a.componentType](raw(b, o)) : raw;
   return Array.from({ length: a.count }, (_, k) => Array.from({ length: size }, (_, c) => get(bin, base + k * stride + c * BYTES[a.componentType])));
+}
+
+// An accessor's bounds, from its values (a quantized one's min and max are
+// in its stored integers).
+function bounds(glb, index) {
+  const lo = [Infinity, Infinity, Infinity];
+  const hi = [-Infinity, -Infinity, -Infinity];
+  read(glb, index).forEach((v) => v.forEach((x, k) => { lo[k] = Math.min(lo[k], x); hi[k] = Math.max(hi[k], x); }));
+  return { min: lo, max: hi };
 }
 
 // Column-major 4x4 matrices, as glTF writes them.
@@ -80,7 +125,8 @@ function part(glb, name = null) {
     if (!inside.has(i) || n.mesh === undefined) return;
     doc.meshes[n.mesh].primitives.forEach((p) => {
       const a = doc.accessors[p.attributes.POSITION];
-      for (const cx of [a.min[0], a.max[0]]) for (const cy of [a.min[1], a.max[1]]) for (const cz of [a.min[2], a.max[2]]) {
+      const box = a.componentType === 5126 ? a : bounds(glb, p.attributes.POSITION);
+      for (const cx of [box.min[0], box.max[0]]) for (const cy of [box.min[1], box.max[1]]) for (const cz of [box.min[2], box.max[2]]) {
         apply(m, [cx, cy, cz]).forEach((v, k) => { lo[k] = Math.min(lo[k], v); hi[k] = Math.max(hi[k], v); });
       }
       tris += (p.indices !== undefined ? doc.accessors[p.indices].count : a.count) / 3;
@@ -141,4 +187,4 @@ function signedVolume(glb, name) {
   return v;
 }
 
-module.exports = { load, read, part, node, at, walk, apply, triangles, groundBelow, signedVolume };
+module.exports = { ready, load, read, part, node, at, walk, apply, triangles, groundBelow, signedVolume };
