@@ -4,7 +4,7 @@
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
-// ["items"]; the default takes circuits, teams, items and helmets. The race-day
+// ["items"]; the default takes circuits, teams, items, helmets and trackside. The race-day
 // parts are "replay", "podium" and "split" (assets/shots/race-day/); "choices"
 // takes the pit lane's race choices and the circuit picker.
 async (page) => {
@@ -14,7 +14,7 @@ async (page) => {
     const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
     await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
   } catch (e) { /* not fatal */ }
-  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets"];
+  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets", "trackside"];
   // Relative to the Playwright server, which runs from the repo root.
   const OUT = "assets/shots/";
   const context = await page.context().browser().newContext({ viewport: null });
@@ -205,6 +205,78 @@ async (page) => {
         document.getElementById("screens").style.visibility = "";
       });
     }
+  }
+
+  // The trackside world (Stage J): a photo camera on each landmark, the
+  // yachts, a stand's crowd on its feet and the pit crews, a few seconds into
+  // a real race (the player parked by what is pictured, the field running).
+  const TRACKSIDE = [
+    { name: "trackside-casino", circuit: "monaco", aim: "casino", back: 40, h: 12, ah: 40, fov: 60, side: 0 },
+    { name: "trackside-yachts", circuit: "monaco", aim: "yachts" },
+    { name: "trackside-singapore", circuit: "singapore", aim: "singaporeFlyer", back: -260, h: 160, ah: 220, fov: 60, side: 120 },
+    { name: "trackside-crowd", circuit: "monaco", aim: "stand" },
+    { name: "trackside-crews", circuit: "monaco", aim: "crew" },
+    { name: "trackside-wing", circuit: "silverstone", aim: "silverstoneWing", back: 60, h: 30, ah: 30, fov: 60, side: 40 },
+  ];
+  for (const t of parts.includes("trackside") ? TRACKSIDE : []) {
+    const c = circuits.find((x) => x.id === t.circuit);
+    await p.evaluate(() => Render3D.loadAllModels && Render3D.loadAllModels());
+    await drive(c, SHOTS.circuits[c.id]);
+    await p.waitForTimeout(1500);
+    await hideOverlays();
+    await p.evaluate((t) => {
+      const ts = Render3D.inspect().trackside;
+      const nearestRoad = (x, z) => state.track.points.reduce((a, b) => (Math.hypot(b.x - x, b.y - z) < Math.hypot(a.x - x, a.y - z) ? b : a));
+      const park = (x, z) => { const pl = getPlayer(); const r = nearestRoad(x, z); pl.x = r.x; pl.y = r.y; pl.speed = 0; };
+      let from;
+      let at;
+      let fov = 55;
+      if (t.aim === "yachts") {
+        // Over the water, the moored yachts sterns to the quay.
+        const moored = ts.yachts.yachts.filter((v) => v.moored);
+        const y = moored[Math.min(12, moored.length - 1)];
+        const f = { x: Math.cos(y.heading), z: Math.sin(y.heading) };
+        from = { x: y.x + f.x * 260 + f.z * 156, y: y.z + f.z * 260 - f.x * 156, h: 40 };
+        at = { x: y.x, y: y.z, h: 10 };
+        fov = 50;
+      } else if (t.aim === "stand") {
+        // In front of the stand by the road, the player beside it: on their feet.
+        const gap = (st) => Math.hypot(nearestRoad(st.x, st.z).x - st.x, nearestRoad(st.x, st.z).y - st.z);
+        const st = ts.standSpots.reduce((a, b) => (gap(b) < gap(a) ? b : a));
+        const f = { x: -Math.sin(st.yaw), z: -Math.cos(st.yaw) };
+        const sd = { x: Math.cos(st.yaw), z: -Math.sin(st.yaw) };
+        park(st.x, st.z);
+        from = { x: st.x + f.x * 58 + sd.x * 75, y: st.z + f.z * 58 + sd.z * 75, h: 10 };
+        at = { x: st.x, y: st.z, h: 28 };
+        fov = 68;
+      } else if (t.aim === "crew") {
+        const crew = Render3D.auditPeople(state.track).samples.crew[0];
+        const r = nearestRoad(crew.x, crew.z);
+        const dx = r.x - crew.x;
+        const dz = r.y - crew.z;
+        const l = Math.hypot(dx, dz) || 1;
+        from = { x: crew.x + (dx / l) * 40 + 25, y: crew.z + (dz / l) * 40, h: 8 };
+        at = { x: crew.x, y: crew.z, h: 7 };
+        fov = 40;
+      } else {
+        const L = ts.landmarks.find((x) => x.name === t.aim);
+        const dx = L.x - L.trackAt.x;
+        const dz = L.z - L.trackAt.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const ux = dx / d;
+        const uz = dz / d;
+        from = { x: L.trackAt.x - ux * t.back - uz * t.side, y: L.trackAt.z - uz * t.back + ux * t.side, h: t.h };
+        at = { x: L.x, y: L.z, h: t.ah };
+        fov = t.fov;
+      }
+      // The player parked (no speed blur), out of the picture unless it belongs there.
+      if (t.aim !== "stand") park(at.x, at.y);
+      Render3D.setPhotoCamera({ from: { ...from, d: 0 }, at: { ...at, d: 0 }, fov });
+    }, t);
+    await p.waitForTimeout(1200);
+    await shot(t.name);
+    written.push(t.name);
+    await p.evaluate(() => Render3D.setPhotoCamera(null));
   }
 
   // One showroom shot per team, the car framed in the right part of the window.
