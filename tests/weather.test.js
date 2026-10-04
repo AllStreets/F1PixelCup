@@ -16,6 +16,24 @@ test("Dry and Wet are fixed; Changeable is seeded and wet about a third of the t
   assert.equal(Weather.raceWeather("storm", 1, 1), "dry");
 });
 
+test("Changeable rains as often as the circuit does: its own chance, seeded", () => {
+  const share = (chance) => {
+    let wet = 0;
+    for (let i = 0; i < 3000; i += 1) if (Weather.raceWeather("changeable", i * 7919, i % 5, chance) === "wet") wet += 1;
+    return wet / 3000;
+  };
+  assert.equal(share(0), 0);
+  assert.equal(share(1), 1);
+  assert.ok(Math.abs(share(0.5) - 0.5) < 0.04, `Spa-like ${share(0.5)}`);
+  assert.ok(share(0.02) < 0.04, `desert ${share(0.02)}`);
+  // No chance given (or a broken one): the old one in three.
+  assert.equal(Weather.raceWeather("changeable", 99, 2, undefined), Weather.raceWeather("changeable", 99, 2));
+  assert.equal(Weather.raceWeather("changeable", 99, 2, "x"), Weather.raceWeather("changeable", 99, 2));
+  // Wet and Dry ignore it.
+  assert.equal(Weather.raceWeather("dry", 1, 1, 1), "dry");
+  assert.equal(Weather.raceWeather("wet", 1, 1, 0), "wet");
+});
+
 test("grip is 1 in the dry and the wet factors are all losses", () => {
   assert.equal(Weather.grip("dry"), 1);
   assert.equal(Weather.grip("wet"), Weather.WET.corner);

@@ -117,6 +117,11 @@ async (page) => {
       if (c.id === "monaco" && (!v.tunnel || !(v.tunnel.roof >= 30))) bad.push(`monaco: tunnel ${JSON.stringify(v.tunnel)}`);
       v.bridges.forEach((z) => { if (z.height > 0.5 || z.deckAbove > 60) bad.push(`${c.id}: bridge zone ${JSON.stringify(z)}`); });
       if (c.id === "suzuka" && v.bridges.length !== 1) bad.push("suzuka: no bridge zone");
+      // Lit all the way round: a tower every few hundred along the lap, and
+      // few of the spots with room by the barrier taken by anything else (a
+      // stand, a board, the sea).
+      if (Venue.FLOODLIT.includes(c.id) && !(v.floodlights >= L / 600 && v.floodlights >= 0.85 * v.floodlightSpots)) bad.push(`${c.id}: ${v.floodlights} floodlights of ${v.floodlightSpots}`);
+      if (!Venue.FLOODLIT.includes(c.id) && v.floodlights) bad.push(`${c.id}: floodlights on a day circuit`);
     });
     return bad.length === 0 || JSON.stringify(bad);
   });
@@ -260,7 +265,11 @@ async (page) => {
   // the car is away, green; the posts elsewhere stay furled.
   await step(async () => {
     Game.backToPitLane();
-    Game.selectCup(0); Game.startCup();
+    // At Monza, by id (the cups follow the calendar).
+    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "monza"));
+    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "monza");
+    Game.selectCup(ci); Game.startCup();
+    if (ti > 0) { state.raceIndex = ti; startRace(ti); }
     for (let i = 0; i < 300 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     // Past the lights and the first seconds (no flags off the line).
     const until = performance.now() + 20000;

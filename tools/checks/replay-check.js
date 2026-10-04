@@ -31,11 +31,15 @@ async (page) => {
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 200)}`; } };
   const frames = (n = 2) => p.evaluate((n) => new Promise((done) => { let i = 0; const f = () => (++i >= n ? done() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 
-  // The circuit built for real (Monza, the first cup's first race), then the
+  // The circuit built for real (Spa, by id: the first race of its cup, so a
+  // next race follows), then the
   // same seeded two-lap race run twice: once with the recorder switched off,
   // once with it on. Every car on autopilot.
   const race = await step(async () => {
-    Game.selectCup(0); Game.selectGridMode("back"); Game.startCup();
+    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "spa"));
+    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "spa");
+    Game.selectCup(ci); Game.selectGridMode("back"); Game.startCup();
+    if (ti > 0) { state.raceIndex = ti; startRace(ti); }
     for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const seed = (n) => {
       let s = n >>> 0;
@@ -44,7 +48,7 @@ async (page) => {
     const run = (truth) => {
       seed(11);
       buildCupEntries();
-      startRace(0);
+      startRace(ti);
       state.preparing = null;
       state.track.laps = 2;
       const player = getPlayer();
@@ -367,14 +371,16 @@ async (page) => {
   const BRIEF_MS = 400;
   const sight = await step(async (BRIEF_MS) => {
     if (!Render3D.sightOfView) return "no sightOfView";
-    resetToGarage();
     const out = {};
-    for (const race of [0, 1]) {
-      Game.selectCup(1); Game.selectGridMode("back");
-      if (race === 0) {
-        Game.startCup();
-        for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
-      } else { startRace(1); state.preparing = null; }
+    // Each circuit found by name in the calendar cups, wherever it falls.
+    for (const want of ["monaco", "singapore"]) {
+      const ci = CUPS.findIndex((cup) => !cup.season && cup.tracks.some((t) => t.id === want));
+      const ti = CUPS[ci].tracks.findIndex((t) => t.id === want);
+      resetToGarage();
+      Game.selectCup(ci); Game.selectGridMode("back");
+      Game.startCup();
+      for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+      if (ti !== 0) { startRace(ti); state.preparing = null; }
       let s = 5;
       Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
       state.track.laps = 1;

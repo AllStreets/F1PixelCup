@@ -29,22 +29,67 @@ test("getTeamForDriver finds the driver's team", () => {
   assert.equal(Data.getTeamForDriver(norris).id, "mclaren");
 });
 
-test("every circuit has a real outline, a country and a real length", () => {
+// The 2025 calendar, race by race (docs/superpowers/specs/2026-10-01-calendar-design.md).
+const CALENDAR_2025 = ["albertpark", "shanghai", "suzuka", "bahrain", "jeddah", "miami", "imola", "monaco",
+  "barcelona", "montreal", "redbullring", "silverstone", "spa", "hungaroring", "zandvoort", "monza",
+  "baku", "singapore", "cota", "mexico", "interlagos", "lasvegas", "losail", "yasmarina"];
+const CALENDAR_CUPS = [
+  ["openingCup", "Opening Cup"], ["springCup", "Spring Cup"], ["summerCup", "Summer Cup"],
+  ["classicsCup", "Classics Cup"], ["autumnCup", "Autumn Cup"], ["finaleCup", "Finale Cup"],
+];
+const lapLength = (points) => points.reduce((sum, a, i) => {
+  const b = points[(i + 1) % points.length];
+  return sum + Math.hypot(b.x - a.x, b.y - a.y);
+}, 0);
+
+test("every circuit has a real outline, a country, a real length and its own weather odds", () => {
   const shapes = trackShapes();
-  assert.equal(Data.CIRCUITS.length, 8);
+  const HEX = /^#[0-9a-f]{6}$/i;
   Data.CIRCUITS.forEach((c) => {
     assert.ok(shapes[c.id], `${c.id} missing from tracks-data.js`);
-    assert.ok(c.country.length > 0);
-    assert.ok(c.lengthM > 3000 && c.lengthM < 8000);
+    assert.ok(c.name.length > 0 && c.country.length > 0 && c.theme.length > 0, c.id);
+    assert.ok(c.lengthM > 3000 && c.lengthM < 8000, c.id);
     assert.equal(c.laps, 5);
+    assert.equal(c.roadWidth, 33);
+    assert.ok(c.rainChance >= 0 && c.rainChance <= 1, `${c.id} rainChance ${c.rainChance}`);
+    ["sky", "grass", "accent", "road", "shoulder", "horizonA", "horizonB", "curbA", "curbB", "sun"].forEach((k) => assert.match(c.bg[k], HEX, `${c.id}.bg.${k}`));
+    // The outline is the real circuit, at the shared scale (1.3 units a metre),
+    // a little shorter where the relaxation opens tight corners out (Monaco's
+    // hairpins the most).
+    const units = lapLength(shapes[c.id].points);
+    assert.ok(Math.abs(units / 1.3 - c.lengthM) / c.lengthM < 0.08, `${c.id}: ${Math.round(units / 1.3)} m against ${c.lengthM}`);
   });
   assert.equal(Data.CIRCUITS.find((c) => c.id === "spa").lengthM, 7004);
+  // Rain where it really rains: Spa the wettest, the desert almost never.
+  const chance = (id) => (Data.CIRCUITS.find((c) => c.id === id) || {}).rainChance;
+  assert.ok(chance("spa") >= Math.max(...Data.CIRCUITS.map((c) => c.rainChance)));
+  assert.ok(chance("bahrain") < 0.05);
 });
 
-test("the two cups use every circuit exactly once", () => {
-  const used = Data.CUP_DEFS.flatMap((cup) => cup.circuitIds);
-  assert.deepEqual([...used].sort(), Data.CIRCUITS.map((c) => c.id).sort());
-  assert.deepEqual(Data.CUP_DEFS.map((cup) => cup.id), ["trophyCup", "constructorCup"]);
+test("all 24 circuits of 2025, in the order of the calendar", () => {
+  assert.deepEqual(Data.CIRCUITS.map((c) => c.id), CALENDAR_2025);
+});
+
+test("the six calendar cups are the only cups; the season races the whole calendar", () => {
+  assert.deepEqual(Data.CUP_DEFS.map((cup) => [cup.id, cup.name]), CALENDAR_CUPS);
+  assert.deepEqual(Data.CUP_DEFS.flatMap((cup) => cup.circuitIds), CALENDAR_2025);
+  assert.equal(Data.SEASON.id, "season");
+  assert.equal(Data.SEASON.name, "2025 Season");
+  assert.deepEqual(Data.SEASON.circuitIds, CALENDAR_2025);
+  assert.ok(!Data.CUP_DEFS.some((cup) => cup.id === Data.SEASON.id));
+});
+
+test("the calendar cups: four races each, in calendar order", () => {
+  const built = CALENDAR_CUPS.map(([id]) => Data.CUP_DEFS.find((cup) => cup.id === id));
+  built.forEach((cup, i) => {
+    assert.ok(cup, CALENDAR_CUPS[i][0]);
+    assert.equal(cup.name, CALENDAR_CUPS[i][1]);
+    assert.deepEqual(cup.circuitIds, CALENDAR_2025.slice(i * 4, i * 4 + 4), cup.id);
+  });
+  // Every cup races circuits that exist; every circuit is in a cup.
+  const ids = Data.CIRCUITS.map((c) => c.id);
+  Data.CUP_DEFS.forEach((cup) => cup.circuitIds.forEach((id) => assert.ok(ids.includes(id), `${cup.id}: ${id}`)));
+  ids.forEach((id) => assert.ok(Data.CUP_DEFS.some((cup) => cup.circuitIds.includes(id)), `${id} is in no cup`));
 });
 
 const PowerUps = require("../powerups.js");
@@ -99,8 +144,10 @@ test("promo shots feature the whole grid: Leclerc first, Hamilton second, six te
     assert.equal(set[0], "leclerc");
     assert.equal(set[1], "hamilton");
     assert.ok(new Set(set.map(teamOf)).size >= 6, "six teams or more");
-    assert.equal(new Set(set).size, set.length, "no driver twice in a set");
   }
+  assert.equal(new Set(items).size, items.length, "no driver twice in the items");
+  // 24 circuits and 20 drivers: nobody more than twice.
+  circuits.forEach((id) => assert.ok(circuits.filter((x) => x === id).length <= 2, `${id} in more than two circuit shots`));
   assert.equal(SHOT_DRIVERS.hero, "leclerc");
 });
 

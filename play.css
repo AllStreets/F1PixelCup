@@ -20,7 +20,9 @@ html, body { height: 100%; overflow: hidden; }
   background: linear-gradient(90deg, rgba(7, 7, 12, 0.94) 0%, rgba(7, 7, 12, 0.6) 34%, rgba(7, 7, 12, 0) 58%);
   display: grid;
   grid-template-columns: minmax(280px, 38%) 1fr auto;
-  grid-template-rows: auto 1fr auto;
+  /* The driver's row is never shorter than the driver: a short window
+     scrolls rather than slide the strip over the career chip. */
+  grid-template-rows: auto minmax(min-content, 1fr) auto;
   grid-template-areas:
     "top choices choices"
     "driver . ."
@@ -45,7 +47,9 @@ html, body { height: 100%; overflow: hidden; }
 .stat span { display: block; color: var(--muted); font: 700 0.68rem/1 var(--font); letter-spacing: 0.14em; text-transform: uppercase; margin-bottom: 4px; }
 .stat-bar { height: 6px; background: rgba(255, 255, 255, 0.12); }
 .stat-bar i { display: block; height: 100%; background: var(--red); }
-.driver-strip { grid-area: strip; display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 6px; align-self: end; scrollbar-width: thin; }
+/* (A scroll box's grid row would shrink to nothing and let the strip ride up
+   over the driver: it keeps its tiles' height, and room for a thin scrollbar.) */
+.driver-strip { grid-area: strip; display: flex; gap: 6px; overflow-x: auto; padding: 4px 2px 6px; align-self: end; scrollbar-width: thin; min-height: calc(44px + 10px + 12px); }
 .driver-tile {
   flex: 0 0 auto; width: 48px; height: 44px; border: 1px solid rgba(255, 255, 255, 0.18);
   background: linear-gradient(160deg, var(--team), rgba(0, 0, 0, 0.55)); color: #fff; cursor: pointer;
@@ -66,7 +70,7 @@ html, body { height: 100%; overflow: hidden; }
 @media (max-width: 760px) {
   .pitlane {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr auto auto;
+    grid-template-rows: auto auto minmax(min-content, 1fr) auto auto;
     grid-template-areas: "top" "choices" "driver" "strip" "start";
     background: rgba(7, 7, 12, 0.72);
     overflow-y: auto;
@@ -74,6 +78,16 @@ html, body { height: 100%; overflow: hidden; }
   .pitlane-choices { justify-self: start; text-align: left; }
   .choice-row, .cup-circuits { justify-content: flex-start; }
   #start-cup { justify-self: stretch; text-align: center; }
+}
+
+/* A phone held upright: the driver block tighter and the choices' hints left
+   out (the season's stays), so the strip and Start fit on the screen. */
+@media (max-width: 760px) and (max-height: 900px) {
+  .pitlane { gap: 10px 24px; }
+  .choice-hint:not(#season-hint) { display: none; }
+  .driver-name { font-size: clamp(1.6rem, 7vw, 2.4rem); margin: 4px 0 2px; }
+  .driver-title { margin-bottom: 8px; }
+  .stat-bars { gap: 4px; margin-bottom: 10px; }
 }
 
 /* ---- Race: timing tower and feed ticker, lined up with the HUD ---- */
@@ -133,6 +147,10 @@ html, body { height: 100%; overflow: hidden; }
 .result-row i { display: block; width: 4px; height: 1.1em; }
 .result-row.is-player { background: rgba(225, 6, 0, 0.18); }
 .result-row .is-fastest { color: #c77dff; }
+.results-table.constructors { margin-top: 22px; }
+.constructors .result-head:not(:first-child) { margin-top: 18px; }
+.constructors .result-row, .constructors .result-head { grid-template-columns: 3rem 4px minmax(0, 1fr) 4.5rem; }
+.new-season { justify-self: end; margin-top: 6px; }
 #results-career { margin-top: 6px; }
 
 .podium { display: grid; grid-template-columns: repeat(3, 1fr); align-items: end; gap: 10px; margin: 18px 0; }

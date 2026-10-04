@@ -57,6 +57,8 @@
           </div>
           <p id="players-hint" class="choice-hint"></p>
           <ol id="cup-circuits" class="cup-circuits"></ol>
+          <p id="season-hint" class="choice-hint hidden"></p>
+          <button id="new-season" class="ghost-btn new-season hidden" data-action="newSeason" type="button">New season</button>
         </div>
         <div class="pitlane-driver">
           <p id="driver-kicker" class="kicker"></p>
@@ -78,6 +80,7 @@
           <h2 id="results-title" class="it-title overlay-title"></h2>
           <div id="results-career" class="career-strip hidden"></div>
           <div id="results-table" class="results-table"></div>
+          <div id="results-standings" class="results-table constructors hidden"></div>
           <div class="overlay-actions">
             <button class="ghost-btn" data-action="pitlane" type="button">Back to pit lane (Esc)</button>
             <button id="results-replay" class="ghost-btn replay-btn" data-action="replay" type="button">Watch the replay</button>
@@ -220,6 +223,7 @@
       const action = target.dataset.action;
       if (action === "start") Game.startCup();
       else if (action === "next") Game.nextRace();
+      else if (action === "newSeason") Game.newSeason();
       else if (action === "replay") Game.replay.open();
       else if (action === "race") Game.startRaceFromQualifying();
       else if (action === "pitlane") Game.backToPitLane();
@@ -252,6 +256,7 @@
   function showPitLane() {
     hideMain();
     show("pitlane");
+    showroomStale = true;
     refreshPitLane();
     focusPitLane();
   }
@@ -307,24 +312,44 @@
     $("weather-hint").textContent = s.weatherMode === "wet"
       ? "Every race in the rain: less grip in the corners, longer braking."
       : s.weatherMode === "changeable"
-        ? "Each race has a one-in-three chance of rain."
-        : "Dry races all cup.";
-    $("cup-circuits").innerHTML = s.cups[s.selectedCup].circuits.map((name) => `<li>${esc(name)}</li>`).join("");
+        ? "Each race rains as often as it really does there: Spa one in two, the desert almost never."
+        : s.cups[s.selectedCup].season ? "Dry races all season." : "Dry races all cup.";
+    // A cup's four circuits; the season's 24 in one line, first to last.
+    const circuits = s.cups[s.selectedCup].circuits;
+    $("cup-circuits").innerHTML = s.cups[s.selectedCup].season
+      ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0])} to ${esc(circuits[circuits.length - 1])}</li>`
+      : circuits.map((name) => `<li>${esc(name)}</li>`).join("");
     // One player or two (split screen); player 2's driver and both key sets.
+    // The season is one player's championship: no second player there.
+    const seasonPicked = s.cups[s.selectedCup].season;
+    const players = seasonPicked ? 1 : s.players;
     $("players-pills").innerHTML = [[1, "1 player"], [2, "2 players"]].map(([n, label]) => `
-      <button class="pill ${n === s.players ? "is-on" : ""}" data-players="${n}" type="button" aria-pressed="${n === s.players}">${label}</button>`).join("");
-    $("second-driver").hidden = s.players !== 2;
+      <button class="pill ${n === players ? "is-on" : ""}" data-players="${n}" type="button" aria-pressed="${n === players}"${seasonPicked && n === 2 ? " disabled" : ""}>${label}</button>`).join("");
+    $("second-driver").hidden = players !== 2;
     $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
     $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
-    $("players-hint").textContent = s.players === 2
+    $("players-hint").textContent = seasonPicked
+      ? "The season is one player's championship."
+      : s.players === 2
       ? `Split screen. P1: ${s.keys.p1}, Left Shift to drift, Space for power-ups. P2: the arrows, Right Shift to drift, and ${s.keys.p2Item} (left of Right Shift) for power-ups. Gamepads work too: the first is P1's, the second P2's.`
       : "One player, the whole screen.";
     $("driver-strip").innerHTML = s.drivers.map((d) => `
       <button class="driver-tile ${d.index === s.selectedDriver ? "is-on" : ""}" data-driver="${d.index}" style="--team:${esc(d.teamColor)}"
         type="button" role="option" aria-selected="${d.index === s.selectedDriver}" title="${esc(d.name)}"><b>${num(d.number)}</b><span>${esc(d.code)}</span></button>`).join("");
-    $("start-cup").innerHTML = `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
+    // The season: resume the saved one (its own driver and settings), or start over.
+    const saved = s.savedSeason;
+    $("start-cup").innerHTML = saved
+      ? `<span>Resume season · Race ${num(saved.nextRace)} of ${num(saved.races)} ›</span>`
+      : `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
+    $("season-hint").textContent = saved
+      ? `Saved: ${saved.driver} on ${saved.difficulty}, ${saved.grid.toLowerCase()}, ${saved.weather.toLowerCase()} weather. Resuming keeps its driver and these settings.`
+      : s.cups[s.selectedCup].season ? "All 24 races in calendar order, for the drivers' and constructors' titles. Saved after every race." : "";
+    $("season-hint").classList.toggle("hidden", !s.cups[s.selectedCup].season);
+    $("new-season").classList.toggle("hidden", !saved);
+    $("new-season").textContent = saved && saved.confirming ? "Throw away the saved season? Click again" : "New season";
     refreshCareerChip();
     restoreFocus(was);
+    showroomStale = true;
   }
 
   // After the arrow keys change driver: bring the chosen tile into view.
@@ -426,7 +451,7 @@
     podiumLoading(false);
     $("results-next").innerHTML = `<span>${esc(summary.nextLabel)} ›</span>`;
     $("results-table").innerHTML = `
-      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>Cup</span></div>
+      <div class="result-head"><span>Pos</span><span></span><span>Driver</span><span>Time</span><span>Gap</span><span>Best lap</span><span>Race</span><span>${esc(summary.pointsLabel || "Cup")}</span></div>
       ${summary.rows.map((r) => `
         <div class="result-row ${r.isPlayer ? "is-player" : ""}${tagClass(r)}">
           <b>${esc(ordinal(num(r.place)))}</b><i style="background:${esc(r.teamColor)}"></i>
@@ -435,6 +460,23 @@
           <span class="${r.fastest ? "is-fastest" : ""}">${esc(r.bestLap)}</span>
           <span>${num(r.racePoints)}</span><span>${num(r.cupPoints)}</span>
         </div>`).join("")}`;
+    // The season's tables, beneath: the drivers', then the constructors'.
+    const standings = summary.drivers || [];
+    const teams = summary.constructors || [];
+    $("results-standings").innerHTML = (standings.length ? `
+      <div class="result-head"><span>Pos</span><span></span><span>Drivers</span><span>Points</span></div>
+      ${standings.map((d) => `
+        <div class="result-row ${d.isPlayer ? "is-player" : ""}">
+          <b>${esc(ordinal(num(d.position)))}</b><i style="background:${esc(d.teamColor)}"></i>
+          <span>${esc(d.name)}</span><span>${num(d.points)}</span>
+        </div>`).join("")}` : "") + (teams.length ? `
+      <div class="result-head"><span>Pos</span><span></span><span>Constructors</span><span>Points</span></div>
+      ${teams.map((t) => `
+        <div class="result-row ${t.isPlayer ? "is-player" : ""}">
+          <b>${esc(ordinal(num(t.position)))}</b><i style="background:${esc(t.teamColor)}"></i>
+          <span>${esc(t.name)}</span><span>${num(t.points)}</span>
+        </div>`).join("")}` : "");
+    $("results-standings").classList.toggle("hidden", !teams.length);
     renderStrip($("results-career"), summary.career);
     $("results-replay").hidden = !(window.Game && Game.replay && Game.replay.available());
     show("results-screen");
@@ -685,6 +727,83 @@
       actions: screen.querySelector(".podium-foot .overlay-actions").getBoundingClientRect(),
     };
     return podiumLayout;
+  }
+
+  // The showroom: the largest open stretch of the pit lane, clear of all its
+  // controls, where the car turns (Render3D.renderGarage fits the car into
+  // it). Null where there is no room for a car worth seeing: it is not drawn
+  // rather than drawn under the controls. Measured only when the pit lane
+  // may have moved (refreshed, resized, scrolled, fonts in); behind an open
+  // overlay the car keeps its place.
+  const SHOWROOM_PARTS = "#pitlane .pitlane-top, #pitlane .choice-row, #pitlane .choice-hint, #pitlane .cup-circuits, #pitlane .new-season, #pitlane .pitlane-driver, #pitlane #driver-strip, #pitlane #start-cup";
+  const SHOWROOM_GAP = 14;
+  // A cell of about 12px, coarser on very large windows (the search grows
+  // with the square of the rows).
+  const showroomCell = (W) => Math.max(12, Math.ceil(W / 160));
+  let showroomStale = true;
+  let showroomOverride = null;
+  // For the site's photographs: a fixed place for the car (or null to stop).
+  function setShowroomArea(area) {
+    showroomOverride = area;
+  }
+  // A car seen from the showroom camera is about this much wider than tall.
+  const SHOWROOM_ASPECT = 2.3;
+  let showroom = null;
+  function showroomArea() {
+    if (showroomOverride) return showroomOverride;
+    const pit = $("pitlane");
+    if (!pit || pit.classList.contains("hidden")) return null;
+    if (openOverlay) return showroom ? showroom.area : null;
+    if (!showroomStale && showroom) return showroom.area;
+    showroomStale = false;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const SHOWROOM_CELL = showroomCell(W);
+    const boxes = [...document.querySelectorAll(SHOWROOM_PARTS)]
+      .filter((el) => !el.hidden && !el.classList.contains("hidden") && el.getClientRects().length)
+      .map((el) => el.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.height > 0);
+    const key = `${W}x${H}|${boxes.map((r) => `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.right)},${Math.round(r.bottom)}`).join(";")}`;
+    if (showroom && showroom.key === key) return showroom.area;
+    // Free cells on a grid over the window, then the largest rectangle of
+    // them that holds the biggest car.
+    const cols = Math.floor((W - 2 * SHOWROOM_GAP) / SHOWROOM_CELL);
+    const rows = Math.floor((H - 2 * SHOWROOM_GAP) / SHOWROOM_CELL);
+    const free = [];
+    for (let y = 0; y < rows; y += 1) {
+      const top = SHOWROOM_GAP + y * SHOWROOM_CELL;
+      const row = [];
+      for (let x = 0; x < cols; x += 1) {
+        const left = SHOWROOM_GAP + x * SHOWROOM_CELL;
+        row.push(!boxes.some((r) => left < r.right + SHOWROOM_GAP && left + SHOWROOM_CELL > r.left - SHOWROOM_GAP
+          && top < r.bottom + SHOWROOM_GAP && top + SHOWROOM_CELL > r.top - SHOWROOM_GAP));
+      }
+      free.push(row);
+    }
+    let best = null;
+    const run = new Array(cols).fill(true);
+    for (let y0 = 0; y0 < rows; y0 += 1) {
+      run.fill(true);
+      for (let y1 = y0; y1 < rows; y1 += 1) {
+        for (let x = 0; x < cols; x += 1) run[x] = run[x] && free[y1][x];
+        const h = (y1 - y0 + 1) * SHOWROOM_CELL;
+        let start = -1;
+        for (let x = 0; x <= cols; x += 1) {
+          if (x < cols && run[x]) { if (start < 0) start = x; continue; }
+          if (start >= 0) {
+            const w = (x - start) * SHOWROOM_CELL;
+            const size = Math.min(w / SHOWROOM_ASPECT, h);
+            if (!best || size > best.size) best = { size, left: SHOWROOM_GAP + start * SHOWROOM_CELL, top: SHOWROOM_GAP + y0 * SHOWROOM_CELL, width: w, height: h };
+            start = -1;
+          }
+        }
+      }
+    }
+    const area = best && best.width >= 160 && best.height >= 70
+      ? { left: best.left, top: best.top, right: best.left + best.width, bottom: best.top + best.height }
+      : null;
+    showroom = { key, area };
+    return area;
   }
 
   // The title's box as drawn over the 3D scene (kicker and title as far as
@@ -980,6 +1099,12 @@
 
   function init() {
     build();
+    // The showroom is measured again whenever the pit lane may have moved.
+    const stale = () => { showroomStale = true; };
+    window.addEventListener("resize", stale);
+    $("pitlane").addEventListener("scroll", stale, { passive: true });
+    if (window.ResizeObserver) new ResizeObserver(stale).observe($("pitlane"));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(stale);
     document.addEventListener("keydown", trapFocus, true);
     window.addEventListener("storage", onStorage);
     const wantsCareer = window.location.hash === "#career";
@@ -995,7 +1120,7 @@
   window.Screens = {
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
-    showQualifying, showPodium, podiumLoading, placePodium, podiumReserve, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showQualifying, showPodium, podiumLoading, placePodium, podiumReserve, showroomArea, setShowroomArea, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());

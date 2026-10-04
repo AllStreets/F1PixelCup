@@ -43,7 +43,7 @@ async (page) => {
   const SHOTS = await p.evaluate(() => SHOT_DRIVERS);
 
   // One shot per circuit, the player on autopilot a few seconds in.
-  const circuits = await p.evaluate(() => CUPS.flatMap((cup, ci) => cup.tracks.map((t, ti) => ({ ci, ti, id: t.id }))));
+  const circuits = await p.evaluate(() => CUPS.flatMap((cup, ci) => (cup.season ? [] : cup.tracks.map((t, ti) => ({ ci, ti, id: t.id })))));
   const drive = async (c, driverId) => {
     await p.evaluate(({ ci, ti, driverId }) => {
       state.selectedDriver = DRIVERS.findIndex((d) => d.id === driverId);
@@ -213,6 +213,9 @@ async (page) => {
   // The showroom turntable turns at one radian every 3 s; wait for the same
   // front three-quarter angle on every car so the grid is consistent.
   const SHOWROOM_ANGLE = 0.3;
+  // The car stands in the picture's frame (the pit lane would fit it beside
+  // its controls, which are hidden for the photographs).
+  await p.evaluate((b) => Screens.setShowroomArea({ left: b.width * 0.42, top: b.height * 0.3, right: b.width * 0.96, bottom: b.height * 0.96 }), box);
   for (const t of parts.includes("teams") ? teams : []) {
     await p.evaluate((index) => Game.selectDriver(index), t.driver);
     await hideOverlays();
@@ -377,6 +380,7 @@ async (page) => {
     await p.waitForTimeout(1500);
     await dayShot("split-pitlane");
   }
+  await p.evaluate(() => Screens.setShowroomArea(null));
   await context.close();
   return written;
 }

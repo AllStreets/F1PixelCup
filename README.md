@@ -1,15 +1,16 @@
 # F1 Pixel Cup
 
-An F1 racing game in the browser — Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** across 8 circuits in two four-race cups.
+An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** on all 24 circuits of its calendar: six four-race cups in calendar order, or the whole season.
 
 ---
 
 ## Features
 
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
-- **8 real circuits** — Monza, Spa, Silverstone, Suzuka, Monaco, Singapore, Bahrain, Interlagos, traced from the real layouts (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
+- **All 24 circuits of 2025**, in calendar order, traced from the real layouts, with their pit lanes placed from OpenStreetMap (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
 - **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
-- **Two cups** — Trophy Cup (Monza → Spa → Silverstone → Suzuka) and Constructor Cup (Monaco → Singapore → Bahrain → Interlagos)
+- **Six calendar cups and a season**: the Opening, Spring, Summer, Classics, Autumn and Finale Cups, four races each in the order of the 2025 calendar, or the **2025 Season**, all 24 races for the drivers' and constructors' titles, saved after every race and resumed from the pit lane
+- **Weather that fits the place**: on Changeable, each race rains as often as it really does there, from Spa's one in two to almost never in the desert
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
 - **Power-ups: Mario Kart chaos, F1 rules** — eight items, each an F1 idea with a Mario Kart counterpart (see *Power-ups* below)
 - **F1-authentic scoring** — 25/18/15/12/10/8/6/4/2/1, plus the bonus point for fastest lap (top ten finishers only)
@@ -90,27 +91,83 @@ headless on every circuit. Every car finished the distance on every track:
 
 | Circuit | Fastest AI lap | Median AI lap |
 |---|---|---|
-| Monza | 38.0s | 39.6s |
-| Spa-Francorchamps | 44.3s | 46.9s |
-| Silverstone | 37.6s | 39.5s |
-| Suzuka | 39.3s | 42.6s |
-| Monaco | 20.3s | 22.0s |
-| Marina Bay | 30.3s | 32.6s |
-| Bahrain | 34.2s | 36.2s |
-| Interlagos | 25.9s | 29.2s |
+| Albert Park Circuit | 29.8s | 33.2s |
+| Shanghai International Circuit | 30.1s | 33.8s |
+| Suzuka International Racing Course | 35.7s | 36.7s |
+| Bahrain International Circuit | 33.4s | 35.4s |
+| Jeddah Corniche Circuit | 35.6s | 37.3s |
+| Miami International Autodrome | 31.3s | 34.2s |
+| Autodromo Enzo e Dino Ferrari | 29.0s | 30.8s |
+| Circuit de Monaco | 18.3s | 20.1s |
+| Circuit de Barcelona-Catalunya | 28.3s | 30.3s |
+| Circuit Gilles Villeneuve | 26.5s | 28.7s |
+| Red Bull Ring | 24.9s | 27.8s |
+| Silverstone Circuit | 33.8s | 36.2s |
+| Circuit de Spa-Francorchamps | 39.8s | 44.8s |
+| Hungaroring | 24.4s | 26.0s |
+| Circuit Zandvoort | 23.7s | 26.8s |
+| Autodromo di Monza | 33.9s | 36.0s |
+| Baku City Circuit | 35.7s | 37.2s |
+| Marina Bay Street Circuit | 26.7s | 30.2s |
+| Circuit of the Americas | 32.3s | 35.2s |
+| Autódromo Hermanos Rodríguez | 26.0s | 27.5s |
+| Autódromo José Carlos Pace | 25.4s | 28.2s |
+| Las Vegas Strip Circuit | 38.1s | 41.0s |
+| Lusail International Circuit | 30.9s | 35.7s |
+| Yas Marina Circuit | 31.8s | 33.9s |
 
 ## The circuits
 
 Each circuit is its real outline, from the open
 [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) dataset (MIT),
-converted by `tools/tracks/build_tracks.py` into `tracks-data.js`:
+converted by `tools/tracks/build_tracks.py` into `tracks-data.js`. All 24 circuits
+of 2025, in calendar order, and the cup each is raced in:
+
+| # | Circuit | Country | Lap | Cup |
+|---|---|---|---|---|
+| 1 | Albert Park Circuit | Australia | 5.278 km | Opening Cup |
+| 2 | Shanghai International Circuit | China | 5.451 km | Opening Cup |
+| 3 | Suzuka International Racing Course | Japan | 5.807 km | Opening Cup |
+| 4 | Bahrain International Circuit | Bahrain | 5.412 km | Opening Cup |
+| 5 | Jeddah Corniche Circuit | Saudi Arabia | 6.175 km | Spring Cup |
+| 6 | Miami International Autodrome | United States | 5.412 km | Spring Cup |
+| 7 | Autodromo Enzo e Dino Ferrari | Italy | 4.909 km | Spring Cup |
+| 8 | Circuit de Monaco | Monaco | 3.337 km | Spring Cup |
+| 9 | Circuit de Barcelona-Catalunya | Spain | 4.655 km | Summer Cup |
+| 10 | Circuit Gilles Villeneuve | Canada | 4.361 km | Summer Cup |
+| 11 | Red Bull Ring | Austria | 4.318 km | Summer Cup |
+| 12 | Silverstone Circuit | Great Britain | 5.891 km | Summer Cup |
+| 13 | Circuit de Spa-Francorchamps | Belgium | 7.004 km | Classics Cup |
+| 14 | Hungaroring | Hungary | 4.381 km | Classics Cup |
+| 15 | Circuit Zandvoort | Netherlands | 4.259 km | Classics Cup |
+| 16 | Autodromo di Monza | Italy | 5.793 km | Classics Cup |
+| 17 | Baku City Circuit | Azerbaijan | 6.003 km | Autumn Cup |
+| 18 | Marina Bay Street Circuit | Singapore | 4.928 km | Autumn Cup |
+| 19 | Circuit of the Americas | United States | 5.514 km | Autumn Cup |
+| 20 | Autódromo Hermanos Rodríguez | Mexico | 4.304 km | Autumn Cup |
+| 21 | Autódromo José Carlos Pace | Brazil | 4.309 km | Finale Cup |
+| 22 | Las Vegas Strip Circuit | United States | 6.201 km | Finale Cup |
+| 23 | Lusail International Circuit | Qatar | 5.380 km | Finale Cup |
+| 24 | Yas Marina Circuit | United Arab Emirates | 5.281 km | Finale Cup |
+
+Each one has its pit lane and garages beside the real pit lane's stretch, as
+near as room allows, where OpenStreetMap maps it, and on its real side where
+the widened road leaves room (at Shanghai, Barcelona, Monaco, Singapore, the
+Hungaroring, Zandvoort and Interlagos it doesn't, and the lane is across the
+road). Albert Park's pit building goes up each year, and Monza, Suzuka and Las
+Vegas have none mapped, so theirs come from the circuit's shape. Lap lengths
+are the outline data's. Each circuit has its signature corners named on boards
+where OpenStreetMap names them (and never where the name is a sponsor's), its
+own ground, trees or city, sky, colour grade and weather odds, floodlights at
+the night races, and the sea, lakes and skylines it is known for.
+
 
 - Every circuit uses the same scale, so Spa is the longest lap and Monaco the shortest.
 - The game's road is wider, relative to its cars, than a real one. Two things are
   adjusted, locally and only where needed: corners tighter than the road can turn
   are opened out, and stretches that would overlap once widened (Monaco's harbour
   front, parts of Singapore and Interlagos) are nudged apart. The largest shift
-  from the real line is about 45 m, at Monaco; Monza's is 12 m.
+  from the real line is about 50 m, at Baku, and 47 m at Monaco; Monza's is 12 m.
 - Suzuka really crosses itself, so the later pass climbs over the earlier one on
   a bridge. The physics never confuses the two: each car only looks for road
   near where it already is, so it can neither snap across the crossover nor cut
@@ -180,8 +237,11 @@ model is unavailable it falls back to the original pseudo-3D canvas renderer.
   and the engine ringing off its walls. The engine rings under Suzuka's
   crossover too, the crowd swells past every grandstand, and the floodlit
   circuits hum, their towers casting pools of light on the road. Name boards
-  stand at Eau Rouge, Raidillon, the Parabolica (Curva Alboreto), 130R and the
-  Senna S, all placed from OpenStreetMap.
+  stand at Eau Rouge, Raidillon, the Parabolica (Curva Alboreto), 130R, the
+  Senna S, Imola's Tamburello, Tosa, Piratella, Acque Minerali and Rivazza,
+  the Red Bull Ring's Niki Lauda Kurve and Rindt, and Zandvoort's Tarzanbocht,
+  Hugenholtzbocht, Scheivlak and Arie Luyendykbocht, all placed from
+  OpenStreetMap.
 - **Trackside life.** Marshal posts all round the lap wave a yellow flag where
   a car is really spun or stopped (green once it clears), the TV helicopter
   follows the race leader, the crowd bobs and waves, and when the chequered
@@ -191,7 +251,7 @@ model is unavailable it falls back to the original pseudo-3D canvas renderer.
   over kerbs and off the track, with a kerb rumble on the audio.
 - Photographic ground textures from Poly Haven, reflections on the paint,
   real-time shadows, fog, a sky with the sun, 3D smoke and boost glow.
-- **3D showroom** in the pit lane: the selected car on a turntable.
+- **3D showroom** in the pit lane: the selected car on a turntable, in the open space beside the controls at any window size.
 - **Broadcast post-processing** with Arcade bursts
   (docs/superpowers/specs/2026-09-29-postfx-design.md):
   - a grade for each circuit, bloom on real highlights, a vignette, a sun flare
@@ -239,6 +299,7 @@ F1_Pixel_Cup/
 ├── game.js           # Racing, AI, items, audio, camera and the canvas HUD
 ├── game-data.js      # Teams, drivers, difficulties, circuits, cups, power-ups
 ├── career.js         # Career points, rating, best laps and the saved profile
+├── season.js         # The season: standings, countback, its save and resume
 ├── grid.js           # Starting grids and qualifying rules
 ├── powerups.js       # Power-up odds, limits and track-following shots
 ├── item-icons.js     # Power-up icons, shared by the HUD and the site
@@ -353,7 +414,10 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   3D car loads; 2D only when 3D fails) and `postfx-check.js` (graphics tiers, bursts, the
   flare, High keeping Low's exposure, adverts reading forward from both sides) and
   `trackside-check.js` (pit lanes and garages on every circuit, nothing over the track,
-  no print reading backwards, the Safety Car parking at its garage). Expected for each: every result true, errors [].
+  no print reading backwards, the Safety Car parking at its garage, floodlights at the night races)
+  `season-check.js` (a season runs, saves after a race and resumes at the next, and starts
+  over only when asked twice) and `showroom-check.js` (the pit lane's car never under its
+  controls, from 1600x900 down to a phone). Expected for each: every result true, errors [].
   Every check minimises the test tool's own blank tab so only the window under test shows.
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with

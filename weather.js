@@ -12,7 +12,8 @@
     { id: "wet", name: "Wet" },
     { id: "changeable", name: "Changeable" },
   ];
-  // Changeable: the chance each race is wet.
+  // Changeable: the chance each race is wet, where the circuit gives none of
+  // its own (game-data.js CIRCUITS rainChance: how often it really rains there).
   const RAIN_CHANCE = 1 / 3;
   // What a wet road leaves: cornering grip, traction, braking and off-road
   // pace as shares of the dry; how much longer an oil spin lasts; and the
@@ -30,10 +31,12 @@
   }
 
   // The weather of one race of a cup: fixed for Dry and Wet; for Changeable,
-  // seeded by the cup run and the race, so it never rerolls.
-  function raceWeather(mode, seed, raceIndex) {
+  // seeded by the cup run and the race, so it never rerolls, and wet as often
+  // as the circuit is (`chance`, 0 to 1).
+  function raceWeather(mode, seed, raceIndex, chance) {
     if (mode === "wet") return "wet";
-    if (mode === "changeable") return mix(seed, raceIndex) < RAIN_CHANCE ? "wet" : "dry";
+    const odds = Number.isFinite(chance) ? Math.min(1, Math.max(0, chance)) : RAIN_CHANCE;
+    if (mode === "changeable") return mix(seed, raceIndex) < odds ? "wet" : "dry";
     return "dry";
   }
 

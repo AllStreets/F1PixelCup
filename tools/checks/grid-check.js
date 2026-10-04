@@ -24,7 +24,7 @@ async (page) => {
   // One failing step reports its error instead of stopping the whole check.
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
-  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); localStorage.removeItem("f1pixelcup.profile.v2"); localStorage.removeItem("f1pixelcup.driver"); });
+  await step(() => { localStorage.removeItem("f1pixelcup.grid"); localStorage.removeItem("f1pixelcup.profile"); localStorage.removeItem("f1pixelcup.profile.v2"); localStorage.removeItem("f1pixelcup.driver"); localStorage.removeItem("f1pixelcup.cup"); });
   await p.reload();
   await p.waitForTimeout(1800);
   await step(() => {
@@ -429,13 +429,16 @@ async (page) => {
       });
     });
     const race = {};
-    [0, 2].forEach((ti) => {
-      race[TRACKS[ti].id] = [0, 1, 2].map((diff) => {
-        seedRandom(31 + ti);
+    // Monza and Silverstone, by id (the cups' order changes with the calendar).
+    [["monza", 0], ["silverstone", 2]].forEach(([id, seed]) => {
+      const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === id));
+      const ti = CUPS[ci].tracks.findIndex((t) => t.id === id);
+      race[id] = [0, 1, 2].map((diff) => {
+        seedRandom(31 + seed);
         // A race uses the difficulty the cup started with.
         state.difficulty = diff;
         state.cupDifficulty = diff;
-        Game.selectCup(0); state.activeCupIndex = 0; buildCupEntries(); startRace(ti);
+        Game.selectCup(ci); state.activeCupIndex = ci; buildCupEntries(); startRace(ti);
         state.racers.forEach((r) => { r.isPlayer = false; });
         // No player in this race, so no catch-up: this measures the driving alone.
         state.playerId = null;

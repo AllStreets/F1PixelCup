@@ -50,10 +50,12 @@ export function buildMarshalPosts(course, posts, venue) {
   const total = course.track.totalLength;
   (posts || []).forEach((post) => {
     // Moved only back along the lap where the spot is taken, so a post still
-    // watches the whole of its stretch.
-    for (const shift of [0, -30, -60, -90, -120]) {
+    // watches the whole of its stretch; across the road only if both fail.
+    const tries = [];
+    [1, -1].forEach((across) => [0, -30, -60, -90, -120].forEach((shift) => tries.push([shift, across])));
+    for (const [shift, across] of tries) {
       const p = course.sampleAt(((post.d + shift) % total + total) % total);
-      const side = p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1);
+      const side = across * (p.curve > 0.0015 ? -1 : p.curve < -0.0015 ? 1 : (post.index % 2 ? 1 : -1));
       const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
       const x = p.x + p.nx * off;
       const z = p.y + p.ny * off;
@@ -267,9 +269,13 @@ export function buildStarter(course) {
   const side = lane ? -lane.side : -1;
   const total = course.track.totalLength;
   let spot = null;
-  for (const back of [20, 50, 80, 110, 140]) {
+  // Further back, and a little further out, only where the nearer spots are taken.
+  const tries = [];
+  [20, 50, 80, 110, 140].forEach((back) => tries.push([back, 12]));
+  [20, 60, 100, 140, 180, 220].forEach((back) => tries.push([back, 34]));
+  for (const [back, out] of tries) {
     const p = course.sampleAt(total - back);
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + out);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
     if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;

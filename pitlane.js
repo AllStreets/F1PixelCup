@@ -50,9 +50,12 @@
     const { side, entry, exit } = pit;
     const W = halfWidth;
     // Signed distance from the line, in (-total/2, total/2].
+    // (A distance already in that range comes back exactly: the lane's own
+    // entry and exit are in it, never a rounding error outside.)
     const rel = (d) => {
-      let r = ((d % total) + total) % total;
+      let r = d % total;
       if (r > total / 2) r -= total;
+      else if (r <= -total / 2) r += total;
       return r;
     };
     const inZone = (d) => {
@@ -114,7 +117,8 @@
     const W = lane.halfWidth;
     const side = lane.side;
     const r = lane.rel(d);
-    const atEdge = Math.abs(lat - side * (W - EDGE_IN)) <= 2;
+    // On the edge itself, not still closing on it (a jump onto the lane's line).
+    const atEdge = Math.abs(lat - side * (W - EDGE_IN)) <= 0.5;
     const takingEntry = atEdge && r >= lane.entry && r <= lane.entry + TURN_IN;
     if (!entered && !takingEntry) return { lat: side * (W - EDGE_IN), inLane: false, park: false };
     const park = side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2);

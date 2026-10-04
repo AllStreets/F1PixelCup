@@ -12,6 +12,9 @@ vm.runInNewContext(`${source}\nthis.TRACK_SHAPES = TRACK_SHAPES;`, sandbox);
 const SHAPES = JSON.parse(JSON.stringify(sandbox.TRACK_SHAPES));
 // The road's half-width in the game: roadWidth 33 x TRACK_WIDTH_SCALE 1.5.
 const W = 49.5;
+// The street circuits (narrower run-off), as the track builder has them.
+const STREET = new Set(JSON.parse(fs.readFileSync(path.join(root, "tools", "tracks", "build_tracks.py"), "utf8")
+  .match(/^STREET = \{([^}]*)\}/m)[1].replace(/^/, "[").replace(/$/, "]")));
 
 // The lap as the game builds it: segments between the points, closing the loop.
 function lapOf(points) {
@@ -100,12 +103,17 @@ test("the pit wall leaves the mouths open and runs where the lane has cleared it
   assert.equal(lane.outerAt(0), W + Pit.WORK_OUT);
 });
 
+test("the renderer and the track builder agree on the street circuits", () => {
+  const track = fs.readFileSync(path.join(root, "r3d", "track.js"), "utf8").match(/^const STREET = new Set\((\[[^\]]*\])\);/m)[1];
+  assert.deepEqual([...new Set(JSON.parse(track))].sort(), [...STREET].sort());
+  assert.ok(STREET.has("monaco") && STREET.has("jeddah"));
+});
+
 test("every pit complex is clear of every other stretch of the lap, run-off and barrier included", () => {
   // The same rule as build_tracks.py: beyond the other stretch's road edge
   // by its run-off and barrier with room to spare; the street circuits' run-off
   // is narrower. The other stretches are followed every 5, not just at their
   // points.
-  const STREET = new Set(["monaco", "singapore"]);
   Object.entries(SHAPES).forEach(([id, shape]) => {
     const { total, at } = lapOf(shape.points);
     const lane = Pit.lane(shape.pit, total, W);
@@ -161,6 +169,9 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   assert.equal(turn.inLane, true);
   // Still out in the road at the entry: it can't swerve in, so it goes round.
   assert.deepEqual(Pit.wayIn(lane, 6000 - 600 + 5, false, 10), { lat: edge, inLane: false, park: false });
+  // Still closing on the edge (not on it yet): turning in would jump it
+  // sideways onto the lane's line, so it doesn't.
+  assert.equal(Pit.wayIn(lane, 6000 - 600 + 5, false, edge - 1.5).inLane, false);
   assert.ok(Math.abs(turn.lat - lane.latAt(6000 - 595)) < 1e-9);
   // Down the lane, until it eases into the working lane before its bay.
   const before = bay.rel - 150;
@@ -174,4 +185,16 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   // On the left, the same, mirrored.
   const left = Pit.lane({ side: -1, entry: -600, exit: 400 }, 6000, W);
   assert.equal(Pit.wayIn(left, 3000, false, 0).lat, -edge);
+});
+
+test("the lane's own ends are in it exactly, whatever the lap's length", () => {
+  // A lap of a fractional length: (440 + total) - total is not 440 in floats.
+  const total = 7962.291717719002;
+  const lane = Pit.lane({ side: 1, entry: -660, exit: 440 }, total, W);
+  assert.equal(lane.rel(440), 440);
+  assert.equal(lane.rel(-660), -660);
+  assert.ok(lane.inZone(440) && lane.inZone(-660) && lane.inZone(total - 660));
+  assert.notEqual(lane.outerAt(440), null);
+  assert.equal(lane.rel(total - 10), -10);
+  assert.equal(lane.inZone(450), false);
 });

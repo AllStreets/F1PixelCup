@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>F1 Pixel Cup: race the real circuits in your browser</title>
-  <meta name="description" content="All 20 drivers of the 2025 season on eight real circuits, in 3D, in your browser, with TV-camera replays, a 3D podium and two-player split screen.">
+  <meta name="description" content="All 20 drivers and all 24 circuits of the 2025 season, in 3D, in your browser, with TV-camera replays, a 3D podium and two-player split screen.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231b1620'/%3E%3Crect x='4' y='5' width='24' height='8' rx='2' fill='%23dc0000'/%3E%3Crect x='4' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='12' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='20' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='8' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='16' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='24' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,9 +38,9 @@
         <div class="tower-row"><b>4</b><i style="background:#1e41b2"></i><span>VER</span><em>+1.6</em></div>
       </div>
       <div class="hero-copy">
-        <p class="kicker">2025 season · 8 real circuits</p>
+        <p class="kicker">2025 season · all 24 circuits</p>
         <h1 class="it-title hero-title">Lights out.<br>Your race.</h1>
-        <p class="hero-lead">All 20 drivers, eight real circuits and a career that remembers every lap. In 3D, in your browser.</p>
+        <p class="hero-lead">All 20 drivers, all 24 circuits of the calendar and a career that remembers every lap. In 3D, in your browser.</p>
         <a class="go-btn play-link" href="./play.html"><span>Play now ›</span></a>
         <p class="hero-features"><a class="chip" href="#replays">TV replays</a><a class="chip" href="#podium">3D podium</a><a class="chip" href="#two-player">Two players</a></p>
       </div>
@@ -48,9 +48,9 @@
 
     <section id="circuits" class="section">
       <p class="kicker">The calendar</p>
-      <h2 class="it-title section-title">Eight real circuits</h2>
-      <p class="section-lead muted">Every track is traced from the real layout, from Monza's straights to Suzuka's figure of eight.</p>
-      <div id="circuit-list" class="circuit-list"></div>
+      <h2 class="it-title section-title">All 24 circuits of 2025</h2>
+      <p class="section-lead muted">Every track is traced from the real layout, from Monza's straights to Suzuka's figure of eight. Race them as six 4-race cups in calendar order, or all 24 as a season with drivers' and constructors' standings.</p>
+      <div id="circuit-list" class="calendar"></div>
     </section>
 
     <section id="race-day" class="section race-day">
@@ -186,6 +186,7 @@
   <script src="./twoplayer.js"></script>
   <script src="./item-icons.js"></script>
   <script src="./trackmap.js"></script>
+  <script src="./venue.js"></script>
   <script src="./device.js"></script>
   <script src="./career.js"></script>
   <script src="./landing.js"></script>

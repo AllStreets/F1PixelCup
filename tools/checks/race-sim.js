@@ -21,7 +21,8 @@ async (page) => {
   await p.waitForTimeout(800);
   const results = await p.evaluate(() => {
     const out = [];
-    const all = CUPS.flatMap((cup, ci) => cup.tracks.map((t, ti) => [ci, ti]));
+    // Every circuit once (the season races them all again).
+    const all = CUPS.flatMap((cup, ci) => (cup.season ? [] : cup.tracks.map((t, ti) => [ci, ti])));
     for (const [ci, ti] of all) {
       state.selectedCup = ci;
       state.activeCupIndex = ci;
@@ -45,6 +46,7 @@ async (page) => {
         finished: state.racers.filter((r) => r.finished).length,
         laps: [Math.min(...laps), Math.max(...laps)],
         fastestLap: best.length ? (best[0] / 1000).toFixed(1) : null,
+        medianLap: best.length ? (best[Math.floor(best.length / 2)] / 1000).toFixed(1) : null,
       });
     }
     return out;

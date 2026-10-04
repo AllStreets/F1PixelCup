@@ -62,6 +62,153 @@ export const VENUES = {
     hills: { tint: "#56804c", count: 16, height: [160, 320] },
     extras: ["lake", "skyline", "favela"],
   },
+  // The 2025 calendar's other circuits (docs/superpowers/specs/2026-10-01-calendar-design.md).
+  // `landmarks` names what Stage J builds there; nothing here draws it yet.
+  albertpark: {
+    // Parkland round Albert Park Lake, Melbourne's towers to the north.
+    ground: "grass", groundTint: "#7fae62", standColor: "#1d5fa8",
+    trees: [{ kind: "broadleaf", count: 900, tint: "#4f7d45" }, { kind: "broadleaf", count: 260, tint: "#5d8a4a", near: 80, seed: 5 }, { kind: "palm", count: 40, tint: "#56803e", near: 50, seed: 9 }],
+    lake: { tint: "#3d7fa6", count: 140 },
+    skyline: { arc: [Math.PI * 1.2, Math.PI * 1.8], count: 90, height: [110, 340] },
+    extras: ["infieldLake", "skylineArc"],
+    landmarks: ["melbourneSkyline"],
+  },
+  shanghai: {
+    // Flat ground in Jiading, a hazy afternoon, the city far to the south-east.
+    ground: "grass", groundTint: "#88a86c", standColor: "#c8102e", runoffTint: "#bdb8ae",
+    trees: [{ kind: "broadleaf", count: 520, tint: "#4a7244" }, { kind: "broadleaf", count: 200, tint: "#557a48", near: 70, seed: 4 }],
+    skyline: { arc: [Math.PI * 0.05, Math.PI * 0.5], count: 70, height: [90, 300] },
+    extras: ["skylineArc"],
+    fogNear: 900, fogFar: 3800,
+    landmarks: ["shanghaiGrandstand"],
+  },
+  jeddah: {
+    // At night on the Corniche: the Red Sea to the west, the city to the east.
+    ground: "city", night: true, standColor: "#00843d", runoffTint: "#9a968e",
+    trees: [{ kind: "palm", count: 240, tint: "#4e7a3a", near: 70 }],
+    coast: { bearing: Math.PI, tint: "#14506e" },
+    skyline: { arc: [-Math.PI * 0.35, Math.PI * 0.35], count: 90, height: [70, 280] },
+    extras: ["coast", "skylineArc", "floodlights"],
+    landmarks: ["kingFahdFountain"],
+  },
+  miami: {
+    // Round the stadium on Miami Gardens' flat lawns: palms, sun, and water
+    // in the infield (the real marina is a painted set by turns 6 to 8).
+    ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", runoffTint: "#aaa69c",
+    trees: [{ kind: "palm", count: 360, tint: "#4f8a3c", near: 90 }, { kind: "broadleaf", count: 160, tint: "#3f7a3a", near: 260, seed: 6 }],
+    lake: { tint: "#38c2cc", count: 5 },
+    extras: ["infieldLake"],
+    landmarks: ["miamiStadium"],
+  },
+  imola: {
+    // Parkland under the Apennine foothills, trees to the barriers.
+    ground: "grass", groundTint: "#78a25a", standColor: "#d40000",
+    trees: [{ kind: "broadleaf", count: 1500, tint: "#3c6e34" }, { kind: "conifer", count: 320, tint: "#2f5a30", near: 70, seed: 3 }],
+    hills: { tint: "#5d8551", count: 18, height: [180, 380] },
+    extras: [],
+    landmarks: ["sennaMonument"],
+  },
+  barcelona: {
+    // Dry Catalan hills round Montmeló, umbrella pines and scrub.
+    ground: "grass", groundTint: "#a7aa66", standColor: "#c60b1e", runoffTint: "#c2b49a", gravelTint: "#d9c9a3",
+    trees: [{ kind: "conifer", count: 700, tint: "#4a6a3a" }, { kind: "broadleaf", count: 260, tint: "#6a8048", near: 120, seed: 2 }],
+    hills: { tint: "#8f9a62", count: 16, height: [160, 360] },
+    extras: [],
+    landmarks: ["montmeloHills"],
+  },
+  montreal: {
+    // An island in the St Lawrence: the river to the east, the rowing basin
+    // to the west, the city across the water to the north-west.
+    ground: "grass", groundTint: "#7cab5e", standColor: "#d52b1e",
+    trees: [{ kind: "broadleaf", count: 520, tint: "#3f7a3a", near: 140 }, { kind: "conifer", count: 120, tint: "#2f5a34", near: 100, seed: 8 }],
+    coast: [{ bearing: 0, tint: "#2c6688", sand: "#a3a892" }, { bearing: Math.PI, tint: "#3a7896", sand: "#a3a892" }],
+    skyline: { arc: [Math.PI * 1.2, Math.PI * 1.55], count: 70, height: [90, 300] },
+    extras: ["coast", "skylineArc"],
+    landmarks: ["biosphere"],
+  },
+  redbullring: {
+    // High in the Styrian hills: steep green slopes and pine forest.
+    ground: "grass", groundTint: "#73ac52", standColor: "#2e5fa8",
+    trees: [{ kind: "conifer", count: 1300, tint: "#2a4f2e" }, { kind: "broadleaf", count: 260, tint: "#3f6e36", near: 120, seed: 4 }],
+    hills: { tint: "#4f7a48", count: 22, height: [320, 720] },
+    fogNear: 900, fogFar: 4400,
+    extras: [],
+    landmarks: ["hillsideStands"],
+  },
+  hungaroring: {
+    // A bowl in the dry hills east of Budapest: the crowd watches from the slopes.
+    ground: "grass", groundTint: "#9cad62", standColor: "#cd2a3e", runoffTint: "#c4b89c",
+    trees: [{ kind: "broadleaf", count: 900, tint: "#4d7a3c" }, { kind: "broadleaf", count: 200, tint: "#5a8444", near: 110, seed: 6 }],
+    hills: { tint: "#859c5c", count: 18, height: [120, 260] },
+    extras: [],
+    landmarks: ["valleyStands"],
+  },
+  zandvoort: {
+    // In the dunes by the North Sea, the beach just to the west.
+    ground: "grass", groundTint: "#aab37c", standColor: "#ff6a00", runoffTint: "#d2c6a2", gravelTint: "#e2d4ae",
+    trees: [{ kind: "conifer", count: 220, tint: "#4d6a45", near: 160 }],
+    hills: { tint: "#c4bd88", count: 40, height: [45, 110] },
+    coast: { bearing: Math.PI, tint: "#4b7489", sand: "#e4d6ad" },
+    extras: ["coast"],
+    landmarks: ["dunes"],
+  },
+  baku: {
+    // Through the old city and along the Caspian boulevard: stone, sea,
+    // towers on the hill.
+    ground: "city", standColor: "#00b5e2", runoffTint: "#b3a98f",
+    trees: [{ kind: "palm", count: 90, tint: "#56803e", near: 50 }, { kind: "broadleaf", count: 140, tint: "#4a7340", near: 60, seed: 3 }],
+    coast: { bearing: Math.PI * 0.38, tint: "#2f6d8c", sand: "#c8bfa4" },
+    skyline: { arc: [Math.PI * 0.9, Math.PI * 1.45], count: 110, height: [70, 260] },
+    extras: ["coast", "bakuCity", "skylineArc"],
+    landmarks: ["flameTowers", "oldCityWalls", "maidenTower"],
+  },
+  cota: {
+    // Texas hill country outside Austin: dry grass, live oaks, big skies.
+    ground: "grass", groundTint: "#a9a964", standColor: "#bf0a30", runoffTint: "#c4b394",
+    trees: [{ kind: "broadleaf", count: 700, tint: "#566f3a" }, { kind: "broadleaf", count: 160, tint: "#61783f", near: 140, seed: 5 }],
+    hills: { tint: "#9a9a62", count: 14, height: [90, 200], flat: true },
+    skyline: { arc: [Math.PI * 1.15, Math.PI * 1.4], count: 40, height: [80, 260] },
+    extras: ["skylineArc"],
+    landmarks: ["observationTower"],
+  },
+  mexico: {
+    // A sports park in the middle of the city: towers all round, the stadium
+    // the last corners run through.
+    ground: "grass", groundTint: "#8dab5c", standColor: "#006847", runoffTint: "#bdb39a",
+    trees: [{ kind: "broadleaf", count: 600, tint: "#4a7a3c" }, { kind: "palm", count: 60, tint: "#58803e", near: 90, seed: 7 }],
+    skyline: { arc: [0, Math.PI * 2], count: 150, height: [50, 210] },
+    extras: ["skylineArc"],
+    landmarks: ["foroSol"],
+  },
+  lasvegas: {
+    // Saturday night on the Strip: the resorts lit up along the west side,
+    // the city's towers all round.
+    ground: "city", night: true, standColor: "#7a3cff", runoffTint: "#8c8896",
+    trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
+    skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] },
+    extras: ["vegasStrip", "skylineArc", "floodlights"],
+    landmarks: ["sphere", "stripResorts"],
+  },
+  losail: {
+    // Under the lights in the desert north of Doha, Lusail's towers to the south.
+    ground: "sand", night: true, standColor: "#8a1538", runoffTint: "#a89a80", gravelTint: "#c8b48a",
+    trees: [{ kind: "palm", count: 110, tint: "#4e7234", near: 80 }],
+    hills: { tint: "#a08a64", count: 14, height: [30, 80], flat: true },
+    skyline: { arc: [Math.PI * 0.3, Math.PI * 0.7], count: 70, height: [80, 300] },
+    extras: ["skylineArc", "floodlights"],
+    landmarks: ["litGrandstand"],
+  },
+  yasmarina: {
+    // Night at the marina on Yas Island: water and yachts beside the track,
+    // the open water to the west.
+    ground: "city", night: true, standColor: "#00732f", runoffTint: "#8f8a80",
+    trees: [{ kind: "palm", count: 220, tint: "#4e7a3a", near: 70 }],
+    lake: { tint: "#123a5a", count: 40 },
+    coast: { bearing: Math.PI * 0.85, tint: "#0f3352", sand: "#a89c80" },
+    skyline: { arc: [Math.PI * 1.6, Math.PI * 2.1], count: 60, height: [70, 220] },
+    extras: ["infieldLake", "lakeYachts", "coast", "skylineArc", "floodlights"],
+    landmarks: ["yasHotel"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -81,6 +228,11 @@ function addMesh(group, geo, mat, x, y, z, { cast = true, receive = true } = {})
 
 export function waterMaterial(tint = "#2a6f96") {
   return new THREE.MeshPhongMaterial({ color: color(tint), specular: 0x9fc4dd, shininess: 90 });
+}
+
+// Whether any of a round footprint lies in the sea (coastline).
+function wet(course, x, z, radius) {
+  return (course.seas || []).some((sea) => x * sea.ux + z * sea.uz + radius > sea.shore);
 }
 
 // Slide a big round thing (a hill, a tower, a bay) straight away from the
@@ -199,17 +351,22 @@ function cornerBoards(course, group, venue) {
     // The outside of the bend first (curve > 0 turns toward +n, so the
     // outside is -n), then the inside, along the corner.
     const tries = [];
-    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift])));
-    for (const [which, shift] of tries) {
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 1])));
+    // Then further back from the barrier, and then a smaller board (a
+    // hairpin with a grandstand round its outside: Zandvoort's Hugenholtz),
+    // where those are all taken.
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 44, 1])));
+    [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 0.6])));
+    for (const [which, shift, back, size] of tries) {
       const p = course.sampleAt(((c.d + shift) % total + total) % total);
       const bend = course.sampleAt(c.d);
       const side = (bend.curve > 0 ? -1 : 1) * which;
-      const off = side * ((side > 0 ? p.outerR : p.outerL) + 14);
+      const off = side * ((side > 0 ? p.outerR : p.outerL) + back);
       const x = p.x + p.nx * off;
       const z = p.y + p.ny * off;
       const angle = Math.atan2(p.ty, p.tx);
-      if (!footprintClear(course, x, z, angle, 38, 4, 6) || course.occupied.blocked(x, z, 38)) continue;
-      course.occupied.add(x, z, 38);
+      if (!footprintClear(course, x, z, angle, 38 * size, 4, 6) || course.occupied.blocked(x, z, 38 * size)) continue;
+      course.occupied.add(x, z, 38 * size);
       const g = new THREE.Group();
       g.name = `corner:${c.board}`;
       const tex = canvasTexture(1024, 256, (cx, w, h) => {
@@ -221,7 +378,7 @@ function cornerBoards(course, group, venue) {
         cx.textAlign = "center";
         cx.textBaseline = "middle";
         cx.font = `900 italic ${c.aka ? 104 : 124}px Trebuchet MS, sans-serif`;
-        cx.fillText(c.board, w / 2, c.aka ? 96 : 118);
+        cx.fillText(c.board, w / 2, c.aka ? 96 : 118, w - 48);
         if (c.aka) {
           cx.font = "700 58px Trebuchet MS, sans-serif";
           cx.fillStyle = "#c9ced6";
@@ -235,6 +392,7 @@ function cornerBoards(course, group, venue) {
       addMesh(g, new THREE.BoxGeometry(74, 20, 1), std(0x2a2d34), 0, 20, 0);
       [-30, 30].forEach((u) => addMesh(g, new THREE.BoxGeometry(2, 12, 2), std(0x2a2d34), u, 5, 0));
       g.position.set(x, p.h, z);
+      g.scale.setScalar(size);
       // The board's face (+z) toward the road.
       g.rotation.y = Math.atan2(p.x - x, p.y - z);
       g.userData.corner = { board: c.board, d: c.d };
@@ -262,7 +420,7 @@ function hills(course, group, { tint, count, height, flat }, rand) {
     hill.scale.set(w, h, depth);
     // The icosahedron's footprint is at most its larger horizontal radius.
     const spot = pushClear(course, cx + Math.cos(a) * rx * d, cz + Math.sin(a) * rz * d, Math.max(w, depth));
-    if (!spot) continue;
+    if (!spot || wet(course, spot.x, spot.z, Math.max(w, depth))) continue;
     hill.position.set(spot.x, -h * 0.15, spot.z);
     hill.rotation.y = rand() * Math.PI;
     hill.receiveShadow = true;
@@ -375,7 +533,7 @@ function skyline(course, group, rand, { night, count = 90, arc = [0, Math.PI * 2
     const h = height[0] + rand() * (height[1] - height[0]);
     const depth = w * (0.6 + rand() * 0.8);
     const spot = pushClear(course, b.cx + Math.cos(a) * rx * d, b.cz + Math.sin(a) * rz * d, Math.hypot(w, depth) / 2, 60);
-    if (!spot) continue;
+    if (!spot || wet(course, spot.x, spot.z, Math.hypot(w, depth) / 2)) continue;
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
     m.compose(new THREE.Vector3(spot.x, h / 2, spot.z), q, new THREE.Vector3(w, h, depth));
     mesh.setMatrixAt(placed, m);
@@ -410,29 +568,88 @@ function floodlights(course, group, venue) {
   const poolMat = new THREE.MeshBasicMaterial({ map: lightPoolTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: venue.night ? 0.32 : 0.14, toneMapped: false });
   const every = 26;
   const { samples } = course;
+  const parts = { poles: [], heads: [], pools: [] };
+  let open = 0;
   for (let i = 0; i < samples.length; i += every) {
     const p = samples[i];
     const side = (i / every) % 2 ? 1 : -1;
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + 9);
+    // Past the barrier (it stands 2 beyond the run-off's edge) by 10.
+    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
-    if (course.occupied.blocked(x, z, 3) || course.clearance(x, z) < 8) continue;
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.3, 70, 6), poleMat);
-    pole.position.set(x, p.h + 35, z);
-    group.add(pole);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(10, 3, 4), headMat);
+    // (No room at all where two stretches share their run-off.)
+    if (course.clearance(x, z) < 8) continue;
+    open += 1;
+    if (course.occupied.blocked(x, z, 3)) continue;
+    course.occupied.add(x, z, 4);
+    parts.poles.push(new THREE.CylinderGeometry(0.9, 1.3, 70, 6).translate(x, p.h + 35, z));
     // Lamp head sits behind the pole, never out over the run-off.
-    head.position.set(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3);
-    head.rotation.y = -Math.atan2(p.ty, p.tx);
-    group.add(head);
+    parts.heads.push(new THREE.BoxGeometry(10, 3, 4).rotateY(-Math.atan2(p.ty, p.tx)).translate(x + p.nx * side * 3, p.h + 70, z + p.ny * side * 3));
     // Its light falls across the near half of the road.
-    const pool = new THREE.Mesh(new THREE.PlaneGeometry(110, 110), poolMat);
     const reach = side * course.width * 0.35;
-    pool.rotation.x = -Math.PI / 2;
-    pool.position.set(p.x + p.nx * reach, p.h + 0.3, p.y + p.ny * reach);
-    pool.userData.ground = true;
-    pool.renderOrder = 1;
-    group.add(pool);
+    parts.pools.push(new THREE.PlaneGeometry(110, 110).rotateX(-Math.PI / 2).translate(p.x + p.nx * reach, p.h + 0.3, p.y + p.ny * reach));
+  }
+  if (!parts.poles.length) return;
+  // One mesh each for the poles, the lamps and the pools of light.
+  const poles = new THREE.Mesh(mergeGeometries(parts.poles), poleMat);
+  poles.name = "floodlights";
+  poles.userData.count = parts.poles.length;
+  // Out of how many spots with room by the barrier (for the checks: few
+  // taken by anything else).
+  poles.userData.spots = open;
+  poles.castShadow = true;
+  const heads = new THREE.Mesh(mergeGeometries(parts.heads), headMat);
+  const pools = new THREE.Mesh(mergeGeometries(parts.pools), poolMat);
+  pools.userData.ground = true;
+  pools.renderOrder = 1;
+  group.add(poles, heads, pools);
+}
+
+// The sea along one side of the circuit, toward `bearing` (0 east, PI/2
+// south): everything past the circuit's furthest reach that way, with a beach
+// in front of it. Nothing grows in it.
+function coastline(course, group, { bearing, tint = "#2a6f96", sand = "#cdbb94" }) {
+  const ux = Math.cos(bearing);
+  const uz = Math.sin(bearing);
+  // The furthest the circuit reaches that way: its barriers, the pit
+  // complex out to the back of the garages, and the track data's grandstands,
+  // billboards and towers (they stand on land).
+  let far = -Infinity;
+  course.samples.forEach((p) => {
+    far = Math.max(far, p.x * ux + p.y * uz + Math.max(p.outerL, p.outerR) + 60);
+  });
+  (course.track.decor || []).forEach((d) => {
+    far = Math.max(far, d.x * ux + d.y * uz + 90);
+  });
+  const shore = far + 40;
+  // Remembered, so the hills and the skyline stay on land (wet).
+  (course.seas = course.seas || []).push({ ux, uz, shore });
+  const size = 40000;
+  const b = course.bounds;
+  const along = b.cx * ux + b.cz * uz;
+  const at = (dist) => [b.cx + ux * (dist - along), b.cz + uz * (dist - along)];
+  const [wx, wz] = at(shore + size / 2);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2).rotateY(-bearing), waterMaterial(tint));
+  sea.position.set(wx, 0.08, wz);
+  sea.userData.ground = true;
+  sea.name = "sea";
+  group.add(sea);
+  const [sx, sz] = at(shore - 20);
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(60, size).rotateX(-Math.PI / 2).rotateY(-bearing), new THREE.MeshStandardMaterial({ color: color(sand), roughness: 1 }));
+  beach.position.set(sx, 0.05, sz);
+  beach.receiveShadow = true;
+  beach.userData.ground = true;
+  group.add(beach);
+  // Keep the trees and everything after out of the water: discs over the
+  // sea as far as anything is ever placed (the trees' pad round the circuit).
+  const reach = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) + 1600;
+  // (Circles of 90 from 50 out: the claim starts at the beach, never inside
+  // the barriers, where the floodlights and marshal posts stand.)
+  for (let d = shore + 50; d < shore + 1400; d += 120) {
+    for (let t = -reach; t <= reach; t += 120) {
+      const [x, z] = at(d);
+      course.occupied.add(x - uz * t, z + ux * t, 90);
+    }
   }
 }
 
@@ -666,6 +883,110 @@ const EXTRAS = {
     mesh.count = placed;
     mesh.castShadow = true;
     group.add(mesh);
+  },
+
+  // Baku's old city and boulevard: low stone-coloured blocks close along the
+  // walls.
+  bakuCity(course, group, venue, rand) {
+    streetBlocks(course, group, rand, {
+      rows: 2, height: [18, 52], depth: [30, 56], width: [26, 52], maxCount: 520, spacing: 7, setback: 8,
+      palette: ["#d9c9a6", "#cdb995", "#e3d6b8", "#bfae8a", "#d4c3a0", "#c9b48c"],
+      night: false, glass: "#5d7486",
+    });
+  },
+
+  // The Strip: tall resorts, lit, close along the circuit.
+  vegasStrip(course, group, venue, rand) {
+    streetBlocks(course, group, rand, {
+      rows: 2, height: [60, 200], depth: [40, 80], width: [40, 80], maxCount: 360, spacing: 10, setback: 14,
+      palette: ["#d8c79a", "#c9a46a", "#e6dccb", "#9fb3c8", "#c48a9a", "#b9a2d6", "#f0e0b0"],
+      night: true, glass: "#2a2440", lit: 0.7,
+    });
+  },
+
+  // Moored yachts on the infield's water (Yas Marina's harbour).
+  lakeYachts(course, group, venue, rand) {
+    const water = course.lakes || [];
+    if (!water.length) return;
+    const count = 40;
+    const hulls = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff, { roughness: 0.3, emissive: venue.night ? 0x222222 : 0x000000 }), count);
+    const cabins = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0x2a3a4a, { roughness: 0.2, metalness: 0.4, emissive: venue.night ? 0x664422 : 0x000000 }), count);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const placed = [];
+    for (let t = 0; t < 2000 && placed.length < count; t += 1) {
+      const disc = water[Math.floor(rand() * water.length)];
+      const a = rand() * Math.PI * 2;
+      const r = Math.sqrt(rand()) * (disc.r - 30);
+      const x = disc.x + Math.cos(a) * r;
+      const z = disc.z + Math.sin(a) * r;
+      const len = 18 + rand() * 26;
+      // Clear of the barriers and of each other, by their lengths.
+      if (course.clearance(x, z, 120) < 45 || placed.some((p) => Math.hypot(p.x - x, p.z - z) < (p.len + len) / 2 + 6)) continue;
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rand() * Math.PI);
+      m.compose(new THREE.Vector3(x, 2.2, z), q, new THREE.Vector3(len, 4.5, len * 0.28));
+      hulls.setMatrixAt(placed.length, m);
+      m.compose(new THREE.Vector3(x, 6, z), q, new THREE.Vector3(len * 0.5, 3.5, len * 0.2));
+      cabins.setMatrixAt(placed.length, m);
+      placed.push({ x, z, len });
+    }
+    hulls.count = cabins.count = placed.length;
+    hulls.castShadow = true;
+    group.add(hulls, cabins);
+  },
+
+  // A lake filling the circuit's infield (Albert Park): overlapping discs,
+  // the largest that fit first, each clear of the barriers, so the water
+  // takes the infield's shape.
+  infieldLake(course, group, venue, rand) {
+    const { tint = "#3a789e", count = 40 } = venue.lake || {};
+    const ring = course.samples;
+    const inside = (x, z) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+        const a = ring[i];
+        const b = ring[j];
+        if ((a.y > z) !== (b.y > z) && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const b = course.bounds;
+    const parts = [];
+    for (const r of [320, 260, 210, 170, 130, 100, 75]) {
+      for (let t = 0; t < 900 && parts.length < count; t += 1) {
+        const x = b.minX + rand() * (b.maxX - b.minX);
+        const z = b.minZ + rand() * (b.maxZ - b.minZ);
+        if (!inside(x, z) || course.clearance(x, z, r + 120) < r + 45) continue;
+        // Join the water already there where it can (one lake, not puddles).
+        if (parts.length && !parts.some((q) => Math.hypot(q.x - x, q.z - z) < (q.r + r) * 0.9)) continue;
+        // Round the stands and towers already standing in the infield.
+        if (course.occupied.blocked(x, z, r + 8)) continue;
+        parts.push({ x, z, r });
+      }
+    }
+    if (!parts.length) return;
+    const discs = parts.map((q) => new THREE.CircleGeometry(q.r, 40).rotateX(-Math.PI / 2).translate(q.x, 0.1, q.z));
+    const lake = new THREE.Mesh(mergeGeometries(discs), waterMaterial(tint));
+    lake.userData.ground = true;
+    lake.name = "lake";
+    group.add(lake);
+    // Nothing else stands in the water. (Claimed once all the discs are
+    // placed: they overlap each other.) The boats know where it is.
+    parts.forEach((q) => course.occupied.add(q.x, q.z, q.r));
+    course.lakes = parts;
+  },
+
+  // The sea (venue.coast: coastline's settings), on one side or several (an
+  // island: Montréal).
+  coast(course, group, venue) {
+    [].concat(venue.coast).forEach((shore) => coastline(course, group, shore));
+  },
+
+  // Towers on the horizon in one direction only (the venue's skyline: an arc
+  // of bearings, 0 east, PI/2 south).
+  skylineArc(course, group, venue, rand) {
+    const { arc, count, height } = venue.skyline;
+    skyline(course, group, rand, { night: Boolean(venue.night), count, arc, height });
   },
 };
 

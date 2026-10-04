@@ -7,6 +7,7 @@ traced from satellite imagery. Download it next to this script first:
       https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson
     python3 tools/tracks/build_tracks.py            # writes tracks-data.js
     python3 tools/tracks/build_tracks.py --plot DIR # also writes overlay PNGs
+    python3 tools/tracks/build_tracks.py --only a,b # rebuilds only those, keeps the rest
 
 Every circuit gets the same scale, so Spa stays the longest and Monaco the
 shortest. The game's road is wider than a real one relative to its cars, so
@@ -35,6 +36,22 @@ MARGIN = 420           # clear space around the circuit inside the world box
 
 # Game id -> dataset id, and whether the dataset runs the wrong way round.
 CIRCUITS = {
+    "albertpark": ("au-1953", False),
+    "shanghai": ("cn-2004", False),
+    "jeddah": ("sa-2021", False),
+    "miami": ("us-2022", False),
+    "imola": ("it-1953", False),
+    "barcelona": ("es-1991", False),
+    "montreal": ("ca-1978", False),
+    "redbullring": ("at-1969", False),
+    "hungaroring": ("hu-1986", False),
+    "zandvoort": ("nl-1948", False),
+    "baku": ("az-2016", False),
+    "cota": ("us-2012", False),
+    "mexico": ("mx-1962", False),
+    "lasvegas": ("us-2023", False),
+    "losail": ("qa-2004", False),
+    "yasmarina": ("ae-2009", False),
     "monza": ("it-1922", False),
     "spa": ("be-1925", False),
     "silverstone": ("gb-1948", False),
@@ -73,7 +90,7 @@ def nearest_index(pts, point, among=None):
     return min(among if among is not None else range(len(pts)), key=lambda i: math.dist(pts[i], point))
 
 
-def true_span(fine, points):
+def true_span(fine, points, length=None):
     """A real feature beside the lap (points along it, from OpenStreetMap),
     on the true outline: the indices where it leaves and rejoins the lap (its
     two ends join the track), in racing order, and which side of the road it
@@ -85,6 +102,22 @@ def true_span(fine, points):
     # Real features are short against the lap: racing order is the short way.
     if (j - i) % n > n // 2:
         i, j = j, i
+    if length:
+        # A pit lane runs beside its stretch, and a corner is its stretch, so
+        # the stretch is about as long as the feature. Where it is far out (an
+        # end nearer another stretch passing close by: Shanghai's back
+        # straight beside the pit entry, the far side of Zandvoort's
+        # Hugenholtz hairpin), the ends are the points near them whose stretch
+        # matches best.
+        run, total = arc_lengths(fine)
+        span = lambda a, b: min((run[b] - run[a]) % total, (run[a] - run[b]) % total)
+        if abs(span(i, j) - length) > 0.4 * length:
+            def near(q):
+                closest = math.dist(fine[nearest_index(fine, q)], q)
+                return [k for k in range(n) if math.dist(fine[k], q) < closest + 80]
+            i, j = min(((a, b) for a in near(points[0]) for b in near(points[-1])), key=lambda ab: abs(span(*ab) - length))
+            if (j - i) % n > n // 2:
+                i, j = j, i
     stretch = [(i + k) % n for k in range((j - i) % n + 1)]
     votes = 0
     for q in points[1:-1]:
@@ -290,7 +323,7 @@ PIT_BAYS = 11
 # street circuits, a barrier at +1) with room to spare.
 PIT_CLEAR = 46
 PIT_CLEAR_STREET = 22
-STREET = {"monaco", "singapore"}
+STREET = {"monaco", "singapore", "jeddah", "miami", "baku", "lasvegas"}
 
 
 class Lap:
@@ -400,6 +433,11 @@ def place_pit_lane(pts, bridges, report, real=None, street=False):
                         break
                     exit_ = rs[k]
                     if exit_ - entry < need or exit_ - entry > 1100:
+                        continue
+                    # A pit lane runs past the line, its garages facing the
+                    # grid: where the real side can't reach the line
+                    # (Shanghai's snail crowds it), the other side does.
+                    if not entry < 0 <= exit_:
                         continue
                     # The garages: eleven bays along the flat part, on slots
                     # with room, nearest its middle (one run where it can be,
@@ -574,8 +612,20 @@ def main():
     data = json.load(open(src))
     by_id = {f["properties"]["id"]: f for f in data["features"]}
     plot_dir = sys.argv[sys.argv.index("--plot") + 1] if "--plot" in sys.argv else None
+    only = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
+    kept = {}
+    if only:
+        # The circuits not rebuilt stay exactly as they are.
+        unknown = [g for g in only if g not in CIRCUITS]
+        assert not unknown, f"unknown circuits: {unknown}"
+        text = open(os.path.join(ROOT, "tracks-data.js")).read()
+        kept = json.loads(text[text.index("const TRACK_SHAPES = ") + len("const TRACK_SHAPES = "):text.rindex(";")])
     out = {}
     for game_id, (src_id, reverse) in CIRCUITS.items():
+        if only and game_id not in only:
+            assert game_id in kept, f"{game_id} has never been built: build it with --only"
+            out[game_id] = kept[game_id]
+            continue
         feat = by_id[src_id]
         coords = feat["geometry"]["coordinates"]
         raw = project(coords)
@@ -625,7 +675,7 @@ def main():
             assert best not in (window[0], window[-1]), f"{game_id}: a real feature maps to the edge of its window"
             assert math.dist(relaxed[best], fine[j]) < 160, f"{game_id}: a real feature maps {math.dist(relaxed[best], fine[j]):.0f} away"
             return best
-        pit_span = true_span(fine, real_pit) if real_pit else None
+        pit_span = true_span(fine, real_pit, osm_pit["metres"] * SCALE) if real_pit else None
         tunnel_span = true_span(fine, real_tunnel) if real_tunnel else None
         relaxed_run, relaxed_total = arc_lengths(relaxed)
         if game_id in OSM["lineAtPitMiddle"]:
@@ -688,10 +738,21 @@ def main():
         corners = []
         for c in OSM["corners"].get(game_id, []):
             pts_c = to_scaled(c["points"])
-            i, j, _ = true_span(fine, pts_c)
+            # (A hairpin's ends lie close together: its length tells them apart.)
+            i, j, _ = true_span(fine, pts_c, c["metres"] * SCALE)
             # The middle, on the corner's own stretch.
             mid = nearest_index(fine, pts_c[2], [(i + k) % len(fine) for k in range((j - i) % len(fine) + 1)])
-            corners.append({"board": c["board"], "aka": c["aka"], "d": round(to_lap(mid), 1), "from": round(to_lap(i), 1), "to": round(to_lap(j), 1)})
+            d, lo, hi = to_lap(mid), to_lap(i), to_lap(j)
+            # Where the relaxation opened a hairpin out, both its ends land
+            # near its middle on the relaxed lap: then it keeps its real length
+            # (in the lap's units), either side of the middle in proportion.
+            want = c["metres"] * SCALE
+            span = lambda a, b: (b - a) % lap_len
+            if abs(span(lo, hi) - want) > 0.35 * want:
+                fine_run_c, fine_total_c = arc_lengths(fine)
+                before = (fine_run_c[mid] - fine_run_c[i]) % fine_total_c / ((fine_run_c[j] - fine_run_c[i]) % fine_total_c or 1)
+                lo, hi = (d - want * before) % lap_len, (d + want * (1 - before)) % lap_len
+            corners.append({"board": c["board"], "aka": c["aka"], "d": round(d, 1), "from": round(lo, 1), "to": round(hi, 1)})
         if corners:
             report["corners"] = ", ".join(f"{c['board']} {c['d']}" for c in corners)
         tunnel = None
