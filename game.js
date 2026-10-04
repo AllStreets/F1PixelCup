@@ -122,6 +122,10 @@ function prepareCircuit() {
   if (ready.ok && ready.value === false) return;
   state.preparing = null;
   state.preparedAt = performance.now();
+  // The race is ready: the cup's next circuits' trackside models are fetched
+  // now, one circuit at a time, so their loading panels are short.
+  const cup = CUPS[state.activeCupIndex];
+  if (cup && window.Render3D.preloadVenues) window.Render3D.preloadVenues(cup.tracks.slice(state.raceIndex + 1).map((t) => t.id));
   // The lights start from here.
   if (state.phase === "countdown") state.countdownStart = performance.now();
 }
@@ -1590,10 +1594,6 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players
   state.cupPlayers = players;
   releaseAllKeys();
   buildCupEntries();
-  // The cup's circuits' trackside models, fetched from the start: the next
-  // circuit's are in before its loading panel.
-  const cupTracks = (CUPS[state.activeCupIndex] || { tracks: [] }).tracks.map((t) => t.id);
-  if (window.Render3D && window.Render3D.preloadVenues) window.Render3D.preloadVenues(cupTracks);
   // A season resumed: the standings so far.
   if (state.season) applySeasonStandings();
   // One id per cup attempt ties its races to its cup bonus (see career.js);
@@ -2121,7 +2121,8 @@ function deploySafetyCar(racer, now) {
     exiting: fromPits || Boolean(was && was.exiting),
     callBack,
     leaving: callBack,
-    speed: meanMax * PowerUps.FACTORS.safetyCar,
+    // (From its garage it starts from rest.)
+    speed: fromPits || callBack ? 0 : meanMax * PowerUps.FACTORS.safetyCar,
     fieldSpeed: meanMax,
     until: now + PowerUps.TIMINGS.safetyCarMs,
     leaveUntil: 0,
@@ -2171,6 +2172,8 @@ function updateSafetyCar(dt, now) {
           sc.callBack = false;
           sc.leaving = false;
           sc.exiting = true;
+          sc.speed = 0;
+          sc.until = now + PowerUps.TIMINGS.safetyCarMs;
           return;
         }
         sc.parked = true;
@@ -2185,12 +2188,19 @@ function updateSafetyCar(dt, now) {
     }
   } else if (sc.exiting && lane) {
     // Out of the pits: down the lane at the pit limit, onto the road at the
-    // exit, then up to its pace on the racing line.
+    // exit, then up to its pace on the racing line. Its spell leading the
+    // field starts once it is on the road (the field is held meanwhile).
     const way = Pit.wayOut(lane, sc.d);
     sc.lat = way.lat;
     sc.inLane = !way.onRoad;
-    if (way.onRoad) sc.exiting = false;
-    sc.speed = way.onRoad ? sc.fieldSpeed * PowerUps.FACTORS.safetyCar : SC_PIT_LIMIT * sc.fieldSpeed;
+    if (way.onRoad) {
+      sc.exiting = false;
+      sc.until = now + PowerUps.TIMINGS.safetyCarMs;
+    } else {
+      sc.until = Math.max(sc.until, now + PowerUps.TIMINGS.safetyCarMs);
+    }
+    const target = way.onRoad ? sc.fieldSpeed * PowerUps.FACTORS.safetyCar : SC_PIT_LIMIT * sc.fieldSpeed;
+    sc.speed += clamp(target - sc.speed, -120 * dt, 60 * dt);
   } else {
     sc.lat += clamp(0 - sc.lat, -40 * dt, 40 * dt);
   }

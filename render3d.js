@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -157,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => ids.forEach((id) => venueModelsSettled(id)), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => preloadModels(ids.map((id) => [...(VENUE_MODELS[id] || []), ...(STAND_MODELS[(VENUES[id] || {}).stand] ? [STAND_MODELS[(VENUES[id] || {}).stand]] : [])])), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A venue's models all in (or failed): its own, and its type of stand's.
 function venueModelsSettled(id) {
@@ -1285,10 +1285,10 @@ function drawFrame(frame) {
   }
   resize();
   // (The venue's own models still on their way, the circuit is built at once
-  // with its stand-ins, so there is always a picture behind the results and
-  // the handoffs; prepare() holds the race until they are in, and the
-  // circuit is built again with them. A cup fetches its circuits' models from
-  // its start, so that is rare.)
+  // with its stand-ins, so the race's world is there behind the results and
+  // for the ceremony's handoff; nothing is drawn of it until prepare() has
+  // its models, and it is built again with them. The cup fetches its next
+  // circuits' models ahead, so that is rare.)
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would

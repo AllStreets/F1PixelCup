@@ -69,7 +69,7 @@ async (page) => {
       for (let i = 0; i < 60 * 400 && !sc.parked; i += 1) {
         t += 1000 / 60;
         // Out on the road: its time is up (it goes in).
-        if (!sc.exiting && !joined) { joined = true; sc.until = t; }
+        if (!sc.exiting && !sc.inLane && !sc.callBack && !joined) { joined = true; sc.until = t; }
         updateSafetyCar(1 / 60, t);
         if (!state.safetyCar) { bad.push({ id: c.id, why: "gone" }); break; }
         // Called again once it is in the lane on its way in.

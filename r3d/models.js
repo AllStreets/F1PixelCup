@@ -5,10 +5,12 @@
 // - the core (the people, at every circuit) loads with the car, and the
 //   renderer is ready once it has loaded or failed;
 // - each venue's own models (its landmarks, its yachts, its type of stand)
-//   load when its circuit is prepared, and only then: Render3D.prepare()
-//   waits for them behind the loading panel, so everything that draws is in
-//   the scene when its shaders compile, and a slow connection fetches only
-//   what the race in front of it shows.
+//   load when its circuit is prepared: Render3D.prepare() waits for them
+//   behind the loading panel, so everything that draws is in the scene when
+//   its shaders compile. Once a race is ready, the cup's next circuits'
+//   models are fetched one circuit at a time (preloadVenues), so the next
+//   loading panel is short; a slow connection fetches only what the cup
+//   shows.
 // The models are compressed (tools/compress-models.mjs): meshoptimizer's
 // decoder, as three.js ships it, unpacks them. A model that fails to load
 // leaves its procedural stand-in in place.
@@ -60,8 +62,9 @@ const loading = {};
 let settled = false;
 let loader = null;
 
-// A download that brings nothing for this long has stalled: the model counts
-// as failed (its stand-in is used) rather than holding the loading panel up.
+// A download that brings nothing for this long has stalled: it is tried once
+// more, then the model counts as failed (its stand-in is used) rather than
+// holding the loading panel up.
 export const STALL_MS = 20000;
 
 function load(name, files) {
@@ -109,7 +112,11 @@ function load(name, files) {
     const attempt = () => {
       tries += 1;
       silent = 0;
-      loader.load(`${files[name]}${tries > 1 ? `?retry=${tries}` : ""}`, (gltf) => settle(true, gltf.scene), progress, (error) => {
+      // Each attempt its own: a stalled first request that errors (or
+      // trickles in) later never fails or feeds the retry.
+      const mine = tries;
+      loader.load(`${files[name]}${tries > 1 ? `?retry=${tries}` : ""}`, (gltf) => settle(true, gltf.scene), () => { if (mine === tries) progress(); }, (error) => {
+        if (mine !== tries) return;
         if (tries < 2) attempt();
         else settle(false, null, error);
       });
@@ -133,10 +140,33 @@ export function loadAllVenueModels(files = FILES) {
   return Promise.all([...Object.values(VENUE_MODELS).flat(), ...Object.values(STAND_MODELS)].map((n) => load(n, files)));
 }
 
-// Has a venue's every model loaded or failed? Starts any not yet asked for.
+// Models that failed while fetched ahead (not for a circuit being
+// prepared): tried again when a circuit needs them.
+const failedAhead = new Set();
+let ahead = Promise.resolve();
+
+// The cup's next circuits' models, one circuit at a time, after whatever is
+// already being fetched.
+export function preloadVenues(groups, files = FILES) {
+  groups.forEach((names) => {
+    ahead = ahead.then(() => Promise.all(names.map((n) => {
+      const known = n in loading;
+      return load(n, files).then(() => { if (!known && failed.includes(n)) failedAhead.add(n); });
+    })));
+  });
+}
+
+// Has a venue's every model loaded or failed? Starts any not yet asked for
+// (and tries again any that failed only while fetched ahead).
 // `extra`: more it needs (its stand's model).
 export function venueModelsSettled(venueId, extra = [], files = FILES) {
   const names = [...(VENUE_MODELS[venueId] || []), ...extra];
+  names.forEach((n) => {
+    if (!failedAhead.has(n)) return;
+    failedAhead.delete(n);
+    failed.splice(failed.indexOf(n), 1);
+    delete loading[n];
+  });
   names.forEach((n) => load(n, files));
   return names.every((n) => n in templates || failed.includes(n));
 }

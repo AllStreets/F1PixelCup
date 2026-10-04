@@ -176,7 +176,7 @@ function moor(course, rand, quay, max, prefer) {
       const heading = Math.atan2(p.ny * side, p.nx * side);
       // Clear water the whole length (beyond every quay), nothing there.
       if (!footprintClear(course, x, z, heading, L / 2, W / 2 + 4, quay + 2)) continue;
-      const hull = { kind, x, z, heading, L, W, moored: true, side, along };
+      const hull = { kind, x, z, heading, L, W, moored: true, side, along, d: p.d };
       if ([-0.35, 0, 0.35].some((f) => course.occupied.blocked(x + Math.cos(heading) * L * f, z + Math.sin(heading) * L * f, W / 2 + 2))) continue;
       if (spots.some((o) => hullsMeet(o, hull, 4))) continue;
       spots.push(hull);
@@ -198,7 +198,7 @@ function moor(course, rand, quay, max, prefer) {
   const total = course.track.totalLength;
   const inPrefer = (h) => {
     if (!prefer || h.side !== prefer.side) return false;
-    const r = ((h.along % total) + total * 1.5) % total - total / 2;
+    const r = ((h.d % total) + total * 1.5) % total - total / 2;
     return r >= prefer.from && r <= prefer.to;
   };
   const score = (run) => run.filter(inPrefer).length * 1000 + run.length;
@@ -206,7 +206,9 @@ function moor(course, rand, quay, max, prefer) {
   const out = [];
   for (const run of runs) {
     if (out.length >= max) break;
-    out.push(...run.slice(0, max - out.length));
+    // The berths in the named stretch first, then the rest of the run.
+    const order = [...run.filter(inPrefer), ...run.filter((h) => !inPrefer(h))];
+    out.push(...order.slice(0, max - out.length));
   }
   out.forEach((h) => [-0.35, 0, 0.35].forEach((f) => course.occupied.add(h.x + Math.cos(h.heading) * h.L * f, h.z + Math.sin(h.heading) * h.L * f, h.W / 2 + 3)));
   return out;

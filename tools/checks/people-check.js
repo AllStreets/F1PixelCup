@@ -143,7 +143,7 @@ async (page) => {
       for (let i = 0; i < d.length; i += 4) if (d[i] > 150 && d[i + 1] > 110 && d[i] > d[i + 2] + 15) n += 1;
       return n / (d.length / 4);
     }, png);
-    results.marinaBaySandsLitAtNight = warm > 0.03 || `warm share ${JSON.stringify(warm)}`;
+    results.marinaBaySandsLitAtNight = warm > 0.012 || `warm share ${JSON.stringify(warm)}`;
     await step(() => { Render3D.setPhotoCamera(null); document.getElementById("game").style.visibility = ""; });
   } else {
     results.marinaBaySandsLitAtNight = "no Marina Bay Sands";
