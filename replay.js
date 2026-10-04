@@ -91,6 +91,18 @@
     return out;
   }
 
+  function packKeys(keys) {
+    let bits = 0;
+    if (keys) for (let b = 0; b < KEYS.length; b += 1) if (keys[KEYS[b]]) bits |= 1 << b;
+    return bits;
+  }
+
+  function unpackKeys(bits) {
+    const out = {};
+    for (let b = 0; b < KEYS.length; b += 1) out[KEYS[b]] = (bits & (1 << b)) !== 0;
+    return out;
+  }
+
   function quantizeKeys(keys) {
     const out = {};
     KEYS.forEach((k) => { out[k] = Boolean(keys && keys[k]); });
@@ -109,6 +121,7 @@
       boxes: Array.from({ length: header.boxes }, (_, i) => Boolean(s.boxes && s.boxes[i])),
       flags: Array.from({ length: header.posts }, (_, i) => FLAGS[Math.max(0, FLAGS.indexOf(s.flags && s.flags[i]))]),
       keys: quantizeKeys(s.keys),
+      keys2: quantizeKeys(s.keys2),
       mid: s.mid ? header.cars.map((_, i) => quantizeMid(s.mid[i] || {})) : null,
     };
   }
@@ -119,7 +132,8 @@
 
   // ---- The recording ----
   // header: { trackId, laps, weather, lapLength, t0, stepMs, items, boxes,
-  // posts, playerId, cars: [{ id, name, code, number, team, color, isPlayer }] }
+  // posts, playerId, players (two-player: both cars' ids, player 1 first),
+  // cars: [{ id, name, code, number, team, color, isPlayer, player }] }
   function createRecording(header) {
     const n = header.cars.length;
     const boxWords = Math.ceil(header.boxes / 32);
@@ -145,7 +159,8 @@
         objStart: new Uint32Array(CHUNK), objLen: new Uint16Array(CHUNK),
         scBits: new Uint8Array(CHUNK), scD: new Float32Array(CHUNK), scLat: new Int16Array(CHUNK),
         boxes: new Uint32Array(CHUNK * Math.max(1, boxWords)), flags: new Uint8Array(CHUNK * Math.max(1, header.posts)),
-        keys: new Uint8Array(CHUNK),
+        // The player's keys; and player 2's, in a two-player race.
+        keys: new Uint8Array(CHUNK), keys2: new Uint8Array(CHUNK),
       };
     }
     function newObjChunk() {
@@ -203,9 +218,8 @@
           ch.boxes[j * boxWords + w] = word >>> 0;
         }
         for (let p = 0; p < header.posts; p += 1) ch.flags[j * header.posts + p] = (s.flags && FLAG_INDEX[s.flags[p]]) || 0;
-        let keys = 0;
-        if (s.keys) for (let b = 0; b < KEYS.length; b += 1) if (s.keys[KEYS[b]]) keys |= 1 << b;
-        ch.keys[j] = keys;
+        ch.keys[j] = packKeys(s.keys);
+        ch.keys2[j] = packKeys(s.keys2);
         count += 1;
         if (s.mid) rec.pushMid(s.mid);
       },
@@ -265,8 +279,8 @@
         for (let b = 0; b < header.boxes; b += 1) boxes.push(Boolean(ch.boxes[j * boxWords + (b >> 5)] & (1 << (b & 31))));
         const flags = [];
         for (let p = 0; p < header.posts; p += 1) flags.push(FLAGS[ch.flags[j * header.posts + p]]);
-        const keys = {};
-        KEYS.forEach((k3, b) => { keys[k3] = Boolean(ch.keys[j] & (1 << b)); });
+        const keys = unpackKeys(ch.keys[j]);
+        const keys2 = unpackKeys(ch.keys2[j]);
         let mid = null;
         if (ch.hasMid[j]) {
           mid = [];
@@ -278,19 +292,20 @@
         return {
           cars, objects, mid,
           safetyCar: sb & 1 ? { d: ch.scD[j], lat: D.lat(ch.scLat[j]), leaving: Boolean(sb & 2), parked: Boolean(sb & 4) } : null,
-          boxes, flags, keys,
+          boxes, flags, keys, keys2,
         };
       },
 
-      // One car's controls at sample k (and the player's keys), without
+      // One car's controls at sample k (and the players' keys), without
       // decoding the whole sample: the input trace reads seconds of these.
       controls(k, i) {
         const ch = chunks[Math.floor(k / CHUNK)];
         const j = k % CHUNK;
         const at = j * n + i;
-        const keys = {};
-        for (let b = 0; b < KEYS.length; b += 1) keys[KEYS[b]] = (ch.keys[j] & (1 << b)) !== 0;
-        return { throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]), steer: D.steer(ch.steer[at]), keys };
+        return {
+          throttle: D.throttle(ch.throttle[at]), brake: D.throttle(ch.brake[at]), steer: D.steer(ch.steer[at]),
+          keys: unpackKeys(ch.keys[j]), keys2: unpackKeys(ch.keys2[j]),
+        };
       },
 
       // The race at any time t. Positions go step by step (from each sample
@@ -505,9 +520,12 @@
       if (pair) {
         focusId = pair[1];
       } else {
-        const player = order.find((c) => c.id === header.playerId);
+        // The player; with two, each in turn (shot by shot), or the one still racing.
+        const humans = header.players && header.players.length ? header.players : [header.playerId];
+        const turn = humans.map((_, h) => humans[(i + h) % humans.length]);
+        const player = turn.map((id) => order.find((c) => c.id === id)).find((c) => c && !c.finished);
         const running = order.find((c) => !c.finished);
-        focusId = player && !player.finished ? player.id : running ? running.id : header.playerId;
+        focusId = player ? player.id : running ? running.id : humans[0];
       }
       shots.push({ start, end, mode: o.cycle[(i - 1) % o.cycle.length], focusId });
       if (end >= total) break;

@@ -25,12 +25,16 @@ function fitViewToElement() {
   view.width = cssWidth / fit;
   view.height = cssHeight / fit;
   view.scale = fit * dpr;
-  // Lets the timing tower and ticker line up with the HUD at any size.
-  if (fitViewToElement.lastFit !== fit) {
-    fitViewToElement.lastFit = fit;
-    document.documentElement.style.setProperty("--hud-scale", fit.toFixed(4));
-  }
+  // Lets the timing tower and ticker line up with the HUD at any size (a
+  // split screen's views set it to theirs, in drawSplit).
+  if (!splitActive()) setHudScale(fit);
   ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+}
+
+function setHudScale(fit) {
+  if (setHudScale.last === fit) return;
+  setHudScale.last = fit;
+  document.documentElement.style.setProperty("--hud-scale", fit.toFixed(4));
 }
 
 // The game page's DOM belongs to screens.js; the game only needs these two.
@@ -397,6 +401,20 @@ const state = {
   hudPlaceFlashDir: 0,
   shakeMag: 0,
   shakeUntil: 0,
+  // Two-player split screen (twoplayer.js; docs/superpowers/specs/
+  // 2026-10-01-split-screen-design.md): the pit-lane choice (never stored, so
+  // every visit starts with one player), the cup's (fixed once it starts),
+  // player 2's driver, and the racer ids of the humans in the session
+  // (player 1's first; state.playerId is player 1's).
+  players: 1,
+  cupPlayers: 1,
+  secondDriver: -1,
+  humanIds: [],
+  secondCupRunId: null,
+  lastSecondRaceCareer: null,
+  lastSecondCupCareer: null,
+  // Player 2's camera and HUD state, swapped in while their view is drawn (asPlayer).
+  second: {},
 };
 
 const input = {
@@ -407,6 +425,45 @@ const input = {
   right: false,
   drift: false,
 };
+
+// Player 2's keys in a two-player session (the arrows, Right Shift and /).
+const input2 = {
+  throttle: false,
+  brake: false,
+  left: false,
+  right: false,
+  drift: false,
+  item: false,
+};
+
+// Each player's gamepad as last read (pollPads), and its buttons' last state.
+const padState = [TwoPlayer.readPad(null), TwoPlayer.readPad(null)];
+const padWas = [{ item: false, pause: false }, { item: false, pause: false }];
+// Which pad (its index) each player has; kept while it stays connected.
+let padSlots = [null, null];
+// Each player's merged controls, kept and refilled each step.
+const controlsKept = [{}, {}];
+
+// What the two players' keys are labelled on this keyboard: they are read by
+// position, so on AZERTY player 1's are Z Q S D and player 2's power-up key
+// is "!". The browser tells us where it can; the labels default to QWERTY.
+const keyLabels = { KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", Slash: "/" };
+try {
+  if (navigator.keyboard && navigator.keyboard.getLayoutMap) {
+    navigator.keyboard.getLayoutMap().then((map) => {
+      Object.keys(keyLabels).forEach((code) => { if (map.get(code)) keyLabels[code] = map.get(code).toUpperCase(); });
+      if (window.Screens && state.phase === "garage") window.Screens.refreshPitLane();
+    }, () => {});
+  }
+} catch (error) {
+  // The QWERTY labels stand.
+}
+
+// Every key let go (leaving a race, losing focus): none can stay held into the next.
+function releaseAllKeys() {
+  Object.keys(input).forEach((k) => { input[k] = false; });
+  Object.keys(input2).forEach((k) => { input2[k] = false; });
+}
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -619,8 +676,11 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
   let brakeBoost = 0;
   let steerAdjust = 0;
 
+  // Two players qualify as ghosts to each other: neither holds the other up.
+  const ghosts = state.phase === "qualifying" && isHuman(racer);
   state.racers.forEach((other) => {
     if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
+    if (ghosts && isHuman(other)) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
@@ -776,9 +836,45 @@ function getPitLaneState() {
     gridMode: state.gridMode,
     weatherModes: Weather.MODES,
     weatherMode: state.weatherMode,
+    // Two-player split screen: how many, player 2's driver, and the keys' labels.
+    players: state.players,
+    keys: { p1: ["KeyW", "KeyA", "KeyS", "KeyD"].map((code) => keyLabels[code]).join(" "), p2Item: keyLabels.Slash },
+    secondDriver: (() => {
+      const d = DRIVERS[state.secondDriver];
+      const t = getTeamForDriver(d);
+      return { index: state.secondDriver, id: d.id, code: d.code, number: d.number, name: d.name, team: t.name, teamColor: t.body };
+    })(),
     // Drivers can be changed only in the pit lane, between cups.
     canChooseDriver: state.phase === "garage",
   };
+}
+
+// One player or two (split screen). Chosen in the pit lane for the next cup;
+// never stored, so every visit starts with one.
+function selectPlayers(count) {
+  if (state.phase !== "garage" || (count !== 1 && count !== 2)) return;
+  state.players = count;
+  settleSecondDriver();
+  renderGarage();
+}
+
+// Player 2's driver, the next (dir 1) or previous (-1) round the grid,
+// never player 1's.
+function stepSecondDriver(dir) {
+  if (state.phase !== "garage") return;
+  const ids = DRIVERS.map((d) => d.id);
+  const next = TwoPlayer.stepDriver(ids, DRIVERS[state.secondDriver].id, dir < 0 ? -1 : 1, DRIVERS[state.selectedDriver].id);
+  state.secondDriver = ids.indexOf(next);
+  renderGarage();
+}
+
+// Player 2 never drives player 1's car: when player 1 picks it, player 2
+// goes back to their default (twoplayer.js).
+function settleSecondDriver() {
+  const ids = DRIVERS.map((d) => d.id);
+  const first = DRIVERS[state.selectedDriver].id;
+  if (DRIVERS[state.secondDriver] && DRIVERS[state.secondDriver].id !== first) return;
+  state.secondDriver = Math.max(0, ids.indexOf(TwoPlayer.secondDriver(ids, first)));
 }
 
 const GRID_MODES = [
@@ -850,6 +946,7 @@ function selectDriver(index) {
 function setSelectedDriver(index) {
   state.selectedDriver = ((index % DRIVERS.length) + DRIVERS.length) % DRIVERS.length;
   state.selectedKart = TEAMS.findIndex((t) => t.id === DRIVERS[state.selectedDriver].teamId);
+  settleSecondDriver();
 }
 
 // Every driver has their own career, so the game comes back to the driver you
@@ -943,10 +1040,14 @@ function loadDifficultyPreference() {
 function buildCupEntries() {
   const playerDriver = DRIVERS[state.selectedDriver];
   const playerKart = getTeamForDriver(playerDriver);
-  const remainingDrivers = shuffle(DRIVERS.filter((driver) => driver.id !== playerDriver.id));
+  // A two-player cup: player 2's driver races too, and one fewer CPU car.
+  const secondDriver = state.cupPlayers === 2 ? DRIVERS[state.secondDriver] : null;
+  const remainingDrivers = shuffle(DRIVERS.filter((driver) => driver.id !== playerDriver.id && driver !== secondDriver));
+  const humanEntries = [{ driver: playerDriver, kart: playerKart, points: 0, isPlayer: true, player: 1 }];
+  if (secondDriver) humanEntries.push({ driver: secondDriver, kart: getTeamForDriver(secondDriver), points: 0, isPlayer: true, player: 2 });
   const cupEntries = [
-    { driver: playerDriver, kart: playerKart, points: 0, isPlayer: true },
-    ...remainingDrivers.slice(0, 19).map((driver) => ({
+    ...humanEntries,
+    ...remainingDrivers.slice(0, 20 - humanEntries.length).map((driver) => ({
       driver,
       kart: getTeamForDriver(driver),
       points: 0,
@@ -970,16 +1071,17 @@ const QUALI_TIME_LIMIT_MS = 180000;
 // Extra distance the player rolls in on autopilot before taking over.
 const QUALI_RUN_IN = 260;
 
-function placeForQualifying(racer, track, runIn = 0) {
+// lat: across the road from its centre (two players roll in side by side).
+function placeForQualifying(racer, track, runIn = 0, lat = 0) {
   const route = getItemRoute(track);
   const d = track.totalLength - QUALI_RUN_UP - runIn;
-  const w = route.toWorld(d, 0);
+  const w = route.toWorld(d, lat);
   // Tell the road lookup which stretch the car is on: the circuit runs past
   // itself in places, and the nearest bit of road may be another part of the lap.
   let segment = 0;
   while (segment < track.cumulativeStarts.length - 1 && track.cumulativeStarts[segment + 1] <= d) segment += 1;
   Object.assign(racer, {
-    x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat: 0, segmentHint: segment,
+    x: w.x, y: w.y, heading: w.heading, trackDistance: d, lat, segmentHint: segment,
     speed: racer.physics.maxSpeed * QUALI_ROLL_SPEED,
     lap: 0, startedRaceLap: false, lapAccum: 0, lapStartAt: 0, lastLapTime: 0, bestLapTime: 0,
     splits: [], lastSplit: -1, finished: false,
@@ -1080,14 +1182,28 @@ function startQualifying(index) {
   // Set first, so every CPU lap reads the cup's difficulty.
   state.phase = "qualifyingSim";
   state.preparing = { trackId: state.track.id, painted: false };
-  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const playerEntry = humanEntry(0);
   const player = createRacer(playerEntry.driver, playerEntry.kart, true, 0);
+  player.playerSlot = 0;
+  // Two players roll in side by side, and are ghosts to each other on their
+  // laps (qualifying has no contact), so neither can spoil the other's.
+  const secondEntry = humanEntry(1);
+  const lane = secondEntry ? state.track.roadWidth * 0.4 : 0;
   // The player rolls in on autopilot while they get ready, and takes over at
   // the same point and speed the CPU laps start from.
-  placeForQualifying(player, state.track, QUALI_RUN_IN);
+  placeForQualifying(player, state.track, QUALI_RUN_IN, lane ? -lane : 0);
   player.qualiAutopilot = true;
   state.racers = [player];
+  if (secondEntry) {
+    const second = createRacer(secondEntry.driver, secondEntry.kart, true, 1);
+    second.playerSlot = 1;
+    placeForQualifying(second, state.track, QUALI_RUN_IN, lane);
+    second.qualiAutopilot = true;
+    state.racers.push(second);
+  }
   state.playerId = player.id;
+  state.humanIds = state.racers.map((racer) => racer.id);
+  resetSecondView();
   state.gridOrder = [];
   // Qualifying has no power-ups.
   state.boxHiddenUntil = state.track.itemBoxes.map(() => Infinity);
@@ -1099,6 +1215,8 @@ function startQualifying(index) {
   state.qualifying = {
     raceIndex: index, sims, times: [], poleSplits: [], poleTimeMs: null, playerTimeMs: null, order: null,
     readyElapsed: 0, handedOver: false, releasedAt: null, aborted: false,
+    // Player 2's lap, in a two-player session.
+    secondTimeMs: null, secondAborted: false,
   };
   if (window.Screens) window.Screens.showRace();
   addFeed(`${state.track.name} qualifying: the field is setting its times.`);
@@ -1139,7 +1257,9 @@ function updateQualifyingSim() {
   state.phase = "qualifying";
   state.lastTick = performance.now();
   state.stepAccum = 0;
-  addFeed(`${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
+  addFeed(state.humanIds.length > 1
+    ? `${state.track.name} qualifying: one flying lap each. Your times set your grid.`
+    : `${state.track.name} qualifying: one flying lap. Your time sets your grid.`);
   updateQualifyingTower(true);
 }
 
@@ -1150,34 +1270,64 @@ function updateQualifying(dt, now) {
   // Nothing starts until the circuit can be seen.
   if (worldView() === "loading") return;
   const steps = takePhysicsSteps(dt);
-  for (let i = 0; i < steps && state.phase === "qualifying"; i += 1) stepQualifying(q, player);
+  for (let i = 0; i < steps && state.phase === "qualifying"; i += 1) stepQualifying(q);
   updateParticles(dt);
   updateQualifyingTower();
 }
 
-function stepQualifying(q, player) {
+// Each player's lap ends on its own (they park past the line); the session
+// ends when every player's has.
+function stepQualifying(q) {
   const tick = (state.lastTick !== null ? state.lastTick : performance.now()) + PHYSICS_STEP_MS;
+  const drivers = humans();
   if (!q.handedOver) {
     // Rolling in on autopilot at the CPU laps' starting speed.
     q.readyElapsed += PHYSICS_STEP_MS;
-    const driving = player.isPlayer;
-    player.isPlayer = false;
-    updateRacer(player, PHYSICS_DT, tick);
-    player.isPlayer = driving;
-    player.speed = player.physics.maxSpeed * QUALI_ROLL_SPEED;
+    drivers.forEach((player) => {
+      const driving = player.isPlayer;
+      player.isPlayer = false;
+      updateRacer(player, PHYSICS_DT, tick);
+      player.isPlayer = driving;
+      player.speed = player.physics.maxSpeed * QUALI_ROLL_SPEED;
+    });
     if (q.readyElapsed >= QUALI_READY_MS) {
       q.handedOver = true;
       q.releasedAt = tick;
-      player.qualiAutopilot = false;
+      drivers.forEach((player) => { player.qualiAutopilot = false; });
     }
   } else {
-    updateRacer(player, PHYSICS_DT, tick);
+    drivers.forEach((player) => updateRacer(player, PHYSICS_DT, tick));
   }
   state.lastTick = tick;
   if (state.phase !== "qualifying") return;
-  if (player.lastLapTime > 0 || q.aborted || (q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS)) {
-    finishQualifying();
-  }
+  const timeUp = q.releasedAt !== null && tick - q.releasedAt > QUALI_TIME_LIMIT_MS;
+  drivers.forEach((player) => {
+    if (player.finished || !(player.lastLapTime > 0 || timeUp)) return;
+    parkQualifier(player);
+    // Two players: a lap in that beats the provisional pole becomes it, for
+    // the other player's delta.
+    if (drivers.length > 1 && player.lastLapTime > 0 && (!q.poleTimeMs || player.lastLapTime < q.poleTimeMs)) {
+      q.poleTimeMs = player.lastLapTime;
+      q.poleSplits = (player.splits || []).slice(0, TIMING_POINTS_PER_LAP).map((t) => t - player.previousLapStartAt);
+    }
+  });
+  if (drivers.every((player) => player.finished)) finishQualifying();
+}
+
+// A player's qualifying is over: the engine settles and the car is done for the session.
+function parkQualifier(player) {
+  player.finished = true;
+  player.speed = 0;
+  player.drifting = false;
+}
+
+// Backing over the line ends that player's flying lap, with no time.
+function abortQualifyingLap(racer) {
+  const q = state.qualifying;
+  if (racer.playerSlot === 1) q.secondAborted = true;
+  else q.aborted = true;
+  parkQualifier(racer);
+  if (humans().every((player) => player.finished)) finishQualifying();
 }
 
 // How far behind (+) or ahead (-) of the provisional pole the player was at
@@ -1192,8 +1342,10 @@ function qualifyingDeltaNow() {
 
 function qualifyingClassification() {
   const q = state.qualifying;
-  const player = state.cupEntries.find((entry) => entry.isPlayer);
+  const player = humanEntry(0);
   const all = [...q.times.map((t) => ({ id: t.id, timeMs: t.timeMs })), { id: player.driver.id, timeMs: q.playerTimeMs }];
+  const second = humanEntry(1);
+  if (second) all.push({ id: second.driver.id, timeMs: q.secondTimeMs });
   const order = Grid.gridFromQualifying(all);
   const byId = Object.fromEntries(all.map((t) => [t.id, t.timeMs]));
   return order.map((id) => ({ id, timeMs: byId[id] }));
@@ -1201,20 +1353,24 @@ function qualifyingClassification() {
 
 function finishQualifying() {
   const q = state.qualifying;
-  const player = getPlayer();
+  const [player, second] = humans();
   q.playerTimeMs = player.lastLapTime > 0 && !q.aborted ? player.lastLapTime : null;
+  if (second) q.secondTimeMs = second.lastLapTime > 0 && !q.secondAborted ? second.lastLapTime : null;
   // Parked: the engine settles and the car is done for the session.
-  player.finished = true;
-  player.speed = 0;
-  player.drifting = false;
+  humans().forEach(parkQualifier);
   const rows = qualifyingClassification();
   q.order = rows.map((row) => row.id);
   state.phase = "qualifyingResults";
   const pole = rows[0];
-  const place = q.order.indexOf(player.driver.id) + 1;
-  const note = q.aborted ? "Lap aborted — you went back over the line, so no time was set."
-    : !q.playerTimeMs ? "No time set within the session."
-      : place === 1 ? `Pole position! ${formatLapTime(q.playerTimeMs)}.` : `You qualified ${formatOrdinal(place)} · ${formatLapTime(q.playerTimeMs)}.`;
+  const noteFor = (racer, timeMs, aborted) => {
+    const place = q.order.indexOf(racer.driver.id) + 1;
+    return aborted ? "Lap aborted: you went back over the line, so no time was set."
+      : !timeMs ? "No time set within the session."
+        : place === 1 ? `Pole position! ${formatLapTime(timeMs)}.` : `You qualified ${formatOrdinal(place)} · ${formatLapTime(timeMs)}.`;
+  };
+  const note = second
+    ? `P1 ${surnameOf(player.driver.name)}: ${noteFor(player, q.playerTimeMs, q.aborted)} P2 ${surnameOf(second.driver.name)}: ${noteFor(second, q.secondTimeMs, q.secondAborted)}`
+    : noteFor(player, q.playerTimeMs, q.aborted);
   addFeed(note);
   if (!window.Screens) return;
   const cup = getActiveCup();
@@ -1233,6 +1389,7 @@ function finishQualifying() {
         time: row.timeMs ? formatLapTime(row.timeMs) : "No time",
         gap: i === 0 || !row.timeMs || !pole.timeMs ? "" : `+${formatGapTime(row.timeMs - pole.timeMs)}`,
         isPlayer: entry.isPlayer,
+        tag: entryTag(entry),
       };
     }),
   });
@@ -1251,14 +1408,20 @@ function updateQualifyingTower(force = false) {
   if (!force && now - (state.towerUpdatedAt || 0) < 250) return;
   state.towerUpdatedAt = now;
   const q = state.qualifying;
-  const player = state.cupEntries.find((entry) => entry.isPlayer);
-  const done = q.times.filter((t) => t.timeMs).sort((a, b) => a.timeMs - b.timeMs);
+  // A player whose lap is in (two players: the other may still be on theirs)
+  // is classified with the field; one still out is on their lap.
+  const lapIn = (racer) => racer.finished && racer.lastLapTime > 0 && !(racer.playerSlot === 1 ? q.secondAborted : q.aborted);
+  const done = q.times.filter((t) => t.timeMs).concat(humans().filter(lapIn).map((r) => ({ id: r.driver.id, timeMs: r.lastLapTime })))
+    .sort((a, b) => a.timeMs - b.timeMs);
   const rows = done.map((t, i) => {
     const entry = state.cupEntries.find((e) => e.driver.id === t.id);
-    return { position: i + 1, code: entry.driver.code, teamColor: entry.kart.body, isPlayer: false,
+    return { position: i + 1, code: entry.driver.code, teamColor: entry.kart.body, isPlayer: Boolean(entry.isPlayer), tag: entryTag(entry),
       gap: i === 0 ? formatLapTime(t.timeMs) : `+${formatGapTime(t.timeMs - done[0].timeMs)}` };
   });
-  rows.push({ position: "—", code: player.driver.code, teamColor: player.kart.body, isPlayer: true, gap: "ON LAP" });
+  humans().filter((r) => !lapIn(r)).forEach((r) => {
+    const entry = humanEntry(r.playerSlot || 0);
+    rows.push({ position: "-", code: entry.driver.code, teamColor: entry.kart.body, isPlayer: true, tag: entryTag(entry), gap: r.finished ? "NO TIME" : "ON LAP" });
+  });
   window.Screens.updateTower(rows);
 }
 
@@ -1351,7 +1514,7 @@ function startCup() {
   // One id per cup attempt ties its races to its cup bonus (see career.js).
   beginCup({
     runId: window.Career ? window.Career.startCupRun() : null,
-    difficulty: state.difficulty, gridMode: state.gridMode, weatherMode: state.weatherMode, raceIndex: 0,
+    difficulty: state.difficulty, gridMode: state.gridMode, weatherMode: state.weatherMode, raceIndex: 0, players: state.players,
   });
 }
 
@@ -1391,19 +1554,25 @@ function startSeason(saved) {
   beginCup({
     runId: season.runId,
     difficulty: DIFFICULTIES.findIndex((d) => d.id === season.difficulty),
-    gridMode: season.gridMode, weatherMode: season.weatherMode, raceIndex: season.nextRace,
+    gridMode: season.gridMode, weatherMode: season.weatherMode, raceIndex: season.nextRace, players: 1,
   });
 }
 
-function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex }) {
+function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players }) {
   initAudio();
   if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
   state.activeCupIndex = state.selectedCup;
   state.raceIndex = raceIndex;
+  // The season is one player's championship; a cup may be two players'.
+  state.cupPlayers = players;
+  releaseAllKeys();
   buildCupEntries();
   // A season resumed: the standings so far.
   if (state.season) applySeasonStandings();
+  // One id per cup attempt ties its races to its cup bonus (see career.js);
+  // each player has their own (a cup bonus is recorded once per id).
   state.cupRunId = runId;
+  state.secondCupRunId = window.Career && state.cupPlayers === 2 ? window.Career.startCupRun() : null;
   state.cupRecordedFor = null;
   state.cupDifficulty = difficulty;
   state.feed = [];
@@ -1413,7 +1582,9 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex }) {
   if (state.season && raceIndex > 0) addFeed(`${getActiveCup().name} resumed: race ${raceIndex + 1} of ${getActiveCup().tracks.length}.`);
   addFeed(state.cupGridMode === "qualifying"
     ? `${getActiveCup().name}: qualifying sets every grid.`
-    : `Lights out soon. ${getActiveCup().name} grid is forming — you start from the back.`);
+    : state.cupPlayers === 2
+      ? `Lights out soon. ${getActiveCup().name} grid is forming: P1 and P2 start from the back.`
+      : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(raceIndex);
 }
@@ -1473,10 +1644,12 @@ function startRace(index) {
   state.pausedAt = 0;
 
   // The starting order: the qualifying classification, or from the back.
-  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const playerEntry = humanEntry(0);
+  const secondEntry = humanEntry(1);
   const qualified = state.qualifying && state.qualifying.raceIndex === index && state.qualifying.order;
   state.gridOrder = qualified ? [...state.qualifying.order] : Grid.gridFromBack({
     playerId: playerEntry.driver.id,
+    playerIds: secondEntry ? [playerEntry.driver.id, secondEntry.driver.id] : undefined,
     aiIds: state.cupEntries.filter((entry) => !entry.isPlayer).map((entry) => entry.driver.id),
     standings: Object.fromEntries(state.cupEntries.map((entry) => [entry.driver.id, entry.points])),
   });
@@ -1489,10 +1662,13 @@ function startRace(index) {
     racer.y = grid[slot].y;
     racer.heading = grid[slot].heading;
     racer.trackDistance = grid[slot].trackDistance;
+    if (entry.isPlayer) racer.playerSlot = (entry.player || 1) - 1;
     return racer;
   });
-  const player = state.racers.find((racer) => racer.isPlayer);
+  const player = state.racers.find((racer) => racer.isPlayer && !racer.playerSlot);
   state.playerId = player.id;
+  state.humanIds = [player.id, ...state.racers.filter((racer) => racer.playerSlot === 1).map((racer) => racer.id)];
+  resetSecondView();
   state.cameraHeading = player.heading;
   state.camPos = null;
   state.countdownStart = performance.now();
@@ -1505,6 +1681,60 @@ function startRace(index) {
 
 function getPlayer() {
   return state.racers.find((racer) => racer.id === state.playerId);
+}
+
+// The humans in the session: player 1 (as state.playerId has it), then
+// player 2 in a two-player session.
+function humans() {
+  const first = getPlayer();
+  if (!first) return [];
+  const second = state.humanIds[1] ? racerById(state.humanIds[1]) : null;
+  return second && second !== first ? [first, second] : [first];
+}
+
+function isHuman(racer) {
+  return Boolean(racer) && state.humanIds.includes(racer.id);
+}
+
+function humanBySlot(slot) {
+  return slot ? racerById(state.humanIds[1]) : getPlayer();
+}
+
+// A cup entry of a human: player 1's (slot 0) or player 2's (slot 1).
+function humanEntry(slot = 0) {
+  return state.cupEntries.find((entry) => entry.isPlayer && (entry.player || 1) === slot + 1);
+}
+
+// "P1" or "P2" for a human's entry in a two-player cup; "" otherwise.
+function entryTag(entry) {
+  return state.cupPlayers === 2 && entry && entry.isPlayer ? `P${entry.player || 1}` : "";
+}
+
+function twoPlayerSession() {
+  return state.cupPlayers === 2 && state.phase !== "garage";
+}
+
+// "P1: " and "P2: " before a player's own news, in a two-player session.
+function playerTag(racer) {
+  return twoPlayerSession() && isHuman(racer) ? `P${(racer.playerSlot || 0) + 1}` : "";
+}
+
+// One player's controls this step: their keys and their pad together.
+function controlsFor(racer) {
+  const slot = racer.playerSlot || 0;
+  return TwoPlayer.merge(slot ? input2 : input, padState[slot], controlsKept[slot]);
+}
+
+// A player's keys (and pad) as the replay keeps them, added to what is held
+// since the last sample (a tap between two still counts).
+function holdKeys(keys, slot) {
+  const c = TwoPlayer.merge(slot ? input2 : input, padState[slot], controlsKept[slot]);
+  keys.throttle = keys.throttle || c.throttle > 0;
+  keys.brake = keys.brake || c.brake > 0;
+  keys.left = keys.left || c.steer < 0;
+  keys.right = keys.right || c.steer > 0;
+  keys.drift = keys.drift || c.drift;
+  keys.item = keys.item || c.item;
 }
 
 function updateCountdown(now) {
@@ -1527,7 +1757,7 @@ function updateCountdown(now) {
     state.simOffset = 0;
     audio.lastBeepStep = -1;
     sfx.lightsOut();
-    addFeed("Lights out — go go go!");
+    addFeed("Lights out, go go go!");
   }
 }
 
@@ -1686,7 +1916,7 @@ function finishRoulette(racer, now) {
   racer.itemHeldSince = now;
   // A human-like pause before the AI uses what it got.
   racer.itemReadyAt = now + (racer.isPlayer ? 0 : 500 + Math.random() * 1000);
-  if (racer.isPlayer) addFeed(`Power-up ready: ${labelizeItem(racer.currentItem)}.`);
+  if (racer.isPlayer) addFeed(`${playerTag(racer) ? `${playerTag(racer)}: ` : ""}Power-up ready: ${labelizeItem(racer.currentItem)}.`);
 }
 
 // The AI uses items for a reason, not at random: an Undercut when there is a
@@ -1821,7 +2051,7 @@ function spinRacer(racer, duration = 900, now = raceNow()) {
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
   racer.spinImmuneUntil = now + duration + 1400;
   if (racer.isPlayer) {
-    addScreenShake(10, 420);
+    addScreenShake(10, 420, racer);
     sfx.spin();
   }
   racer.speed *= 0.55;
@@ -1962,9 +2192,8 @@ function updateLapProgress(racer, now, dt = 0) {
   // race stays continuous instead of jumping almost a lap ahead.
   const unwrapped = previousDistance < lapLength * 0.25 && currentDistance > lapLength * 0.75;
   // In qualifying there is one flying lap: backing over the line ends it.
-  if (unwrapped && delta < 0 && racer.startedRaceLap && state.phase === "qualifying" && racer.id === state.playerId && state.qualifying) {
-    state.qualifying.aborted = true;
-    finishQualifying();
+  if (unwrapped && delta < 0 && racer.startedRaceLap && state.phase === "qualifying" && isHuman(racer) && state.qualifying) {
+    abortQualifyingLap(racer);
     return;
   }
   if (unwrapped && delta < 0 && racer.startedRaceLap) {
@@ -2108,16 +2337,18 @@ function updateRacer(racer, dt, now) {
   if (racer.isPlayer) {
     // Throttle stands on its own. Shift is the drift modifier, exactly as the
     // control card says -- it is not a deadman switch for the accelerator.
-    throttle = input.throttle ? 1 : 0;
-    if (input.brake && !input.throttle) {
+    // This player's keys and pad (a pad's stick and triggers in proportion).
+    const controls = controlsFor(racer);
+    throttle = controls.throttle;
+    if (controls.brake > 0 && !(controls.throttle > 0)) {
       if (racer.speed > 18) {
-        brake = 1;
+        brake = controls.brake;
       } else {
-        reverse = 1;
+        reverse = controls.brake;
       }
     }
-    steerInput = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-    drifting = input.drift && input.throttle && Math.abs(steerInput) > 0 && racer.speed > 70;
+    steerInput = controls.steer;
+    drifting = controls.drift && controls.throttle > 0 && Math.abs(steerInput) > 0 && racer.speed > 70;
     driftSide = steerInput;
     if (racer.oilHoldStart && !racer.trailingOil && racer.currentItem === "oilSlick"
       && now - racer.oilHoldStart >= PowerUps.TIMINGS.trailHoldMs) {
@@ -2194,10 +2425,10 @@ function updateRacer(racer, dt, now) {
     const difficulty = getDifficulty();
     targetSpeed *= difficulty.aiPace;
     if (difficulty.catchUp) {
-      const human = getPlayer();
-      if (human && human !== racer) {
-        // Positive when this car is behind the player, negative when ahead.
-        const gap = getRaceProgress(human) - getRaceProgress(racer);
+      const people = humans();
+      if (people.length && !people.includes(racer)) {
+        // Positive when this car is behind the (nearest) player, negative when ahead.
+        const gap = TwoPlayer.nearestGap(people.map(getRaceProgress), getRaceProgress(racer));
         const catchUp = clamp(gap / (state.track.totalLength * 0.5), -1, 1);
         targetSpeed *= 1 + catchUp * difficulty.catchUp;
       }
@@ -2343,14 +2574,35 @@ function updateRacer(racer, dt, now) {
   emitRacerParticles(racer, dt, now, offroad);
 }
 
+// After the flag, with the other player still racing: the car lifts, brakes
+// gently and drifts to the edge of the road it is nearer, out of the way of
+// the cars still racing (finished cars take no part in contacts), and stops.
+const COOL_DOWN_BRAKE = 70;
+function coolDown(racer, dt) {
+  const route = getItemRoute(state.track);
+  racer.drawFrom = { x: racer.x, y: racer.y, heading: racer.heading };
+  racer.speed = Math.max(0, racer.speed - COOL_DOWN_BRAKE * dt);
+  if (racer.speed <= 0) return;
+  const d = racer.trackDistance || 0;
+  const side = racer.lat >= 0 ? 1 : -1;
+  const edge = side * Math.max(0, route.halfWidthAt(d) - PowerUps.CAR_WIDTH);
+  racer.lat += clamp(edge - racer.lat, -30 * dt, 30 * dt);
+  racer.trackDistance = wrapLap(d + racer.speed * dt);
+  const w = route.toWorld(racer.trackDistance, racer.lat);
+  racer.x = w.x;
+  racer.y = w.y;
+  racer.heading = w.heading;
+  racer.drifting = false;
+}
+
 function finishRacer(racer, now) {
   if (racer.finished) return;
   racer.finished = true;
   if (racer.isPlayer) {
     sfx.finish();
     // The player's chequered flag: the trackside show starts (even when they
-    // are the last car home).
-    state.chequerAt = now;
+    // are the last car home). With two players, the first one's.
+    if (!state.chequerAt) state.chequerAt = now;
   }
   racer.finishTime = now - state.raceStart;
   // Placed once the step is over, so cars crossing in the same step are
@@ -2445,6 +2697,28 @@ function updateHazards(now) {
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
 }
 
+// The power-ups and the trackside life as drawn this frame: worked out once
+// a frame (a split screen's two views and the mini maps share them).
+const thisFrame = { no: -1, now: 0, powerUps: null, trackside: null };
+let frameNo = 0;
+function sharedFrame(now) {
+  if (thisFrame.no !== frameNo || thisFrame.now !== now) {
+    thisFrame.no = frameNo;
+    thisFrame.now = now;
+    thisFrame.powerUps = null;
+    thisFrame.trackside = null;
+  }
+  return thisFrame;
+}
+function powerUpsThisFrame(now) {
+  const f = sharedFrame(now);
+  return f.powerUps || (f.powerUps = powerUpFrame(now));
+}
+function tracksideThisFrame(now) {
+  const f = sharedFrame(now);
+  return f.trackside || (f.trackside = tracksideFrame(now));
+}
+
 // World positions of everything the renderers draw.
 function powerUpFrame(now) {
   if (!state.track) return { shots: [], hazards: [], trails: [], safetyCar: null, boxHidden: [], flashes: [] };
@@ -2521,7 +2795,7 @@ function handleRacerContacts(now) {
         b.y -= nx * lateralBias;
 
         if (a.isPlayer || b.isPlayer) {
-          addScreenShake(clamp(overlap * 0.7, 2, 9), 220);
+          [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(overlap * 0.7, 2, 9), 220, r); });
           if (overlap > 4) sfx.impact();
         }
         if (isProtected(a, now)) spinRacer(b, PowerUps.SPIN_MS.contact, now);
@@ -2589,6 +2863,8 @@ function updateRace(dt, now) {
       if (racer.finished || (!playerSteps && racer.isPlayer)) return;
       updateRacer(racer, PHYSICS_DT, tick);
     });
+    // Two players: one home while the other still races coasts off the line.
+    if (state.humanIds.length > 1 && !state.flagOutAt) humans().forEach((racer) => { if (racer.finished) coolDown(racer, PHYSICS_DT); });
     settleFinishers();
     updateShots(PHYSICS_DT, tick);
     updateSafetyCar(PHYSICS_DT, tick);
@@ -2606,14 +2882,15 @@ function updateRace(dt, now) {
   updateStandingsUI();
   updatePlayerUI();
 
-  const player = getPlayer();
+  // The field is fast-forwarded once every player has taken the flag.
+  const people = humans();
   const everyoneFinished = state.racers.every((racer) => racer.finished);
-  if (player && player.finished && !state.flagOutAt && !everyoneFinished) {
+  if (people.length && people.every((racer) => racer.finished) && !state.flagOutAt && !everyoneFinished) {
     state.flagOutAt = now;
     // Safety valve only. With the fast-forward above the field is home in a
     // few seconds; this exists so a wedged car can never hang the race.
     state.resultTimeoutAt = now + 60000;
-    addFeed("Chequered flag — waiting for the rest of the field to come home.");
+    addFeed("Chequered flag: waiting for the rest of the field to come home.");
   }
 
   if (!state.resultsQueued && (everyoneFinished || (state.resultTimeoutAt && now >= state.resultTimeoutAt))) {
@@ -2645,13 +2922,16 @@ function startRecording(from) {
     boxes: track.itemBoxes.length,
     posts: (track.marshalPosts || []).length,
     playerId: state.playerId,
+    players: state.humanIds.length > 1 ? [...state.humanIds] : undefined,
     cars: state.racers.map((racer) => ({
       id: racer.id, name: racer.driver.name, code: racer.driver.code, number: racer.driver.number,
-      team: racer.kart.name, color: racer.kart.body, isPlayer: racer.id === state.playerId,
+      team: racer.kart.name, color: racer.kart.body, isPlayer: isHuman(racer),
+      player: isHuman(racer) ? (racer.playerSlot || 0) + 1 : 0,
     })),
   });
   state.recordSteps = 0;
   state.recordKeys = {};
+  state.recordKeys2 = {};
   state.recordIds = new WeakMap();
   state.recordNextId = 1;
   state.recordFlashes = new WeakSet();
@@ -2664,14 +2944,9 @@ function startRecording(from) {
 function recordStep(tick) {
   const rec = state.recording;
   if (!rec) return;
-  const keys = state.recordKeys;
-  // The player's keys since the last sample (a tap between two still counts).
-  keys.throttle = keys.throttle || input.throttle;
-  keys.brake = keys.brake || input.brake;
-  keys.left = keys.left || input.left;
-  keys.right = keys.right || input.right;
-  keys.drift = keys.drift || input.drift;
-  keys.item = keys.item || input.space;
+  // The players' keys (and pads) since the last sample (a tap between two still counts).
+  holdKeys(state.recordKeys, 0);
+  if (state.humanIds.length > 1) holdKeys(state.recordKeys2, 1);
   state.recordSteps += 1;
   if (state.recordSteps % Replay.SAMPLE_EVERY === 0) recordSample(tick);
   // Between samples the cars' positions alone (a contact can shove a car in
@@ -2769,8 +3044,10 @@ function recordSample(now) {
     boxes: recordBoxes(track, now),
     flags: recordFlags(track, now, racing),
     keys: state.recordKeys,
+    keys2: state.recordKeys2,
   });
   state.recordKeys = {};
+  state.recordKeys2 = {};
   state.fxFlashes.forEach((flash) => {
     if (state.recordFlashes.has(flash)) return;
     state.recordFlashes.add(flash);
@@ -2828,7 +3105,7 @@ function getRaceStandings() {
     let gap;
     if (index === 0) gap = leader.finished ? "FIN" : "LEADER";
     else gap = `+${formatGap(gapSeconds(racer, leader))}`;
-    return { position: index + 1, code: racer.driver.code, teamColor: racer.kart.body, isPlayer: racer.id === state.playerId, gap };
+    return { position: index + 1, code: racer.driver.code, teamColor: racer.kart.body, isPlayer: isHuman(racer), tag: playerTag(racer), gap };
   });
 }
 
@@ -2843,12 +3120,21 @@ function updateStandingsUI() {
 // The player's race, handed to the career profile. Called once per race, from
 // finalizeRace, so a race abandoned before the flag is never recorded.
 function recordPlayerRace(finishers, fastest) {
-  const player = finishers.find((racer) => racer.isPlayer);
+  return recordHumanRace(finishers.find((racer) => racer.id === state.playerId), finishers, fastest, state.cupRunId);
+}
+
+// Player 2's race, to player 2's driver's career (a two-player cup only).
+function recordSecondPlayerRace(finishers, fastest) {
+  if (state.humanIds.length < 2) return null;
+  return recordHumanRace(finishers.find((racer) => racer.id === state.humanIds[1]), finishers, fastest, state.secondCupRunId);
+}
+
+function recordHumanRace(player, finishers, fastest, cupRunId) {
   if (!player || !window.Career) return null;
   try {
     return window.Career.recordRace({
       cupId: getActiveCup().id,
-      cupRunId: state.cupRunId,
+      cupRunId,
       raceIndex: state.raceIndex,
       trackId: state.track.id,
       difficulty: getDifficulty().id,
@@ -2870,7 +3156,7 @@ function recordPlayerRace(finishers, fastest) {
 function playerQualifying(player) {
   const q = state.qualifying;
   if (state.cupGridMode !== "qualifying" || !q || q.raceIndex !== state.raceIndex || !q.order) return undefined;
-  return { position: q.order.indexOf(player.driver.id) + 1, timeMs: q.playerTimeMs };
+  return { position: q.order.indexOf(player.driver.id) + 1, timeMs: player.playerSlot === 1 ? q.secondTimeMs : q.playerTimeMs };
 }
 
 function escapeHtml(text) {
@@ -2911,14 +3197,19 @@ function careerForRace(summary) {
   return { lines, saved: summary.saved };
 }
 
-function careerForCup(cup, playerPlace) {
+// Two players' career lines in one strip (each line starts with the driver's surname).
+function bothCareers(first, second) {
+  if (!second) return first;
+  return { lines: [...first.lines, ...second.lines], saved: first.saved !== false && second.saved !== false };
+}
+
+function careerForCup(cup, playerPlace, driver = humanEntry(0)) {
   if (!cup) return { lines: [], saved: true };
   // The season counts in the career as a cup: the championship.
   const what = getActiveCup().season ? "Championship" : "Cup";
   const lines = cup.bonus > 0
     ? [`<strong>${what} ${escapeHtml(formatOrdinal(playerPlace))} bonus +${escapeHtml(Number(cup.careerPoints) || 0)}</strong> (${escapeHtml(Number(cup.bonus) || 0)} × ${escapeHtml(careerDifficultyName(getDifficulty().id))} ×${escapeHtml(Number(cup.multiplier) || 0)}) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`]
     : [`${what} ${escapeHtml(formatOrdinal(playerPlace))}: no ${what.toLowerCase()} bonus (the top three score 50, 30 and 20 × difficulty) · Career total ${escapeHtml((Number(cup.careerTotal) || 0).toLocaleString())}`];
-  const driver = state.cupEntries.find((entry) => entry.isPlayer);
   if (driver && lines.length) lines[0] = `${escapeHtml(surnameOf(driver.driver.name))}: ${lines[0]}`;
   return { lines, saved: cup.saved };
 }
@@ -2929,7 +3220,23 @@ function careerForCup(cup, playerPlace) {
 function recordPlayerCup() {
   if (!window.Career || !state.cupRunId || state.cupRecordedFor === state.cupRunId) return;
   state.cupRecordedFor = state.cupRunId;
-  const playerEntry = state.cupEntries.find((entry) => entry.isPlayer);
+  const playerEntry = humanEntry(0);
+  // Player 2's first (each on their own cup run id), so player 1's driver is
+  // the one the game comes back to.
+  const secondEntry = humanEntry(1);
+  try {
+    state.lastSecondCupCareer = secondEntry && state.secondCupRunId ? window.Career.recordCup({
+      cupId: getActiveCup().id,
+      cupRunId: state.secondCupRunId,
+      driverId: secondEntry.driver.id,
+      difficulty: getDifficulty().id,
+      position: state.cupEntries.indexOf(secondEntry) + 1,
+      cupPoints: secondEntry.points,
+    }) : null;
+  } catch (error) {
+    console.warn("Career: cup not recorded", error);
+    state.lastSecondCupCareer = null;
+  }
   try {
     state.lastCupCareer = playerEntry ? window.Career.recordCup({
       cupId: getActiveCup().id,
@@ -2958,8 +3265,10 @@ function finalizeRace() {
   if (fastest && finishers.indexOf(fastest) < 10) {
     const entry = state.cupEntries.find((cupEntry) => cupEntry.driver.id === fastest.driver.id);
     if (entry) entry.points += 1;
-    addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}) — bonus point.`);
+    addFeed(`Fastest lap: ${fastest.driver.name} (${formatLapTime(fastest.bestLapTime)}), a bonus point.`);
   }
+  // Player 2's first, so player 1's driver is the one the game comes back to.
+  state.lastSecondRaceCareer = recordSecondPlayerRace(finishers, fastest);
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
   if (state.season && getActiveCup().season) {
@@ -3039,10 +3348,11 @@ function showResults(finishers) {
         fastest: Boolean(fastest && racer.id === fastest.id),
         racePoints,
         cupPoints: cupEntry ? cupEntry.points : racePoints,
-        isPlayer: racer.id === state.playerId,
+        isPlayer: isHuman(racer),
+        tag: playerTag(racer),
       };
     }),
-    career: careerForRace(state.lastRaceCareer),
+    career: bothCareers(careerForRace(state.lastRaceCareer), state.humanIds.length > 1 ? careerForRace(state.lastSecondRaceCareer) : null),
   });
 }
 
@@ -3068,7 +3378,9 @@ function showPodium() {
   recordPlayerCup();
   state.phase = "podium";
   if (!window.Screens) return;
-  const playerPlace = state.cupEntries.findIndex((entry) => entry.isPlayer) + 1;
+  const playerPlace = state.cupEntries.indexOf(humanEntry(0)) + 1;
+  const secondEntry = humanEntry(1);
+  const secondPlace = state.cupEntries.indexOf(secondEntry) + 1;
   const podium = state.cupEntries.slice(0, 3).map((entry, index) => ({
     place: index + 1,
     driverId: entry.driver.id,
@@ -3077,13 +3389,22 @@ function showPodium() {
     teamColor: entry.kart.body,
     points: entry.points,
     isPlayer: entry.isPlayer,
+    tag: entryTag(entry),
   }));
+  // Two players: each one's result, e.g. "Cup winner: Leclerc" or "Leclerc 3rd · Hamilton 6th".
+  const name = (entry) => surnameOf(entry.driver.name);
+  const winner = activeCup.season ? "World champion" : "Cup winner";
+  const title = !secondEntry
+    ? (playerPlace === 1 ? winner : `You finished ${formatOrdinal(playerPlace)}`)
+    : playerPlace === 1 || secondPlace === 1
+      ? `${winner}: ${name(playerPlace === 1 ? humanEntry(0) : secondEntry)}`
+      : `${name(humanEntry(0))} ${formatOrdinal(playerPlace)} · ${name(secondEntry)} ${formatOrdinal(secondPlace)}`;
   const constructors = activeCup.season && state.season ? constructorRows() : null;
   window.Screens.showPodium({
     kicker: constructors ? `${activeCup.name} complete · Constructors' champions: ${constructors[0].name}` : `${activeCup.name} complete`,
-    title: playerPlace === 1 ? (activeCup.season ? "World champion" : "Cup winner") : `You finished ${formatOrdinal(playerPlace)}`,
+    title,
     podium,
-    career: careerForCup(state.lastCupCareer, playerPlace),
+    career: bothCareers(careerForCup(state.lastCupCareer, playerPlace), secondEntry ? careerForCup(state.lastSecondCupCareer, secondPlace, secondEntry) : null),
   });
   // The ceremony in 3D (r3d/podium.js): the cup's real top three. Until it
   // can draw, the screen's 2D steps stand in.
@@ -3133,8 +3454,8 @@ function pauseQuitHint(finished) {
 // finalised (the cars still running are placed on their pace, as the time
 // limit would) and counts, before going back to the pit lane.
 function quitToPitLane() {
-  const player = getPlayer();
-  if (state.phase === "race" && player && player.finished && !state.resultsQueued) {
+  const people = humans();
+  if (state.phase === "race" && people.length && people.every((racer) => racer.finished) && !state.resultsQueued) {
     state.resultsQueued = true;
     completeRemainingFinishers(raceNow());
     finalizeRace();
@@ -3183,6 +3504,10 @@ function resetToGarage() {
   state.cameraHeading = 0;
   state.camPos = null;
   state.camRoll = 0;
+  state.humanIds = [];
+  state.cupPlayers = 1;
+  state.second = {};
+  releaseAllKeys();
   addFeed("Back in the pit lane.");
   if (window.Screens) window.Screens.showPitLane();
 }
@@ -3371,6 +3696,7 @@ function replayGraphics(frame, shot, focus) {
     gap: i === 0 ? (c.finished ? "FIN" : "LEADER") : `+${formatGap(c.gap)}`,
     isFocus: c.meta.id === shot.focusId,
     isPlayer: c.meta.isPlayer,
+    tag: h.players && c.meta.player ? `P${c.meta.player}` : "",
   }));
   const lapShown = leader.finished ? h.laps : Math.min(leader.lap + 1, h.laps);
   const lap = leader.finished ? "FINISH" : lapShown === h.laps ? "FINAL LAP" : `LAP ${lapShown}/${h.laps}`;
@@ -3381,16 +3707,18 @@ function replayGraphics(frame, shot, focus) {
   const k = frame.k;
   const history = [];
   const keys = fc.meta.isPlayer;
+  // (Player 2's own keys, in a two-player race.)
+  const own = (c) => (fc.meta.player === 2 ? c.keys2 : c.keys);
   if (shot.mode === "onboard") {
     for (let j = Math.max(0, k - Math.round(REPLAY_TRACE_MS / rec.sampleMs)); j <= k; j += 1) {
       const c = rec.controls(j, fc.index);
       history.push(keys
-        ? { throttle: c.keys.throttle ? 1 : 0, brake: c.keys.brake ? 1 : 0 }
+        ? { throttle: own(c).throttle ? 1 : 0, brake: own(c).brake ? 1 : 0 }
         : { throttle: c.throttle, brake: c.brake });
     }
   }
   const now = rec.controls(k, fc.index);
-  const steer = keys ? (now.keys.right ? 1 : 0) - (now.keys.left ? 1 : 0) : fc.steer;
+  const steer = keys ? (own(now).right ? 1 : 0) - (own(now).left ? 1 : 0) : fc.steer;
   return {
     time: r.time,
     duration: rec.duration,
@@ -3404,7 +3732,7 @@ function replayGraphics(frame, shot, focus) {
     tower,
     focus: {
       id: fc.meta.id, name: fc.meta.name, code: fc.meta.code, number: fc.meta.number, team: fc.meta.team, color: fc.meta.color,
-      place: fc.place, isPlayer: fc.meta.isPlayer, finished: fc.finished,
+      place: fc.place, isPlayer: fc.meta.isPlayer, finished: fc.finished, tag: h.players && fc.meta.player ? `P${fc.meta.player}` : "",
       interval: ahead && !fc.finished ? `+${formatGap(Math.max(0, fc.gap - ahead.gap))}` : "",
       // As the race's speed panel shows it.
       kph: Math.round(Math.abs(focus ? focus.speed : fc.speed) * KPH_PER_UNIT),
@@ -3456,7 +3784,7 @@ function drawReplay() {
       racing: false,
       trackside: replayTrackside(frame, ghosts, now),
       weather: rec.header.weather,
-      view: { mode: shot.mode, focusId: focus.id, alsoShow: rec.header.playerId, cut: r.cut },
+      view: { mode: shot.mode, focusId: focus.id, alsoShow: rec.header.players || rec.header.playerId, cut: r.cut },
     }));
   }
   r.cut = false;
@@ -3486,6 +3814,138 @@ function handleReplayKey(event) {
   else if (lower === "x") exitReplay();
   else handled = false;
   if (handled) event.preventDefault();
+}
+
+// ---------------------------------------------------------------------------
+// Split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md):
+// each player's view drawn into its own part of the window, with its own
+// camera and HUD. Player 1's camera and HUD state are the state's own fields;
+// player 2's are swapped in while player 2's view is drawn.
+// ---------------------------------------------------------------------------
+
+const VIEW_FIELDS = ["playerId", "cameraHeading", "camPos", "camRoll", "camLastHeading", "hudLastPlace",
+  "hudPlaceFlashUntil", "hudPlaceFlashDir", "finalLapAt", "shakeMag", "shakeUntil"];
+
+function resetSecondView() {
+  const second = state.humanIds[1] ? racerById(state.humanIds[1]) : null;
+  state.second = second ? {
+    playerId: second.id, cameraHeading: second.heading, camPos: null, camRoll: 0, camLastHeading: second.heading,
+    hudLastPlace: 0, hudPlaceFlashUntil: 0, hudPlaceFlashDir: 0, finalLapAt: 0, shakeMag: 0, shakeUntil: 0,
+  } : {};
+}
+
+function asPlayer(slot, draw) {
+  if (!slot) return draw();
+  const mine = {};
+  VIEW_FIELDS.forEach((k) => { mine[k] = state[k]; state[k] = state.second[k]; });
+  try {
+    return draw();
+  } finally {
+    VIEW_FIELDS.forEach((k) => { state.second[k] = state[k]; state[k] = mine[k]; });
+  }
+}
+
+// Two views while a two-player session is on track (the replay and the
+// podium are one picture).
+function splitActive() {
+  return twoPlayerSession() && state.humanIds.length === 2 && !["replay", "podium"].includes(state.phase);
+}
+
+function splitLayout() {
+  return TwoPlayer.layout(canvas.clientWidth || SAFE_WIDTH, canvas.clientHeight || SAFE_HEIGHT);
+}
+
+// The renderer is told the views (or that there is one) before the circuit
+// is prepared, so its effects are sized for them before the first frame.
+let viewportsKey = "";
+function syncViewports() {
+  const layout = splitActive() ? splitLayout() : null;
+  const views = layout ? layout.views : null;
+  // Side by side, the feed ticker sits under the first view, not on the divider (play.css).
+  const arrangement = layout ? layout.arrangement : "";
+  if (document.body.dataset.split !== arrangement) document.body.dataset.split = arrangement;
+  if (!window.Render3D || !window.Render3D.setViewports) return;
+  const key = views ? `${views[0].x},${views[0].y},${views[0].w},${views[0].h},${views[1].x},${views[1].y}` : "";
+  if (key === viewportsKey) return;
+  viewportsKey = key;
+  window.Render3D.setViewports(views);
+}
+
+// What each view drew last frame (for the checks): its rectangle, whose it
+// is, and every HUD panel's box in CSS px.
+const splitDrawn = { layout: null, views: [] };
+const viewsKept = [{ boxes: [] }, { boxes: [] }];
+let drawingView = null;
+
+// (Only while the checks ask: Game.probeHud.)
+let hudProbe = false;
+function noteHudBox(x, y, w, h) {
+  if (!drawingView || !hudProbe) return;
+  const m = ctx.getTransform();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  drawingView.boxes.push({ x: (m.a * x + m.e) / dpr, y: (m.d * y + m.f) / dpr, w: (m.a * w) / dpr, h: (m.d * h) / dpr });
+}
+
+function drawSplit(track) {
+  const layout = splitLayout();
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const whole = { width: view.width, height: view.height, scale: view.scale };
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  splitDrawn.layout = layout;
+  splitDrawn.views.length = 0;
+  layout.views.forEach((rect, slot) => {
+    const fit = TwoPlayer.hudFit(rect.w, rect.h);
+    view.width = fit.width;
+    view.height = fit.height;
+    view.scale = fit.scale * dpr;
+    // (Kept from frame to frame; the HUD notes only while the checks probe.)
+    drawingView = viewsKept[slot];
+    Object.assign(drawingView, { slot, rect, playerId: state.humanIds[slot], fit: fit.scale, hud: hudProbe ? {} : null });
+    drawingView.boxes.length = 0;
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.beginPath();
+    ctx.rect(rect.x, rect.y, rect.w, rect.h);
+    ctx.clip();
+    ctx.setTransform(view.scale, 0, 0, view.scale, rect.x * dpr, rect.y * dpr);
+    try {
+      asPlayer(slot, () => drawTrack(track));
+    } finally {
+      ctx.restore();
+      splitDrawn.views.push(drawingView);
+      drawingView = null;
+    }
+  });
+  Object.assign(view, whole);
+  // The tower and the ticker line up with the views' HUD.
+  setHudScale(TwoPlayer.hudFit(layout.views[0].w, layout.views[0].h).scale);
+  // The rule between the views: dark, with a thin line of the game's red.
+  const d = layout.divider;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#08080f";
+  ctx.fillRect(d.x, d.y, d.w, d.h);
+  ctx.fillStyle = "#e10600";
+  if (layout.arrangement === "stacked") ctx.fillRect(d.x, d.y + d.h / 2 - 0.75, d.w, 1.5);
+  else ctx.fillRect(d.x + d.w / 2 - 0.75, d.y, 1.5, d.h);
+  ctx.setTransform(view.scale, 0, 0, view.scale, 0, 0);
+}
+
+// The player tag at the top of each split view: P1 or P2 in the player's
+// colour, and the driver's code.
+const PLAYER_COLOURS = ["#75d5ff", "#ff7ac6"];
+function drawPlayerTag(player) {
+  const slot = player.playerSlot || 0;
+  const text = `P${slot + 1} · ${player.driver.code}`;
+  ctx.save();
+  ctx.font = "bold 14px Trebuchet MS";
+  const w = Math.ceil(ctx.measureText(text).width) + 26;
+  const x = Math.round(view.width / 2 - w / 2);
+  hudPanel(x, 10, w, 26, PLAYER_COLOURS[slot]);
+  ctx.fillStyle = PLAYER_COLOURS[slot];
+  ctx.textAlign = "center";
+  ctx.fillText(text, view.width / 2 + 2, 28);
+  ctx.restore();
 }
 
 function drawTrack(track) {
@@ -4264,15 +4724,19 @@ function drawDriverView(track) {
       camPos: state.camPos,
       roll: state.camRoll,
       shake: getScreenShake(),
-      powerUps: powerUpFrame(now),
+      powerUps: powerUpsThisFrame(now),
       particles: state.particles,
       now,
       // Real racing frames only, for the graphics auto tier: not the
       // countdown, qualifying, a pause, the loading panel, or the
       // fast-forward after the flag.
       racing: state.phase === "race" && !state.paused && !state.preparing && !state.flagOutAt,
-      trackside: tracksideFrame(now),
+      trackside: tracksideThisFrame(now),
       weather: state.weather,
+      // Split screen: which view this is, and the other player's car kept in
+      // sight after it finishes.
+      viewIndex: drawingView ? drawingView.slot : undefined,
+      alsoShow: drawingView ? state.humanIds[1 - drawingView.slot] : undefined,
     }));
     if (surface.ok) {
       const onKerb = surface.value && surface.value.onKerb;
@@ -4280,6 +4744,7 @@ function drawDriverView(track) {
       drawDriverItemBadge(player);
       drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
       drawDriverHud(track, player);
+      if (drawingView) drawPlayerTag(player);
       if (state.phase === "countdown") drawStartLights(now);
       drawLightsOutFlash(now);
       return;
@@ -4287,7 +4752,7 @@ function drawDriverView(track) {
     // The 3D renderer failed on this frame: carry on in 2D from here.
   }
 
-  state.fallbackFrames += 1;
+  if (!drawingView || drawingView.slot === 0) state.fallbackFrames += 1;
   let samples = buildDriverRoadSamples(track, player, cameraHeading);
   const onScreen = samples.filter((sample) => sample.y > CAMERA.horizon - 4
     && sample.y < view.height + 500
@@ -4333,6 +4798,7 @@ function drawDriverView(track) {
   drawDriverItemBadge(player);
   drawMiniMap(track, player, { x: view.width - 224, y: 12, width: 212, height: 212 });
   drawDriverHud(track, player);
+  if (drawingView) drawPlayerTag(player);
   if (state.phase === "countdown") drawStartLights(renderClock());
   drawLightsOutFlash(renderClock());
 }
@@ -4410,28 +4876,34 @@ function initAudio() {
   audio.noiseBuffer = makeNoiseBuffer(ctxA);
 
   // Engine: two detuned oscillators through a lowpass that opens with revs.
-  const engineGain = ctxA.createGain();
-  engineGain.gain.value = 0;
-  const engineFilter = ctxA.createBiquadFilter();
-  engineFilter.type = "lowpass";
-  engineFilter.frequency.value = 700;
-  engineFilter.Q.value = 6;
-  const oscA = ctxA.createOscillator();
-  oscA.type = "sawtooth";
-  oscA.frequency.value = 55;
-  const oscB = ctxA.createOscillator();
-  oscB.type = "square";
-  oscB.frequency.value = 82;
-  const oscBGain = ctxA.createGain();
-  oscBGain.gain.value = 0.4;
-  oscA.connect(engineFilter);
-  oscB.connect(oscBGain);
-  oscBGain.connect(engineFilter);
-  engineFilter.connect(engineGain);
-  engineGain.connect(audio.master);
-  oscA.start();
-  oscB.start();
-  audio.engine = { oscA, oscB, gain: engineGain, filter: engineFilter };
+  // A second voice is player 2's in a two-player race (silent otherwise).
+  const engineVoice = () => {
+    const engineGain = ctxA.createGain();
+    engineGain.gain.value = 0;
+    const engineFilter = ctxA.createBiquadFilter();
+    engineFilter.type = "lowpass";
+    engineFilter.frequency.value = 700;
+    engineFilter.Q.value = 6;
+    const oscA = ctxA.createOscillator();
+    oscA.type = "sawtooth";
+    oscA.frequency.value = 55;
+    const oscB = ctxA.createOscillator();
+    oscB.type = "square";
+    oscB.frequency.value = 82;
+    const oscBGain = ctxA.createGain();
+    oscBGain.gain.value = 0.4;
+    oscA.connect(engineFilter);
+    oscB.connect(oscBGain);
+    oscBGain.connect(engineFilter);
+    engineFilter.connect(engineGain);
+    engineGain.connect(audio.master);
+    oscA.start();
+    oscB.start();
+    return { oscA, oscB, gain: engineGain, filter: engineFilter };
+  };
+  audio.engine = engineVoice();
+  audio.engine2 = engineVoice();
+  const engineGain = audio.engine.gain;
 
   // Tyre scrub: looping noise through a bandpass, opened while sliding.
   const screechSource = ctxA.createBufferSource();
@@ -4542,7 +5014,7 @@ function initAudio() {
   hissFilter.connect(hissGain);
   hissGain.connect(audio.master);
   hissSource.start();
-  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, rain: rainGain, hiss: hissGain, convolver, engineGain, feeding: false };
+  audio.venue = { reverb: reverbGain, crowd: crowdGain, hum: humGain, rotor: rotorGain, rain: rainGain, hiss: hissGain, convolver, engineGain, engineGain2: audio.engine2.gain, feeding: false };
 
   audio.ready = true;
   updateSoundButton();
@@ -4691,33 +5163,50 @@ function venueSound(player, racing) {
   return out;
 }
 
-function updateEngineAudio(player) {
+// One engine voice following one car (pitch: player 2's sits a touch higher,
+// so the two can be told apart; share: the level when two are heard).
+function driveEngineVoice(voice, player, racing, now, pitch = 1, share = 1) {
+  const maxSpeed = Math.max(1, player ? player.physics.maxSpeed : 1);
+  const ratio = player ? clamp(Math.abs(player.speed) / maxSpeed, 0, 1.25) : 0;
+  // Fake gearing: the note climbs, drops back, and climbs again.
+  const geared = (ratio * 4) % 1;
+  const base = (46 + geared * 58 + ratio * 66) * pitch;
+  voice.oscA.frequency.setTargetAtTime(base, now, 0.05);
+  voice.oscB.frequency.setTargetAtTime(base * 1.5, now, 0.05);
+  voice.filter.frequency.setTargetAtTime(420 + ratio * 2400, now, 0.06);
+  const idle = racing ? 0.055 : 0;
+  const level = !player || player.finished ? 0 : (idle + ratio * 0.1) * share;
+  voice.gain.gain.setTargetAtTime(level, now, 0.09);
+}
+
+// second: player 2's car in a two-player race.
+function updateEngineAudio(player, second = null) {
   if (!audio.ready || !audio.engine) return;
   const ctxA = audio.ctx;
   const now = ctxA.currentTime;
   const racing = state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying";
-  const maxSpeed = Math.max(1, player ? player.physics.maxSpeed : 1);
-  const ratio = player ? clamp(Math.abs(player.speed) / maxSpeed, 0, 1.25) : 0;
-
-  // Fake gearing: the note climbs, drops back, and climbs again.
-  const geared = (ratio * 4) % 1;
-  const base = 46 + geared * 58 + ratio * 66;
-  audio.engine.oscA.frequency.setTargetAtTime(base, now, 0.05);
-  audio.engine.oscB.frequency.setTargetAtTime(base * 1.5, now, 0.05);
-  audio.engine.filter.frequency.setTargetAtTime(420 + ratio * 2400, now, 0.06);
-  const idle = racing ? 0.055 : 0;
-  const level = player && player.finished ? 0 : idle + ratio * 0.1;
-  audio.engine.gain.gain.setTargetAtTime(level, now, 0.09);
+  driveEngineVoice(audio.engine, player, racing, now, 1, second ? 0.75 : 1);
+  driveEngineVoice(audio.engine2, second, racing && Boolean(second), now, 1.12, 0.75);
 
   if (audio.venue) {
     // The convolver only runs where the circuit has a tunnel or a bridge.
     const rings = Boolean(state.track && state.track.reverbZones && state.track.reverbZones.length);
     if (rings !== audio.venue.feeding) {
-      if (rings) audio.venue.engineGain.connect(audio.venue.convolver);
-      else audio.venue.engineGain.disconnect(audio.venue.convolver);
+      [audio.venue.engineGain, audio.venue.engineGain2].forEach((g) => {
+        if (rings) g.connect(audio.venue.convolver);
+        else g.disconnect(audio.venue.convolver);
+      });
       audio.venue.feeding = rings;
     }
+    // Two players: each sound as loud as it is for whichever is nearer it.
     const venue = venueSound(player, racing);
+    if (second) {
+      const near = { ...venue };
+      const theirs = venueSound(second, racing);
+      Object.keys(near).forEach((k) => { near[k] = Math.max(near[k], theirs[k]); });
+      state.venueSound = near;
+      Object.assign(venue, near);
+    }
     audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9, now, 0.08);
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
@@ -4727,8 +5216,9 @@ function updateEngineAudio(player) {
   }
 
   if (audio.screech) {
-    const sliding = player && !player.finished
-      && (player.drifting || (Math.abs(player.speed) > 60 && !findSurfaceInfo(player, state.track).onRoad));
+    const slides = (p) => p && !p.finished
+      && (p.drifting || (Math.abs(p.speed) > 60 && !findSurfaceInfo(p, state.track).onRoad));
+    const sliding = slides(player) || slides(second);
     audio.screech.gain.gain.setTargetAtTime(sliding ? 0.13 : 0, now, 0.07);
   }
 }
@@ -4833,10 +5323,12 @@ function drawSceneParticles(player, cameraHeading) {
     });
 }
 
-function addScreenShake(magnitude, durationMs) {
+// The shake is the player's own: player 2's goes to player 2's view.
+function addScreenShake(magnitude, durationMs, racer = null) {
   const now = performance.now();
-  state.shakeMag = Math.min(11, Math.max(state.shakeMag || 0, magnitude));
-  state.shakeUntil = Math.max(state.shakeUntil || 0, now + durationMs);
+  const own = racer && racer.playerSlot === 1 ? state.second : state;
+  own.shakeMag = Math.min(11, Math.max(own.shakeMag || 0, magnitude));
+  own.shakeUntil = Math.max(own.shakeUntil || 0, now + durationMs);
 }
 
 function getScreenShake() {
@@ -4863,6 +5355,7 @@ function drawStartLights(now) {
   const x = Math.round(view.width / 2 - panelWidth / 2);
   const y = 62;
 
+  noteHudBox(x, y - 16, panelWidth, panelHeight + 16);
   ctx.save();
   ctx.fillStyle = "rgba(10, 8, 16, 0.9)";
   ctx.fillRect(x, y, panelWidth, panelHeight);
@@ -4972,6 +5465,7 @@ function drawMiniMap(track, player, frame) {
   const cy = frame.y + frame.height / 2;
   const radius = Math.min(frame.width, frame.height) / 2 - 6;
   const scale = radius / geo.radius;
+  noteHudBox(frame.x, frame.y - 12, frame.width, frame.height + 12);
   // A world point straight ahead of the camera must land straight up.
   const rot = -(state.cameraHeading || 0) - Math.PI / 2;
   const cosR = Math.cos(rot);
@@ -5021,8 +5515,10 @@ function drawMiniMap(track, player, frame) {
   const fov = Math.atan(view.width / 2 / CAMERA.focal);
   const eye = toMap(state.camPos || player);
   const wedge = ctx.createRadialGradient(eye.x, eye.y, 0, eye.x, eye.y, radius * 1.15);
-  wedge.addColorStop(0, "rgba(117, 213, 255, 0.42)");
-  wedge.addColorStop(1, "rgba(117, 213, 255, 0)");
+  // (Player 2's view in player 2's colour.)
+  const own = drawingView && drawingView.slot === 1 ? "255, 122, 198" : "117, 213, 255";
+  wedge.addColorStop(0, `rgba(${own}, 0.42)`);
+  wedge.addColorStop(1, `rgba(${own}, 0)`);
   ctx.beginPath();
   ctx.moveTo(eye.x, eye.y);
   ctx.arc(eye.x, eye.y, radius * 1.15, -Math.PI / 2 - fov, -Math.PI / 2 + fov);
@@ -5044,7 +5540,7 @@ function drawMiniMap(track, player, frame) {
   }
   ctx.restore();
 
-  const pu = powerUpFrame(renderClock());
+  const pu = powerUpsThisFrame(renderClock());
   pu.hazards.concat(pu.trails).forEach((h) => {
     const point = toMap(h);
     ctx.fillStyle = "#08080c";
@@ -5069,6 +5565,11 @@ function drawMiniMap(track, player, frame) {
     if (racer.id === player.id) return;
     const point = toMap(racer);
     const place = sorted.findIndex((entry) => entry.id === racer.id) + 1;
+    // The other player, in their own colour.
+    if (drawingView && isHuman(racer)) {
+      drawMapBlip(point.x, point.y, racer.heading + rot, PLAYER_COLOURS[racer.playerSlot || 0], 4.2, "#fff0c9");
+      return;
+    }
     drawMapBlip(point.x, point.y, racer.heading + rot, racer.driver.color, 3.1, "rgba(6, 4, 10, 0.9)");
     if (place <= 3) {
       ctx.strokeStyle = "rgba(231, 184, 61, 0.8)";
@@ -5081,12 +5582,12 @@ function drawMiniMap(track, player, frame) {
 
   const me = toMap(player);
   const pulse = 5.5 + Math.sin(renderClock() / 260) * 1.4;
-  ctx.strokeStyle = "rgba(117, 213, 255, 0.85)";
+  ctx.strokeStyle = `rgba(${own}, 0.85)`;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   ctx.arc(me.x, me.y, pulse, 0, TAU);
   ctx.stroke();
-  drawMapBlip(me.x, me.y, player.heading + rot, "#75d5ff", 4.6, "#fff0c9");
+  drawMapBlip(me.x, me.y, player.heading + rot, PLAYER_COLOURS[drawingView ? player.playerSlot || 0 : 0], 4.6, "#fff0c9");
 
   ctx.restore();
 
@@ -5142,6 +5643,7 @@ function getPlaceStyle(place) {
 }
 
 function hudPanel(x, y, w, h, accent) {
+  noteHudBox(x, y, w, h);
   ctx.fillStyle = "rgba(8, 6, 14, 0.9)";
   ctx.fillRect(x, y, w, h);
   ctx.strokeStyle = "rgba(255, 240, 201, 0.24)";
@@ -5195,10 +5697,13 @@ function drawQualifyingHud(track, player) {
   ctx.fillText(`${track.name.toUpperCase()} · QUALIFYING${state.weather === "wet" ? " · WET" : ""}`, 34, 34);
   ctx.fillStyle = "#fff0c9";
   ctx.font = "bold 22px Georgia";
+  // (Two players: one may be in while the other is still on their lap.)
   const label = state.phase === "qualifyingSim" ? "Timing the field…" : state.phase === "qualifyingResults" ? "Session over"
-    : !(q && q.handedOver) ? "Get ready…" : onLap ? "Flying lap" : "Out lap";
+    : player.finished ? ((player.playerSlot === 1 ? q.secondAborted : q.aborted) ? "Lap aborted" : "Lap complete")
+      : !(q && q.handedOver) ? "Get ready…" : onLap ? "Flying lap" : "Out lap";
+  if (drawingView && drawingView.hud) drawingView.hud.label = label;
   ctx.fillText(label, 34, 62);
-  const liveLap = onLap && player.lapStartAt ? now - player.lapStartAt : 0;
+  const liveLap = player.finished ? player.lastLapTime : onLap && player.lapStartAt ? now - player.lapStartAt : 0;
   const row = (label, text, y, color) => {
     ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
     ctx.font = "bold 11px Trebuchet MS";
@@ -5207,7 +5712,7 @@ function drawQualifyingHud(track, player) {
     ctx.font = "bold 16px Georgia";
     ctx.fillText(text, 306 - ctx.measureText(text).width, y);
   };
-  row("LAP TIME", onLap ? formatLapTime(liveLap) : "-:--.---", 92, "#fff0c9");
+  row("LAP TIME", onLap || player.finished ? formatLapTime(liveLap) : "-:--.---", 92, "#fff0c9");
   row("PROVISIONAL POLE", q && q.poleTimeMs ? formatLapTime(q.poleTimeMs) : "-:--.---", 114, "#c77dff");
   const delta = qualifyingDeltaNow();
   row("DELTA", delta === null ? "—" : `${delta <= 0 ? "−" : "+"}${formatGapTime(Math.abs(delta))}`, 136,
@@ -5225,6 +5730,7 @@ function drawDriverHud(track, player) {
   const total = sorted.length;
   const placeStyle = getPlaceStyle(place);
   const now = raceNow();
+  if (drawingView && drawingView.hud) Object.assign(drawingView.hud, { place, lap: getDisplayedLap(player, track), driver: player.driver.code });
 
   // Flash the position panel whenever a place changes hands.
   if (state.hudLastPlace && state.hudLastPlace !== place && state.phase === "race") {
@@ -5347,6 +5853,24 @@ function drawDriverHud(track, player) {
     }
   }
 
+  // ---- Two players: this one home, the other still racing ----
+  const other = drawingView ? racerById(state.humanIds[1 - drawingView.slot]) : null;
+  if (other && player.finished && !other.finished) {
+    const w = 420;
+    const x = view.width / 2 - w / 2;
+    hudPanel(x, 226, w, 70, "#e7b83d");
+    ctx.fillStyle = "#e7b83d";
+    ctx.font = "bold 30px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
+    ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
+    ctx.font = "bold 15px Trebuchet MS";
+    const waiting = `You finished P${player.finishPosition} · Player ${(other.playerSlot || 0) + 1} still racing`;
+    if (drawingView.hud) drawingView.hud.waiting = waiting;
+    ctx.fillText(waiting, view.width / 2, 288);
+    ctx.textAlign = "left";
+  }
+
   // ---- Waiting for the rest of the field ----
   if (state.flagOutAt && player.finished) {
     const done = state.racers.filter((racer) => racer.finished).length;
@@ -5359,7 +5883,7 @@ function drawDriverHud(track, player) {
     ctx.fillText("CHEQUERED FLAG", view.width / 2, 264);
     ctx.fillStyle = "rgba(255, 240, 201, 0.75)";
     ctx.font = "bold 15px Trebuchet MS";
-    ctx.fillText(`You finished P${player.finishPosition} — field coming home`, view.width / 2, 288);
+    ctx.fillText(`You finished P${player.finishPosition} · field coming home`, view.width / 2, 288);
     ctx.fillStyle = "#fff0c9";
     ctx.font = "bold 16px Georgia";
     ctx.fillText(`${done} / ${state.racers.length} classified`, view.width / 2, 310);
@@ -5372,6 +5896,7 @@ function drawDriverHud(track, player) {
 // Speed, bottom right: in the race and on a qualifying lap alike.
 function drawSpeedPanel(player) {
   const kph = Math.round(Math.abs(player.speed) * KPH_PER_UNIT);
+  if (drawingView && drawingView.hud) drawingView.hud.kph = kph;
   const speedRatio = clamp(Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), 0, 1);
   const sx = view.width - 208;
   const sy = view.height - 116;
@@ -5417,8 +5942,13 @@ function hudItemState(player, now) {
   }
   const key = player.currentItem;
   if (!key || key === "none") return null;
-  let hint = "Press Space to use";
-  if (key === "oilSlick") hint = player.trailingOil ? "TRAILING · release Space to drop" : "Tap Space: drop · Hold: trail";
+  // The player's own key (P2's is the one left of Right Shift), and their
+  // pad's button when one is in (the left face button: X on one make of pad,
+  // a square on another).
+  const slot = player.playerSlot || 0;
+  const button = `${slot ? keyLabels.Slash : "Space"}${padState[slot].connected ? " or pad left button" : ""}`;
+  let hint = `Press ${button} to use`;
+  if (key === "oilSlick") hint = player.trailingOil ? `TRAILING · release ${button} to drop` : `Tap ${button}: drop · Hold: trail`;
   return { key, label: labelizeItem(key), hint, rolling: false };
 }
 
@@ -5426,6 +5956,7 @@ function drawDriverItemBadge(player) {
   const now = renderClock();
   const slot = hudItemState(player, now);
   if (!slot) return;
+  if (drawingView && drawingView.hud) drawingView.hud.item = { label: slot.label, hint: slot.hint };
   // Wide enough for the longest line (the TRAILING hint is the longest).
   ctx.save();
   ctx.font = "bold 18px Georgia";
@@ -5438,6 +5969,7 @@ function drawDriverItemBadge(player) {
   const panelX = Math.round(view.width / 2 - panelWidth / 2);
   const panelY = view.height - 104;
 
+  noteHudBox(panelX, panelY, panelWidth, panelHeight);
   ctx.save();
   ctx.fillStyle = "rgba(18, 10, 21, 0.84)";
   ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
@@ -5623,15 +6155,59 @@ function shiftRaceClocks(delta) {
   ["countdownStart", "flagOutAt", "resultTimeoutAt", "shakeUntil"].forEach((field) => {
     if (state[field]) state[field] += delta;
   });
+  if (state.second.shakeUntil) state.second.shakeUntil += delta;
 }
 
 // Space came up (or focus went): a trailed slick is dropped, and a press too
 // short to start trailing was a tap, which drops it too.
-function letGoOfOil() {
-  const player = getPlayer();
+function letGoOfOil(player = getPlayer()) {
   if (!player || player.finished || player.currentItem !== "oilSlick") return;
   if (player.trailingOil) releaseTrail(player, raceNow());
   else if (player.oilHoldStart) useItem(player, raceNow());
+}
+
+// A player's power-up key (or pad button) went down: fire, or start holding
+// an oil slick (held long enough, it trails).
+function pressItem(player) {
+  // A finished car is parked on the line: it has nothing left to fire.
+  if (!player || player.finished || state.phase !== "race" || state.paused) return;
+  if (player.currentItem === "oilSlick") {
+    if (!player.trailingOil) player.oilHoldStart = raceNow();
+  } else if (player.currentItem !== "none") {
+    useItem(player, raceNow());
+  }
+}
+
+function itemHeld(slot) {
+  return Boolean((slot ? input2.item : input.space) || padState[slot].item);
+}
+
+// The gamepads, once a frame: the first connected drives player 1, the
+// second player 2 (in a two-player session). Their power-up button and Start
+// act on the press, as the keys do.
+function pollPads() {
+  let list = [];
+  try {
+    list = navigator.getGamepads ? TwoPlayer.padsInOrder(navigator.getGamepads()) : [];
+  } catch (error) {
+    list = [];
+  }
+  // One slot with one player, two with two; a player keeps their pad.
+  padSlots = TwoPlayer.assignPads(twoPlayerSession() ? [padSlots[0], padSlots[1]] : [padSlots[0]], list);
+  for (let slot = 0; slot < 2; slot += 1) {
+    const index = padSlots[slot] ?? null;
+    const pad = index === null ? null : list.find((p) => p.index === index) || null;
+    TwoPlayer.readPad(pad, padState[slot]);
+    padState[slot].connected = Boolean(pad);
+    const now = padState[slot];
+    const was = padWas[slot];
+    const player = humanBySlot(slot);
+    if (now.item && !was.item) pressItem(player);
+    if (!now.item && was.item && !state.paused && !(slot ? input2.item : input.space)) letGoOfOil(player);
+    if (now.pause && !was.pause && ["race", "countdown", "qualifying", "qualifyingSim"].includes(state.phase)) togglePause();
+    was.item = now.item;
+    was.pause = now.pause;
+  }
 }
 
 function togglePause() {
@@ -5641,7 +6217,8 @@ function togglePause() {
     state.paused = false;
     state.pausedAt = 0;
     // Space let go of during the pause: act on it now the race is running.
-    if (!input.space) letGoOfOil();
+    if (!itemHeld(0)) letGoOfOil();
+    if (state.humanIds[1] && !itemHeld(1)) letGoOfOil(humanBySlot(1));
   } else {
     state.paused = true;
     state.pausedAt = performance.now();
@@ -5681,14 +6258,17 @@ function drawPauseOverlay() {
   ctx.fillStyle = "rgba(255, 240, 201, 0.7)";
   ctx.fillText("Esc or P to resume", view.width / 2, view.height / 2 + 30);
   ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
-  const me = getPlayer();
-  ctx.fillText(pauseQuitHint(Boolean(me && me.finished && state.phase === "race")), view.width / 2, view.height / 2 + 54);
+  const people = humans();
+  ctx.fillText(pauseQuitHint(Boolean(people.length && people.every((racer) => racer.finished) && state.phase === "race")), view.width / 2, view.height / 2 + 54);
   ctx.textAlign = "left";
   ctx.restore();
 }
 
 function update(now) {
+  frameNo += 1;
   fitViewToElement();
+  pollPads();
+  syncViewports();
   // The real time since the last frame; physics turns it into fixed steps.
   const dt = clamp((now - (state.lastTimestamp || now)) / 1000, 0, 0.25);
   state.lastTimestamp = now;
@@ -5710,14 +6290,15 @@ function update(now) {
     }
   }
 
-  updateEngineAudio(getPlayer());
+  updateEngineAudio(getPlayer(), splitActive() ? humanBySlot(1) : null);
 
   if (state.phase === "podium") {
     drawPodiumScene();
   } else if (state.phase === "replay" && state.replay) {
     drawReplay();
   } else if (state.phase !== "garage") {
-    drawTrack(state.track);
+    if (splitActive()) drawSplit(state.track);
+    else drawTrack(state.track);
     if (state.paused) drawPauseOverlay();
   } else {
     drawGarageScene();
@@ -5835,11 +6416,28 @@ function bindEvents() {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Shift"].includes(event.key) || event.code === "Space") {
       event.preventDefault();
     }
-    if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") input.throttle = true;
-    if (event.key === "ArrowDown" || event.key.toLowerCase() === "s") input.brake = true;
-    if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
-    if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
-    if (event.key === "Shift") input.drift = true;
+    // Two players: each key set drives its own car (by physical key).
+    if (twoPlayerSession()) {
+      const hit = TwoPlayer.keyFor(event.code);
+      if (hit) {
+        event.preventDefault();
+        if (hit.action === "item") {
+          if (hit.player) input2.item = true;
+          else input.space = true;
+          if (!event.repeat) pressItem(humanBySlot(hit.player));
+        } else {
+          (hit.player ? input2 : input)[hit.action] = true;
+        }
+        // A driving key is only that (KeyA types q on AZERTY: never Quit).
+        return;
+      }
+    } else {
+      if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") input.throttle = true;
+      if (event.key === "ArrowDown" || event.key.toLowerCase() === "s") input.brake = true;
+      if (event.key === "ArrowLeft" || event.key.toLowerCase() === "a") input.left = true;
+      if (event.key === "ArrowRight" || event.key.toLowerCase() === "d") input.right = true;
+      if (event.key === "Shift") input.drift = true;
+    }
     if (event.key.toLowerCase() === "p" && (state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying")) {
       event.preventDefault();
       togglePause();
@@ -5849,23 +6447,29 @@ function bindEvents() {
       event.preventDefault();
       quitToPitLane();
     }
-    if (event.code === "Space") {
+    if (event.code === "Space" && !twoPlayerSession()) {
       event.preventDefault();
       input.space = true;
-      const player = getPlayer();
-      // A finished car is parked on the line: it has nothing left to fire.
-      if (event.repeat || !player || player.finished || state.phase !== "race" || state.paused) return;
-      if (player.currentItem === "oilSlick") {
-        if (!player.trailingOil) player.oilHoldStart = raceNow();
-      } else if (player.currentItem !== "none") {
-        useItem(player, raceNow());
-      }
+      if (!event.repeat) pressItem(getPlayer());
     }
   });
 
   window.addEventListener("keyup", (event) => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " ", "Shift"].includes(event.key) || event.code === "Space") {
       event.preventDefault();
+    }
+    const hit = twoPlayerSession() ? TwoPlayer.keyFor(event.code) : null;
+    if (hit) {
+      event.preventDefault();
+      if (hit.action === "item") {
+        if (hit.player) input2.item = false;
+        else input.space = false;
+        // While paused the race is frozen: the slick is let go on resume.
+        if (!state.paused && !padState[hit.player].item) letGoOfOil(humanBySlot(hit.player));
+      } else {
+        (hit.player ? input2 : input)[hit.action] = false;
+      }
+      return;
     }
     if (event.key === "ArrowUp" || event.key.toLowerCase() === "w") input.throttle = false;
     if (event.key === "ArrowDown" || event.key.toLowerCase() === "s") input.brake = false;
@@ -5875,7 +6479,7 @@ function bindEvents() {
     if (event.code === "Space") {
       input.space = false;
       // While paused the race is frozen: the slick is let go on resume.
-      if (!state.paused) letGoOfOil();
+      if (!state.paused && !padState[0].item) letGoOfOil();
     }
   });
 
@@ -5884,8 +6488,11 @@ function bindEvents() {
   // Losing focus loses the key-up: count Space as released rather than keep a
   // slick trailing forever (while paused, it drops on resume).
   window.addEventListener("blur", () => {
-    input.space = false;
-    if (!state.paused) letGoOfOil();
+    releaseAllKeys();
+    if (!state.paused) {
+      letGoOfOil();
+      if (state.humanIds[1]) letGoOfOil(humanBySlot(1));
+    }
   });
 
   // A hidden tab stops drawing, but the race clock would keep running behind
@@ -5903,6 +6510,16 @@ window.Game = {
   selectDifficulty,
   selectGridMode,
   selectWeatherMode,
+  selectPlayers,
+  stepSecondDriver,
+  // The checks ask each split view to note its HUD panels and values.
+  probeHud(on) { hudProbe = Boolean(on); },
+  // What the split screen drew last frame (the checks read it).
+  splitInfo: () => (splitActive() ? {
+    arrangement: splitDrawn.layout && splitDrawn.layout.arrangement,
+    divider: splitDrawn.layout && { ...splitDrawn.layout.divider },
+    views: splitDrawn.views.map((v) => ({ slot: v.slot, rect: { ...v.rect }, playerId: v.playerId, fit: v.fit, hud: { ...(v.hud || {}) }, boxes: v.boxes.map((b) => ({ ...b })) })),
+  } : null),
   startCup,
   startRaceFromQualifying,
   nextRace,
@@ -5934,6 +6551,7 @@ loadAudioPreference();
 loadCupPreference();
 loadDifficultyPreference();
 loadDriverPreference();
+settleSecondDriver();
 if (window.Screens) {
   window.Screens.init();
   window.Screens.showPitLane();

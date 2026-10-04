@@ -390,3 +390,19 @@ html, body { height: 100%; overflow: hidden; }
   .bc-trace { display: none; }
   .bc-tower { width: 12.5em; }
 }
+
+/* ---- Two-player split screen: player 2's driver, and the P1 / P2 tags ---- */
+.second-driver[hidden] { display: none; }
+.second-pick { display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.second-name { display: inline-flex; align-items: center; gap: 0.4em; font-weight: 700; min-width: 0; }
+.second-name i { display: inline-block; width: 4px; height: 1.1em; background: var(--team, var(--red)); }
+.second-name small { color: var(--muted); font-weight: 600; }
+.ptag {
+  display: inline-block; margin-left: 0.4em; padding: 0 0.35em; border-radius: 2px;
+  font: 900 0.72em/1.45 var(--font); letter-spacing: 0.04em; color: #0b0b12; background: #75d5ff; vertical-align: 0.1em;
+}
+.is-p2 .ptag { background: #ff7ac6; }
+.tower-row.is-p2 { background: rgba(255, 122, 198, 0.24); }
+.result-row.is-p2 { background: rgba(255, 122, 198, 0.16); }
+/* Side by side, the feed ticker sits under the first view, clear of the divider. */
+body[data-split="side"] .ticker { left: 25%; max-width: 44vw; }

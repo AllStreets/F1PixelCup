@@ -154,7 +154,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -626,7 +626,9 @@ function inspect() {
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
   // The replay's camera, when one drew the last frame.
   const view = viewInfo;
-  return { drawing, view, drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  // Split screen: the views, and each one's camera as last drawn.
+  const split = viewports ? { rects: viewports.map((r) => ({ ...r })), cams: viewCams.slice(0, viewports.length).map((c) => ({ ...c })) } : null;
+  return { drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -804,14 +806,14 @@ function updateTrackside(world, track, life, now, dt) {
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
 // does: dark going in, bright coming out.
-function updateTunnelLight(world, track, dt) {
+function updateTunnelLight(world, track, dt, tunnel = world.tunnel) {
   const base = world.light;
   let inside = 0;
   if (track.tunnel && window.Venue) {
     const at = world.course.nearestSample(camera.position.x, camera.position.z);
     if (at && camera.position.y - at.h < TUNNEL_ROOF) inside = Venue.reverbAt(at.d, [track.tunnel], track.totalLength);
   }
-  const t = world.tunnel;
+  const t = tunnel;
   t.inside = inside;
   t.adapted += (inside - t.adapted) * (1 - Math.exp(-dt / 0.5));
   hemi.intensity = base.hemi;
@@ -996,8 +998,8 @@ function syncCars(world, racers, player, now, dt, alsoShow, cut = false) {
     const car = ensureCar(world, racer);
     seen.add(racer.id);
     // A finished car is parked out of the way, except the one in view (and,
-    // in a replay, the player's, as the race showed it).
-    const visible = !racer.finished || racer.id === player.id || racer.id === alsoShow;
+    // in a replay or split screen, the players', as the race showed them).
+    const visible = !racer.finished || racer.id === player.id || (Array.isArray(alsoShow) ? alsoShow.includes(racer.id) : racer.id === alsoShow);
     car.root.visible = visible;
     if (!visible) return;
     const spinning = racer.spinUntil > now;
@@ -1048,6 +1050,8 @@ function syncCars(world, racers, player, now, dt, alsoShow, cut = false) {
 // instead of cropping the road at the edges.
 function fitFov(fov) {
   const aspect = camera.aspect || 16 / 9;
+  // A split-screen view has its own rule (twoplayer.js): it can be far wider.
+  if (viewportOn && window.TwoPlayer) return window.TwoPlayer.viewFov(fov, aspect);
   if (aspect >= 16 / 9) return fov;
   const half = Math.atan(Math.tan((fov * Math.PI) / 360) * (16 / 9) / aspect);
   return (half * 360) / Math.PI;
@@ -1065,16 +1069,86 @@ function resize() {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // The effects work at the size of one split-screen view, or the canvas.
+  const split = viewports ? viewports[0] : null;
+  const effects = split ? `${split.w}x${split.h}` : "";
   // three sizes the canvas with Math.floor: compare the same way, or a
   // fractional pixel ratio would resize on every frame.
-  if (renderer.getPixelRatio() !== dpr || canvas3d.width !== Math.floor(w * dpr) || canvas3d.height !== Math.floor(h * dpr)) {
+  if (renderer.getPixelRatio() !== dpr || canvas3d.width !== Math.floor(w * dpr) || canvas3d.height !== Math.floor(h * dpr) || effects !== sizedEffects) {
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     particleMat.uniforms.scale.value = h * dpr * 0.9;
-    postfx.setSize(w, h, dpr);
+    if (split) postfx.setSize(split.w, split.h, dpr, true);
+    else postfx.setSize(w, h, dpr);
+    sizedEffects = effects;
+    // setSize puts the viewport back to the whole canvas, but not the
+    // scissor: that goes back here, so nothing after a split is clipped.
+    renderer.setScissorTest(false);
+    viewportOn = false;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md):
+// two views of the one scene, each in its own viewport. game.js sets the
+// views (CSS px from the canvas's top left; null for one view) before the
+// circuit is prepared, so the effects are sized for them before the first
+// frame, then renders each with frame.viewIndex.
+// ---------------------------------------------------------------------------
+
+let viewports = null;
+let viewportOn = false;
+let sizedEffects = "";
+const fullSize = new THREE.Vector2();
+
+function setViewports(rects) {
+  viewports = rects && rects.length ? rects.map((r) => ({ x: r.x, y: r.y, w: r.w, h: r.h })) : null;
+  resize();
+  // One view again: the whole canvas, and nothing of player 2's view kept.
+  if (!viewports) {
+    useViewport(null);
+    postfx.dropViews();
+    rain.dropViews();
+  }
+}
+
+// Draw into one rectangle of the canvas (CSS px from its top left), or, with
+// null, the whole of it again.
+function useViewport(rect) {
+  renderer.getSize(fullSize);
+  if (!rect) {
+    // (Cheap, and it must never be left on: the clips would cut the picture.)
+    renderer.setScissorTest(false);
+    if (!viewportOn) return;
+    viewportOn = false;
+    renderer.setViewport(0, 0, fullSize.x, fullSize.y);
+    renderer.setScissor(0, 0, fullSize.x, fullSize.y);
+    camera.aspect = fullSize.x / Math.max(1, fullSize.y);
+    camera.updateProjectionMatrix();
+    particleMat.uniforms.scale.value = fullSize.y * renderer.getPixelRatio() * 0.9;
+    return;
+  }
+  viewportOn = true;
+  const y = fullSize.y - rect.y - rect.h;
+  renderer.setViewport(rect.x, y, rect.w, rect.h);
+  renderer.setScissor(rect.x, y, rect.w, rect.h);
+  renderer.setScissorTest(true);
+  const aspect = rect.w / Math.max(1, rect.h);
+  if (camera.aspect !== aspect) {
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+  }
+  particleMat.uniforms.scale.value = rect.h * renderer.getPixelRatio() * 0.9;
+}
+
+// The second view's own camera state; the first view's is the world's own
+// (world.fov, world.rumble, world.tunnel), where the checks read it.
+function viewState(world, index) {
+  if (!index) return world;
+  if (!world.second) world.second = { fov: BASE_FOV, rumble: 0, tunnel: { inside: 0, adapted: 0 } };
+  return world.second;
 }
 
 // What the player's tyres are on: kerb, grass/run-off, or tarmac.
@@ -1095,51 +1169,66 @@ let lastNow = 0;
 const lookTarget = new THREE.Vector3();
 
 // Called by game.js each frame in place of the 2D road, scenery and cars.
+// Split screen calls it once per view (frame.viewIndex, after setViewports):
+// the first view also does the frame's own work (the cars, the power-ups, the
+// particles, the boxes, trackside life); each view has its own camera.
+let lastDt = 0;
 function render(frame) {
   if (!api.ready) return null;
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
-  viewInfo = null;
-  const dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
-  lastNow = now;
+  const index = viewports && frame.viewIndex !== undefined ? frame.viewIndex : 0;
+  const rect = viewports && frame.viewIndex !== undefined ? viewports[index] || null : null;
+  const first = index === 0;
+  let dt = lastDt;
+  if (first) {
+    viewInfo = null;
+    dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
+    lastNow = now;
+    lastDt = dt;
+  }
   resize();
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would
   // compile them all at once and freeze the page.
   if (!prepare(track, racers, frame.weather)) {
+    useViewport(null);
     renderer.setRenderTarget(null);
     renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
     renderer.clear();
     return { onKerb: false };
   }
+  useViewport(rect);
   const { course } = world;
-  garage.group.visible = false;
-  world.group.visible = true;
-  powerUpLayer.group.visible = particles.visible = true;
-
+  const own = viewState(world, index);
   // A replay's cut (a seek, opening it): what eases from frame to frame
   // starts from the moment itself, not from wherever the last frame was.
   const cut = Boolean(frame.view && frame.view.cut);
-  syncCars(world, racers, player, now, dt, frame.view && frame.view.alsoShow, cut);
-  if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
-  syncParticles(list, course);
-  world.boxes.forEach((b, i) => {
-    const hidden = powerUps && powerUps.boxHidden[i];
-    const u = b.userData;
-    const target = hidden ? 0 : 1;
-    // Burst away fast when taken, grow back more slowly with a shimmer.
-    const rate = hidden ? dt / 0.15 : dt / 0.3;
-    u.scale = cut ? target : (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
-    b.scale.setScalar(Math.max(0.0001, u.scale));
-    b.visible = u.scale > 0.001;
-    // It glows brighter while it grows back.
-    const glow = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
-    // Relative to each material's own resting glow (0.35 for the stand-in).
-    u.glow.forEach((m) => { m.emissiveIntensity = (m.userData.baseEmissive ?? 0.35) * (glow / 0.35); });
-    u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
-    b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
-  });
-  world.landmarks.userData.animate?.(dt);
+  if (first) {
+    garage.group.visible = false;
+    world.group.visible = true;
+    powerUpLayer.group.visible = particles.visible = true;
+    syncCars(world, racers, player, now, dt, (frame.view && frame.view.alsoShow) || frame.alsoShow, cut);
+    if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
+    syncParticles(list, course);
+    world.boxes.forEach((b, i) => {
+      const hidden = powerUps && powerUps.boxHidden[i];
+      const u = b.userData;
+      const target = hidden ? 0 : 1;
+      // Burst away fast when taken, grow back more slowly with a shimmer.
+      const rate = hidden ? dt / 0.15 : dt / 0.3;
+      u.scale = cut ? target : (u.scale ?? 1) + Math.max(-rate, Math.min(rate, target - (u.scale ?? 1)));
+      b.scale.setScalar(Math.max(0.0001, u.scale));
+      b.visible = u.scale > 0.001;
+      // It glows brighter while it grows back.
+      const glow = 0.35 + (u.scale < 1 && !hidden ? (1 - u.scale) * 1.5 : 0);
+      // Relative to each material's own resting glow (0.35 for the stand-in).
+      u.glow.forEach((m) => { m.emissiveIntensity = (m.userData.baseEmissive ?? 0.35) * (glow / 0.35); });
+      u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
+      b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
+    });
+    world.landmarks.userData.animate?.(dt);
+  }
 
   // Speed: the field of view opens up and the camera drops and pushes its
   // aim further down the road as the car gets going.
@@ -1147,16 +1236,16 @@ function render(frame) {
   const sf = Math.min(1, speed / 230);
   const boosting = player.formationUntil > now || player.boostUntil > now;
   const targetFov = BASE_FOV + 15 * Math.pow(sf, 1.4) + (boosting ? 8 : 0);
-  world.fov += (targetFov - world.fov) * Math.min(1, dt * 4);
-  setFov(world.fov);
+  own.fov += (targetFov - own.fov) * Math.min(1, dt * 4);
+  setFov(own.fov);
 
   // Rumble: hard and fast over kerbs, looser off the track, a faint buzz at
   // top speed on the tarmac.
   const surface = surfaceUnder(world, player);
   const target = (surface.onKerb ? 1 : surface.offTrack ? 0.55 : 0) * Math.min(1, speed / 60) + sf * 0.08;
-  world.rumble += (target - world.rumble) * Math.min(1, dt * 18);
+  own.rumble += (target - own.rumble) * Math.min(1, dt * 18);
   const t = now / 1000;
-  const r = world.rumble;
+  const r = own.rumble;
 
   const cos = Math.cos(cameraHeading);
   const sin = Math.sin(cameraHeading);
@@ -1197,16 +1286,18 @@ function render(frame) {
   // The weather: the circuit wet or dry, the rain round the camera, the
   // spray off the wheels.
   const wet = frame.weather === "wet";
-  rain.apply(world, scene, wet);
-  // Intermediates in the wet: the tyres' lettering turns green.
-  setTyreCompound(frame.weather);
-  updateTunnelLight(world, track, dt);
-  updateTrackside(world, track, frame.trackside, now, dt);
+  if (first) {
+    rain.apply(world, scene, wet);
+    // Intermediates in the wet: the tyres' lettering turns green.
+    setTyreCompound(frame.weather);
+  }
+  updateTunnelLight(world, track, dt, own.tunnel);
+  if (first) updateTrackside(world, track, frame.trackside, now, dt);
   // In the helicopter view the camera is in it.
   if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
-  rain.update({ camera, world, racers, dt, isWet: wet });
+  rain.update({ camera, world, racers, dt, isWet: wet, view: index });
   // Models loaded since (car bodies, items) learn the tunnel's light too.
-  if (track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
+  if (first && track.tunnel && (tunnelPatchTick = (tunnelPatchTick + 1) % 90) === 0) lightInTunnel(scene);
 
   // Shadows follow the player.
   sun.position.set(player.x + SUN_DIR.x * 700, ground + SUN_DIR.y * 700 + 150, player.y + SUN_DIR.z * 700);
@@ -1216,19 +1307,26 @@ function render(frame) {
   });
 
   // The frame, through the post-processing of the current tier.
-  sampleFrame(Boolean(frame.racing));
+  if (first) sampleFrame(Boolean(frame.racing));
   // A replay's fixed cameras (trackside, the helicopter) do not move with the
   // car: no speed blur or streaks there, only onboard.
   const still = frame.view && frame.view.mode !== "onboard";
   postfx.render({
+    view: index,
+    // The view's rectangle from the canvas's bottom left, as the renderer has it.
+    viewport: rect ? { x: rect.x, y: fullSize.y - rect.y - rect.h, w: rect.w, h: rect.h } : null,
     dt, now, trackId: track.id, speedFraction: still ? 0 : sf, boosting: still ? false : boosting, playerId: player.id,
     // Drops on the lens, out of the tunnel.
-    rain: wet ? 1 - world.tunnel.adapted : 0,
+    rain: wet ? 1 - own.tunnel.adapted : 0,
     sunPosition: camera.position.clone().addScaledVector(SUN_DIR, 4000),
     occluders: [world.decor, world.landmarks, ...world.circuit.userData.occluders],
   });
+  // Where each view's camera was, and whose car it followed (for the checks).
+  const cam = viewCams[index] || (viewCams[index] = {});
+  cam.playerId = player.id; cam.x = camera.position.x; cam.z = camera.position.z; cam.fov = camera.fov; cam.aspect = camera.aspect;
   return surface;
 }
+const viewCams = [];
 
 // ---------------------------------------------------------------------------
 // Replay cameras (docs/superpowers/specs/2026-10-01-replays-design.md):
@@ -1527,6 +1625,7 @@ garage.group.visible = false;
 function renderGarage(kart, driver, now) {
   if (!api.ready) return false;
   resize();
+  useViewport(null);
   if (current) {
     disposeWorld(current);
     current = null;
@@ -1630,6 +1729,7 @@ function podiumFrame(now, reserve = null) {
   if (!podium || !api.ready) return { drawing: false };
   podium.setReserve(reserve);
   resize();
+  useViewport(null);
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
   const dpr = renderer.getPixelRatio();

@@ -55,6 +55,7 @@ Accounts and Supabase are last of all, and not part of this order.
 - [ ] Render the figure dressed for real before asking: Leclerc in Ferrari colours with his helmet, and Hamilton likewise, via a small three.js preview page or the podium prototype.
 - [x] Driver v2 (branch `driver-v2`): the mannequin rebuilt as one smooth skinned body with a suit painted by region, gloved hands and real boots; `r3d/driver.js` dresses it per driver; studio at `tools/preview/driver.html`. Review page published 2026-10-01.
 - [ ] **Faces (user, 2026-10-01):** "realistic faces that look at least slightly like the driver they are supposed to look like ... they will not be wearing helmets on the podium." A realistic head (CC0 MakeHuman base and morph targets, or sculpted to that standard), eyes, brows, hair and facial hair styles, and a `look` per driver in `game-data.js` (skin, hair, beard, eyes, face shape) so each of the 20 resembles the real driver, Leclerc and Hamilton best of all. No photos of the drivers in the game; public photos as reference only. `buildDriver(driver, team, { headwear: "none" | "helmet" })`; the podium is bareheaded. Branch `driver-faces`. Review with the driver figure.
+- [ ] **Faces review notes (user, 2026-10-02):** slim the neck-to-torso junction (too wide, awkward); more specific features per driver from public photos (reference only), own brows, faces further apart; less plasticky skin; trim Hamilton's beard; braids that read as raised plaits, not flat black hair. Re-review before merge.
 - [ ] Apply the user's notes to `tools/blender/build_driver.py`. For example: face or no face, helmet on or a team cap, proportions, suit detail, more sculpted limbs. Rebuild `assets/driver.glb` and keep the Node tests green.
 
 ## 1. Stage J: trackside monuments, buildings, stands and people (Blender) **[REVIEW]**
@@ -88,6 +89,7 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
   - every landmark loads;
   - the people stay off the road;
   - frame time holds on all three tiers (Low keeps the far crowd texture only).
+- [x] First look approved (user, 2026-10-02): people are good, the Monaco casino loved. Additions: detailed realistic yachts in the water (Monaco harbour above all, every harbour venue), another really good building or two per venue, inspired by the user's Chicago open world buildings at ultra, with no lag on any tier.
 - [ ] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
 
 ## 2. Stage K: the 3D podium ceremony **[REVIEW]**
@@ -175,8 +177,8 @@ From the master to-do, unchanged.
 
 Committed (user, 2026-10-01: "all the way through the two player option").
 
-- [ ] A pit-lane option, never the default: two players, separate key sets or gamepads, two views and independent HUDs, both within the responsive rules (no black bars, the HUD on screen at every size).
-- [ ] A browser check: both drive, the HUDs are independent, it is off by default, and there are no errors. Review, merge and push.
+- [x] A pit-lane option, never the default: two players, separate key sets or gamepads, two views and independent HUDs, both within the responsive rules (no black bars, the HUD on screen at every size).
+- [x] A browser check: both drive, the HUDs are independent, it is off by default, and there are no errors. Review, merge and push.
 
 ## 8. Stage R: the README
 
