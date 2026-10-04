@@ -165,7 +165,7 @@
       ],
       podium: [
         { file: "podium-spray", label: "Champagne", caption: `${name(first)}, ${name(second)} and ${name(third)} spray the champagne`,
-          alt: `The podium: ${name(first)} on the top step, ${name(second)} second and ${name(third)} third, spraying champagne` },
+          alt: `The podium: ${name(first)} on the top step, ${name(second)} second and ${name(third)} third, bareheaded in their team suits, spraying champagne` },
         { file: "podium-arms", label: "Arms up", caption: "Arms up, each on stepping forward",
           alt: `The podium: ${name(first)}, ${name(second)} and ${name(third)} with their arms raised, name plates below` },
         { file: "podium-trophy", label: "Trophy", caption: `${name(first)} lifts the trophy under the confetti`,
