@@ -280,16 +280,17 @@ test("faces: Hamilton's beard runs full along the jaw, not in patches", () => {
   const beard = meshNode("beard");
   const pos = positions(beard);
   const edge = attribute(beard, "_HAIR_MOUSTACHE").map((v) => v[0]);
-  // Round the jaw from the chin toward the ear, either side: in every few
-  // degrees' slice the beard is full somewhere (its strip filled in).
+  // Round the jaw past the chin toward the ear, either side: in every few
+  // degrees' slice the beard is full (not thinned at an edge) over a band
+  // at least 5 mm deep, never only a vertex or two.
   for (const sgn of [1, -1]) {
-    for (let a = 0.15; a < 1.05; a += 0.1) {
-      const slice = pos.map((p, i) => [p, edge[i]]).filter(([p]) => {
+    for (let a = 0.45; a < 1.1; a += 0.1) {
+      const full = pos.filter((p, i) => {
         const b = Math.atan2(sgn * p[2], p[0] - 0.04);
-        return b > a - 0.05 && b < a + 0.05 && p[1] < 1.575;
-      });
-      const full = Math.max(0, ...slice.map(([, e]) => e));
-      assert.ok(full > 0.95, `the jaw beard is ${full.toFixed(2)} full at ${(a * sgn).toFixed(2)} rad`);
+        return b > a - 0.05 && b < a + 0.05 && p[1] < 1.575 && edge[i] > 0.95;
+      }).map((p) => p[1]);
+      const depth = full.length ? Math.max(...full) - Math.min(...full) : 0;
+      assert.ok(depth > 0.005, `the jaw beard is full over ${(depth * 1000).toFixed(1)} mm at ${(a * sgn).toFixed(2)} rad`);
     }
   }
 });

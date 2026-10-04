@@ -917,10 +917,12 @@ def beards(mats, surface, L):
     # (Trimmed close under the chin, not down the throat.)
     on_chin = lambda v: (1 - smoothstep(0.03, 0.038, abs(v.y))) * (1 - smoothstep(mouth.z - 0.011, mouth.z - 0.006, v.z)) * smoothstep(chin.z - 0.014, chin.z - 0.006, v.z)
 
+    jaw_top = lambda v: (chin.z + 0.008) * (1 - side(v)) + (ear.z - 0.04) * side(v)
+
     def jawline(v):
         # A strip along the jaw's edge, trimmed tidy and filled in: full
         # inside, its edges a few millimetres soft.
-        top = (chin.z + 0.008) * (1 - side(v)) + (ear.z - 0.04) * side(v)
+        top = jaw_top(v)
         low = top - 0.018
         return (1 - smoothstep(top - 0.002, top + 0.004, v.z)) * smoothstep(low - 0.004, low + 0.002, v.z)
     # (Full inside: the beard's area fades at its edges, which would leave the
@@ -935,7 +937,7 @@ def beards(mats, surface, L):
                       tache_flow, beard_st),
     }
     # (The jaw's strip of beard is narrower than the faces along the jaw.)
-    along_jaw = lambda c: c.z < mouth.z - 0.004 and abs(c.y) > 0.02 and c.x > ear.x - 0.01
+    along_jaw = lambda c: abs(c.y) > 0.02 and c.x > ear.x - 0.01 and jaw_top(c) - 0.03 < c.z < jaw_top(c) + 0.008
     return [skin_shell("beard", mats, "beard", surface, styles, refine=along_jaw)]
 
 

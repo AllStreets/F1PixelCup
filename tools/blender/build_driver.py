@@ -338,7 +338,7 @@ def region(c, bone):
     s = "L" if side > 0 else "R"
     if c.z > 1.478 and abs(c.y) < 0.12:
         return "balaclava"
-    if c.z > 1.442 and abs(c.y) < 0.088:
+    if c.z > 1.442 and abs(c.y) < 0.09:
         # Round the foot of the collar band (built below), the trim's colour
         # down to a clean line: wherever the band meets the suit's surface,
         # it meets its own colour.
@@ -378,8 +378,6 @@ Z = Vector((0, 0, 1))
 near_neck = lambda c: abs(c.y) < 0.13 and 1.4 < c.z < 1.52
 cut(Vector((0, 0, 1.478)), Z, near_neck)
 cut(Vector((0, 0, 1.442)), Z, near_neck)
-for y in (0.088, -0.088):
-    cut(Vector((0, y, 0)), Vector((0, 1, 0)), lambda c: c.z > 1.43 and abs(c.x) < 0.12 and abs(c.y) < 0.12)
 torso = lambda c: abs(c.y) < 0.21 and 0.9 < c.z < 1.42
 for z in (0.985, 1.03, 1.05, 1.37):
     cut(Vector((0, 0, z)), Z, torso)

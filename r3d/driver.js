@@ -236,7 +236,8 @@ function skinMaterial(look, tier = "high") {
 const HAIR_KINDS = {
   hair: { layers: 22, solid: 1, deep: 0.32, shine: 1, strands: [2800, 70], clumps: [230, 16] },
   beard: { layers: 12, solid: 0.4, deep: 0.55, shine: 0.5, strands: [2200, 160], clumps: [260, 30] },
-  brows: { layers: 6, solid: 0.2, deep: 0.75, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
+  // (A brow draws its own coverage, from the driver's density: its `solid` is unused.)
+  brows: { layers: 6, solid: 1, deep: 0.75, shine: 0.3, strands: [4500, 110], clumps: [370, 26] },
 };
 // On Medium and Low, fewer layers: the strands are coarser close up, the
 // same from the podium's cameras.
@@ -263,7 +264,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
     hairShine: { value: kind.shine * (pattern === "braids" ? 1.6 : 1) },
     hairVolume: { value: opts.volume || 1 },
     browShape: { value: new THREE.Vector4(b.thickness, b.arch, b.tail, b.gap) },
-    browDensity: { value: b.density === undefined ? 0.8 : b.density },
+    browDensity: { value: b.density },
     strandScale: { value: new THREE.Vector2(...kind.strands) },
     clumpScale: { value: new THREE.Vector2(...kind.clumps) },
   };
@@ -400,13 +401,22 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
         float aa = mix(max(fwidth(strand), 0.02), 0.12, blur);
         diffuseColor.a = smoothstep(need - aa, need + aa, strand);
         #ifdef HAIR_BROWS
-          // A brow is hairs with skin between them: as dense as the driver's
-          // own (browDensity), thinning out a layer at a time; seen from
-          // afar, the share of the skin they cover rather than a solid bar
-          // (alpha to coverage dithers it).
-          float cover = hairEdge * browDensity * (1.0 - 0.3 * vLayer);
-          float sharp = smoothstep(1.0 - cover - aa, 1.0 - cover + aa, strand);
-          diffuseColor.a = mix(sharp, min(1.0, cover * 1.1), blur);
+          // A brow is hairs with skin between them: each layer covers a
+          // share of the skin (never more than about half: the layers lie
+          // a little apart, so together they cover more, and the skin
+          // must still show), as dense as the driver's own (browDensity),
+          // thinner layer by layer out and in clumps; seen from afar, the
+          // share they cover together (dithered), never a solid bar.
+          float cover = min(0.55, 0.6 * hairEdge * browDensity) * (1.0 - 0.6 * pow(vLayer, 1.2) * (1.0 - 0.5 * hairClump));
+          // The strand value below which a share 1 - cover of strands lies
+          // (strands are not evenly spread: a fit to their distribution).
+          float p = 1.0 - cover;
+          float q = p < 0.9 ? 0.5 + 0.506 * (p - 0.5) : mix(0.702, 0.97, (p - 0.9) / 0.1);
+          float sharp = smoothstep(q - aa, q + aa, strand);
+          // (Alpha to coverage gives every layer the same dither for the same
+          // alpha, so from afar the layers would not add up: the far alpha is
+          // what the layers cover together, about three layers' worth.)
+          diffuseColor.a = mix(sharp, min(0.9, 1.0 - pow(1.0 - cover, 3.0)), blur);
         #endif
         if (hairEdge <= 0.0 || diffuseColor.a < 0.02) discard;
         // Self-shadowed down in the hair; each strand a slightly different tone.
@@ -671,6 +681,7 @@ export function buildDriver(driver, team, options = {}) {
       }
       if (n.isMesh && n.name === "head_skin") head = n;
     });
+    const browUniforms = materials.has("brows") && materials.get("brows").userData.uniforms;
     const hex = (name) => (materials.has(name) ? `#${materials.get(name).color.getHexString()}` : null);
     const keys = {};
     if (head && head.morphTargetDictionary) {
@@ -687,8 +698,7 @@ export function buildDriver(driver, team, options = {}) {
       eyes: hex("eye_iris"),
       stubble: materials.has("skin") && materials.get("skin").userData.uniforms ? materials.get("skin").userData.uniforms.stubble.value : null,
       // The brows' shape and the hair's fullness the shaders really draw.
-      brows: materials.has("brows") && materials.get("brows").userData.uniforms
-        ? [...materials.get("brows").userData.uniforms.browShape.value.toArray(), materials.get("brows").userData.uniforms.browDensity.value] : null,
+      brows: browUniforms ? [...browUniforms.browShape.value.toArray(), browUniforms.browDensity.value] : null,
       hairVolume: materials.has("hair") && materials.get("hair").userData.uniforms ? materials.get("hair").userData.uniforms.hairVolume.value : null,
       keys,
     };
