@@ -97,7 +97,7 @@ async (page) => {
       skin: l.face.skin,
       wantSkin: look.skin.toLowerCase(),
       keysMatch,
-      browsMatch: JSON.stringify(l.face.brows) === JSON.stringify([look.brows.thickness, look.brows.arch, look.brows.tail, look.brows.gap]),
+      browsMatch: JSON.stringify(l.face.brows) === JSON.stringify([look.brows.thickness, look.brows.arch, look.brows.tail, look.brows.gap, look.brows.density]),
       volumeMatch: l.face.hairVolume === look.hair.volume,
     };
   }));
