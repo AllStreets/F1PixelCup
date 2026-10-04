@@ -160,7 +160,7 @@ model is unavailable it falls back to the original pseudo-3D canvas renderer.
   - Ambient occlusion baked into the model.
 
   Each team has its own paint scheme after its 2025 car (a split lower flank, a nose-to-tail fade, a pinstripe, a painted nose), plus the driver's number on the nose and engine cover and their helmet design. Wheels roll and steer, and the DRS flap opens.
-- **Blender-built drivers** (`assets/driver.glb`): a jointed figure in a race suit and gloves, with the car's helmet shell (so each driver's design carries over). Poses: stand, wave, arms up, trophy and champagne spray. They are for the podium ceremony.
+- **Blender-built drivers** (`assets/driver.glb`): a jointed figure in a race suit and gloves. Poses: stand, wave, arms up, trophy and champagne spray. They are for the podium ceremony, where they stand bareheaded with their own faces.
 - **The circuit** is extruded from the physics centreline: tarmac, kerbs only
   where it bends, gravel traps on the outside of corners, run-off that narrows
   wherever another stretch of the lap is close, advertising barriers, catch

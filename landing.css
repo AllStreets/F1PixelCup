@@ -224,7 +224,8 @@ body.landing { overflow-x: hidden; }
   font: 700 0.85rem/1 var(--font); white-space: nowrap;
 }
 .key small { color: var(--p); font-size: 0.62rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.howto-sub { margin-top: 22px !important; }
+.howto-block .howto-sub { margin-top: 22px; }
+.keymap-note { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted); font-size: 0.8rem; line-height: 1.45; }
 
 @media (max-width: 900px) {
   .feature, .feature.flip { grid-template-columns: minmax(0, 1fr); grid-template-areas: "gallery" "copy"; }

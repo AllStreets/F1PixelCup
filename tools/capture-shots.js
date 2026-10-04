@@ -260,7 +260,7 @@ async (page) => {
     await freshGame();
     await p.evaluate(async ({ DAY, ci, ti }) => {
       Game.selectDriver(DRIVERS.findIndex((d) => d.id === DAY.replay));
-      Game.selectPlayers(1); Game.selectCup(ci); Game.selectGridMode("back"); Game.startCup();
+      Game.selectPlayers(1); Game.selectCup(ci); Game.selectGridMode("back"); Game.selectWeatherMode("dry"); Game.startCup();
       const front = ["norris", "piastri", "verstappen", DAY.replay, DAY.onboard, "russell"];
       const rest = state.cupEntries.map((e) => e.driver.id).filter((id) => !front.includes(id));
       state.raceIndex = ti;
@@ -268,15 +268,15 @@ async (page) => {
       startRace(ti);
       state.qualifying = null;
       for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
-      state.track.laps = 3;
       const pl = getPlayer();
       pl.isPlayer = false;
       state.phase = "race";
       let now = performance.now();
       state.raceStart = now; state.lastTick = now; state.simOffset = 0;
       state.racers.forEach((r) => { r.lapStartAt = now; });
-      for (let steps = 0; state.phase === "race" && steps < 60 * 600; steps += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+      for (let steps = 0; state.phase === "race" && steps < 60 * 900; steps += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
       pl.isPlayer = true;
+      if (state.phase === "race") throw new Error("capture-shots: the replay's race did not finish in 15 simulated minutes");
     }, { DAY, ...(await spotOf("monaco")) });
     await p.click("#results-replay");
     await p.waitForTimeout(1500);
@@ -301,16 +301,18 @@ async (page) => {
 
   // The podium: a cup whose four races finish in a set order, scored by the
   // game's own finalizeRace (DAY.podium first, second and third), then the
-  // ceremony. The page's own title and button are hidden; the 3D name plates
-  // stay. Shot at the timeline's beats (ceremony.js).
+  // ceremony. The page's own title and button are hidden; the name plates
+  // (HTML, placed under each driver) stay. Shot at the timeline's beats (ceremony.js).
   if (parts.includes("podium")) {
     await sizeTo(1600, 900);
     await freshGame();
     await p.evaluate((top) => {
       Game.selectDriver(DRIVERS.findIndex((d) => d.id === top[0]));
       Game.selectPlayers(1);
-      state.gridMode = "back";
-      startCup();
+      Game.selectCup(0);
+      Game.selectGridMode("back");
+      Game.selectWeatherMode("dry");
+      Game.startCup();
       for (let race = 0; race < getActiveCup().tracks.length; race += 1) {
         const rank = (r) => { const i = top.indexOf(r.driver.id); return i < 0 ? 99 : i; };
         [...state.racers].sort((a, b) => rank(a) - rank(b) || a.driver.name.localeCompare(b.driver.name)).forEach((r, i) => {

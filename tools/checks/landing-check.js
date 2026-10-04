@@ -6,7 +6,8 @@
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; the race-day values
 // (raceDay, raceDayImages, raceDayAlts, raceDayGallery, replayCopyTrue, twoPlayerKeys, raceDayLayout1600,
-// raceDayLayout390) and every *TextClean true; errors [].
+// raceDayLayout1000, raceDayLayout390), every navOneLine (870 to 1900) and every *TextClean true;
+// errors [] (a window the browser would not size counts as an error).
 // Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
@@ -27,13 +28,16 @@ async (page) => {
     await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
     await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
     await p.waitForTimeout(400);
+    // The window really is that size (a size the browser refuses would test another).
+    const got = await p.evaluate(() => [innerWidth, innerHeight]);
+    if (Math.abs(got[0] - width) > 2) errors.push(`window ${width}x${height} came out ${got.join("x")}`);
   };
   const noSideScroll = () => p.evaluate(() => document.documentElement.scrollWidth <= innerWidth);
   // Everything a reader can see or hear (title, description, text, alt and
-  // aria labels): no em dash, and the players are P1 and P2, never 1P or 2P.
+  // aria labels, titles): no em dash, and the players are P1 and P2, never 1P or 2P.
   const textClean = (pg) => pg.evaluate(() => {
     const text = [document.title, document.querySelector('meta[name="description"]')?.content || "", document.body.textContent,
-      ...[...document.querySelectorAll("[alt], [aria-label]")].map((e) => `${e.getAttribute("alt") || ""} ${e.getAttribute("aria-label") || ""}`)].join(" ");
+      ...[...document.querySelectorAll("[alt], [aria-label], [title]")].map((e) => `${e.getAttribute("alt") || ""} ${e.getAttribute("aria-label") || ""} ${e.getAttribute("title") || ""}`)].join(" ");
     const bad = [text.includes("—") && "em dash", /\b[12]P\b/.test(text) && "1P/2P"].filter(Boolean);
     return bad.length ? bad.join(", ") : true;
   });
@@ -126,8 +130,17 @@ async (page) => {
       if (!i.complete) await Promise.race([new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }), new Promise((r) => setTimeout(r, 4000))]);
     }
     window.scrollTo({ top: 0, behavior: "instant" });
-    return imgs.length === 15 && imgs.every((i) => i.complete && i.naturalWidth > 0 && i.loading === "lazy"
-      && Number(i.getAttribute("width")) > 0 && Number(i.getAttribute("height")) > 0);
+    // Every file a srcset offers exists (most are never loaded at this size).
+    const offered = (i) => [i.getAttribute("src"), ...(i.getAttribute("srcset") || "").split(",").map((c) => c.trim().split(/\s+/)[0])];
+    // (A thumbnail's full-size picture is what its click shows: the -400 file's 1600 one.)
+    const urls = [...new Set(imgs.flatMap((i) => [...offered(i), i.closest(".thumb") ? i.getAttribute("src").replace("-400.jpg", ".jpg") : null]).filter(Boolean))];
+    const missing = [];
+    for (const u of urls) { if (!(await fetch(u, { method: "HEAD" })).ok) missing.push(u); }
+    // Its width and height say the picture's real shape (to the pixel; a srcset
+    // image reports its size scaled to the slot, rounded).
+    const shaped = (i) => Math.abs(i.naturalHeight - (i.naturalWidth * Number(i.getAttribute("height"))) / Number(i.getAttribute("width"))) <= 1;
+    const bad = imgs.filter((i) => !(i.complete && i.naturalWidth > 0 && i.loading === "lazy" && i.decoding === "async" && shaped(i))).map((i) => i.getAttribute("src"));
+    return (imgs.length === 15 && bad.length === 0 && missing.length === 0 && urls.length >= 36) || JSON.stringify({ n: imgs.length, bad, missing, urls: urls.length });
   });
   // Leclerc is in every block's main shot; Hamilton is in the section too.
   out.raceDayAlts = await p.evaluate((blocks) => blocks.every((id) => (document.querySelector(`#${id} .feature-main img`)?.alt || "").includes("Charles Leclerc"))
@@ -142,14 +155,16 @@ async (page) => {
     const screens = await (await fetch(`./screens.js?${Date.now()}`)).text();
     const speeds = JSON.parse(game.match(/const REPLAY_SPEEDS = (\[[^\]]*\])/)[1]);
     const button = screens.match(/id="results-replay"[^>]*>([^<]+)</)[1].trim();
+    const cameras = JSON.parse(game.match(/const REPLAY_CAMERAS = (\[[^\]]*\])/)[1]);
     const copy = block.textContent;
-    return copy.includes(`${speeds[0]}x to ${speeds[speeds.length - 1]}x`) && copy.includes(button)
-      && ["Director", "Trackside", "Onboard", "Helicopter"].every((c) => copy.includes(c));
+    return copy.includes(`${speeds[0]}x to ${speeds[speeds.length - 1]}x`) && copy.includes(button) && cameras.length === 4
+      && cameras.every((c) => copy.includes(c[0].toUpperCase() + c.slice(1)));
   });
   // The two key maps (in the block and in How to play) show each player's
   // keys as the game binds them (TwoPlayer.KEYS), tagged P1 and P2.
   out.twoPlayerKeys = await p.evaluate(() => {
     if (!window.TwoPlayer) return "twoplayer.js not loaded";
+    // The check's own record of each key's QWERTY name (independent of landing.js).
     const LABEL = { KeyW: "W", KeyA: "A", KeyS: "S", KeyD: "D", ShiftLeft: "Left Shift", Space: "Space",
       ArrowUp: "↑", ArrowDown: "↓", ArrowLeft: "←", ArrowRight: "→", ShiftRight: "Right Shift", Slash: "/" };
     const maps = [...document.querySelectorAll(".keymap")];
@@ -170,14 +185,17 @@ async (page) => {
     const thumbs = block ? [...block.querySelectorAll(".feature-strip button")] : [];
     const main = block && block.querySelector(".feature-main img");
     if (thumbs.length !== 4 || !main) return false;
+    block.scrollIntoView({ block: "center", behavior: "instant" });
     const before = { src: main.currentSrc || main.src, alt: main.alt, cap: block.querySelector("figcaption").textContent };
     thumbs[2].click();
-    await new Promise((r) => { if (main.complete) r(); else { main.addEventListener("load", r, { once: true }); setTimeout(r, 4000); } });
-    const after = { src: main.currentSrc || main.src, alt: main.alt, cap: block.querySelector("figcaption").textContent };
+    await new Promise((r) => { main.addEventListener("load", r, { once: true }); setTimeout(r, 4000); });
+    const after = { src: main.currentSrc || main.src, attr: main.getAttribute("src"), alt: main.alt, cap: block.querySelector("figcaption").textContent };
     const pressed = thumbs.map((t) => t.getAttribute("aria-pressed")).join(",");
     thumbs[0].click();
-    return after.src !== before.src && after.src.includes("podium-trophy") && after.alt !== before.alt && after.cap !== before.cap
-      && main.naturalWidth > 0 && pressed === "false,false,true,false" && thumbs[0].getAttribute("aria-pressed") === "true";
+    window.scrollTo({ top: 0, behavior: "instant" });
+    return (after.src !== before.src && after.src.includes("podium-trophy") && after.attr.includes("podium-trophy") && after.alt !== before.alt && after.cap !== before.cap
+      && main.naturalWidth > 0 && pressed === "false,false,true,false" && thumbs[0].getAttribute("aria-pressed") === "true")
+      || JSON.stringify({ before, after, pressed, nw: main.naturalWidth });
   });
   out.indexTextClean = await textClean(p);
 
@@ -237,11 +255,11 @@ async (page) => {
     && JSON.parse(localStorage.getItem("f1pixelcup.profile.v2")).version === 2, v1);
   await clearProfiles();
 
-  for (const [w, h] of [[1600, 900], [1000, 700], [900, 700], [1900, 760], [560, 800], [390, 844]]) {
+  for (const [w, h] of [[1600, 900], [1000, 700], [900, 700], [870, 700], [1900, 760], [560, 800], [390, 844]]) {
     await size(w, h);
     out[`noSideScroll${w}`] = await noSideScroll();
     // Where the top nav shows, its links sit on one line between the wordmark and Play.
-    if (w >= 900) {
+    if (w >= 870) {
       out[`navOneLine${w}`] = await p.evaluate(() => {
         const r = (s) => document.querySelector(s).getBoundingClientRect();
         const links = [...document.querySelectorAll(".topnav a")].map((a) => a.getBoundingClientRect());
@@ -249,7 +267,7 @@ async (page) => {
           && r(".wordmark").right < r(".topnav").left && r(".topnav").right < r(".topbar .go-btn").left;
       });
     }
-    if (w === 1600 || w === 390) out[`raceDayLayout${w}`] = await raceDayLayout(w === 1600 ? "beside" : "stacked");
+    if ([1600, 1000, 390].includes(w)) out[`raceDayLayout${w}`] = await raceDayLayout(w === 390 ? "stacked" : "beside");
     if (w === 560) {
       out.puPhoneOneColumn = await p.evaluate(() => {
         const cards = [...document.querySelectorAll("#power-ups .pu-card")];
