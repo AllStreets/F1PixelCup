@@ -391,11 +391,21 @@ async (page) => {
       const r = state.replay;
       if (r.playing) Game.replay.togglePlay();
       Game.replay.setCamera("trackside");
+      // (The circuit was started without its loading panel: its shaders may
+      // still be compiling, and nothing is drawn until they are.)
+      // (A frame first: until one is drawn, the last circuit's view is what
+      // the renderer remembers.)
+      for (let i = 0; i < 1200 && (i < 2 || !Render3D.viewShot()); i += 1) await new Promise((res) => requestAnimationFrame(res));
       const h = r.rec.header;
       let worst = { ms: 0 };
       let frames = 0;
       let shots = 0;
-      for (const id of [h.cars[0].id, h.playerId, h.cars[Math.floor(h.cars.length / 2)].id]) {
+      // Frames not trackside (gone onboard): where, and with the onboard graphics?
+      const off = { outsideTunnel: [], noTrace: 0 };
+      const tunnel = state.track.tunnel;
+      const L = state.track.totalLength;
+      const inTunnel = (d) => tunnel && ((d - tunnel.from + 40) % L + L) % L <= ((tunnel.to - tunnel.from) % L + L) % L + 80;
+      for (const id of [...new Set([h.cars[0].id, h.playerId, h.cars[Math.floor(h.cars.length / 2)].id])]) {
         r.focusId = id;
         let run = null;
         const end = (t) => { if (run && t - run.from > worst.ms) worst = { ms: t - run.from, ...run }; run = null; };
@@ -405,17 +415,29 @@ async (page) => {
           const v = Render3D.sightOfView();
           frames += 1;
           if (v) shots += 1;
+          else {
+            const d = r.ghosts.get(id).trackDistance;
+            if (!inTunnel(d)) off.outsideTunnel.push(Math.round(d));
+            if (document.getElementById("bc-trace").classList.contains("hidden")) off.noTrace += 1;
+          }
           if (v && v.hidden) { if (!run) run = { from: t, id, cam: v.cam, by: v.by }; } else end(t);
         }
         end(r.rec.duration + 100);
       }
-      out[track] = { frames, shots, worst, camsMs: Math.round(Render3D.inspect().view.camsMs) };
+      out[track] = { frames, shots, worst, off: { outsideTunnel: off.outsideTunnel.slice(0, 8), count: off.outsideTunnel.length, noTrace: off.noTrace }, camsMs: Math.round(Render3D.inspect().view.camsMs) };
       Game.replay.exit();
     }
     return out;
   }, BRIEF_MS);
   info.sight = sight;
-  const seen = (id) => sight && sight[id] && typeof sight[id] === "object" && sight[id].shots > 100 && sight[id].worst.ms <= BRIEF_MS;
+  // Every frame trackside (at least 97% of them) but where no camera can see
+  // the road (Monaco's tunnel, and a stretch either side): those go onboard,
+  // with the onboard graphics. No trackside frame loses its car for long.
+  const seen = (id) => {
+    const x = sight && sight[id];
+    return Boolean(x && typeof x === "object" && x.worst.ms <= BRIEF_MS && x.off.count === 0 && x.off.noTrace === 0
+      && (id === "monaco" ? x.shots / x.frames >= 0.8 : x.shots / x.frames >= 0.97));
+  };
   results.tracksideAlwaysSeesItsCar = (seen("monaco") && seen("singapore")) || JSON.stringify(sight);
 
   await context.close();

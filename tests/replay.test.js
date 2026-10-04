@@ -393,9 +393,77 @@ test("coverage: where no camera sees the car (a tunnel) there is none, and only 
 
 test("coverage: a blip of a few metres (a lamp post) does not cut away and back", () => {
   const { L, cams } = coverageCams();
-  const sees = (k, d) => !(k === 2 && d >= 2600 && d < 2620);
+  // The post hides a little of the car: most of it is still in view.
+  const sees = (k, d) => (k === 2 && d >= 2600 && d < 2620 ? 0.8 : 1);
   const cover = Replay.assignTvCoverage(cams, L, sees);
   for (let d = 2400; d < 2800; d += 2) assert.equal(Replay.tvCameraAt(cover, d), 2, `d ${d}`);
+});
+
+test("coverage: a short stretch where the car is really hidden is never handed back to the blind camera", () => {
+  const { L, cams } = coverageCams();
+  const sees = (k, d) => !(k === 2 && d >= 2600 && d < 2640);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  for (let d = 2600; d < 2640; d += 2) assert.notEqual(Replay.tvCameraAt(cover, d), 2, `d ${d}`);
+});
+
+test("coverage: a blip across the line is kept as one, and the lap's two ends agree", () => {
+  const { L, cams } = coverageCams();
+  // Camera 3 (3500, covering 2850 to 3850 and on round to 0 by its stretch
+  // ... here the line falls inside camera 0's stretch: 3850 to 850).
+  const sees = (k, d) => (k === 0 && (d >= L - 20 || d < 20) ? 0.8 : 1);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  for (const d of [L - 30, L - 10, 0, 10, 30]) assert.equal(Replay.tvCameraAt(cover, d), 0, `d ${d}`);
+  // And a real blind run across the line goes elsewhere, with no -1.
+  const blind = Replay.assignTvCoverage(cams, L, (k, d) => !(k === 0 && (d >= L - 40 || d < 40)));
+  for (const d of [L - 30, L - 10, 0, 10, 30]) {
+    const k = Replay.tvCameraAt(blind, d);
+    assert.ok(k >= 0 && k !== 0, `d ${d}: ${k}`);
+  }
+  // The same camera both sides of the line (no cut at the line itself).
+  assert.equal(Replay.tvCameraAt(blind, L - 10), Replay.tvCameraAt(blind, 10));
+});
+
+test("coverage: a lap that is not a whole number of bins tests its short last bin inside the lap", () => {
+  const L = 4010;
+  const cams = [500, 1500, 2500, 3500].map((d) => ({ d }));
+  cams.forEach((c, k) => { c.from = ((cams[(k + 3) % 4].d + 350) % L + L) % L; });
+  cams.forEach((c, k) => { c.to = cams[(k + 1) % 4].from; });
+  const asked = [];
+  Replay.assignTvCoverage(cams, L, (k, d) => { asked.push(d); return true; });
+  assert.ok(asked.every((d) => d >= 0 && d < L), JSON.stringify(asked.filter((d) => d >= L)));
+  assert.ok(asked.includes(4005), "the last bin's middle");
+});
+
+test("coverage: the cut to the next stretch falls on its boundary only when that camera sees there", () => {
+  const { L, cams } = coverageCams();
+  // Camera 1 (stretch from 850) cannot see 850 to 880: the cut waits.
+  const cover = Replay.assignTvCoverage(cams, L, (k, d) => !(k === 1 && d >= 850 && d < 880));
+  assert.equal(Replay.tvCameraAt(cover, 855), 0);
+  assert.equal(Replay.tvCameraAt(Replay.assignTvCoverage(cams, L, () => true), 855), 1);
+});
+
+test("coverage: where no camera sees all of a stretch, the one that sees most of it (and most of the car) has it", () => {
+  const { L, cams } = coverageCams();
+  const sees = (k, d) => (d >= 2000 && d < 2200 ? [0.2, 0.5, 0.8, 0.4][k] : 1);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  assert.equal(Replay.tvCameraAt(cover, 2100), 2);
+  // Most of it, or none: below that the stretch has no camera.
+  const dark = Replay.assignTvCoverage(cams, L, (k, d) => (d >= 2000 && d < 2200 ? 0.4 : 1));
+  assert.equal(Replay.tvCameraAt(dark, 2100), -1);
+});
+
+test("coverage by lane: a car on the side of the road a camera cannot see goes to one that can", () => {
+  const { L, cams } = coverageCams();
+  // Camera 1 cannot see the outside lane (lane 2) from 1000 to 1300; it sees
+  // the other lanes there.
+  const sees = (k, d, lane) => !(k === 1 && lane === 2 && d >= 1000 && d < 1300);
+  const cover = Replay.assignTvCoverageLanes(cams, L, sees, [-33, -11, 11, 33]);
+  assert.equal(Replay.tvCameraAt(cover, 1150, 20), 0);
+  assert.equal(Replay.tvCameraAt(cover, 1150, 0), 1);
+  assert.equal(Replay.tvCameraAt(cover, 1150, -25), 1);
+  // Off the road's edge counts as the outermost lane.
+  assert.equal(Replay.tvCameraAt(cover, 1150, 40), 0);
+  assert.equal(Replay.tvCameraAt(cover, 1600, 20), 1);
 });
 
 test("a TV camera goes only as high as it must to see its stretch (over a catch fence)", () => {

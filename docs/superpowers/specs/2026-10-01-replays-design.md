@@ -91,11 +91,16 @@ All three are computed in the renderer from the replay frame and the circuit; th
   - each candidate is moved to the nearest spot the claim system allows (clearance from the barriers of at least its radius plus a margin, not blocked by anything placed), scored by how much of its stretch it can see (rays from the camera to the car's height along the stretch, against the scenery, landmarks and the circuit's own walls and stands), and the best is claimed.
   - Camera height above the road: the lowest of 26, 40, 60 and 80 units (about 4 m up to a 13 m crane) from which it sees its whole stretch, with the catch fences counted as in the way (seen through from right behind, a fence fills the shot; the street circuits' fences stand 32 high). Failing that, the height that sees most of it.
 - **Coverage:** camera `k`'s own stretch runs from 35% of the way after the previous camera to 35% of the way to the next. It sees the car coming, follows it past, and the broadcast cuts to the next camera.
-- **Coverage follows sight** (`Replay.assignTvCoverage`), worked out once when the replay opens. The lap is cut into 20-unit stretches. A camera sees a stretch when it has a clear line, at the stretch's middle and both ends, to three points right across the road at a car's height. The line is tested against everything that stands by the circuit: its walls, barriers, stands and their roofs, the tunnel and bridges, the scenery, the landmarks and the marshal posts.
-  - Each stretch goes to its own camera while that camera sees it, else to the camera already on the car if it still sees it, else to the nearest camera round the lap that does.
-  - A gap of three stretches or fewer on its own camera (a lamp post going by) is not worth two cuts, so that camera keeps it.
-  - Where no camera can see the road (inside Monaco's tunnel), the shot goes onboard until one can, as television does.
-- **The check:** `replay-check` walks a whole replay at Monaco and at Singapore every tenth of a second, on three cars. Each frame's line of sight to the car is tested exactly (`Render3D.sightOfView`), and the check fails if a trackside shot loses its car for more than 0.4 s.
+- **Coverage follows sight** (`Replay.assignTvCoverageLanes`), worked out once when the replay opens (about 60 to 100 ms). The lap is cut into 20-unit stretches and the road into three lanes, so a car is looked for where it is: the racing line, the kerbs, the grid's outer slots.
+  - **When a lane is seen:** a camera sees a lane of a stretch when it has a clear line, at the stretch's middle and both ends, to both sides of the lane at a car's height.
+  - **What can block the line:** everything that stands by the circuit, tested exactly, instances included: its walls, barriers, stands and their roofs, the tunnel and bridges, the scenery, the landmarks and the marshal posts. Things lying on the ground do not count, and nothing farther than 1,500 units counts as seen (even the longest lens shows a speck).
+  - **Which camera gets it:** each lane of each stretch goes to its own camera while that camera sees all of it. Failing that, it goes to the camera already on the car if that one still does, then to the nearest camera round the lap that does, then to the camera that sees most of it, if that is most of it.
+  - **Short gaps:** a gap of three stretches or fewer, where the stretch's own camera still sees most of the car (a lamp post going by), is not worth two cuts, so that camera keeps it. A stretch where the car is really hidden is never handed back.
+  - **Where no camera can see the road** (inside Monaco's tunnel), the shot goes onboard until one can, with the onboard graphics, as television does.
+- **The check:** `replay-check` walks a whole replay at Monaco and at Singapore every tenth of a second, on three cars. Each frame's line of sight to the car is tested exactly (`Render3D.sightOfView`). It fails if:
+  - a trackside shot loses its car for more than 0.4 s;
+  - any frame goes onboard outside the tunnel, or goes onboard without its graphics;
+  - fewer than 97% of Singapore's frames are trackside, or fewer than 80% of Monaco's.
 - **Pan and zoom:** the camera aims at the car (a little ahead of it), and its field of view keeps the car the same size in the frame (a subject ~110 units wide), between 4° and 40°.
 
 ### Onboard (T-cam)
