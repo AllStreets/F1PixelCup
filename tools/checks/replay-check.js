@@ -31,12 +31,13 @@ async (page) => {
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 200)}`; } };
   const frames = (n = 2) => p.evaluate((n) => new Promise((done) => { let i = 0; const f = () => (++i >= n ? done() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 
-  // The circuit built for real (Monza, by id: the cups follow the calendar), then the
+  // The circuit built for real (Spa, by id: the first race of its cup, so a
+  // next race follows), then the
   // same seeded two-lap race run twice: once with the recorder switched off,
   // once with it on. Every car on autopilot.
   const race = await step(async () => {
-    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "monza"));
-    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "monza");
+    const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "spa"));
+    const ti = CUPS[ci].tracks.findIndex((t) => t.id === "spa");
     Game.selectCup(ci); Game.selectGridMode("back"); Game.startCup();
     state.raceIndex = ti;
     startRace(ti);
