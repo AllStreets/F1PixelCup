@@ -113,7 +113,7 @@ All 24 circuits of 2025. The eight we have are Monza, Spa, Silverstone, Suzuka, 
 - Albert Park, Shanghai, Jeddah, Miami, Imola, Barcelona-Catalunya, Gilles-Villeneuve, Red Bull Ring;
 - Hungaroring, Zandvoort, Baku, Circuit of the Americas, Hermanos Rodríguez, Las Vegas, Losail, Yas Marina.
 
-- [ ] **Spec:** the cups, the season mode and the care standard.
+- [x] **Spec:** the cups, the season mode and the care standard.
   - **Proposed cups, in 2025 calendar order:**
 
     | Cup | Races |
@@ -135,13 +135,13 @@ All 24 circuits of 2025. The eight we have are Monza, Spa, Silverstone, Suzuka, 
     - its own look: ground, run-off, trees or city, sky, grade and weather odds;
     - landmarks and stands from Stage J where it has them;
     - marshals and the helicopter.
-- [ ] **Batches of four (one cup each),** in calendar order. Each batch:
+- [x] **Batches of four (one cup each),** in calendar order. Each batch:
   1. `build_tracks.py` and `fetch_osm.py`, then regenerate `tracks-data.js`;
   2. venue data and landmarks;
   3. the checks: relaxation, bridge detection, no boxes on the grid, `auditScenery` at 0, and a headless race where all 20 finish;
   4. screenshots of every circuit, published on a review page for the user to see. They don't block the build: carry on, and fold in any notes.
-- [ ] **Season mode** (the original Stage L): all 24 in order, with drivers' and constructors' standings and progress saved and resumed. Per-driver careers are credited. Node tests for the standings maths; a browser check that a season runs, saves and resumes.
-- [ ] The site's circuits section and the README circuit table cover all 24. A fresh reviewer, then fix everything. Merge and push, per batch.
+- [x] **Season mode** (the original Stage L): all 24 in order, with drivers' and constructors' standings and progress saved and resumed. Per-driver careers are credited. Node tests for the standings maths; a browser check that a season runs, saves and resumes.
+- [x] The site's circuits section and the README circuit table cover all 24. A fresh reviewer, then fix everything. Merge and push, per batch.
 
 ## 4. Stage L2: historical circuits
 
