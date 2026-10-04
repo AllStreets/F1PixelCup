@@ -5,7 +5,7 @@
 
 (function () {
   const STAT_LABELS = { speed: "Speed", handling: "Handling", acceleration: "Acceleration", traction: "Traction" };
-  const OVERLAYS = ["career-screen", "settings-screen", "phone-note"];
+  const OVERLAYS = ["career-screen", "settings-screen", "phone-note", "circuits-screen"];
   const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
   const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
   const $ = (id) => document.getElementById(id);
@@ -40,7 +40,13 @@
           <button class="ghost-btn" data-action="settings" type="button">Settings</button>
         </header>
         <div class="pitlane-choices">
-          <div class="choice-row"><span class="choice-label" id="cup-label">Cup</span><span id="cup-pills" role="group" aria-labelledby="cup-label"></span></div>
+          <div class="choice-row"><span class="choice-label" id="race-label">Race</span><span id="race-pills" role="group" aria-labelledby="race-label"></span></div>
+          <div id="cup-row" class="choice-row"><span class="choice-label" id="cup-label">Cup</span><span id="cup-pills" role="group" aria-labelledby="cup-label"></span></div>
+          <div id="pick-row" class="choice-row" hidden><span class="choice-label" id="pick-label"></span><span id="pick-controls" class="pick-controls" role="group" aria-labelledby="pick-label"></span></div>
+          <ol id="cup-circuits" class="cup-circuits" aria-label="Circuits, in race order"></ol>
+          <p id="race-hint" class="choice-hint hidden"></p>
+          <p id="season-hint" class="choice-hint hidden"></p>
+          <button id="new-season" class="ghost-btn new-season hidden" data-action="newSeason" type="button">New season</button>
           <div class="choice-row"><span class="choice-label" id="difficulty-label">Difficulty</span><span id="difficulty-pills" role="group" aria-labelledby="difficulty-label"></span></div>
           <div class="choice-row"><span class="choice-label" id="grid-label">Grid</span><span id="grid-pills" role="group" aria-labelledby="grid-label" aria-describedby="grid-hint"></span></div>
           <p id="grid-hint" class="choice-hint"></p>
@@ -56,9 +62,6 @@
             </span>
           </div>
           <p id="players-hint" class="choice-hint"></p>
-          <ol id="cup-circuits" class="cup-circuits"></ol>
-          <p id="season-hint" class="choice-hint hidden"></p>
-          <button id="new-season" class="ghost-btn new-season hidden" data-action="newSeason" type="button">New season</button>
         </div>
         <div class="pitlane-driver">
           <p id="driver-kicker" class="kicker"></p>
@@ -174,6 +177,23 @@
         </div>
       </section>
 
+      <section id="circuits-screen" class="screen overlay hidden" role="dialog" aria-modal="true" aria-labelledby="circuits-title">
+        <div class="overlay-card wide picker-card">
+          <p id="circuits-kicker" class="kicker"></p>
+          <h2 id="circuits-title" class="it-title overlay-title"></h2>
+          <label class="picker-search"><span class="visually-hidden">Search circuits</span>
+            <input id="circuit-search" type="search" placeholder="Search circuits or countries" autocomplete="off" spellcheck="false" data-autofocus aria-controls="circuit-cards">
+          </label>
+          <ol id="circuit-order" class="circuit-order" aria-label="Running order"></ol>
+          <p id="circuit-count" class="choice-hint picker-count" aria-live="polite"></p>
+          <div id="circuit-cards" class="circuit-cards" role="group" aria-label="Circuits"></div>
+          <div class="overlay-actions">
+            <button id="picker-clear" class="ghost-btn" data-action="pickerClear" type="button">Clear</button>
+            <button class="go-btn" data-action="pickerDone" type="button"><span>Done ›</span></button>
+          </div>
+        </div>
+      </section>
+
       <section id="phone-note" class="screen overlay hidden" role="dialog" aria-modal="true" aria-label="Best on a computer">
         <div class="overlay-card narrow">
           <p class="kicker">Heads up</p>
@@ -186,6 +206,14 @@
         </div>
       </section>`;
     $("screens").addEventListener("click", onClick);
+    $("circuit-search").addEventListener("input", () => renderPickerCards());
+    // Enter in the search box goes to the first circuit it found.
+    $("circuit-search").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const first = $("circuit-cards").querySelector("[data-pick]");
+      if (first) first.focus();
+    });
     const seek = $("bc-seek");
     seek.addEventListener("pointerdown", () => { seeking = true; });
     // (A cancelled touch, or a lost capture, ends the drag too.)
@@ -197,7 +225,7 @@
   }
 
   function onClick(event) {
-    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-difficulty], [data-grid], [data-weather], [data-players], [data-second], [data-replay]");
+    const target = event.target.closest("[data-action], [data-driver], [data-cup], [data-race], [data-single], [data-pick], [data-move], [data-unpick], [data-difficulty], [data-grid], [data-weather], [data-players], [data-second], [data-replay]");
     if (!target || !window.Game) return;
     if (target.dataset.replay !== undefined) {
       onReplayControl(target.dataset.replay, target.dataset.value);
@@ -214,6 +242,26 @@
       }
     }
     else if (target.dataset.cup !== undefined) Game.selectCup(Number(target.dataset.cup));
+    else if (target.dataset.race !== undefined) Game.selectRaceMode(target.dataset.race);
+    else if (target.dataset.single !== undefined) {
+      Game.selectSinglePick(target.dataset.single);
+      // Chosen, with nothing chosen yet: the picker, to choose it.
+      const race = Game.getPitLaneState().race;
+      if (race.single.pick === "chosen" && !race.single.circuitId) showCircuitPicker();
+    }
+    else if (target.dataset.pick !== undefined) {
+      if (pickerSingle()) {
+        Game.chooseSingleCircuit(target.dataset.pick);
+        closeOverlay();
+      } else {
+        Game.toggleCustomCircuit(target.dataset.pick);
+      }
+    }
+    else if (target.dataset.move !== undefined) {
+      const [index, dir] = target.dataset.move.split(":").map(Number);
+      Game.moveCustomCircuit(index, dir);
+    }
+    else if (target.dataset.unpick !== undefined) Game.toggleCustomCircuit(target.dataset.unpick);
     else if (target.dataset.difficulty !== undefined) Game.selectDifficulty(Number(target.dataset.difficulty));
     else if (target.dataset.grid !== undefined) Game.selectGridMode(target.dataset.grid);
     else if (target.dataset.weather !== undefined) Game.selectWeatherMode(target.dataset.weather);
@@ -224,6 +272,10 @@
       if (action === "start") Game.startCup();
       else if (action === "next") Game.nextRace();
       else if (action === "newSeason") Game.newSeason();
+      else if (action === "reroll") Game.rerollDraw();
+      else if (action === "pickCircuits") showCircuitPicker();
+      else if (action === "pickerDone") closeOverlay();
+      else if (action === "pickerClear") Game.clearCustomCircuits();
       else if (action === "replay") Game.replay.open();
       else if (action === "race") Game.startRaceFromQualifying();
       else if (action === "pitlane") Game.backToPitLane();
@@ -263,7 +315,7 @@
 
   // The pit lane is redrawn on every pick; keep focus on the control that was
   // picked (its replacement) instead of dropping it on the page.
-  const FOCUS_KEYS = ["driver", "cup", "difficulty", "grid", "weather", "players", "second", "action"];
+  const FOCUS_KEYS = ["driver", "cup", "race", "single", "difficulty", "grid", "weather", "players", "second", "action"];
   function focusedControl() {
     const el = document.activeElement;
     if (!el || !$("pitlane").contains(el)) return null;
@@ -294,40 +346,56 @@
     $("driver-stats").innerHTML = Object.keys(STAT_LABELS).map((key) => `
       <div class="stat"><span>${STAT_LABELS[key]}</span><div class="stat-bar"><i style="width:${Math.round(num(s.stats[key]) * 100)}%"></i></div></div>
     `).join("");
-    $("cup-pills").innerHTML = s.cups.map((cup) => `
+    const race = s.race;
+    const cur = race.current;
+    $("race-pills").innerHTML = race.modes.map((m) => `
+      <button class="pill ${m.id === race.mode ? "is-on" : ""}" data-race="${esc(m.id)}" type="button" aria-pressed="${m.id === race.mode}">${esc(m.name)}</button>`).join("");
+    // The Cup row: the calendar cups (the season has its own pill above).
+    $("cup-row").hidden = race.mode !== "cup";
+    $("cup-pills").innerHTML = s.cups.filter((cup) => !cup.season).map((cup) => `
       <button class="pill ${cup.index === s.selectedCup ? "is-on" : ""}" data-cup="${cup.index}" type="button" aria-pressed="${cup.index === s.selectedCup}">${esc(cup.name)}</button>`).join("");
+    renderPickRow(race);
     $("difficulty-pills").innerHTML = s.difficulties.map((d) => `
       <button class="pill ${d.index === s.selectedDifficulty ? "is-on" : ""}" data-difficulty="${d.index}" type="button" aria-pressed="${d.index === s.selectedDifficulty}">${esc(d.name)}</button>`).join("");
     $("grid-pills").innerHTML = s.gridModes.map((m) => `
       <button class="pill ${m.id === s.gridMode ? "is-on" : ""}" data-grid="${esc(m.id)}" type="button" aria-pressed="${m.id === s.gridMode}">${esc(m.name)}</button>`).join("");
-    $("grid-hint").textContent = s.players === 2
+    // (A single race has one race to say it of.)
+    const each = cur.single ? "the race" : "every race";
+    const Each = cur.single ? "Before the race" : "Before every race";
+    $("grid-hint").textContent = s.players === 2 && !cur.season
       ? (s.gridMode === "qualifying"
-        ? "Before every race: one flying lap each, both at once, sets your grid and pays career points."
-        : "P1 and P2 start every race side by side on the last row and fight through the field.")
+        ? `${Each}: one flying lap each, both at once, sets your grid and pays career points.`
+        : `P1 and P2 start ${each} side by side on the last row and fight through the field.`)
       : s.gridMode === "qualifying"
-        ? "Before every race: one flying lap sets your grid, and pays career points."
-        : "You start every race last and fight through the field.";
+        ? `${Each}: one flying lap sets your grid, and pays career points.`
+        : `You start ${each} last and fight through the field.`;
     $("weather-pills").innerHTML = s.weatherModes.map((m) => `
       <button class="pill ${m.id === s.weatherMode ? "is-on" : ""}" data-weather="${esc(m.id)}" type="button" aria-pressed="${m.id === s.weatherMode}">${esc(m.name)}</button>`).join("");
     $("weather-hint").textContent = s.weatherMode === "wet"
-      ? "Every race in the rain: less grip in the corners, longer braking."
+      ? (cur.single ? "In the rain: less grip in the corners, longer braking." : "Every race in the rain: less grip in the corners, longer braking.")
       : s.weatherMode === "changeable"
-        ? "Each race rains as often as it really does there: Spa one in two, the desert almost never."
-        : s.cups[s.selectedCup].season ? "Dry races all season." : "Dry races all cup.";
-    // A cup's four circuits; the season's 24 in one line, first to last.
-    const circuits = s.cups[s.selectedCup].circuits;
-    $("cup-circuits").innerHTML = s.cups[s.selectedCup].season
-      ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0])} to ${esc(circuits[circuits.length - 1])}</li>`
-      : circuits.map((name) => `<li>${esc(name)}</li>`).join("");
+        ? (cur.single ? "It rains as often as it really does there: Spa one race in two, the desert almost never." : "Each race rains as often as it really does there: Spa one in two, the desert almost never.")
+        : cur.season ? "Dry races all season." : cur.single ? "A dry race." : "Dry races all cup.";
+    // A cup's four circuits; the season's 24 in one line, first to last; a
+    // custom cup still being chosen says how many are to come.
+    const circuits = cur.circuits;
+    const todo = race.mode === "custom" && circuits.length < race.cupSize
+      ? `<li class="is-todo">${circuits.length ? `${num(race.cupSize - circuits.length)} more to choose` : `No circuits chosen yet`}</li>`
+      : race.mode === "single" && !circuits.length ? `<li class="is-todo">No circuit chosen yet</li>` : "";
+    $("cup-circuits").innerHTML = cur.season
+      ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0].name)} to ${esc(circuits[circuits.length - 1].name)}</li>`
+      : circuits.map((c) => `<li data-circuit="${esc(c.id)}">${esc(c.name)}</li>`).join("") + todo;
+    $("cup-circuits").classList.toggle("is-numbered", race.mode === "random" || race.mode === "custom");
     // One player or two (split screen); player 2's driver and both key sets.
     // The season is one player's championship: no second player there.
-    const seasonPicked = s.cups[s.selectedCup].season;
+    const seasonPicked = cur.season;
     const players = seasonPicked ? 1 : s.players;
     $("players-pills").innerHTML = [[1, "1 player"], [2, "2 players"]].map(([n, label]) => `
       <button class="pill ${n === players ? "is-on" : ""}" data-players="${n}" type="button" aria-pressed="${n === players}"${seasonPicked && n === 2 ? " disabled" : ""}>${label}</button>`).join("");
     $("second-driver").hidden = players !== 2;
     $("second-driver").style.setProperty("--team", s.secondDriver.teamColor);
     $("second-name").innerHTML = `<i></i><b>${num(s.secondDriver.number)}</b> ${esc(s.secondDriver.name)} <small>${esc(s.secondDriver.team)}</small>`;
+    $("players-hint").classList.toggle("is-plain", players !== 2);
     $("players-hint").textContent = seasonPicked
       ? "The season is one player's championship."
       : s.players === 2
@@ -340,16 +408,137 @@
     const saved = s.savedSeason;
     $("start-cup").innerHTML = saved
       ? `<span>Resume season · Race ${num(saved.nextRace)} of ${num(saved.races)} ›</span>`
-      : `<span>Start ${esc(s.cups[s.selectedCup].name)} ›</span>`;
+      : !race.ready
+        ? (race.mode === "custom" ? `<span>Choose ${num(race.cupSize)} circuits ›</span>` : "<span>Choose a circuit ›</span>")
+        : cur.single ? "<span>Start single race ›</span>" : `<span>Start ${esc(cur.name)} ›</span>`;
     $("season-hint").textContent = saved
       ? `Saved: ${saved.driver} on ${saved.difficulty}, ${saved.grid.toLowerCase()}, ${saved.weather.toLowerCase()} weather. Resuming keeps its driver and these settings.`
-      : s.cups[s.selectedCup].season ? "All 24 races in calendar order, for the drivers' and constructors' titles. Saved after every race." : "";
-    $("season-hint").classList.toggle("hidden", !s.cups[s.selectedCup].season);
+      : cur.season ? `All ${num(cur.circuits.length)} races in calendar order, for the drivers' and constructors' titles. Saved after every race.` : "";
+    $("season-hint").classList.toggle("hidden", !cur.season);
     $("new-season").classList.toggle("hidden", !saved);
     $("new-season").textContent = saved && saved.confirming ? "Throw away the saved season? Click again" : "New season";
     refreshCareerChip();
     restoreFocus(was);
     showroomStale = true;
+  }
+
+  // The row under Race for a random cup (the reroll), a custom cup (the
+  // picker) or a single race (random or chosen), with its hint.
+  function renderPickRow(race) {
+    const mode = race.mode;
+    const row = $("pick-row");
+    row.hidden = !["random", "custom", "single"].includes(mode);
+    const reroll = '<button class="pill pick-btn" data-action="reroll" type="button"><i aria-hidden="true">↻</i> Reroll</button>';
+    const choose = (label) => `<button class="pill pick-btn" data-action="pickCircuits" type="button" aria-haspopup="dialog">${esc(label)}</button>`;
+    let label = "";
+    let controls = "";
+    let hint = "";
+    if (mode === "random") {
+      label = "Draw";
+      controls = reroll;
+      hint = `Four circuits drawn from all ${num(race.poolSize)}, no repeats. Reroll for another four.`;
+    } else if (mode === "custom") {
+      label = "Circuits";
+      controls = choose(race.custom.length ? "Change circuits" : "Choose circuits");
+      hint = "Any four circuits, in the order you choose.";
+    } else if (mode === "single") {
+      label = "Circuit";
+      controls = [["random", "Random"], ["chosen", "Chosen"]].map(([id, name]) => `
+        <button class="pill ${race.single.pick === id ? "is-on" : ""}" data-single="${id}" type="button" aria-pressed="${race.single.pick === id}">${name}</button>`).join("")
+        + (race.single.pick === "random" ? reroll : choose(race.single.circuitId ? "Change circuit" : "Choose circuit"));
+      hint = race.single.pick === "random"
+        ? `One race at a circuit drawn from all ${num(race.poolSize)}. Reroll for another.`
+        : "One race at the circuit you choose.";
+    }
+    $("pick-label").textContent = label;
+    $("pick-controls").innerHTML = controls;
+    $("race-hint").textContent = hint;
+    $("race-hint").classList.toggle("hidden", !hint);
+  }
+
+  // ---- The circuit picker (a custom cup's four, or a single race's one) ----
+  const outlines = {};
+  function outline(id) {
+    if (outlines[id] !== undefined) return outlines[id];
+    const shape = typeof TRACK_SHAPES !== "undefined" ? TRACK_SHAPES[id] : null;
+    const map = window.TrackMap && shape ? TrackMap.path(shape.points, { width: 120, height: 76, padding: 7 }) : null;
+    outlines[id] = map && map.d
+      ? `<svg class="cc-map" viewBox="${map.viewBox}" aria-hidden="true"><path d="${map.d}"/>${map.start ? `<circle cx="${map.start.x}" cy="${map.start.y}" r="3.4"/>` : ""}</svg>`
+      : '<svg class="cc-map" viewBox="0 0 120 76" aria-hidden="true"></svg>';
+    return outlines[id];
+  }
+
+  const pickerSingle = () => Boolean(window.Game && Game.getPitLaneState().race.mode === "single");
+
+  function showCircuitPicker() {
+    if (!window.Game || !$("circuits-screen")) return;
+    $("circuit-search").value = "";
+    renderPicker();
+    openOverlayId("circuits-screen");
+  }
+
+  function refreshCircuitPicker() {
+    if (openOverlay === "circuits-screen") renderPicker();
+  }
+
+  // The focused control of the picker, to find again after a redraw.
+  function pickerFocus() {
+    const el = document.activeElement;
+    if (!el || !$("circuits-screen").contains(el)) return null;
+    for (const key of ["pick", "move", "unpick", "action"]) if (el.dataset && el.dataset[key] !== undefined) return { key, value: el.dataset[key] };
+    return el.id ? { id: el.id } : null;
+  }
+
+  function restorePickerFocus(was) {
+    if (!was || openOverlay !== "circuits-screen" || $("circuits-screen").contains(document.activeElement)) return;
+    let el = was.id ? $(was.id) : [...$("circuits-screen").querySelectorAll(`[data-${was.key}]`)].find((n) => n.dataset[was.key] === was.value);
+    // A move button at the end of the order, now disabled, or a removed slot:
+    // the search box.
+    if (!el || el.disabled) el = $("circuit-search");
+    el.focus({ preventScroll: true });
+  }
+
+  function renderPicker() {
+    const was = pickerFocus();
+    const race = Game.getPitLaneState().race;
+    const single = race.mode === "single";
+    const size = race.cupSize;
+    $("circuits-kicker").textContent = single ? "Single race" : "Custom cup";
+    $("circuits-title").textContent = single ? "Choose a circuit" : `Choose ${size} circuits`;
+    $("circuit-order").hidden = single;
+    $("picker-clear").hidden = single || !race.custom.length;
+    const circuit = (id) => race.pool.find((c) => c.id === id) || { name: id, short: id };
+    const named = (id) => circuit(id).name;
+    $("circuit-order").innerHTML = single ? "" : Array.from({ length: size }, (_, i) => {
+      const id = race.custom[i];
+      if (!id) return `<li class="is-empty"><b>${i + 1}</b><span>Pick a circuit</span></li>`;
+      const name = named(id);
+      return `<li data-circuit="${esc(id)}" title="${esc(name)}"><b>${i + 1}</b><span>${esc(circuit(id).short)}</span>
+        <button class="cc-btn" data-move="${i}:-1" type="button" aria-label="Move ${esc(name)} earlier"${i === 0 ? " disabled" : ""}>‹</button>
+        <button class="cc-btn" data-move="${i}:1" type="button" aria-label="Move ${esc(name)} later"${i === race.custom.length - 1 ? " disabled" : ""}>›</button>
+        <button class="cc-btn" data-unpick="${esc(id)}" type="button" aria-label="Take ${esc(name)} out">×</button></li>`;
+    }).join("");
+    const n = race.custom.length;
+    $("circuit-count").textContent = single
+      ? (race.single.circuitId ? `Chosen: ${named(race.single.circuitId)}.` : "Click a circuit to race it.")
+      : n >= size ? `All ${size} chosen. Take one out to swap it for another.` : `${n} of ${size} chosen. Pick them in the order you want to race them.`;
+    renderPickerCards(race);
+    restorePickerFocus(was);
+  }
+
+  function renderPickerCards(race = Game.getPitLaneState().race) {
+    const was = pickerFocus();
+    const single = race.mode === "single";
+    const query = $("circuit-search").value;
+    const found = window.Choices ? Choices.search(race.pool, query) : race.pool;
+    const full = !single && race.custom.length >= race.cupSize;
+    $("circuit-cards").innerHTML = found.length ? found.map((c) => {
+      const slot = single ? (race.single.circuitId === c.id ? 1 : 0) : race.custom.indexOf(c.id) + 1;
+      return `<button class="circuit-card ${slot ? "is-on" : ""} ${full && !slot ? "is-full" : ""}" data-pick="${esc(c.id)}" type="button" aria-pressed="${Boolean(slot)}"
+        title="${esc(c.name)}">${outline(c.id)}${slot && !single ? `<b class="cc-slot" aria-label="Race ${slot}">${slot}</b>` : ""}
+        <strong>${esc(c.name)}</strong><span>${esc(c.country)}${c.cup ? ` · ${esc(c.cup)}` : ""}</span></button>`;
+    }).join("") : `<p class="muted picker-empty">No circuit matches ‘${esc(query.trim())}’.</p>`;
+    restorePickerFocus(was);
   }
 
   // After the arrow keys change driver: bring the chosen tile into view.
@@ -1058,7 +1247,11 @@
     }
     const back = focusBeforeOverlay;
     focusBeforeOverlay = null;
+    // The picker's own button is drawn again while it is open: back to its
+    // new self.
+    const again = closing === "circuits-screen" && (!back || !back.isConnected) ? $("pitlane").querySelector('[data-action="pickCircuits"]') : null;
     if (back && back !== document.body && back.isConnected && back.getClientRects().length && typeof back.focus === "function") back.focus({ preventScroll: true });
+    else if (again) again.focus({ preventScroll: true });
     else focusPitLane(true);
     return true;
   }
@@ -1121,6 +1314,7 @@
     init, showPitLane, refreshPitLane, showRace, updateTower, pushFeed,
     showResults, showResultsAgain, showReplay, updateReplay,
     showQualifying, showPodium, podiumLoading, placePodium, podiumReserve, showroomArea, setShowroomArea, showCareer, showSettings, showPhoneNote, refreshSettings, revealSelectedDriver,
+    showCircuitPicker, refreshCircuitPicker,
     closeOverlay, isOverlayOpen: () => Boolean(openOverlay),
   };
 }());
