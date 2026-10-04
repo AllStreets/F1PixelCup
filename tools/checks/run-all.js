@@ -9,7 +9,7 @@
 // `true` but plain values (counts, strings) in play, landing, career and
 // race-sim are informational, compared by eye; a real failure says so.
 async (page) => {
-  const names = (globalThis.CHECKS || "play,keys,landing,loading,minors,helmet,career,grid,powerups,race-clock,race-sim,postfx,trackside,people,trackside-models,rain,motion,car,driver,replay,season,podium,split,showroom").split(",");
+  const names = (globalThis.CHECKS || "play,keys,landing,loading,minors,helmet,career,grid,powerups,race-clock,race-sim,postfx,trackside,safety-car,people,trackside-models,rain,motion,car,driver,replay,season,podium,split,showroom").split(",");
   const out = {};
   for (const n of names) {
     const file = n === "race-sim" ? "race-sim.js" : `${n}-check.js`;

@@ -48,7 +48,8 @@ export const VENUES = {
     // The casino claims its square first; the town fills in round it.
     extras: ["casino", "monacoCity", "yachts", "mountains"],
     // The harbour: yachts moored stern-to at the town's edge, more at anchor.
-    harbour: { quay: 190, moored: 46, anchored: 22, wind: 0.5 },
+    // The start straight's harbour front first, where the pit lane is not.
+    harbour: { quay: 190, moored: 46, anchored: 22, wind: 0.5, prefer: { side: -1, from: -560, to: 560 } },
     runoffTint: "#b8b4ac",
   },
   singapore: {

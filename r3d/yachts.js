@@ -3,13 +3,15 @@
 // at the city's scale, instanced per model and level of detail.
 //
 // A venue lists its harbour (r3d/landmarks.js VENUES):
-//   harbour: { quay, moored, anchored, anchorIn, wind }
+//   harbour: { quay, moored, anchored, anchorIn, wind, prefer }
 // quay: how far past the barrier the town's edge is (the yachts moor
 // stern-to there, side by side, along the longest stretches of open water);
 // moored and anchored: how many at most; anchorIn: the name of a landmark
 // whose bay they anchor in (else open water beyond the quays; none if that
 // landmark has no bay); wind: the heading (radians) their bows point to at
-// anchor. Every yacht claims its water; tenders run among them.
+// anchor; prefer: { side, from, to }, a stretch of the lap (signed distances
+// from the line) whose quay fills first. Every yacht claims its water;
+// tenders run among them.
 //
 // One material draws them: each vertex's role (hull, superstructure, ...)
 // takes the yacht's own colours; the vertex shader bobs, pitches and rolls
@@ -151,7 +153,7 @@ function instancedKind(name, capacity, material) {
 // over the water, side by side with a gap between. Every spot along the lap
 // is found first; the yachts then fill the longest unbroken stretches of
 // quay (the harbour), not whatever comes first round the lap.
-function moor(course, rand, quay, max) {
+function moor(course, rand, quay, max, prefer) {
   if (!max) return [];
   const spots = [];
   const { samples } = course;
@@ -189,7 +191,16 @@ function moor(course, rand, quay, max) {
     });
     if (run.length) runs.push(run);
   });
-  runs.sort((x, y) => y.length - x.length);
+  // A stretch the venue names comes first (Monaco: the start straight's
+  // harbour front), then the longest.
+  const total = course.track.totalLength;
+  const inPrefer = (h) => {
+    if (!prefer || h.side !== prefer.side) return false;
+    const r = ((h.along % total) + total * 1.5) % total - total / 2;
+    return r >= prefer.from && r <= prefer.to;
+  };
+  const score = (run) => run.filter(inPrefer).length * 1000 + run.length;
+  runs.sort((x, y) => score(y) - score(x));
   const out = [];
   for (const run of runs) {
     if (out.length >= max) break;
@@ -269,7 +280,7 @@ export function buildYachts(course, group, venue, rand) {
   const out = new THREE.Group();
   out.name = "yachts";
   const quay = harbour.quay ?? 190;
-  const moored = moor(course, rand, quay, harbour.moored || 0);
+  const moored = moor(course, rand, quay, harbour.moored || 0, harbour.prefer);
   const area = harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
   // A bay to anchor in that isn't there (its landmark fell back): none.
   const anchored = harbour.anchorIn && !area ? [] : anchor(course, rand, {
