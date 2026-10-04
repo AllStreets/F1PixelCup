@@ -117,7 +117,7 @@
       const dy = b.y - a.y;
       const len = Math.hypot(dx, dy);
       starts.push(total);
-      segs.push({ a, dx, dy, len });
+      segs.push({ a, b, dx, dy, len });
       total += len;
     }
     function locate(d) {
@@ -140,7 +140,12 @@
     }
     return {
       length: total,
-      halfWidthAt: () => halfWidth,
+      // Where the track data narrows the road (a point's `w`, its share of
+      // the usual width), in between its points.
+      halfWidthAt(d) {
+        const { s, t } = locate(d);
+        return halfWidth * ((s.a.w ?? 1) * (1 - t) + (s.b.w ?? 1) * t);
+      },
       sample,
       toWorld(d, lat) {
         const s = sample(d);

@@ -525,7 +525,9 @@ function buildSegments(points, width, closed = true) {
       dx,
       dy,
       length,
-      width,
+      // Where the track data narrows the road (a point's `w`, its share of
+      // the usual width: Shanghai's snail).
+      width: width * ((point.w ?? 1) + (next.w ?? 1)) / 2,
     };
   });
 }
@@ -2351,8 +2353,10 @@ function updateRacer(racer, dt, now) {
     const aim = sampleRouteSurfaceAtDistance(
       getMainRoute(state.track), (racer.trackDistance || 0) + lookahead,
     );
-    const aimX = aim.point.x + aim.normalX * racer.aiOffset;
-    const aimY = aim.point.y + aim.normalY * racer.aiOffset;
+    // Off the line by its own margin, in proportion where the road narrows.
+    const offset = racer.aiOffset * (aim.width / state.track.roadWidth);
+    const aimX = aim.point.x + aim.normalX * offset;
+    const aimY = aim.point.y + aim.normalY * offset;
     targetAngle = Math.atan2(aimY - racer.y, aimX - racer.x);
   }
   const surface = getActiveSurfaceInfo(racer, state.track, now);
