@@ -461,18 +461,18 @@ body[data-split="side"] .ticker { left: 25%; max-width: 44vw; }
 .circuit-order { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .circuit-order[hidden] { display: none; }
 .circuit-order li {
-  display: flex; align-items: center; gap: 6px; min-height: 2.6rem; padding: 0 6px 0 0;
-  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); font: 700 0.82rem/1.2 var(--font);
+  display: flex; align-items: center; gap: 4px; min-height: 2.6rem; padding: 0 5px 0 0;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); font: 700 0.8rem/1.2 var(--font);
 }
 .circuit-order li > b {
   align-self: stretch; display: grid; place-items: center; min-width: 2rem;
   background: var(--red); color: #fff; font: italic 900 1rem/1 var(--font);
 }
-.circuit-order li > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-order li > span { flex: 1; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .circuit-order li.is-empty { border-style: dashed; color: rgba(255, 255, 255, 0.4); font-style: italic; }
 .circuit-order li.is-empty > b { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.5); }
 .cc-btn {
-  flex: 0 0 auto; width: 1.7rem; height: 1.7rem; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  flex: 0 0 auto; width: 1.45rem; height: 1.7rem; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
   background: rgba(7, 7, 12, 0.6); color: var(--ink); font: 800 0.95rem/1 var(--font); cursor: pointer;
 }
 .cc-btn:hover:not(:disabled), .cc-btn:focus-visible { border-color: #fff; }
