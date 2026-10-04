@@ -251,7 +251,7 @@ model is unavailable it falls back to the original pseudo-3D canvas renderer.
   over kerbs and off the track, with a kerb rumble on the audio.
 - Photographic ground textures from Poly Haven, reflections on the paint,
   real-time shadows, fog, a sky with the sun, 3D smoke and boost glow.
-- **3D showroom** in the pit lane: the selected car on a turntable.
+- **3D showroom** in the pit lane: the selected car on a turntable, in the open space beside the controls at any window size.
 - **Broadcast post-processing** with Arcade bursts
   (docs/superpowers/specs/2026-09-29-postfx-design.md):
   - a grade for each circuit, bloom on real highlights, a vignette, a sun flare
@@ -415,8 +415,9 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
   flare, High keeping Low's exposure, adverts reading forward from both sides) and
   `trackside-check.js` (pit lanes and garages on every circuit, nothing over the track,
   no print reading backwards, the Safety Car parking at its garage, floodlights at the night races)
-  and `season-check.js` (a season runs, saves after a race and resumes at the next, and starts
-  over only when asked twice). Expected for each: every result true, errors [].
+  `season-check.js` (a season runs, saves after a race and resumes at the next, and starts
+  over only when asked twice) and `showroom-check.js` (the pit lane's car never under its
+  controls, from 1600x900 down to a phone). Expected for each: every result true, errors [].
   Every check minimises the test tool's own blank tab so only the window under test shows.
 - `tools/capture-shots.js` recaptures the landing page's images from the real
   game; resize them afterwards with

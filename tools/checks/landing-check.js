@@ -83,7 +83,8 @@ async (page) => {
   });
   out.seasonCard = await p.evaluate(() => {
     const card = document.querySelector("#circuits .season-card");
-    return Boolean(card) && /24/.test(card.textContent) && /constructors/i.test(card.textContent) && /saved after every race/i.test(card.textContent);
+    return Boolean(card) && /24/.test(card.textContent) && /constructors/i.test(card.textContent) && /saved after every race/i.test(card.textContent)
+      && card.querySelector("a.go-btn").getAttribute("href") === "./play.html?cup=season";
   });
   out.teams = await p.locator("#grid .team-card").count();
   out.newPlayer = (await p.locator("#career-summary").innerText()).toLowerCase().includes("starts");

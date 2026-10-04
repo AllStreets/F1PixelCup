@@ -65,9 +65,9 @@ async (page) => {
     const ok = state.phase === "results" && saved.nextRace === 1 && saved.driverId === "hamilton" && saved.difficulty === "legend"
       && (total === 101 || total === 102)
       && JSON.stringify(shown) === JSON.stringify(table.map((r) => [r.driverId, r.points]))
-      && !document.getElementById("results-constructors").classList.contains("hidden")
+      && !document.getElementById("results-standings").classList.contains("hidden")
       // The season's tables: the 20 drivers, then the 10 constructors.
-      && document.querySelectorAll("#results-constructors .result-row").length === 30;
+      && document.querySelectorAll("#results-standings .result-row").length === 30;
     window.__seasonRun = saved.runId;
     return ok || JSON.stringify({ phase: state.phase, next: saved.nextRace, total, driver: saved.driverId });
   });
@@ -113,8 +113,26 @@ async (page) => {
     return ok || JSON.stringify({ asking, phase: state.phase, race: state.raceIndex, run: state.cupRunId === before.run });
   }, before);
 
+  // The season is one player's: with two players picked, choosing it shows
+  // one player (the second greyed out) and starts with one.
+  results.seasonIsOnePlayer = await step(() => {
+    localStorage.removeItem(Season.STORAGE_KEY);
+    Game.selectCup(0);
+    Game.selectPlayers(2);
+    Game.selectCup(Game.getPitLaneState().cups.findIndex((c) => c.season));
+    const two = document.querySelector('#players-pills [data-players="2"]');
+    const shows = two.disabled && !two.classList.contains("is-on") && document.getElementById("second-driver").hidden;
+    Game.startCup();
+    const players = state.cupPlayers;
+    Game.backToPitLane();
+    Game.selectCup(0);
+    Game.selectPlayers(1);
+    return (shows && players === 1) || JSON.stringify({ shows, players });
+  });
+
   // A broken save is ignored: the season simply starts fresh.
   results.brokenSaveIgnored = await step(() => {
+    Game.selectCup(Game.getPitLaneState().cups.findIndex((c) => c.season));
     localStorage.setItem(Season.STORAGE_KEY, "{\"version\":1,\"results\":[1]}");
     const s = Game.getPitLaneState();
     return (s.cups[s.selectedCup].season && s.savedSeason === null) || JSON.stringify({ season: s.cups[s.selectedCup].season, saved: s.savedSeason });
@@ -139,6 +157,7 @@ async (page) => {
     let season = Season.start({ runId: "check-final", driverId: "leclerc", difficulty: "pro", gridMode: "back", weatherMode: "dry", ...ctx });
     for (let i = 0; i < 23; i += 1) season = Season.addRace(season, { order: [...ctx.field], fastest: null });
     localStorage.setItem(Season.STORAGE_KEY, Season.serialize(season));
+    Game.selectCup(Game.getPitLaneState().cups.findIndex((c) => c.season));
     Game.startCup();
     if (state.raceIndex !== 23 || state.track.id !== "yasmarina") return `resumed at ${state.raceIndex} ${state.track.id}`;
     state.racers.forEach((r) => { r.isPlayer = false; });
@@ -156,6 +175,13 @@ async (page) => {
     const ok = cleared && podium && cups === 1 && /2025 Season complete · Constructors' champions: /.test(kicker)
       && (title === "World champion" || /^You finished/.test(title));
     return ok || JSON.stringify({ cleared, podium, cups, kicker, title });
+  });
+  // The site's "Start the season" link opens the pit lane on the season.
+  await p.goto(`http://localhost:8765/play.html?cup=season&${Date.now()}`);
+  await p.waitForFunction(() => window.Game && window.Season, null, { timeout: 30000 });
+  results.linkOpensSeason = await step(() => {
+    const s = Game.getPitLaneState();
+    return (s.cups[s.selectedCup].season && !/cup=/.test(location.search)) || JSON.stringify({ cup: s.cups[s.selectedCup].name, search: location.search });
   });
   await step(() => {
     localStorage.removeItem(Season.STORAGE_KEY);

@@ -560,7 +560,7 @@ function auditVenue(track) {
     })(),
     floodlightSpots: (() => {
       let n = 0;
-      world.landmarks.traverse((o) => { if (o.name === "floodlights") n += o.userData.tries; });
+      world.landmarks.traverse((o) => { if (o.name === "floodlights") n += o.userData.spots; });
       return n;
     })(),
   };
@@ -629,8 +629,8 @@ function inspect() {
   // Split screen: the views, and each one's camera as last drawn.
   const split = viewports ? { rects: viewports.map((r) => ({ ...r })), cams: viewCams.slice(0, viewports.length).map((c) => ({ ...c })) } : null;
   // The pit lane's showroom: whether the car is drawn, and where.
-  const showroom = garage.group.visible ? { shown: Boolean(garage.car && garage.car.root.visible), car: garage.car && garage.car.root.visible ? garage.rect : null } : null;
-  return { garage: showroom, drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  const showroom = garage.group.visible ? { shown: Boolean(garage.car && garage.car.root.visible), car: garageCarRect() } : null;
+  return { garage: showroom, cameraOffset: Boolean(camera.view && camera.view.enabled), drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -1600,7 +1600,7 @@ function auditItemBoxes(track) {
 // Garage: a turntable showroom for the selected car
 // ---------------------------------------------------------------------------
 
-const garage = { group: new THREE.Group(), car: null, key: "" };
+const garage = { group: new THREE.Group(), car: null, key: "", seenProjection: new THREE.Matrix4(), seenView: new THREE.Matrix4() };
 scene.add(garage.group);
 garage.group.visible = false;
 {
@@ -1648,7 +1648,8 @@ function renderGarage(kart, driver, now, area) {
   sun.intensity = 2.6;
   sun.color.set(0xffffff);
   renderer.toneMappingExposure = 1.1;
-  setFov(BASE_FOV);
+  // (Fitted to an area, the showroom sets its own field of view.)
+  if (area === undefined) setFov(BASE_FOV);
   setNear(CAMERA_NEAR);
   const key = `${kart.id}|${driver.id || driver.name}`;
   if (garage.key !== key) {
@@ -1673,17 +1674,39 @@ function renderGarage(kart, driver, now, area) {
   }
   sun.position.set(80, 160, 60);
   sun.target.position.set(0, 0, 0);
-  renderer.render(scene, camera);
-  // Where it was drawn (for the checks), then the camera is plain again.
-  garage.rect = garageCarRect();
-  camera.clearViewOffset();
+  try {
+    renderer.render(scene, camera);
+    // How it was drawn, for the checks (garageCarRect works it out on demand).
+    camera.updateMatrixWorld(true);
+    garage.seenProjection.copy(camera.projectionMatrix);
+    garage.seenView.copy(camera.matrixWorldInverse);
+  } finally {
+    // The camera is plain again for the race, the replay and the podium.
+    camera.clearViewOffset();
+  }
   return true;
 }
 
 // Frame the turning car in the area: the box it sweeps as it turns (its
 // widest reach all round, floor to roof), sized by the camera's distance to
 // fill the area and moved by a view offset onto the area's middle.
-const showroomCorners = Array.from({ length: 8 }, () => new THREE.Vector3());
+const showroomCorner = new THREE.Vector3();
+const showroomTarget = new THREE.Vector3();
+const showroomAway = new THREE.Vector3();
+function showroomExtents(r, y0, y1, W, H) {
+  camera.updateMatrixWorld(true);
+  let l = Infinity; let rt = -Infinity; let tp = Infinity; let b = -Infinity;
+  for (let k = 0; k < 8; k += 1) {
+    const v = showroomCorner.set(k & 1 ? r : -r, k & 2 ? y1 : y0, k & 4 ? r : -r).project(camera);
+    const px = (v.x + 1) / 2 * W;
+    const py = (1 - v.y) / 2 * H;
+    if (px < l) l = px;
+    if (px > rt) rt = px;
+    if (py < tp) tp = py;
+    if (py > b) b = py;
+  }
+  return { l, r: rt, t: tp, b };
+}
 function fitShowroom(area) {
   const root = garage.car.root;
   if (!garage.sweep || garage.sweep.key !== garage.key) {
@@ -1706,35 +1729,24 @@ function fitShowroom(area) {
   const page = canvas3d.getBoundingClientRect();
   const W = page.width || 1;
   const H = page.height || 1;
-  camera.lookAt(0, (y0 + y1) / 2, 0);
-  const extents = () => {
-    camera.updateMatrixWorld(true);
-    let l = Infinity; let rt = -Infinity; let tp = Infinity; let b = -Infinity;
-    let k = 0;
-    [-r, r].forEach((x) => [y0, y1].forEach((y) => [-r, r].forEach((z) => {
-      const v = showroomCorners[k].set(x, y, z).project(camera);
-      k += 1;
-      const px = (v.x + 1) / 2 * W;
-      const py = (1 - v.y) / 2 * H;
-      l = Math.min(l, px); rt = Math.max(rt, px); tp = Math.min(tp, py); b = Math.max(b, py);
-    })));
-    return { l, r: rt, t: tp, b };
-  };
+  const target = showroomTarget.set(0, (y0 + y1) / 2, 0);
+  camera.lookAt(target);
   // Sized by the camera's distance (the field of view stays the showroom's):
   // a few passes settle it, perspective being not quite linear.
-  camera.fov = BASE_FOV;
-  camera.updateProjectionMatrix();
+  if (camera.fov !== BASE_FOV) {
+    camera.fov = BASE_FOV;
+    camera.updateProjectionMatrix();
+  }
   const aw = area.right - area.left;
   const ah = area.bottom - area.top;
-  const target = new THREE.Vector3(0, (y0 + y1) / 2, 0);
-  let box = extents();
+  let box = showroomExtents(r, y0, y1, W, H);
   for (let pass = 0; pass < 4; pass += 1) {
     const scale = Math.min((aw * 0.94) / (box.r - box.l), (ah * 0.94) / (box.b - box.t));
-    const away = camera.position.clone().sub(target);
+    const away = showroomAway.copy(camera.position).sub(target);
     const dist = Math.min(4000, Math.max(r * 2.2, away.length() / scale));
     camera.position.copy(target).addScaledVector(away.normalize(), dist);
     camera.lookAt(target);
-    box = extents();
+    box = showroomExtents(r, y0, y1, W, H);
   }
   // Onto the area's middle (the area is in page pixels; so is the offset).
   const dx = (area.left + area.right) / 2 - page.left - (box.l + box.r) / 2;
@@ -1742,17 +1754,17 @@ function fitShowroom(area) {
   camera.setViewOffset(W, H, -dx, -dy, W, H);
 }
 
-// Where the showroom car is on the page (its box, projected), for the checks.
+// Where the showroom car was drawn on the page (its box, projected as the
+// last showroom frame drew it), for the checks; worked out only when asked.
 function garageCarRect() {
   if (!garage.car || !garage.car.root.visible) return null;
   garage.car.root.updateMatrixWorld(true);
-  camera.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(garage.car.root);
   const rect = canvas3d.getBoundingClientRect();
   const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   const v = new THREE.Vector3();
   [box.min.x, box.max.x].forEach((x) => [box.min.y, box.max.y].forEach((y) => [box.min.z, box.max.z].forEach((z) => {
-    v.set(x, y, z).project(camera);
+    v.set(x, y, z).applyMatrix4(garage.seenView).applyMatrix4(garage.seenProjection);
     const px = rect.left + (v.x + 1) / 2 * rect.width;
     const py = rect.top + (1 - v.y) / 2 * rect.height;
     r.left = Math.min(r.left, px); r.right = Math.max(r.right, px);

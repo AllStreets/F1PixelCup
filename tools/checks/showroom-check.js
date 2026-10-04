@@ -27,9 +27,12 @@ async (page) => {
   // of the pit lane that is showing.
   const measure = () => p.evaluate(() => {
     const g = Render3D.inspect().garage;
-    const boxes = [...document.querySelectorAll("#pitlane .pitlane-top, #pitlane .choice-row, #pitlane .choice-hint, #pitlane .cup-circuits, #pitlane .new-season, #pitlane .pitlane-driver, #pitlane #driver-strip, #pitlane #start-cup")]
-      .filter((el) => el.getClientRects().length && !el.classList.contains("hidden") && !el.hidden)
-      .map((el) => ({ id: el.id || el.className.split(" ")[0], r: el.getBoundingClientRect() }))
+    // Every visible control and line of text in the pit lane (whatever it is,
+    // not a list kept beside the code): its leaf elements and its buttons.
+    const boxes = [...document.querySelectorAll("#pitlane *")]
+      .filter((el) => (el.children.length === 0 || el.matches("button, li, p, h1")) && el.getClientRects().length
+        && getComputedStyle(el).visibility !== "hidden" && !el.closest(".hidden, [hidden]"))
+      .map((el) => ({ id: el.id || `${el.tagName.toLowerCase()}.${el.className.split(" ")[0]}`, r: el.getBoundingClientRect() }))
       .filter((b) => b.r.width > 0 && b.r.height > 0);
     const car = g && g.car;
     const hits = car ? boxes.filter((b) => !(b.r.right <= car.left || b.r.left >= car.right || b.r.bottom <= car.top || b.r.top >= car.bottom)).map((b) => b.id) : ["no car measured"];
@@ -44,7 +47,8 @@ async (page) => {
     return { clash, w: innerWidth, h: innerHeight, car: car && { l: Math.round(car.left), t: Math.round(car.top), r: Math.round(car.right), b: Math.round(car.bottom) }, shown: Boolean(g && g.shown), hits, onScreen: Boolean(onScreen) };
   });
 
-  const sizes = [[1600, 900], [1280, 720], [1120, 700], [1000, 700], [700, 900], [390, 844]];
+  // (Chrome keeps a window at least about 500 wide: the phone size is 500x844.)
+  const sizes = [[1600, 900], [1280, 720], [1120, 700], [1000, 700], [700, 900], [500, 844]];
   const bad = [];
   const seen = [];
   for (const [w, h] of sizes) {
@@ -53,21 +57,38 @@ async (page) => {
       ["opening", () => { Game.selectPlayers(1); Game.selectCup(0); }],
       ["season", () => { Game.selectCup(CUPS.findIndex((c) => c.season)); }],
       ["two players", () => { Game.selectCup(0); Game.selectPlayers(2); }],
+      ["season, two players picked", () => { Game.selectCup(CUPS.findIndex((c) => c.season)); }],
     ]) {
       await p.evaluate(setup);
-      await frames(4);
-      const m = await measure();
-      seen.push({ size: `${w}x${h}`, label, ...m });
-      // Shown, on screen, and under nothing. (A car with no room left is not
-      // drawn at all, rather than drawn under the controls: that is reported.)
-      if (m.shown && (m.hits.length || !m.onScreen)) bad.push({ size: `${w}x${h}`, label, car: m.car, hits: m.hits, onScreen: m.onScreen });
-      // Hidden only where a phone leaves no room at all.
-      if (!m.shown && w >= 600) bad.push({ size: `${w}x${h}`, label, hidden: true });
-      if (m.clash.length) bad.push({ size: `${w}x${h}`, label, clash: m.clash });
+      // Three looks a second apart: the car turns.
+      for (let look = 0; look < 3; look += 1) {
+        await p.waitForTimeout(look ? 1000 : 0);
+        await frames(4);
+        const m = await measure();
+        const size = `${m.w}x${m.h}`;
+        seen.push({ size, label, ...m });
+        // Shown, on screen, big enough to see, and under nothing. (A car with
+        // no room left is not drawn at all, rather than drawn under the
+        // controls: that is allowed only on a phone.)
+        if (m.shown && (m.hits.length || !m.onScreen)) bad.push({ size, label, car: m.car, hits: m.hits.slice(0, 4), onScreen: m.onScreen });
+        if (m.shown && m.w >= 1000 && m.car && m.car.r - m.car.l < 160) bad.push({ size, label, small: m.car });
+        if (!m.shown && m.w >= 600) bad.push({ size, label, hidden: true });
+        if (m.clash.length) bad.push({ size, label, clash: m.clash });
+      }
     }
   }
   await p.evaluate(() => { Game.selectPlayers(1); Game.selectCup(0); });
   results.carClearOfThePitLane = bad.length === 0 || JSON.stringify(bad).slice(0, 1200);
+  // Leaving the pit lane, the camera is plain again (no showroom framing
+  // carried into the race).
+  results.raceCameraPlain = await p.evaluate(async () => {
+    Game.startCup();
+    for (let i = 0; i < 600 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const offset = Render3D.inspect().cameraOffset;
+    Game.backToPitLane();
+    return offset === false || `offset ${offset}`;
+  });
 
   await context.close();
   return { results, errors };

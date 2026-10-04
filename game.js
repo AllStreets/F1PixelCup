@@ -336,8 +336,9 @@ const state = {
   // once more before it throws a saved one away.
   season: null,
   confirmNewSeason: false,
-  // The pit lane's driver while a resumed season races its own.
+  // The pit lane's drivers while a resumed season races its own.
   driverBeforeSeason: null,
+  seasonUnsavedWarned: false,
   difficulty: 1,
   activeCupIndex: 0,
   phase: "garage",
@@ -853,6 +854,7 @@ function getPitLaneState() {
 // never stored, so every visit starts with one.
 function selectPlayers(count) {
   if (state.phase !== "garage" || (count !== 1 && count !== 2)) return;
+  state.confirmNewSeason = false;
   state.players = count;
   settleSecondDriver();
   renderGarage();
@@ -862,6 +864,7 @@ function selectPlayers(count) {
 // never player 1's.
 function stepSecondDriver(dir) {
   if (state.phase !== "garage") return;
+  state.confirmNewSeason = false;
   const ids = DRIVERS.map((d) => d.id);
   const next = TwoPlayer.stepDriver(ids, DRIVERS[state.secondDriver].id, dir < 0 ? -1 : 1, DRIVERS[state.selectedDriver].id);
   state.secondDriver = ids.indexOf(next);
@@ -1001,6 +1004,19 @@ function loadCupPreference() {
     stored = window.localStorage.getItem("f1pixelcup.cup");
   } catch (err) {
     // Keep the first cup.
+  }
+  // A ?cup= link (the site's "Start the season") picks the cup; the address
+  // goes back to plain play.html.
+  try {
+    const url = new URL(window.location.href);
+    const linked = url.searchParams.get("cup");
+    if (linked !== null) {
+      if (CUPS.some((cup) => cup.id === linked)) stored = linked;
+      url.searchParams.delete("cup");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch (err) {
+    // No link cup.
   }
   const id = Season.resolveCup(stored, [...CUP_DEFS, SEASON]);
   state.selectedCup = Math.max(0, CUPS.findIndex((cup) => cup.id === id));
@@ -1536,8 +1552,9 @@ function startSeason(saved) {
   state.confirmNewSeason = false;
   let season = saved;
   if (season) {
-    // Raced as its own driver; the pit lane's pick comes back afterwards.
-    state.driverBeforeSeason = state.selectedDriver;
+    // Raced as its own driver; the pit lane's picks (both players') come
+    // back afterwards.
+    state.driverBeforeSeason = { first: state.selectedDriver, second: state.secondDriver };
     setSelectedDriver(DRIVERS.findIndex((d) => d.id === season.driverId));
   } else {
     season = Season.start({
@@ -1548,7 +1565,8 @@ function startSeason(saved) {
       weatherMode: state.weatherMode,
       ...SEASON_CONTEXT,
     });
-    saveSeason(season);
+    state.seasonUnsavedWarned = false;
+    if (!saveSeason(season)) warnSeasonUnsaved();
   }
   state.season = season;
   beginCup({
@@ -1587,6 +1605,14 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players
       : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(raceIndex);
+}
+
+// Once a season: the browser would not store it, so it lasts only until it
+// is left.
+function warnSeasonUnsaved() {
+  if (state.seasonUnsavedWarned) return;
+  state.seasonUnsavedWarned = true;
+  addFeed("Season not saved: this browser would not store it, so it ends when you leave it.");
 }
 
 // The cup's table is the season's: its points, in its order (the countback
@@ -3275,7 +3301,7 @@ function finalizeRace() {
     // The season moves on and is saved: quit now and it resumes at the next race.
     try {
       state.season = Season.addRace(state.season, { order: finishers.map((r) => r.driver.id), fastest: fastest ? fastest.driver.id : null });
-      if (!saveSeason(state.season)) addFeed("Season not saved: this browser would not store it. Finish it in this session.");
+      if (!saveSeason(state.season)) warnSeasonUnsaved();
       applySeasonStandings();
     } catch (error) {
       console.warn("Season: race not added", error);
@@ -3479,7 +3505,10 @@ function resetToGarage() {
   // lane's own driver is back.
   state.season = null;
   state.confirmNewSeason = false;
-  if (state.driverBeforeSeason !== null) setSelectedDriver(state.driverBeforeSeason);
+  if (state.driverBeforeSeason !== null) {
+    setSelectedDriver(state.driverBeforeSeason.first);
+    state.secondDriver = state.driverBeforeSeason.second;
+  }
   state.driverBeforeSeason = null;
   state.track = getSelectedCup().tracks[0];
   // Nothing run from the pit lane is wet.

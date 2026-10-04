@@ -596,7 +596,7 @@ function floodlights(course, group, venue) {
   poles.userData.count = parts.poles.length;
   // Out of how many spots with room by the barrier (for the checks: few
   // taken by anything else).
-  poles.userData.tries = open;
+  poles.userData.spots = open;
   poles.castShadow = true;
   const heads = new THREE.Mesh(mergeGeometries(parts.heads), headMat);
   const pools = new THREE.Mesh(mergeGeometries(parts.pools), poolMat);

@@ -37,7 +37,7 @@
           <div class="circuit-shot"><img src="./assets/shots/circuit-${esc(c.id)}.jpg" alt="${esc(shotCar(SHOT_DRIVERS.circuits[c.id]))} at ${esc(c.name)}" loading="lazy"><span class="circuit-round">R${num(round(c.id))}</span></div>
           <div class="circuit-body">
             <div>
-              <h3>${esc(c.name)}</h3>
+              <h4>${esc(c.name)}</h4>
               <div class="circuit-meta">${esc(c.country)} · ${(c.lengthM / 1000).toFixed(3)} km · ${num(c.laps)} laps</div>
             </div>
             <svg class="circuit-map" viewBox="${map.viewBox}" role="img" aria-label="Map of ${esc(c.name)}"><path class="track" d="${map.d}"></path>${start}</svg>
@@ -52,9 +52,9 @@
           <header class="cup-head">
             <span class="cup-number">${num(i + 1)}</span>
             <h3 class="cup-name it-title">${esc(cup.name)}</h3>
-            <span class="cup-rounds">Rounds ${num(first)} to ${num(first + circuits.length - 1)} · ${esc(circuits.map((c) => c.country).join(", "))}</span>
+            <span class="cup-rounds">Rounds ${num(first)} to ${num(round(cup.circuitIds[cup.circuitIds.length - 1]))} · ${esc(circuits.map((c) => c.country).join(", "))}</span>
           </header>
-          <div class="circuit-list">${circuits.map(card).join("")}</div>
+          <div class="cup-circuits-grid">${circuits.map(card).join("")}</div>
         </section>`;
     }).join("");
     // The circuits the game lights with floodlights all the way round (venue.js).
@@ -63,15 +63,15 @@
       <aside class="season-card">
         <div class="season-shot"><img src="./assets/shots/season.jpg" alt="The pit lane with a 2025 Season saved: resume at race 2 of 24" loading="lazy"></div>
         <div class="season-copy">
-        <p class="kicker">Or race them all</p>
-        <h3 class="it-title">${esc(SEASON.name)}</h3>
-        <p>All ${num(SEASON.circuitIds.length)} rounds in calendar order, for the drivers' and the constructors' titles. Points as the cups score them, ties split on countback, and the season is saved after every race: quit at round 9 and it is waiting at round 9.</p>
-        <ul class="season-facts">
-          <li><b>${num(SEASON.circuitIds.length)}</b><span>rounds</span></li>
-          <li><b>${num(CUP_DEFS.length)}</b><span>cups of four</span></li>
-          ${lit ? `<li><b>${num(lit)}</b><span>under floodlights</span></li>` : ""}
-        </ul>
-        <a class="go-btn" href="./play.html"><span>Start the season ›</span></a>
+          <p class="kicker">Or race them all</p>
+          <h3 class="it-title">${esc(SEASON.name)}</h3>
+          <p>All ${num(SEASON.circuitIds.length)} rounds in calendar order, for the drivers' and the constructors' titles. Points as the cups score them, ties split on countback, and the season is saved after every race: quit at round 9 and it is waiting at round 9.</p>
+          <ul class="season-facts">
+            <li><b>${num(SEASON.circuitIds.length)}</b><span>rounds</span></li>
+            <li><b>${num(CUP_DEFS.length)}</b><span>cups of four</span></li>
+            ${lit ? `<li><b>${num(lit)}</b><span>under floodlights</span></li>` : ""}
+          </ul>
+          <a class="go-btn" href="./play.html?cup=season"><span>Start the season ›</span></a>
         </div>
       </aside>`;
   }

@@ -39,8 +39,7 @@ async (page) => {
     const ci = CUPS.findIndex((c) => !c.season && c.tracks.some((t) => t.id === "spa"));
     const ti = CUPS[ci].tracks.findIndex((t) => t.id === "spa");
     Game.selectCup(ci); Game.selectGridMode("back"); Game.startCup();
-    state.raceIndex = ti;
-    startRace(ti);
+    if (ti > 0) { state.raceIndex = ti; startRace(ti); }
     for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const seed = (n) => {
       let s = n >>> 0;
