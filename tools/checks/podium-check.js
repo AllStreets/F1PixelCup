@@ -166,6 +166,14 @@ async (page) => {
     const names = await p.evaluate(() => state.cupEntries.slice(0, 3).map((e) => [e.driver.name, e.kart.name, String(e.points)]));
     results.platesSayWho = names.every((n, i) => { const pl = big.plates.find((x) => x.place === i + 1); return pl && n.every((bit) => pl.text.toLowerCase().includes(bit.toLowerCase())); });
     results.fillsWindow = big.canvas[0] === big.w && big.canvas[1] === big.h;
+    // Each name is whole: the box (it clips what overflows) leaves room after
+    // the text for the italic's last letter, which leans past its advance.
+    results.plateNamesWhole = await p.evaluate(() => [...document.querySelectorAll(".podium-plate strong")].every((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const room = el.getBoundingClientRect().right - range.getBoundingClientRect().right;
+      return el.scrollWidth <= el.clientWidth && room >= parseFloat(getComputedStyle(el).fontSize) * 0.1;
+    })) || "an italic name is clipped at its last letter";
     // The page's title (kicker, title and career strip, as drawn) and the
     // wall's own title never touch: at every moment of the ceremony (the
     // camera is a function of time), at each window size; and the live frame

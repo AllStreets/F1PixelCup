@@ -1,9 +1,11 @@
-// Capture the landing page's images from the real game, HUD hidden.
+// Capture the landing page's images from the real game, HUD hidden (shown in
+// the race-day shots, where the HUD is the point).
 // Run with the Playwright MCP tool browser_run_code_unsafe,
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
-// ["items"]; the default takes circuits, teams, items and helmets.
+// ["items"]; the default takes circuits, teams, items and helmets. The race-day
+// parts are "replay", "podium" and "split" (assets/shots/race-day/).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -144,7 +146,7 @@ async (page) => {
         oilSlick: { from: [-30, 20, 13], at: [12, 4, 1] },
         debris: { from: [-30, 17, 10], at: [10, 3, 2] },
         undercut: { from: [-30, 16, 8], at: [12, 2, 2.5] },
-        stewardPenalty: { from: [-26, -5, 7.5], at: [24, 0, 8] },
+        stewardPenalty: { from: [-24, -5, 9.5], at: [24, 0, 6.5] },
         safetyCar: { from: [-34, 19, 9], at: [24, 3, 3] },
         drs: { from: [-30, -9, 9], at: [2, 0, 3] },
         overtakeMode: { from: [-30, -9, 9], at: [2, 0, 3] },
@@ -222,6 +224,158 @@ async (page) => {
     await p.waitForTimeout(wait);
     await shot(`team-${t.id}`, { x: box.width * 0.42, y: box.height * 0.3, width: box.width * 0.54, height: box.height * 0.66 });
     written.push(`team-${t.id}`);
+  }
+
+  // ---- Race day: replays, the podium, two players (the site's #race-day). ----
+  // Full 1600x900 pictures with the game's own HUD where it is the point (the
+  // replay's broadcast graphics, both split views), written to
+  // assets/shots/race-day/; sips makes the web sizes (see README).
+  const RD = `${OUT}race-day/`;
+  const DAY = SHOTS.raceDay;
+  const sizeTo = async (width, height) => {
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
+    await p.waitForTimeout(600);
+  };
+  const dayShot = async (name, clip) => {
+    await p.screenshot({ path: `${RD}${name}.jpg`, type: "jpeg", quality: 92, scale: "css", ...(clip ? { clip } : {}) });
+    written.push(`race-day/${name}`);
+  };
+  const freshGame = async () => {
+    await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
+    await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 60000 });
+  };
+  // The cup and the race index of a circuit, wherever the cups put it.
+  const spotOf = (circuit) => p.evaluate((id) => {
+    const ci = CUPS.findIndex((c) => c.tracks.some((t) => t.id === id));
+    return { ci, ti: CUPS[ci].tracks.findIndex((t) => t.id === id) };
+  }, circuit);
+
+  // Replays: a real race at Monaco, run on autopilot (Leclerc fourth on the
+  // grid, Hamilton fifth, among the front-runners so the cameras find a
+  // pack), then opened from the results screen's own button. Each camera is
+  // shot playing at 1x, a moment after a seek.
+  if (parts.includes("replay")) {
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate(async ({ DAY, ci, ti }) => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === DAY.replay));
+      Game.selectPlayers(1); Game.selectCup(ci); Game.selectGridMode("back"); Game.selectWeatherMode("dry"); Game.startCup();
+      const front = ["norris", "piastri", "verstappen", DAY.replay, DAY.onboard, "russell"];
+      const rest = state.cupEntries.map((e) => e.driver.id).filter((id) => !front.includes(id));
+      state.raceIndex = ti;
+      state.qualifying = { raceIndex: ti, order: [...front, ...rest] };
+      startRace(ti);
+      state.qualifying = null;
+      for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+      const pl = getPlayer();
+      pl.isPlayer = false;
+      state.phase = "race";
+      let now = performance.now();
+      state.raceStart = now; state.lastTick = now; state.simOffset = 0;
+      state.racers.forEach((r) => { r.lapStartAt = now; });
+      for (let steps = 0; state.phase === "race" && steps < 60 * 900; steps += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+      pl.isPlayer = true;
+      if (state.phase === "race") throw new Error("capture-shots: the replay's race did not finish in 15 simulated minutes");
+    }, { DAY, ...(await spotOf("monaco")) });
+    await p.click("#results-replay");
+    await p.waitForTimeout(1500);
+    // [name, camera, whose car (null: the director's choice), race time in ms]
+    const REPLAY_SHOTS = [
+      ["replay-trackside", "trackside", DAY.replay, 4000],
+      ["replay-onboard", "onboard", DAY.onboard, 5000],
+      ["replay-helicopter", "helicopter", DAY.replay, 3000],
+      ["replay-director", "director", null, 8000],
+    ];
+    for (const [name, camera, driverId, t] of REPLAY_SHOTS) {
+      await p.evaluate(({ camera, driverId, t }) => {
+        Game.replay.setCamera(camera);
+        if (driverId) state.replay.focusId = state.racers.find((r) => r.driver.id === driverId).id;
+        Game.replay.seek(t - 1200);
+        if (!state.replay.playing) Game.replay.togglePlay();
+      }, { camera, driverId, t });
+      await p.waitForTimeout(1200);
+      await dayShot(name);
+    }
+  }
+
+  // The podium: a cup whose four races finish in a set order, scored by the
+  // game's own finalizeRace (DAY.podium first, second and third), then the
+  // ceremony. The page's own title and button are hidden; the name plates
+  // (HTML, placed under each driver) stay. Shot at the timeline's beats (ceremony.js).
+  if (parts.includes("podium")) {
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate((top) => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === top[0]));
+      Game.selectPlayers(1);
+      Game.selectCup(0);
+      Game.selectGridMode("back");
+      Game.selectWeatherMode("dry");
+      Game.startCup();
+      for (let race = 0; race < getActiveCup().tracks.length; race += 1) {
+        const rank = (r) => { const i = top.indexOf(r.driver.id); return i < 0 ? 99 : i; };
+        [...state.racers].sort((a, b) => rank(a) - rank(b) || a.driver.name.localeCompare(b.driver.name)).forEach((r, i) => {
+          r.finished = true;
+          r.finishPosition = i + 1;
+          r.finishTime = 300000 + i * 2100;
+          r.bestLapTime = 60000 + i * 300;
+        });
+        state.phase = "race";
+        state.resultsQueued = true;
+        finalizeRace();
+        nextRace();
+      }
+    }, DAY.podium);
+    await p.waitForFunction(() => Render3D.podium && Render3D.podium.inspect().drawing, null, { timeout: 60000 });
+    await p.addStyleTag({ content: "#podium-screen .podium-head, #podium-screen .podium-foot { visibility: hidden !important; }" });
+    for (const [name, t] of [["podium-arms", 4.8], ["podium-trophy", 7.2], ["podium-spray", 13], ["podium-orbit", 27]]) {
+      await p.waitForFunction((tt) => Render3D.podium.inspect().t >= tt, t, { timeout: 60000 });
+      await dayShot(name);
+    }
+  }
+
+  // Two players: P1 and P2 (DAY.players) from the back on autopilot, both
+  // views and both HUDs; at Spa in the dry, at Monaco in the rain, and on a
+  // window over 2.1 times as wide as it is tall (1600x700), where the views sit
+  // side by side. Plus the pit lane's Players choice.
+  if (parts.includes("split")) {
+    const SPLIT_SHOTS = [
+      ["split-spa", "spa", "dry", 1600, 900, 10],
+      ["split-monaco-wet", "monaco", "wet", 1600, 900, 8],
+      ["split-side-by-side", "spa", "dry", 1600, 700, 14],
+    ];
+    for (const [name, circuit, weather, w, h, seconds] of SPLIT_SHOTS) {
+      await sizeTo(w, h);
+      await freshGame();
+      await p.evaluate(({ DAY, ci, ti, weather }) => {
+        Game.selectDriver(DRIVERS.findIndex((d) => d.id === DAY.players[0]));
+        Game.selectPlayers(2);
+        state.secondDriver = DRIVERS.findIndex((d) => d.id === DAY.players[1]);
+        Game.selectCup(ci); Game.selectGridMode("back"); Game.selectWeatherMode(weather);
+        renderGarage();
+        Game.startCup();
+        if (ti > 0) { state.raceIndex = ti; startRace(ti); }
+      }, { DAY, weather, ...(await spotOf(circuit)) });
+      await p.waitForFunction(() => state.phase === "race", null, { timeout: 90000 });
+      // Starting a cup goes full screen; the window goes back to its size.
+      await p.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {});
+      await sizeTo(w, h);
+      await p.evaluate(() => humans().forEach((racer) => { racer.isPlayer = false; }));
+      await p.waitForTimeout(seconds * 1000);
+      await dayShot(name);
+    }
+    // The pit lane, two players picked: the whole screen, at 1600x900.
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate((DAY) => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === DAY.players[0]));
+      Game.selectPlayers(2);
+      state.secondDriver = DRIVERS.findIndex((d) => d.id === DAY.players[1]);
+      renderGarage();
+    }, DAY);
+    await p.waitForTimeout(1500);
+    await dayShot("split-pitlane");
   }
   await context.close();
   return written;
