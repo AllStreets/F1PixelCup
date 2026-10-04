@@ -212,7 +212,8 @@ async (page) => {
   const TRACKSIDE = [
     { name: "trackside-casino", circuit: "monaco", aim: "casino", back: 40, h: 12, ah: 40, fov: 60, side: 0 },
     { name: "trackside-yachts", circuit: "monaco", aim: "yachts" },
-    { name: "trackside-singapore", circuit: "singapore", aim: "singaporeFlyer", back: -260, h: 160, ah: 220, fov: 60, side: 120 },
+    // Down the main straight to the Flyer, the pits and Marina Bay Sands beside it.
+    { name: "trackside-singapore", circuit: "singapore", aim: "road", from: -500, to: 100, h: 14, fov: 62 },
     { name: "trackside-crowd", circuit: "monaco", aim: "stand" },
     { name: "trackside-crews", circuit: "monaco", aim: "crew" },
     { name: "trackside-wing", circuit: "silverstone", aim: "silverstoneWing", back: 60, h: 30, ah: 30, fov: 60, side: 40 },
@@ -230,7 +231,15 @@ async (page) => {
       let from;
       let at;
       let fov = 55;
-      if (t.aim === "yachts") {
+      if (t.aim === "road") {
+        const route = getItemRoute(state.track);
+        const L = state.track.totalLength;
+        const a = route.toWorld(((t.from % L) + L) % L, 0);
+        const b = route.toWorld(((t.to % L) + L) % L, 0);
+        from = { x: a.x, y: a.y, h: t.h };
+        at = { x: b.x, y: b.y, h: 10 };
+        fov = t.fov;
+      } else if (t.aim === "yachts") {
         // Over the water, the moored yachts sterns to the quay.
         const moored = ts.yachts.yachts.filter((v) => v.moored);
         const y = moored[Math.min(12, moored.length - 1)];
