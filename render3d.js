@@ -154,7 +154,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -1299,7 +1299,7 @@ function render(frame) {
   if (first) sampleFrame(Boolean(frame.racing));
   // A replay's fixed cameras (trackside, the helicopter) do not move with the
   // car: no speed blur or streaks there, only onboard.
-  const still = frame.view && frame.view.mode !== "onboard";
+  const still = frame.view && viewInfo && viewInfo.shot !== "onboard";
   postfx.render({
     view: index,
     // The view's rectangle from the canvas's bottom left, as the renderer has it.
@@ -1366,32 +1366,87 @@ function tvCameras(world) {
   if (world.tvCams) return world.tvCams;
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  // (And the catch fences: seen through from right behind, a fence fills the
-  // shot, so a camera rises until it looks over them.)
-  const fences = [];
-  world.circuit.traverse((o) => { if (o.userData.catchFence) fences.push(o); });
-  const blockers = [world.decor, world.landmarks, ...(world.circuit.userData.occluders || []), ...fences].filter(Boolean);
-  // Each blocker's box in the world (each instance's, for the trees and
-  // buildings drawn instanced): a ray is tested against the boxes first, and
-  // only a box it hits is looked at closely (a single mesh exactly; an
-  // instance by its box, near enough for scoring a view). Far cheaper than
-  // raycasting the whole scenery for every ray.
+  const started = performance.now();
+  // Placing them: each looks over the catch fences (seen through from right
+  // behind, a fence fills the shot, so a camera rises until it clears them).
+  world.tvCams = window.Replay.placeTvCameras(course, { heights: TV_HEIGHTS, visible: sightTest(world, true) });
+  // Which camera has the car where: from what each one actually sees of the
+  // road, past everything that stands (the circuit's walls, barriers, stands,
+  // tunnel and bridges, the scenery, the landmarks, the marshal posts). A
+  // stretch no camera sees (inside a tunnel) has none.
+  const sees = sightTest(world, false);
+  const L = course.track.totalLength;
+  // A camera sees a stretch (a bin) when, at its middle and both its ends,
+  // it sees right across the road: so a bin half in a tunnel's mouth, or a
+  // car on the grid's outer slots behind a stand's roof, is not taken as seen.
+  const half = window.Replay.COVER_BIN / 2 - 1;
+  world.tvCover = window.Replay.assignTvCoverage(world.tvCams, L, (k, d) => {
+    const cam = world.tvCams[k];
+    return [-half, 0, half].every((along) => {
+      const p = pointOnLap(course, d + along);
+      let seen = 0;
+      [-TV_SIGHT_LAT, 0, TV_SIGHT_LAT].forEach((lat) => {
+        if (sees(cam, { x: p.x + p.nx * lat, y: p.h + 4, z: p.y + p.ny * lat })) seen += 1;
+      });
+      return seen === 3;
+    });
+  });
+  world.tvCamsMs = performance.now() - started;
+  // The nearest any of them stands to its barriers (for the checks).
+  world.tvCamsClearance = world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null;
+  return world.tvCams;
+}
+
+// Across the road from its middle, where a car is looked for by the cameras.
+const TV_SIGHT_LAT = 12;
+
+// A line-of-sight test against what stands round the circuit: visible(a, b)
+// is true when nothing is between a and b. Each blocker's box in the world
+// (each instance's, for the trees and buildings drawn instanced) is filed on
+// a grid over the ground; a ray meets only the boxes in the cells it
+// crosses, and only a box it hits is looked at closely (a single mesh
+// exactly; an instance by its box, which can only err towards hidden). Far
+// cheaper than raycasting the whole scenery for every ray. The circuit's
+// parts that lie on the ground (road, kerbs, lines) are left out; with
+// `fences`, the catch fences count as well.
+function sightTest(world, fences) {
+  const roots = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
+  const standing = new Set(world.circuit.userData.occluders || []);
   const boxes = [];
   const m = new THREE.Matrix4();
-  blockers.forEach((root) => root.traverseVisible((o) => {
-    if (!o.isMesh || o.userData.ground) return;
+  const add = (o) => {
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
     if (o.isInstancedMesh) {
       for (let i = 0; i < o.count; i += 1) {
         o.getMatrixAt(i, m);
         boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(m.premultiply(o.matrixWorld)), mesh: null });
       }
+    } else if (o.geometry.attributes.position.count > SIGHT_SPLIT) {
+      // A long mesh (a barrier, a wall the length of the lap) is filed
+      // triangle by triangle, so a ray meets only the few near it.
+      const pos = o.geometry.attributes.position;
+      const index = o.geometry.index;
+      const tris = index ? index.count / 3 : pos.count / 3;
+      for (let t = 0; t < tris; t += 1) {
+        const tri = [0, 1, 2].map((c) => new THREE.Vector3().fromBufferAttribute(pos, index ? index.getX(t * 3 + c) : t * 3 + c).applyMatrix4(o.matrixWorld));
+        boxes.push({ box: new THREE.Box3().setFromPoints(tri), tri });
+      }
     } else {
       boxes.push({ box: o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld), mesh: o });
     }
+  };
+  roots.forEach((root) => root.traverseVisible((o) => {
+    if (o.isMesh && !o.userData.ground) add(o);
   }));
-  // The boxes filed on a grid over the ground, so a ray only meets those
-  // in the cells its stretch crosses.
+  world.circuit.traverseVisible((o) => {
+    if (!o.isMesh || o.userData.ground) return;
+    if (o.userData.catchFence) { if (fences) add(o); return; }
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    // What rises off the ground: walls, barriers, stands, and raised flat
+    // things too (a stand's roof, a canopy).
+    const top = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).max.y;
+    if (standing.has(o) || top > 1.5) add(o);
+  });
   const CELL = 200;
   const grid = new Map();
   const cell = (i, j) => `${i},${j}`;
@@ -1410,7 +1465,7 @@ function tvCameras(world) {
   const dir = new THREE.Vector3();
   const hit = new THREE.Vector3();
   let stamp = 0;
-  const visible = (a, b) => {
+  return (a, b) => {
     from.set(a.x, a.y, a.z);
     dir.set(b.x - a.x, b.y - a.y, b.z - a.z);
     const far = dir.length() - 2;
@@ -1425,20 +1480,24 @@ function tvCameras(world) {
           const item = boxes[n];
           if (item.stamp === stamp) continue;
           item.stamp = stamp;
-          if (!ray.ray.intersectBox(item.box, hit) || hit.distanceTo(from) > far) continue;
+          // (From inside a box, intersectBox gives the way out, which can be
+          // past the car: a box round the camera is always looked at closely.)
+          if (!item.box.containsPoint(from) && (!ray.ray.intersectBox(item.box, hit) || hit.distanceTo(from) > far)) continue;
+          if (item.tri) {
+            const at = ray.ray.intersectTriangle(item.tri[0], item.tri[1], item.tri[2], false, hit);
+            if (at && at.distanceTo(from) <= far) return false;
+            continue;
+          }
           if (!item.mesh || ray.intersectObject(item.mesh, false).length > 0) return false;
         }
       }
     }
     return true;
   };
-  const started = performance.now();
-  world.tvCams = window.Replay.placeTvCameras(course, { heights: TV_HEIGHTS, visible });
-  world.tvCamsMs = performance.now() - started;
-  // The nearest any of them stands to its barriers (for the checks).
-  world.tvCamsClearance = world.tvCams.length ? Math.min(...world.tvCams.map((c) => course.clearance(c.x, c.z))) : null;
-  return world.tvCams;
 }
+
+// Meshes with more vertices than this are filed for the sight test by triangle.
+const SIGHT_SPLIT = 96;
 
 // Before a replay opens: its circuit's TV cameras, so no frame of it waits
 // on placing them.
@@ -1454,7 +1513,14 @@ function placeViewCamera(world, view, focus) {
   const car = world.cars.get(focus.id);
   const road = course.heightAt(focus.trackDistance || 0);
   let cam = -1;
-  if (view.mode === "onboard" && car) {
+  // Trackside, where no camera sees the car (in a tunnel), the shot goes
+  // onboard until one does, as television does.
+  let shot = view.mode;
+  if (shot === "trackside") {
+    cam = Replay.tvCameraAt(tvCameras(world) && world.tvCover, focus.trackDistance || 0);
+    if (cam < 0 && car) shot = "onboard";
+  }
+  if (shot === "onboard" && car) {
     car.root.updateMatrixWorld(true);
     camera.position.copy(TCAM).applyMatrix4(car.root.matrixWorld);
     viewTarget.copy(TCAM_AT).applyMatrix4(car.root.matrixWorld);
@@ -1479,9 +1545,7 @@ function placeViewCamera(world, view, focus) {
     setNear(CAMERA_NEAR);
     setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget), HELI_SUBJECT));
   } else {
-    const cams = tvCameras(world);
-    cam = Replay.tvCameraFor(cams, focus.trackDistance || 0, L);
-    const c = cams[cam];
+    const c = world.tvCams[cam];
     if (c) camera.position.set(c.x, c.y, c.z);
     // Aimed a little ahead of the car, as an operator leads a moving subject.
     const lead = 6 + Math.abs(focus.speed || 0) * 0.04;
@@ -1492,7 +1556,7 @@ function placeViewCamera(world, view, focus) {
     setFov(Replay.zoomFov(camera.position.distanceTo(viewTarget)));
   }
   viewInfo = {
-    mode: view.mode, focusId: focus.id, cam,
+    mode: view.mode, shot, focusId: focus.id, cam,
     x: camera.position.x, y: camera.position.y, z: camera.position.z, fov: camera.fov, near: camera.near,
     clearance: course.clearance(camera.position.x, camera.position.z),
     ground: course.heightAtPoint(camera.position.x, camera.position.z),
@@ -1502,7 +1566,43 @@ function placeViewCamera(world, view, focus) {
     // The nearest any TV camera of this circuit stands to its barriers.
     camsClearance: world.tvCams ? world.tvCamsClearance : null,
     camsMs: world.tvCamsMs || 0,
+    // The car in view, for sightOfView (the checks).
+    car: { x: focus.x, y: focus.y, heading: focus.heading, road },
   };
+}
+
+// For the checks: is the car in view hidden from the replay's camera? Exact
+// rays (every mesh, every instance) from the camera to the car's middle, nose
+// and tail, against all that stands by the circuit: the circuit's own walls
+// and stands, the scenery, the landmarks, the marshal posts. The catch fences
+// are left out (they are see-through mesh). Hidden when most rays are.
+const sightRay = new THREE.Raycaster();
+function sightOfView() {
+  const v = viewInfo;
+  if (!v || !current || v.shot === "onboard") return null;
+  const world = current;
+  const roots = [world.circuit, world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
+  const from = new THREE.Vector3(v.x, v.y, v.z);
+  const cos = Math.cos(v.car.heading);
+  const sin = Math.sin(v.car.heading);
+  let hidden = 0;
+  let by = null;
+  [0, 12, -12].forEach((along) => {
+    const to = new THREE.Vector3(v.car.x + cos * along, v.car.road + 4, v.car.y + sin * along);
+    const dir = to.clone().sub(from);
+    const far = dir.length() - 3;
+    sightRay.set(from, dir.normalize());
+    sightRay.far = far;
+    const shown = (o) => { for (let n = o; n; n = n.parent) if (!n.visible) return false; return true; };
+    const hit = sightRay.intersectObjects(roots, true).find((h) => !h.object.userData.ground && !h.object.userData.catchFence && shown(h.object));
+    if (hit) {
+      hidden += 1;
+      let o = hit.object;
+      while (o.parent && !o.name && !roots.includes(o.parent)) o = o.parent;
+      by = by || `${o.name || o.type}@${Math.round(hit.distance)}`;
+    }
+  });
+  return { hidden: hidden >= 2, rays: hidden, by, cam: v.cam, focusId: v.focusId };
 }
 
 // ---------------------------------------------------------------------------

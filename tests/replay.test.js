@@ -347,6 +347,57 @@ test("a TV camera prefers the spot that can see its stretch", () => {
   assert.ok(cams.every((c) => Math.hypot(c.x, c.z) < 1000), "all on the inside, where they can see");
 });
 
+// Coverage from what each camera can see: four cameras round a 4000 lap.
+function coverageCams() {
+  const L = 4000;
+  const cams = [500, 1500, 2500, 3500].map((d) => ({ d }));
+  cams.forEach((c, k) => {
+    const prev = cams[(k + 3) % 4];
+    c.from = ((prev.d + 0.35 * 1000) % L + L) % L;
+  });
+  cams.forEach((c, k) => { c.to = cams[(k + 1) % 4].from; });
+  return { L, cams };
+}
+
+test("coverage: each stretch goes to its own camera while that camera sees the car", () => {
+  const { L, cams } = coverageCams();
+  const cover = Replay.assignTvCoverage(cams, L, () => true);
+  for (let d = 0; d < L; d += 7) assert.equal(Replay.tvCameraAt(cover, d), Replay.tvCameraFor(cams, d, L), `d ${d}`);
+});
+
+test("coverage: where a camera's view is blocked, a neighbour that sees the car takes it", () => {
+  const { L, cams } = coverageCams();
+  // A building hides 1000 to 1300 from camera 1 (it covers 850 to 1850);
+  // camera 0 sees that stretch.
+  const sees = (k, d) => !(k === 1 && d >= 1000 && d < 1300);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  for (let d = 0; d < L; d += 5) {
+    const k = Replay.tvCameraAt(cover, d);
+    assert.ok(k >= 0 && sees(k, d), `d ${d}: camera ${k} cannot see it`);
+  }
+  assert.equal(Replay.tvCameraAt(cover, 1150), 0);
+  // Once the car is clear again, the stretch's own camera has it.
+  assert.equal(Replay.tvCameraAt(cover, 1600), 1);
+});
+
+test("coverage: where no camera sees the car (a tunnel) there is none, and only there", () => {
+  const { L, cams } = coverageCams();
+  const sees = (k, d) => !(d >= 2000 && d < 2400);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  for (let d = 0; d < L; d += 5) {
+    const k = Replay.tvCameraAt(cover, d);
+    if (d >= 2000 + cover.bin && d < 2400 - cover.bin) assert.equal(k, -1, `d ${d}`);
+    if (d < 2000 - cover.bin || d >= 2400 + cover.bin) assert.ok(k >= 0, `d ${d}`);
+  }
+});
+
+test("coverage: a blip of a few metres (a lamp post) does not cut away and back", () => {
+  const { L, cams } = coverageCams();
+  const sees = (k, d) => !(k === 2 && d >= 2600 && d < 2620);
+  const cover = Replay.assignTvCoverage(cams, L, sees);
+  for (let d = 2400; d < 2800; d += 2) assert.equal(Replay.tvCameraAt(cover, d), 2, `d ${d}`);
+});
+
 test("a TV camera goes only as high as it must to see its stretch (over a catch fence)", () => {
   const course = fakeCourse();
   // A fence: nothing is seen from below 50 up.

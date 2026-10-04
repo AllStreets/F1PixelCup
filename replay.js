@@ -472,6 +472,76 @@
     return 0;
   }
 
+  // Which camera has the car where, from what each camera can actually see
+  // (sees(k, d): camera k sees a car at lap distance d). Lap distance in bins
+  // of COVER_BIN; each bin goes to its own stretch's camera while that one
+  // sees it, else the camera already on the car if it still sees it, else
+  // the nearest camera round the lap that does, else none (-1: nowhere sees
+  // it, as in a tunnel). A blip shorter than COVER_BLIP bins on the stretch's
+  // own camera (a lamp post, a tree trunk) is not worth two cuts: it stays.
+  const COVER_BIN = 20;
+  const COVER_BLIP = 3;
+  function assignTvCoverage(cams, L, sees, bin = COVER_BIN) {
+    const n = Math.max(1, Math.ceil(L / bin));
+    const m = cams.length;
+    const cover = { bin, L, list: cams, natural: null, cams: new Int16Array(n).fill(-1) };
+    if (!m) return cover;
+    const memo = new Map();
+    const seen = (k, b) => {
+      const key = k * n + b;
+      if (!memo.has(key)) memo.set(key, Boolean(sees(k, Math.min(L, (b + 0.5) * bin))));
+      return memo.get(key);
+    };
+    const natural = Array.from({ length: n }, (_, b) => tvCameraFor(cams, Math.min(L, (b + 0.5) * bin), L));
+    cover.natural = natural;
+    const pick = (b, prev) => {
+      const nat = natural[b];
+      if (seen(nat, b)) return nat;
+      if (prev >= 0 && seen(prev, b)) return prev;
+      for (let dist = 1; dist <= m / 2; dist += 1) {
+        const back = (nat - dist + m) % m;
+        if (seen(back, b)) return back;
+        const ahead = (nat + dist) % m;
+        if (seen(ahead, b)) return ahead;
+      }
+      return -1;
+    };
+    // Twice round, so the first bins know which camera the lap ended on.
+    let prev = -1;
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let b = 0; b < n; b += 1) {
+        cover.cams[b] = pick(b, prev);
+        prev = cover.cams[b];
+      }
+    }
+    // Blips: a short run off the stretch's own camera, with that camera on
+    // both sides of it, goes back to it.
+    for (let b = 0; b < n; b += 1) {
+      const nat = natural[b];
+      if (cover.cams[b] === nat) continue;
+      let e = b;
+      while (e < n && cover.cams[e] !== natural[e] && natural[e] === nat) e += 1;
+      const before = cover.cams[(b - 1 + n) % n];
+      const after = cover.cams[e % n];
+      if (e - b <= COVER_BLIP && before === nat && after === nat) for (let i = b; i < e; i += 1) cover.cams[i] = nat;
+      b = e - 1;
+    }
+    return cover;
+  }
+
+  // The camera on a car at d. Where the bins follow the stretches' own
+  // cameras, the cut falls exactly where the stretches meet, not at a bin's
+  // edge.
+  function tvCameraAt(cover, d) {
+    const n = cover.cams.length;
+    const b = Math.min(n - 1, Math.floor((((d % cover.L) + cover.L) % cover.L) / cover.bin));
+    const k = cover.cams[b];
+    if (!cover.natural || k !== cover.natural[b]) return k;
+    const exact = tvCameraFor(cover.list, d, cover.L);
+    if (exact !== k && (cover.cams[(b + 1) % n] === exact || cover.cams[(b - 1 + n) % n] === exact)) return exact;
+    return k;
+  }
+
   // The lens that keeps a subject of the same width filling the frame at
   // this distance (vertical degrees, for a 16:9 picture).
   function zoomFov(distance, subject = TV_CAM.subject) {
@@ -552,6 +622,6 @@
 
   return {
     SAMPLE_EVERY, CHUNK, JUMP, OBJECT_TYPES, FLAGS, KEYS, BITS, TV_CAM, DIRECTOR,
-    createRecording, quantizeSample, placeTvCameras, tvCameraFor, zoomFov, directorShots, shotAt, neighbour,
+    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, tvCameraAt, zoomFov, directorShots, shotAt, neighbour,
   };
 }));

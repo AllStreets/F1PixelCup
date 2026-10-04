@@ -356,6 +356,68 @@ async (page) => {
     return (state.phase === "countdown" && state.recording === null && old !== null && state.replay === null) || JSON.stringify({ phase: state.phase });
   });
 
+  // The trackside camera always sees the car it is on (more than a brief
+  // moment hidden, a lamp post or a tree trunk going by, is a failure): a
+  // one-lap race at Monaco (city blocks, the tunnel under the hotel, the
+  // casino) and at Singapore (the pit stands' roofs), the replay walked from
+  // lights out to the flag every tenth of a second on three cars, each
+  // frame's line of sight to the car tested exactly against everything that
+  // stands by the circuit (Render3D.sightOfView). In the tunnel, where no
+  // camera can see, the shot goes onboard (not a trackside view).
+  const BRIEF_MS = 400;
+  const sight = await step(async (BRIEF_MS) => {
+    if (!Render3D.sightOfView) return "no sightOfView";
+    resetToGarage();
+    const out = {};
+    for (const race of [0, 1]) {
+      Game.selectCup(1); Game.selectGridMode("back");
+      if (race === 0) {
+        Game.startCup();
+        for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+      } else { startRace(1); state.preparing = null; }
+      let s = 5;
+      Math.random = () => { s = (s + 0x6d2b79f5) >>> 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+      state.track.laps = 1;
+      const player = getPlayer();
+      player.isPlayer = false;
+      state.phase = "race";
+      let now = 100000;
+      state.raceStart = now; state.lastTick = now; state.simOffset = 0; state.stepAccum = 0;
+      state.racers.forEach((r) => { r.lapStartAt = now; });
+      for (let n = 0; state.phase === "race" && n < 60 * 300; n += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+      player.isPlayer = true;
+      const track = state.track.id;
+      if (!Game.replay.open()) { out[track] = `no replay (${state.phase})`; continue; }
+      const r = state.replay;
+      if (r.playing) Game.replay.togglePlay();
+      Game.replay.setCamera("trackside");
+      const h = r.rec.header;
+      let worst = { ms: 0 };
+      let frames = 0;
+      let shots = 0;
+      for (const id of [h.cars[0].id, h.playerId, h.cars[Math.floor(h.cars.length / 2)].id]) {
+        r.focusId = id;
+        let run = null;
+        const end = (t) => { if (run && t - run.from > worst.ms) worst = { ms: t - run.from, ...run }; run = null; };
+        for (let t = 0; t <= r.rec.duration; t += 100) {
+          Game.replay.seek(t);
+          await new Promise((res) => requestAnimationFrame(res));
+          const v = Render3D.sightOfView();
+          frames += 1;
+          if (v) shots += 1;
+          if (v && v.hidden) { if (!run) run = { from: t, id, cam: v.cam, by: v.by }; } else end(t);
+        }
+        end(r.rec.duration + 100);
+      }
+      out[track] = { frames, shots, worst, camsMs: Math.round(Render3D.inspect().view.camsMs) };
+      Game.replay.exit();
+    }
+    return out;
+  }, BRIEF_MS);
+  info.sight = sight;
+  const seen = (id) => sight && sight[id] && typeof sight[id] === "object" && sight[id].shots > 100 && sight[id].worst.ms <= BRIEF_MS;
+  results.tracksideAlwaysSeesItsCar = (seen("monaco") && seen("singapore")) || JSON.stringify(sight);
+
   await context.close();
   return { results, errors, info };
 }
