@@ -90,6 +90,11 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
   - the people stay off the road;
   - frame time holds on all three tiers (Low keeps the far crowd texture only).
 - [x] First look approved (user, 2026-10-02): people are good, the Monaco casino loved. Additions: detailed realistic yachts in the water (Monaco harbour above all, every harbour venue), another really good building or two per venue, inspired by the user's Chicago open world buildings at ultra, with no lag on any tier.
+- [x] Final look approved (user, 2026-10-04). Follow-ups:
+  - [ ] Monaco: move the pit lane and garages somewhere less obvious, with yachts where they stood; the safety car's route derived from the pit lane on every circuit.
+  - [ ] Monaco: remove the buildings between the harbour and the track so the yachts back right up to the fence, as in photos of the real race.
+  - [ ] Calm Marina Bay Sands' windows; Spa's pits and the São Paulo towers to the Wing's level; the Singapore Flyer visible from the track; faster first load.
+  - [ ] The 16 new venues' landmarks, stands and yachts (branch landmarks-2025).
 - [ ] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
 
 ## 2. Stage K: the 3D podium ceremony **[REVIEW]**
