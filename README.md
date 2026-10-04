@@ -370,8 +370,9 @@ Drag-and-drop the folder or connect the repo. No build command — publish direc
 - Circuit outlines: [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits), MIT
 - Real pit lanes, start lines, the Monaco tunnel and the signature corners: [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright), ODbL (`tools/tracks/fetch_osm.py`, `tools/tracks/osm-features.json`)
 - Ground textures: [Poly Haven](https://polyhaven.com), CC0 (see `assets/textures/CREDITS.md`)
+- The drivers' heads: the [MakeHuman](https://github.com/makehumancommunity/makehuman) base mesh and shape targets (data files only, at commit a8bc2d5), CC0 (`tools/blender/makehuman/`)
 - Three.js: MIT
 
 ## License
 
-The code is released under the [MIT License](LICENSE). Third-party pieces keep their own licences: circuit outlines from bacinger/f1-circuits (MIT), pit lane, tunnel and corner positions from OpenStreetMap (ODbL), textures from Poly Haven (CC0) and Three.js (MIT). Their notices are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
+The code is released under the [MIT License](LICENSE). Third-party pieces keep their own licences: circuit outlines from bacinger/f1-circuits (MIT), pit lane, tunnel and corner positions from OpenStreetMap (ODbL), textures from Poly Haven (CC0), the drivers' heads from MakeHuman's data (CC0) and Three.js (MIT). Their notices are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).

@@ -70,3 +70,13 @@ THE SOFTWARE.
 ------------------------------------------------------------------------------
 Textures: Poly Haven (https://polyhaven.com), released under CC0 1.0 (public
 domain). No attribution is required; it is given here with thanks.
+
+------------------------------------------------------------------------------
+The drivers' heads: the MakeHuman base mesh (makehuman/data/3dobjs/base.obj)
+and shape targets (makehuman/data/targets/**) from
+https://github.com/makehumancommunity/makehuman at commit
+a8bc2d54ff0ac92e78ff71431b1023eda42bf482, released under CC0 1.0 (public
+domain; the repository's LICENSE.md, section C, and LICENSE.ASSETS.md). Only
+these data files are used, read by this project's own code
+(tools/blender/makehuman/); none of MakeHuman's program code (AGPL) is.
+Attribution is not required; it is given here with thanks.
