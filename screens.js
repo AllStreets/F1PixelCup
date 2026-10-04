@@ -525,7 +525,7 @@
     }
     put("pos", $("bc-pos"), f.finished ? "FIN" : `P${num(f.place)}`);
     put("int", $("bc-int"), esc(f.interval));
-    const onboard = info.mode === "onboard";
+    const onboard = (info.shown || info.mode) === "onboard";
     $("bc-trace").classList.toggle("hidden", !onboard);
     if (onboard) drawTrace(info.trace, f);
     put("play", $("bc-play"), info.playing ? "<span class=\"bc-icon-pause\"></span>" : "<span class=\"bc-icon-play\"></span>");

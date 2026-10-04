@@ -472,6 +472,112 @@
     return 0;
   }
 
+  // Which camera has the car where, from what each camera can actually see.
+  // sees(k, d) is how much of a car at lap distance d camera k sees, from 0
+  // to 1 (true and false count as 1 and 0). Lap distance in bins of
+  // COVER_BIN; each bin goes to its own stretch's camera while that one sees
+  // all of it, else the camera already on the car if it still does, else the
+  // nearest camera round the lap that does, else the one that sees most of
+  // it if that is most (COVER_MOSTLY), else none (-1: nowhere sees it, as in
+  // a tunnel). A run of COVER_BLIP bins or fewer off the stretch's own
+  // camera, where that camera still sees most of the car (COVER_MOSTLY: a
+  // lamp post, a tree trunk going by), is not worth two cuts: it keeps it.
+  const COVER_BIN = 20;
+  const COVER_BLIP = 3;
+  const COVER_MOSTLY = 0.6;
+  function assignTvCoverage(cams, L, sees, bin = COVER_BIN) {
+    const n = Math.max(1, Math.ceil(L / bin));
+    const m = cams.length;
+    const cover = { bin, L, list: cams, natural: null, cams: new Int16Array(n).fill(-1) };
+    if (!m) return cover;
+    // A bin's middle (the last bin can be short: its own middle, in the lap).
+    const middle = (b) => (b * bin + Math.min(L, (b + 1) * bin)) / 2;
+    const memo = new Map();
+    const amount = (k, b) => {
+      const key = k * n + b;
+      if (!memo.has(key)) memo.set(key, Number(sees(k, middle(b))) || 0);
+      return memo.get(key);
+    };
+    const seen = (k, b) => amount(k, b) >= 1;
+    const natural = Array.from({ length: n }, (_, b) => tvCameraFor(cams, middle(b), L));
+    cover.natural = natural;
+    const pick = (b, prev) => {
+      const nat = natural[b];
+      if (seen(nat, b)) return nat;
+      if (prev >= 0 && seen(prev, b)) return prev;
+      for (let dist = 1; dist <= m / 2; dist += 1) {
+        const back = (nat - dist + m) % m;
+        if (seen(back, b)) return back;
+        const ahead = (nat + dist) % m;
+        if (seen(ahead, b)) return ahead;
+      }
+      // None sees all of it: the one that sees most, if that is most of it.
+      let best = -1;
+      for (let k = 0; k < m; k += 1) if (amount(k, b) >= COVER_MOSTLY && (best < 0 || amount(k, b) > amount(best, b))) best = k;
+      return best;
+    };
+    // Round the lap until the line agrees with itself (the first bins choose
+    // knowing which camera the lap ended on).
+    let prev = -1;
+    for (let pass = 0; pass < 4; pass += 1) {
+      const before = cover.cams.slice();
+      for (let b = 0; b < n; b += 1) {
+        cover.cams[b] = pick(b, prev);
+        prev = cover.cams[b];
+      }
+      if (pass && before.every((k, b) => k === cover.cams[b])) break;
+    }
+    // Blips, walked round from a bin on its own camera (so a run across the
+    // line is one run).
+    const start = cover.cams.findIndex((k, b) => k === natural[b]);
+    if (start >= 0) {
+      for (let step = 1; step <= n; step += 1) {
+        const b = (start + step) % n;
+        const nat = natural[b];
+        if (cover.cams[b] === nat) continue;
+        const run = [];
+        for (let e = b; run.length <= n && cover.cams[e] !== natural[e] && natural[e] === nat; e = (e + 1) % n) run.push(e);
+        const before = cover.cams[(b - 1 + n) % n];
+        const after = cover.cams[(run[run.length - 1] + 1) % n];
+        if (run.length <= COVER_BLIP && before === nat && after === nat && run.every((i) => amount(nat, i) >= COVER_MOSTLY)) {
+          run.forEach((i) => { cover.cams[i] = nat; });
+        }
+        step += run.length - 1;
+      }
+    }
+    return cover;
+  }
+
+  // Coverage lane by lane across the road (edges: the lanes' bounds, from
+  // one side to the other, e.g. [-33, -11, 11, 33]): a car is looked for
+  // where it is, so a camera that sees one side of the road but not the
+  // other keeps the cars on its side. sees(k, d, lane) as for one lane.
+  function assignTvCoverageLanes(cams, L, sees, edges, bin = COVER_BIN) {
+    const lanes = [];
+    for (let lane = 0; lane + 1 < edges.length; lane += 1) lanes.push(assignTvCoverage(cams, L, (k, d) => sees(k, d, lane), bin));
+    return { edges, lanes };
+  }
+
+  // The camera on a car at d (and lat, across the road, with lanes). Where
+  // two stretches' own cameras meet inside a bin, and both have their sides
+  // of it, the cut falls exactly where the stretches meet, not at the bin's
+  // edge.
+  function tvCameraAt(cover, d, lat = 0) {
+    if (cover.lanes) {
+      let lane = 0;
+      while (lane < cover.lanes.length - 1 && lat >= cover.edges[lane + 1]) lane += 1;
+      return tvCameraAt(cover.lanes[lane], d);
+    }
+    const n = cover.cams.length;
+    const b = Math.min(n - 1, Math.floor((((d % cover.L) + cover.L) % cover.L) / cover.bin));
+    const k = cover.cams[b];
+    if (!cover.natural || k !== cover.natural[b]) return k;
+    const exact = tvCameraFor(cover.list, d, cover.L);
+    if (exact === k) return k;
+    const side = [(b + 1) % n, (b - 1 + n) % n].find((i) => cover.natural[i] === exact);
+    return side !== undefined && cover.cams[side] === exact ? exact : k;
+  }
+
   // The lens that keeps a subject of the same width filling the frame at
   // this distance (vertical degrees, for a 16:9 picture).
   function zoomFov(distance, subject = TV_CAM.subject) {
@@ -552,6 +658,6 @@
 
   return {
     SAMPLE_EVERY, CHUNK, JUMP, OBJECT_TYPES, FLAGS, KEYS, BITS, TV_CAM, DIRECTOR,
-    createRecording, quantizeSample, placeTvCameras, tvCameraFor, zoomFov, directorShots, shotAt, neighbour,
+    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour,
   };
 }));

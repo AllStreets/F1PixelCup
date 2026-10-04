@@ -2799,6 +2799,13 @@ function startRecording(from) {
   state.recordFlashes = new WeakSet();
   state.recordMarshals = {};
   state.recordYellowAt = null;
+  // Each car's side offset as the race works it out each step (on the grid
+  // it has not been yet): the replay's cameras look for a car across the road.
+  const route = getItemRoute(state.track);
+  state.racers.forEach((racer) => {
+    const along = route.sample(racer.trackDistance || 0);
+    racer.lat = (racer.x - along.x) * along.nx + (racer.y - along.y) * along.ny;
+  });
   recordSample(from);
 }
 
@@ -3627,7 +3634,10 @@ function replayGraphics(frame, shot, focus) {
   const keys = fc.meta.isPlayer;
   // (Player 2's own keys, in a two-player race.)
   const own = (c) => (fc.meta.player === 2 ? c.keys2 : c.keys);
-  if (shot.mode === "onboard") {
+  // The picture actually drawn: trackside goes onboard where no camera can
+  // see (a tunnel), and the onboard graphics come with it.
+  const drawn = (window.Render3D && Render3D.viewShot && Render3D.viewShot()) || shot.mode;
+  if (drawn === "onboard") {
     for (let j = Math.max(0, k - Math.round(REPLAY_TRACE_MS / rec.sampleMs)); j <= k; j += 1) {
       const c = rec.controls(j, fc.index);
       history.push(keys
@@ -3644,6 +3654,7 @@ function replayGraphics(frame, shot, focus) {
     speed: r.speed,
     camera: r.camera,
     mode: shot.mode,
+    shown: drawn,
     director: shot.director,
     track: h.trackName || state.track.name,
     lap,
