@@ -52,14 +52,14 @@ test("the harbours: yachts where there is water for them, loaded with the venue"
     assert.ok(v.extras.includes("yachts"), `${id} doesn't place its yachts`);
     assert.ok(VENUE_MODELS[id].includes("yachts"), `${id} doesn't load the yachts`);
   });
-  // The lake harbours sit on the infield's water, the sea ones off the coast.
-  assert.equal(VENUES.yasmarina.harbour.anchorIn, "lake");
+  // Miami's harbour sits on the infield's painted water, the rest off the coast.
   assert.equal(VENUES.miami.harbour.anchorIn, "lake");
   assert.equal(VENUES.baku.harbour.anchorIn, "sea");
   assert.equal(VENUES.jeddah.harbour.anchorIn, "sea");
+  assert.equal(VENUES.yasmarina.harbour.anchorIn, "sea");
   // The water is made before the yachts look for it.
-  ["yasmarina", "miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("infieldLake") < VENUES[id].extras.indexOf("yachts"), `${id}: the lake after the yachts`));
-  ["baku", "jeddah"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("coast") < VENUES[id].extras.indexOf("yachts"), `${id}: the sea after the yachts`));
+  ["miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("infieldLake") < VENUES[id].extras.indexOf("yachts"), `${id}: the lake after the yachts`));
+  ["baku", "jeddah", "yasmarina"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("coast") < VENUES[id].extras.indexOf("yachts"), `${id}: the sea after the yachts`));
 });
 
 test("only the current venue's models load: no background load of every venue", () => {

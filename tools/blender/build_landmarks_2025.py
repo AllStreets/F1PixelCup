@@ -89,6 +89,9 @@ PALETTE = {
     "planting": ((0.12, 0.32, 0.14), 0.0, 0.9),
     "seat": ((0.8, 0.06, 0.06), 0.0, 0.5),
     "seat_orange": ((0.95, 0.38, 0.02), 0.0, 0.5),
+    # Rows of spectators (the game paints its crowd texture on it, by the
+    # UVs in metres).
+    "crowd": ((0.55, 0.45, 0.4), 0.0, 0.9),
     "concrete": ((0.62, 0.62, 0.64), 0.0, 0.9),
     "concrete_dark": ((0.45, 0.45, 0.47), 0.0, 0.9),
     "steel": ((0.55, 0.57, 0.6), 0.7, 0.4),
@@ -99,6 +102,7 @@ PALETTE = {
     "red_steel": ((0.72, 0.08, 0.06), 0.6, 0.35),
     "sail_shade": ((0.97, 0.97, 0.96), 0.0, 0.5),
     "spray": ((0.92, 0.95, 0.98), 0.0, 0.3),
+    "mist": ((0.9, 0.93, 0.96), 0.0, 0.5),
     "grass": ((0.30, 0.50, 0.20), 0.0, 0.95),
     "sand": ((0.86, 0.79, 0.62), 0.0, 1.0),
     "bronze": ((0.22, 0.18, 0.15), 0.8, 0.38),
@@ -113,7 +117,7 @@ def material(role):
     if role not in MATS:
         c, metal, rough = PALETTE[role]
         MATS[role] = mat(role, c, metal, rough, emit=(1.0, 0.85, 0.6) if role == "window_lit" else None,
-                         alpha=0.6 if role == "spray" else 1.0)
+                         alpha=0.6 if role == "spray" else 0.3 if role == "mist" else 1.0)
     return MATS[role]
 
 
@@ -396,8 +400,8 @@ def wing(m, sign):
     canopy rising from the stand's roof outward, its eaves upturned like a
     pagoda's, on raked columns."""
     nu, nv = 14, 10
-    x0 = 150.0 * sign
-    span = 62.0
+    x0 = 132.0 * sign
+    span = 48.0
     top = lambda u, v: 33.0 + 16.0 * u ** 1.8 + 5.0 * (abs(v - 0.5) * 2) ** 2.4 * (0.3 + u)
     # The leaf's plan: wide at the stand, narrowing to its tip, from the
     # stand's back (y -42) to past its front (y +20).
@@ -435,12 +439,12 @@ def build_shanghai():
     clear()
     root = empty("shanghai_grandstand")
     s = Mesh("stand")
-    L = 150.0
+    L = 132.0
     rows = 24
     for k in range(rows):
         y1 = 14.0 - 2.0 * k
         z = 3.0 + 1.05 * (k + 1)
-        s.box((-L, y1 - 2.0, 0), (L, y1, z), "seat" if k % 6 else "concrete", skip=("-z",))
+        s.box((-L, y1 - 2.0, 0), (L, y1, z), ("concrete", "crowd", "crowd", "seat", "crowd", "crowd")[k % 6], skip=("-z",))
     back = 14.0 - 2.0 * rows
     s.box((-L, back - 12.0, 0), (L, back, 30.0), "concrete", skip=("-z",))
     # The boxes: a band of glass along the back wall, over the top row.
@@ -471,24 +475,25 @@ def build_fountain():
     clear()
     root = empty("jeddah_fountain")
     j = Mesh("jet")
-    j.lathe([(0.0, 3.0), (1.4, 3.0), (2.2, 60), (3.4, 140), (5.0, 200), (8.0, 238), (11.0, 252), (9.0, 259), (0.0, 262)], (0, 0), "spray", segs=16)
-    # The fall: a wide sheath of spray round the jet, heaviest downwind.
+    j.lathe([(0.0, 3.0), (1.2, 3.0), (1.6, 60), (2.4, 140), (3.6, 200), (5.5, 238), (8.0, 252), (6.0, 259), (0.0, 262)], (0, 0), "spray", segs=12)
+    # The fall: a sheath of mist round the jet, widest where the water turns
+    # at the top, drifting downwind (+x) as it falls back to the sea.
     fall = []
-    for z, r, lean in ((4.0, 34.0, 10.0), (40, 30.0, 12.0), (110, 24.0, 12.0), (180, 19.0, 9.0), (230, 15.0, 5.0), (250, 12.0, 2.0)):
+    for z, r, lean in ((4.0, 14.0, 34.0), (50, 20.0, 30.0), (120, 24.0, 22.0), (180, 24.0, 13.0), (225, 20.0, 6.0), (252, 11.0, 1.0)):
         fall.append([(lean * (z / 250) ** 0.5 + r * math.cos(2 * math.pi * i / 20) * (1.0 + 0.25 * math.cos(2 * math.pi * i / 20)), r * math.sin(2 * math.pi * i / 20) * 0.9, z) for i in range(20)])
     inner = [[(x * 0.92 + 0.0, y * 0.92, z + 1.5) for x, y, z in ring] for ring in fall]
     for r0, r1 in zip(fall, fall[1:]):
         for i in range(20):
             k = (i + 1) % 20
-            j.face((r0[i], r0[k], r1[k], r1[i]), "spray")
+            j.face((r0[i], r0[k], r1[k], r1[i]), "mist")
     for r0, r1 in zip(inner, inner[1:]):
         for i in range(20):
             k = (i + 1) % 20
-            j.face((r1[i], r1[k], r0[k], r0[i]), "spray")
+            j.face((r1[i], r1[k], r0[k], r0[i]), "mist")
     for a, b in ((fall[-1], inner[-1]), (inner[0], fall[0])):
         for i in range(20):
             k = (i + 1) % 20
-            j.face((a[i], a[k], b[k], b[i]), "spray")
+            j.face((a[i], a[k], b[k], b[i]), "mist")
     j.finish(parent=root)
     p = Mesh("platform")
     p.prism([(math.cos(2 * math.pi * k / 8) * 11, math.sin(2 * math.pi * k / 8) * 11) for k in range(8)], 0, 2.5, "concrete")
@@ -530,7 +535,8 @@ def build_miami_stadium():
     rows.append(ring(1.0, 0.0))
     # Faces between the rows, outward (the field side faces in).
     for r, (r0, r1) in enumerate(zip(rows, rows[1:])):
-        role = "seat" if 2 <= r < len(rows) - 2 and r % 2 == 0 else "concrete"
+        # Treads (seats) and risers (the fans in front of them) in turn.
+        role = ("seat" if r % 2 == 0 else "crowd") if 2 <= r < len(rows) - 2 else "concrete"
         if r == len(rows) - 2:
             role = "concrete"
         for k in range(n):
@@ -610,7 +616,10 @@ def build_hillside():
     for k in range(11):
         y = 6 - k * 3.6
         z = hill_height(0, y - 1.8)
-        t.box((-70, y - 3.6, max(0.0, z - 2.5)), (70, y, z + 0.35), "concrete" if k % 2 else "concrete_dark")
+        # A narrow concrete step at the front of each grass ledge.
+        t.box((-70, y - 1.0, max(0.0, z - 2.0)), (70, y, z + 0.35), "concrete" if k % 2 else "concrete_dark")
+        # Fans along the ledge, on the grass behind the step.
+        t.box((-68, y - 2.6, z + 0.2), (68, y - 1.4, z + 1.6), "crowd")
         # A bench rail along each terrace.
         t.box((-69, y - 0.6, z + 0.35), (69, y - 0.3, z + 1.0), "steel")
     for x in (-70, -35, 0, 35, 70):
@@ -648,14 +657,14 @@ def build_barcelona_grandstand():
     L = 120.0
     for k in range(16):
         y1 = 14.0 - 1.4 * k
-        s.box((-L, y1 - 1.4, 0), (L, y1, 2.0 + 0.62 * (k + 1)), "seat" if k % 5 else "concrete", skip=("-z",))
+        s.box((-L, y1 - 1.4, 0), (L, y1, 2.0 + 0.62 * (k + 1)), ("concrete", "crowd", "crowd", "seat", "crowd")[k % 5], skip=("-z",))
     s.box((-L, -10.4, 0), (L, -8.4, 14.0), "concrete", skip=("-z",))
     for k in range(20):
         x = -L + 6 + k * (2 * L - 12) / 19
         s.box((x - 2, -8.5, 11.0), (x + 2, -8.3, 13.6), "glass")
     for k in range(13):
         y1 = -10.4 - 1.5 * k
-        s.box((-L, y1 - 1.5, 0), (L, y1, 14.6 + 0.8 * (k + 1)), "seat" if k % 4 else "concrete", skip=("-z",))
+        s.box((-L, y1 - 1.5, 0), (L, y1, 14.6 + 0.8 * (k + 1)), ("concrete", "crowd", "seat", "crowd")[k % 4], skip=("-z",))
     s.box((-L, -34.0, 0), (L, -29.9, 27.0), "concrete", skip=("-z",))
     s.box((-L - 1, -34, 0), (-L, 15, 2.6), "concrete_dark")
     s.box((L, -34, 0), (L + 1, 15, 2.6), "concrete_dark")
@@ -748,59 +757,71 @@ def build_biosphere():
 # Spielberg: the steel bull
 # =============================================================================
 
+def cone(m, a, b, r0, r1, role, sides=8):
+    """A tapering bar from a (radius r0) to b (r1), closed at its ends."""
+    a, b = Vector(a), Vector(b)
+    d = (b - a).normalized()
+    side = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
+    u = d.cross(side).normalized()
+    v = d.cross(u)
+    ra = [a + (u * math.cos(2 * math.pi * k / sides) + v * math.sin(2 * math.pi * k / sides)) * r0 for k in range(sides)]
+    rb = [b + (u * math.cos(2 * math.pi * k / sides) + v * math.sin(2 * math.pi * k / sides)) * r1 for k in range(sides)]
+    for k in range(sides):
+        j = (k + 1) % sides
+        m.face((ra[k], ra[j], rb[j], rb[k]), role)
+    m.face(list(reversed(ra)), role)
+    m.face(rb, role)
+
+
+# The bull's body, tail to muzzle: (x, centre height, half-width, half-height).
+BULL_BODY = [
+    (-6.8, 7.3, 0.9, 1.1), (-6.2, 7.3, 1.6, 1.9), (-4.8, 7.1, 1.95, 2.2), (-2.4, 6.9, 2.0, 2.3),
+    (0.0, 7.1, 2.1, 2.5), (1.8, 7.5, 2.05, 2.9), (3.2, 7.0, 1.8, 2.7), (4.4, 6.1, 1.45, 2.0),
+    (5.4, 5.2, 1.15, 1.6), (6.4, 4.5, 1.0, 1.3), (7.3, 3.9, 0.85, 0.9), (7.8, 3.6, 0.55, 0.55),
+]
+
+
 def build_bull():
-    """A charging bull, about 14 m long: head down, horns forward and up,
-    tail raised, its forelegs braced and its hind legs driving, in dark
-    steel plates (the skin of a skeleton of radii, faceted); on a rough
-    rock plinth. Generic: no mark."""
+    """A charging bull, about 14 m long: its head down and horns forward and
+    up, the hump of its shoulders high over a deep chest, tail raised,
+    forelegs braced and hind legs driving; in dark steel, faceted like the
+    plates of the real sculpture (a body lofted through its sections, the
+    legs and horns tapering bars); on a rough rock plinth. Generic: no mark."""
     clear()
     root = empty("spielberg_bull")
     k = 0.85
     base = 1.6
-    nodes = {
-        "hip": ((-5.0, 0, 7.4), 2.4), "back": ((-1.6, 0, 7.9), 2.7), "withers": ((2.0, 0, 8.5), 3.0),
-        "chest": ((2.6, 0, 6.2), 2.5), "neck": ((4.3, 0, 7.2), 2.2), "head": ((6.3, 0, 5.2), 1.35), "muzzle": ((7.5, 0, 4.2), 0.9),
-        "tail0": ((-6.6, 0, 7.8), 0.4), "tail1": ((-8.0, 0, 9.0), 0.28), "tail2": ((-8.7, 0, 10.6), 0.22),
-    }
-    edges = [("hip", "back"), ("back", "withers"), ("withers", "neck"), ("withers", "chest"), ("chest", "neck"), ("neck", "head"), ("head", "muzzle"), ("hip", "tail0"), ("tail0", "tail1"), ("tail1", "tail2")]
-    for side in (1, -1):
-        s = "L" if side > 0 else "R"
-        nodes.update({
-            f"fs{s}": ((2.6, side * 1.3, 5.6), 1.0), f"fe{s}": ((3.4, side * 1.4, 3.9), 0.75), f"fk{s}": ((4.2, side * 1.4, 2.2), 0.5), f"fh{s}": ((4.9, side * 1.4, 0.35), 0.45),
-            f"hs{s}": ((-4.8, side * 1.3, 6.4), 1.6), f"hst{s}": ((-4.1, side * 1.4, 4.2), 1.0), f"hk{s}": ((-5.8, side * 1.4, 2.3), 0.5), f"hh{s}": ((-6.5, side * 1.4, 0.35), 0.42),
-            f"h0{s}": ((6.5, side * 0.9, 6.2), 0.32), f"h1{s}": ((7.0, side * 2.1, 6.6), 0.24), f"h2{s}": ((7.9, side * 2.5, 7.6), 0.1),
-        })
-        edges += [("chest", f"fs{s}"), (f"fs{s}", f"fe{s}"), (f"fe{s}", f"fk{s}"), (f"fk{s}", f"fh{s}"),
-                  ("hip", f"hs{s}"), (f"hs{s}", f"hst{s}"), (f"hst{s}", f"hk{s}"), (f"hk{s}", f"hh{s}"),
-                  ("head", f"h0{s}"), (f"h0{s}", f"h1{s}"), (f"h1{s}", f"h2{s}")]
-    names = list(nodes)
-    me = bpy.data.meshes.new("bull_skeleton")
-    me.from_pydata([tuple(c * k for c in nodes[n][0][:2]) + (nodes[n][0][2] * k + base,) for n in names],
-                   [(names.index(a), names.index(b)) for a, b in edges], [])
-    ob = bpy.data.objects.new("bull_skeleton", me)
-    scene.collection.objects.link(ob)
-    skin = ob.modifiers.new("skin", "SKIN")
-    for i, n in enumerate(names):
-        r = nodes[n][1] * k
-        me.skin_vertices[0].data[i].radius = (r, r * (0.8 if n in ("hip", "back", "withers", "chest") else 1.0))
-    me.skin_vertices[0].data[names.index("withers")].use_root = True
-    sub = ob.modifiers.new("sub", "SUBSURF")
-    sub.levels = 1
-    deps = bpy.context.evaluated_depsgraph_get()
-    evaluated = ob.evaluated_get(deps)
-    body = bmesh.new()
-    body.from_mesh(evaluated.to_mesh())
-    evaluated.to_mesh_clear()
-    bpy.data.objects.remove(ob, do_unlink=True)
-    # The bull's body is lower and longer in the barrel: squash the trunk a
-    # little in y (its width) where it is widest.
-    for v in body.verts:
-        if abs(v.co.y) > 1.0 * k and v.co.z > 4.5 * k + base:
-            v.co.y *= 0.9
+    at = lambda x, y, z: (x * k, y * k, z * k + base)
     m = Mesh("bull")
-    for f in body.faces:
-        m.face([v.co.copy() for v in f.verts], "bronze")
-    body.free()
+    n = 14
+    rings = []
+    for x, cz, hw, hh in BULL_BODY:
+        ring = []
+        for i in range(n):
+            t = 2 * math.pi * i / n
+            c, sn = math.cos(t), math.sin(t)
+            # A rounded box section, flatter on the back.
+            yy = hw * math.copysign(abs(c) ** 0.7, c)
+            zz = hh * math.copysign(abs(sn) ** 0.8, sn) * (0.9 if sn > 0 else 1.0)
+            ring.append(at(x, yy, cz + zz))
+        rings.append(ring)
+    for r0, r1 in zip(rings, rings[1:]):
+        for i in range(n):
+            j = (i + 1) % n
+            m.face((r0[i], r0[j], r1[j], r1[i]), "bronze")
+    m.face(list(reversed(rings[0])), "bronze")
+    m.face(rings[-1], "bronze")
+    for side in (1, -1):
+        # Forelegs braced forward, hind legs driving back.
+        cone(m, at(2.6, side * 1.3, 5.6), at(3.5, side * 1.45, 3.0), 1.05 * k, 0.75 * k, "bronze")
+        cone(m, at(3.5, side * 1.45, 3.0), at(4.6, side * 1.5, 0.35), 0.72 * k, 0.5 * k, "bronze")
+        cone(m, at(-4.7, side * 1.35, 6.6), at(-4.1, side * 1.5, 3.6), 1.5 * k, 0.85 * k, "bronze")
+        cone(m, at(-4.1, side * 1.5, 3.6), at(-6.3, side * 1.55, 0.35), 0.8 * k, 0.48 * k, "bronze")
+        # The horns, out and then forward and up.
+        cone(m, at(6.5, side * 0.8, 5.3), at(7.0, side * 2.3, 5.8), 0.42 * k, 0.32 * k, "bronze", 6)
+        cone(m, at(7.0, side * 2.3, 5.8), at(7.9, side * 2.7, 7.0), 0.32 * k, 0.08 * k, "bronze", 6)
+    cone(m, at(-6.6, 0, 7.8), at(-8.0, 0, 9.4), 0.32 * k, 0.2 * k, "bronze", 6)
+    cone(m, at(-8.0, 0, 9.4), at(-8.6, 0, 10.4), 0.2 * k, 0.12 * k, "bronze", 6)
     m.finish(parent=root)
     p = Mesh("plinth")
     rock = []
@@ -809,7 +830,6 @@ def build_bull():
         r = 1.0 + 0.08 * math.sin(3 * t) + 0.05 * math.cos(5 * t)
         rock.append((math.cos(t) * 9.0 * r, math.sin(t) * 4.2 * r))
     p.prism(rock, 0.0, base, "stone_dark")
-    p.prism([(x * 0.9, y * 0.9) for x, y in rock], base, base + 0.02, "stone_dark")
     p.finish(parent=root)
     return root
 
@@ -821,60 +841,65 @@ def build_bull():
 def build_hugenholtz():
     """The bowl of terraces round the outside of the hairpin: concrete steps
     with orange benches following the curve, a dune behind them with marram
-    grass, its crest above the top row."""
+    grass, its crest above the top row. In six pieces along the arc
+    (terraces_k, dune_k), so the game claims the ground piece by piece and
+    the hairpin sits inside the curve."""
     clear()
     root = empty("hugenholtz")
-    C = Vector((0.0, 70.0))
-    r_in, rows, tread, rise = 58.0, 12, 2.0, 0.95
-    span = math.radians(62)
-    n = 26
-    t = Mesh("terraces")
-    angles = [-span + 2 * span * i / n for i in range(n + 1)]
+    terr = empty("terraces", parent=root)
+    dunes = empty("dune", parent=root)
+    C = Vector((0.0, 44.0))
+    r_in, rows, tread, rise = 34.0, 10, 1.6, 1.0
+    span = math.radians(52)
+    pieces, per = 6, 5
     pt = lambda a, r: (C.x + math.sin(a) * r, C.y - math.cos(a) * r)
-    for k in range(rows):
-        r0 = r_in + tread * k
-        r1 = r0 + tread
-        z = 1.2 + rise * (k + 1)
-        role = "concrete" if k % 4 == 0 else "seat_orange"
-        for a0, a1 in zip(angles, angles[1:]):
-            p0, p1, p2, p3 = pt(a0, r0), pt(a1, r0), pt(a1, r1), pt(a0, r1)
-            t.face([(*p3, z), (*p2, z), (*p1, z), (*p0, z)], role)
-            t.face([(*p0, z), (*p1, z), (*p1, z - rise), (*p0, z - rise)] if k else [(*p0, z), (*p1, z), (*p1, 0), (*p0, 0)], "concrete")
-        if k == rows - 1:
-            for a0, a1 in zip(angles, angles[1:]):
-                p2, p3 = pt(a1, r1), pt(a0, r1)
-                t.face([(*p3, 0), (*p2, 0), (*p2, z), (*p3, z)], "concrete")
-        for side, a in ((-1, angles[0]), (1, angles[-1])):
-            p0, p3 = pt(a, r0), pt(a, r1)
-            q = [(*p0, 0), (*p3, 0), (*p3, z), (*p0, z)]
-            t.face(q if side > 0 else list(reversed(q)), "concrete")
-    # The front rail.
-    for a in angles:
-        x, y = pt(a, r_in - 0.3)
-        t.box((x - 0.06, y - 0.06, 0), (x + 0.06, y + 0.06, 2.3), "steel")
-    t.finish(parent=root)
-    d = Mesh("dune")
     r_top = r_in + tread * rows
-    prof = [(0.0, 1.0), (4.0, 1.0 + rise * rows + 0.6), (10.0, 1.0 + rise * rows + 3.0), (22.0, 14.0), (38.0, 0.0)]
-    m = 34
-    dangles = [-span - 0.25 + (2 * span + 0.5) * i / m for i in range(m + 1)]
-    rings = [[(*pt(a, r_top + dr), z) for a in dangles] for dr, z in prof]
-    for r0, r1 in zip(rings, rings[1:]):
-        for i in range(m):
-            d.face((r0[i + 1], r0[i], r1[i], r1[i + 1]), "sand")
-    for idx in (0, m):
-        side = [row[idx] for row in rings]
-        d.face(side if idx == 0 else list(reversed(side)), "sand")
-    d.finish(parent=root)
+    prof = [(0.0, 1.0), (2.5, 1.0 + rise * rows + 0.6), (6.0, 1.0 + rise * rows + 2.5), (11.0, 13.0), (19.0, 0.0)]
+    for pc in range(pieces):
+        a_lo = -span + 2 * span * pc / pieces
+        a_hi = -span + 2 * span * (pc + 1) / pieces
+        angles = [a_lo + (a_hi - a_lo) * i / per for i in range(per + 1)]
+        t = Mesh(f"terraces_{pc}")
+        for k in range(rows):
+            r0 = r_in + tread * k
+            r1 = r0 + tread
+            z = 1.2 + rise * (k + 1)
+            role = "concrete" if k % 4 == 0 else "seat_orange"
+            for a0, a1 in zip(angles, angles[1:]):
+                p0, p1, p2, p3 = pt(a0, r0), pt(a1, r0), pt(a1, r1), pt(a0, r1)
+                t.face([(*p3, z), (*p2, z), (*p1, z), (*p0, z)], role)
+                t.face([(*p0, z), (*p1, z), (*p1, z - rise if k else 0), (*p0, z - rise if k else 0)], "concrete" if k % 4 == 0 else "crowd")
+            if k == rows - 1:
+                for a0, a1 in zip(angles, angles[1:]):
+                    p2, p3 = pt(a1, r1), pt(a0, r1)
+                    t.face([(*p3, 0), (*p2, 0), (*p2, z), (*p3, z)], "concrete")
+            for side, a in ((-1, angles[0]), (1, angles[-1])):
+                p0, p3 = pt(a, r0), pt(a, r1)
+                q = [(*p0, 0), (*p3, 0), (*p3, z), (*p0, z)]
+                t.face(q if side > 0 else list(reversed(q)), "concrete")
+        for a in angles[:-1]:
+            x, y = pt(a, r_in - 0.3)
+            t.box((x - 0.06, y - 0.06, 0), (x + 0.06, y + 0.06, 2.3), "steel")
+        t.finish(parent=terr)
+        d = Mesh(f"dune_{pc}")
+        d.upward = True
+        dangles = [a_lo + (a_hi - a_lo) * i / per for i in range(per + 1)]
+        rings = [[(*pt(a, r_top + dr), z) for a in dangles] for dr, z in prof]
+        for r0, r1 in zip(rings, rings[1:]):
+            for i in range(per):
+                d.face((r0[i + 1], r0[i], r1[i], r1[i + 1]), "sand")
+        for idx in (0, per):
+            side = [row[idx] for row in rings]
+            d.face(side if idx == 0 else list(reversed(side)), "sand")
+        d.finish(parent=dunes)
     g = Mesh("marram")
     for i in range(40):
         a = -span + 2 * span * ((i * 0.618) % 1.0)
-        dr = 8 + (i * 7.3) % 22
+        dr = 4 + (i * 7.3) % 8
         x, y = pt(a, r_top + dr)
-        z = 1.0 + rise * rows + 3.0 if dr < 22 else 14.0 * (1 - (dr - 22) / 16)
-        z = min(z, 14.0)
+        z = min(13.0, 1.0 + rise * rows + 2.5 if dr < 11 else 13.0 * (1 - (dr - 11) / 8))
         g.lathe([(0.0, z - 0.4), (1.2, z - 0.4), (1.6, z + 0.4), (0.0, z + 1.6)], (x, y), "grass", segs=5, smooth=False)
-    g.finish(parent=root)
+    g.finish(parent=dunes)
     return root
 
 
@@ -1030,7 +1055,7 @@ def build_foro_sol():
         for a0, a1 in zip(angles, angles[1:]):
             p0, p1, p2, p3 = pt(a0, r0), pt(a1, r0), pt(a1, r1), pt(a0, r1)
             s.face([(*p3, z), (*p2, z), (*p1, z), (*p0, z)], role)
-            s.face([(*p0, z), (*p1, z), (*p1, z - rise if k else 0), (*p0, z - rise if k else 0)], "concrete")
+            s.face([(*p0, z), (*p1, z), (*p1, z - rise if k else 0), (*p0, z - rise if k else 0)], "concrete" if k in (0, 11) else "crowd")
     r_out = r_in + tread * rows
     top = 2.0 + rise * rows
     for a0, a1 in zip(angles, angles[1:]):
@@ -1111,11 +1136,11 @@ def build_sphere():
     s = Mesh("sphere")
     lo = math.asin((0.0 - SPHERE_CZ) / SPHERE_R)
     prof = []
-    for k in range(29):
-        a = lo + (math.pi / 2 - lo) * k / 28
+    for k in range(41):
+        a = lo + (math.pi / 2 - lo) * k / 40
         prof.append((SPHERE_R * math.cos(a), SPHERE_CZ + SPHERE_R * math.sin(a)))
     prof[-1] = (0.0, SPHERE_CZ + SPHERE_R)
-    s.lathe(prof, (0, 0), "screen", segs=56)
+    s.lathe(prof, (0, 0), "screen", segs=80)
     s.finish(parent=root, colour=planet)
     b = Mesh("base")
     r0 = prof[0][0]
@@ -1173,7 +1198,7 @@ def build_losail_grandstand():
     L = 100.0
     for k in range(18):
         y1 = 10.0 - 1.2 * k
-        s.box((-L, y1 - 1.2, 0), (L, y1, 2.2 + 0.7 * (k + 1)), "seat" if k % 6 else "concrete", skip=("-z",))
+        s.box((-L, y1 - 1.2, 0), (L, y1, 2.2 + 0.7 * (k + 1)), ("concrete", "crowd", "crowd", "seat", "crowd", "crowd")[k % 6], skip=("-z",))
     s.box((-L, -16.0, 0), (L, -11.6, 18.0), "concrete", skip=("-z",))
     s.box((-L + 1, -11.65, 12.0), (L - 1, -11.55, 16.6), "glass")
     s.finish(parent=root)
@@ -1221,13 +1246,13 @@ def build_losail_grandstand():
 
 def crescent(m, sign, H):
     """A crescent tower: the plan a crescent moon (its horns toward +Y), the
-    tower curving inward (toward the other) as it climbs, like a blade."""
+    tower curving outward (away from the other) as it climbs, like a blade."""
     n = 26
     rings = []
     for k in range(25):
         z = H * k / 24
         t = z / H
-        lean = sign * (40.0 - 22.0 * t ** 1.8)
+        lean = sign * (24.0 + 26.0 * t ** 1.6)
         scale = 1.0 - 0.35 * t ** 2.2
         ring = []
         for i in range(n):
@@ -1241,8 +1266,8 @@ def crescent(m, sign, H):
 
 
 def build_lusail_towers():
-    """Lusail's twin crescent towers (about 200 m), facing each other, their
-    tops leaning together."""
+    """Lusail's twin crescent towers (about 200 m), back to back, curving
+    apart as they rise like two blades."""
     clear()
     root = empty("lusail_towers")
     for name, sign in (("crescent_1", -1), ("crescent_2", 1)):
@@ -1257,32 +1282,32 @@ def build_lusail_towers():
 # =============================================================================
 
 def gridshell_z(x, y):
-    """The gridshell's surface: from the ground on the far side (y -56) up
+    """The gridshell's surface: from the ground on the far side (y -40) up
     over the block to its crest over the block's front, still high at its
-    track-side edge (y +12), where in life it runs on over the track; its
+    track-side edge (y +8), where in life it runs on over the track; its
     ends rounded down."""
-    t = (y + 56.0) / 68.0
-    ends = smooth((76.0 - abs(x)) / 16.0)
-    return 0.5 + 60.0 * math.sin(min(1.0, max(0.0, t)) * math.pi * 0.62) ** 0.45 * ends
+    t = (y + 40.0) / 48.0
+    ends = smooth((62.0 - abs(x)) / 12.0)
+    return 0.5 + 60.0 * math.sin(min(1.0, max(0.0, t)) * math.pi * 0.62) ** 0.3 * ends
 
 
 def build_yas_hotel():
     """Half of the hotel the circuit runs through: a curved block of twelve
-    storeys (about 46 m) under the gridshell, a free-form lattice of steel
+    storeys (about 44 m) under the gridshell, a free-form lattice of steel
     diamonds with glass panels in it, lit at night. In life its other half
     stands across the track, joined by a bridge over it; here the halves
     stand either side and the bridge is left out."""
     clear()
     root = empty("yas_hotel")
     b = Mesh("block")
-    plan = [(x, -4.0 - 6.0 * math.cos(x / 58 * math.pi / 2)) for x in [-58 + 116 * k / 12 for k in range(13)]]
-    back = [(x, y - 20.0) for x, y in reversed(plan)]
-    facade_tower(b, plan + back, 0, 46.0, "facade")
+    plan = [(x, -4.0 - 5.0 * math.cos(x / 50 * math.pi / 2)) for x in [-50 + 100 * k / 12 for k in range(13)]]
+    back = [(x, y - 18.0) for x, y in reversed(plan)]
+    facade_tower(b, plan + back, 0, 44.0, "facade")
     b.finish(parent=root)
     g = Mesh("gridshell")
-    nx, ny = 26, 12
-    xs = [-76 + 152 * i / nx for i in range(nx + 1)]
-    ys = [-56 + 68 * k / ny for k in range(ny + 1)]
+    nx, ny = 24, 10
+    xs = [-62 + 124 * i / nx for i in range(nx + 1)]
+    ys = [-40 + 48 * k / ny for k in range(ny + 1)]
     surf = [[(x, y, gridshell_z(x, y)) for y in ys] for x in xs]
     # The diamonds: bars along both diagonals of the grid.
     for i in range(nx):
@@ -1429,21 +1454,21 @@ def preview(root, tag, shots, night=False):
 MODELS = (
     # build, name, top (m), uvs (a facade), vertex colours, preview shots, night
     (build_melbourne, "melbourne_skyline", (300, 325), True, False, [("front", (-20, 520, 120), (-20, 0, 150))], False),
-    (build_shanghai, "shanghai_grandstand", (45, 60), False, False, [("front", (40, 330, 60), (0, 0, 25))], False),
+    (build_shanghai, "shanghai_grandstand", (45, 60), True, False, [("front", (40, 330, 60), (0, 0, 25))], False),
     (build_fountain, "jeddah_fountain", (250, 275), False, False, [("front", (0, 520, 60), (0, 0, 130))], True),
-    (build_miami_stadium, "miami_stadium", (80, 100), False, False, [("front", (120, 420, 120), (0, 0, 20))], False),
-    (build_hillside, "hillside", (16, 34), False, False, [("front", (40, 140, 20), (0, -10, 10))], False),
-    (build_barcelona_grandstand, "barcelona_grandstand", (20, 34), False, False, [("front", (60, 170, 30), (0, 0, 12))], False),
+    (build_miami_stadium, "miami_stadium", (80, 100), True, False, [("front", (120, 420, 120), (0, 0, 20))], False),
+    (build_hillside, "hillside", (16, 34), True, False, [("front", (40, 140, 20), (0, -10, 10))], False),
+    (build_barcelona_grandstand, "barcelona_grandstand", (20, 34), True, False, [("front", (60, 170, 30), (0, 0, 12))], False),
     (build_biosphere, "biosphere", (60, 66), False, False, [("front", (40, 130, 30), (0, 0, 28))], False),
     (build_bull, "spielberg_bull", (9, 14), False, False, [("front", (6, 26, 6), (0, 0, 6)), ("side", (22, 14, 5), (0, 0, 6))], False),
-    (build_hugenholtz, "hugenholtz", (10, 26), False, False, [("front", (0, 120, 25), (0, 20, 5))], False),
+    (build_hugenholtz, "hugenholtz", (10, 26), True, False, [("front", (0, 120, 25), (0, 20, 5))], False),
     (build_flame_towers, "flame_towers", (178, 192), True, False, [("front", (40, 420, 60), (0, 0, 95))], False),
     (build_old_city, "baku_old_city", (28, 34), False, False, [("front", (40, 80, 14), (0, -10, 8))], False),
     (build_cota_tower, "cota_tower", (74, 80), False, False, [("front", (40, 150, 30), (0, -10, 38))], False),
-    (build_foro_sol, "foro_sol", (30, 60), False, False, [("front", (0, 160, 40), (0, 20, 10))], False),
+    (build_foro_sol, "foro_sol", (30, 60), True, False, [("front", (0, 160, 40), (0, 20, 10))], False),
     (build_sphere, "vegas_sphere", (108, 116), False, True, [("front", (0, 330, 50), (0, 0, 55))], True),
     (build_strip, "vegas_strip", (340, 360), True, False, [("front", (0, 560, 80), (0, -40, 150))], True),
-    (build_losail_grandstand, "losail_grandstand", (18, 45), False, False, [("front", (40, 130, 20), (0, 0, 14))], True),
+    (build_losail_grandstand, "losail_grandstand", (18, 45), True, False, [("front", (40, 130, 20), (0, 0, 14))], True),
     (build_lusail_towers, "lusail_towers", (185, 215), True, False, [("front", (0, 480, 60), (0, 0, 100))], True),
     (build_yas_hotel, "yas_hotel", (50, 70), True, False, [("front", (40, 170, 30), (0, 0, 30))], True),
 )

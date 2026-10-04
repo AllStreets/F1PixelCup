@@ -33,6 +33,11 @@ async (page) => {
   const WANT = {
     monza: ["monzaBanking"], spa: ["spaPits"], silverstone: ["silverstoneWing"], suzuka: ["suzukaWheel"],
     monaco: ["casino"], singapore: ["marinaBaySands", "singaporeFlyer"], bahrain: ["sakhirTower"], interlagos: ["spTowers"],
+    // The 2025 venues (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
+    albertpark: ["melbourneSkyline"], shanghai: ["shanghaiGrandstand"], jeddah: ["jeddahFountain"], miami: ["miamiStadium"],
+    imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergBull", "hillside"],
+    hungaroring: ["hillside"], zandvoort: ["hugenholtz"], baku: ["bakuOldCity", "flameTowers"], cota: ["cotaTower", "hillside"],
+    mexico: ["foroSol"], lasvegas: ["vegasSphere", "vegasStrip"], losail: ["losailGrandstand", "lusailTowers"], yasmarina: ["yasHotel"],
   };
   results.everyLandmarkFromItsModel = await step((WANT) => {
     const bad = [];
@@ -48,14 +53,18 @@ async (page) => {
 
   // The yachts: Monaco's moored at the quays and anchored out, Singapore's in
   // the bay; every hull past the quays (190 past the barrier at Monaco), no
-  // two touching, Singapore's wholly inside Marina Bay.
+  // two touching, Singapore's wholly inside Marina Bay. The 2025 harbours:
+  // Miami's berthed on the infield's painted water; Yas Marina's, Baku's and
+  // Jeddah's at anchor at sea; every hull on its water.
   results.yachtsOnTheWater = await step(() => {
     const out = {};
-    ["monaco", "singapore"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
+    ["monaco", "singapore", "yasmarina", "miami", "baku", "jeddah"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
+    const onWater = (y, least, clear) => y && y.anchored >= least && y.inBay && y.outsideBay === 0 && y.overlaps === 0 && y.leastClearance >= clear;
     return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && m.overlaps === 0
-      && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40) || JSON.stringify(out);
+      && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40
+      && onWater(out.yasmarina, 6, 40) && onWater(out.miami, 3, 40) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
   });
 
   // Nothing over the track and nobody on the road, every circuit.
