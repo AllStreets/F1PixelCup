@@ -34,8 +34,8 @@ NECK_CUT = 1.425   # the neck runs down into the suit to here
 OX = -0.02         # the head's offset forward, so its neck stands over the body's
 # The suit's collar: the top of its lip. Below the jaw the neck is fitted
 # inside it (build() passes the collar's real outline, build_driver.py's).
-COLLAR_TOP = 1.475
-FIT_FROM, FIT_TO = 1.54, 1.49
+COLLAR_TOP = 1.488
+FIT_FROM, FIT_TO = 1.53, 1.497
 
 
 def _top():
@@ -104,7 +104,9 @@ def fit(v, collar):
         t = max(t, smoothstep(FIT_FROM, FIT_TO, z))
         new = rho + (lim - rho) * t
     else:
-        new = rho + (lim - rho) * t * smoothstep(1.508, COLLAR_TOP, v.z)
+        # (Eased out to the collar over the 3.5 cm above it: the neck thickens
+        # toward its base, as a driver's does.)
+        new = rho + (lim - rho) * t * smoothstep(1.523, COLLAR_TOP, v.z)
     k = new / max(rho, 1e-9)
     return Vector((collar.cx + dx * k, collar.cy + dy * k, z))
 
@@ -631,7 +633,7 @@ def attach(me, data, mats, material, name, variants=None):
     return ob
 
 
-def skin_shell(name, mats, material, surface, styles, cuts=0, planes=()):
+def skin_shell(name, mats, material, surface, styles, cuts=0, planes=(), refine=None):
     """One shell on the head's own faces for several styles, wherever any of
     them grows hair. styles: {name: (region, tip, flow, st)}, where region(v)
     is 0 at that style's edge, 1 well inside it and below 0 outside, so its
@@ -653,6 +655,11 @@ def skin_shell(name, mats, material, surface, styles, cuts=0, planes=()):
         bm.faces.new([vs[local[i]] for i in f])
     if cuts:
         bmesh.ops.subdivide_edges(bm, edges=bm.edges[:], cuts=cuts, use_grid_fill=True, smooth=1.0)
+    if refine:
+        # Finer where a narrow edge must be drawn (the head's faces there are
+        # wider than it), and only there.
+        fs = [f for f in bm.faces if refine(f.calc_center_median())]
+        bmesh.ops.subdivide_edges(bm, edges=list({e for f in fs for e in f.edges}), cuts=1, use_grid_fill=True, smooth=1.0)
     for co, no, where in planes:
         fs = [f for f in bm.faces if where(f.calc_center_median())]
         geom = list({v for f in fs for v in f.verts}) + list({e for f in fs for e in f.edges}) + fs
@@ -911,11 +918,14 @@ def beards(mats, surface, L):
     on_chin = lambda v: (1 - smoothstep(0.03, 0.038, abs(v.y))) * (1 - smoothstep(mouth.z - 0.011, mouth.z - 0.006, v.z)) * smoothstep(chin.z - 0.014, chin.z - 0.006, v.z)
 
     def jawline(v):
-        # A narrow strip along the jaw's edge, trimmed tidy.
-        top = (chin.z + 0.006) * (1 - side(v)) + (ear.z - 0.044) * side(v)
-        low = top - 0.011
-        return (1 - smoothstep(top - 0.004, top + 0.004, v.z)) * smoothstep(low - 0.004, low + 0.004, v.z)
-    tache = lambda v: area(v) * min(1.0, max(upper_lip(v), corners(v), on_chin(v), jawline(v)))
+        # A strip along the jaw's edge, trimmed tidy and filled in: full
+        # inside, its edges a few millimetres soft.
+        top = (chin.z + 0.008) * (1 - side(v)) + (ear.z - 0.04) * side(v)
+        low = top - 0.018
+        return (1 - smoothstep(top - 0.002, top + 0.004, v.z)) * smoothstep(low - 0.004, low + 0.002, v.z)
+    # (Full inside: the beard's area fades at its edges, which would leave the
+    # strip thin and patchy all along it.)
+    tache = lambda v: min(1.0, 1.8 * area(v)) * min(1.0, max(upper_lip(v), corners(v), on_chin(v), jawline(v)))
     tache_flow = lambda v, n: tangent(-Z + Y * (1.0 if v.y > 0 else -1.0) * 0.8 * upper_lip(v) + X * 0.3, n)
     styles = {
         "short_beard": (area, lambda v, n: n * (0.0025 + 0.002 * chin_w(v)) + down(v, n) * 0.0015, down, beard_st),
@@ -924,7 +934,9 @@ def beards(mats, surface, L):
         "moustache": (tache, lambda v, n: n * (0.0014 + 0.0005 * upper_lip(v) + 0.0006 * chin_w(v)) + tache_flow(v, n) * 0.0004,
                       tache_flow, beard_st),
     }
-    return [skin_shell("beard", mats, "beard", surface, styles)]
+    # (The jaw's strip of beard is narrower than the faces along the jaw.)
+    along_jaw = lambda c: c.z < mouth.z - 0.004 and abs(c.y) > 0.02 and c.x > ear.x - 0.01
+    return [skin_shell("beard", mats, "beard", surface, styles, refine=along_jaw)]
 
 
 # --- Brows ---------------------------------------------------------------------------

@@ -338,8 +338,11 @@ def region(c, bone):
     s = "L" if side > 0 else "R"
     if c.z > 1.478 and abs(c.y) < 0.12:
         return "balaclava"
-    if c.z > 1.458 and abs(c.y) < 0.12:
-        return "suit_trim"  # the collar band
+    if c.z > 1.442 and abs(c.y) < 0.088:
+        # Round the foot of the collar band (built below), the trim's colour
+        # down to a clean line: wherever the band meets the suit's surface,
+        # it meets its own colour.
+        return "suit_trim"
     if bone in ("root", "spine", "chest") and 0.985 < c.z < 1.03:
         return "suit_trim"  # the belt
     if bone in ("spine", "chest") and abs(c.x) < 0.032 and abs(c.y) > 0.1 and 1.05 < c.z < 1.37:
@@ -374,7 +377,9 @@ def cut(co, no, where):
 Z = Vector((0, 0, 1))
 near_neck = lambda c: abs(c.y) < 0.13 and 1.4 < c.z < 1.52
 cut(Vector((0, 0, 1.478)), Z, near_neck)
-cut(Vector((0, 0, 1.458)), Z, near_neck)
+cut(Vector((0, 0, 1.442)), Z, near_neck)
+for y in (0.088, -0.088):
+    cut(Vector((0, y, 0)), Vector((0, 1, 0)), lambda c: c.z > 1.43 and abs(c.x) < 0.12 and abs(c.y) < 0.12)
 torso = lambda c: abs(c.y) < 0.21 and 0.9 < c.z < 1.42
 for z in (0.985, 1.03, 1.05, 1.37):
     cut(Vector((0, 0, z)), Z, torso)
@@ -468,8 +473,10 @@ part(sp, "head")
 # top, rising out of the slope of the shoulders (the body's own trim band is
 # under it). Rings of (height, half width, half depth), out and up, over the
 # lip and back down inside.
-COLLAR_RINGS = [(1.432, 0.066, 0.061), (1.454, 0.0645, 0.0602), (1.471, 0.0636, 0.0596), (1.4765, 0.0618, 0.0578),
-                (1.4775, 0.0598, 0.0558), (1.475, 0.0584, 0.0544), (1.458, 0.0582, 0.0542)]
+# (A racing driver's neck is short and thick: the collar stands up high
+# round it, close to a thick base.)
+COLLAR_RINGS = [(1.44, 0.07, 0.065), (1.464, 0.0688, 0.0641), (1.484, 0.0682, 0.0637), (1.4895, 0.0664, 0.0619),
+                (1.4905, 0.0644, 0.0599), (1.488, 0.063, 0.0585), (1.468, 0.0628, 0.0583)]
 COLLAR_X = 0.002
 
 
@@ -506,7 +513,7 @@ LOWEST_HAIR = min(min((ob.matrix_world @ v.co).z for v in ob.data.vertices) for 
 if LOWEST_HAIR < 1.505:
     raise RuntimeError(f"hair reaches down to {LOWEST_HAIR:.3f} m, into the neck's bend")
 for v in head_skin.data.vertices:
-    w = driver_head.smoothstep(1.477, 1.505, v.co.z)
+    w = driver_head.smoothstep(1.49, 1.505, v.co.z)
     hg.add([v.index], w, "REPLACE")
     if w < 1:
         cg.add([v.index], 1 - w, "REPLACE")

@@ -253,7 +253,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
   const brows = name === "brows";
   // Brows are drawn to the driver's own shape inside their roomy patch.
   if (brows) m.defines = { HAIR_BROWS: "" };
-  const b = opts.brows || { thickness: 1, arch: 0, tail: 0.5, gap: 0.5 };
+  const b = opts.brows || { thickness: 1, arch: 0, tail: 0.5, gap: 0.5, density: 0.8 };
   const uniforms = {
     hairTint: { value: color(hex) },
     hairLayers: { value: layers },
@@ -263,6 +263,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
     hairShine: { value: kind.shine * (pattern === "braids" ? 1.6 : 1) },
     hairVolume: { value: opts.volume || 1 },
     browShape: { value: new THREE.Vector4(b.thickness, b.arch, b.tail, b.gap) },
+    browDensity: { value: b.density === undefined ? 0.8 : b.density },
     strandScale: { value: new THREE.Vector2(...kind.strands) },
     clumpScale: { value: new THREE.Vector2(...kind.clumps) },
   };
@@ -306,6 +307,7 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
         uniform float hairShine;
         uniform float hairDeep;
         uniform vec4 browShape;
+        uniform float browDensity;
         uniform vec2 strandScale;
         uniform vec2 clumpScale;
         varying float vLayer;
@@ -368,10 +370,14 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
           // end further from the nose or closer.
           float u = vBrow.x;
           float mid = 0.0035 * browShape.y * sin(3.14159 * clamp(u / 0.72, 0.0, 1.0)) - 0.004 * browShape.z * smoothstep(0.6, 1.0, u);
-          float halfH = 0.0052 * browShape.x * (1.0 - 0.55 * max(0.0, u - 0.35) / 0.65) * (0.75 + 0.25 * smoothstep(0.0, 0.2, u));
+          // (Tapering hard over its last third to a fine tail.)
+          float halfH = 0.0052 * browShape.x * (1.0 - 0.55 * max(0.0, u - 0.35) / 0.65) * (1.0 - 0.45 * smoothstep(0.6, 1.0, u)) * (0.75 + 0.25 * smoothstep(0.0, 0.2, u));
           float start = 0.02 + 0.12 * browShape.w;
-          // (Sparser toward the edges, so its outline is hairs, not a line.)
-          hairEdge = (1.0 - smoothstep(0.25, 1.25, abs(vBrow.y - mid) / halfH)) * smoothstep(start, start + 0.16, u) * (1.0 - smoothstep(0.8, 1.0, u));
+          // Sparser toward its edges, and the edges ragged, hair by hair, so
+          // its outline is hairs, not a line; thinner along the tail.
+          float rag = 0.35 * (faceNoise(vec3(u * 90.0, vBrow.y * 600.0, 4.0)) - 0.5);
+          hairEdge = (1.0 - smoothstep(0.1, 1.2, abs(vBrow.y - mid) / halfH + rag)) * smoothstep(start, start + 0.16, u) * (1.0 - smoothstep(0.78, 1.0, u))
+            * (1.0 - 0.45 * smoothstep(0.55, 1.0, u));
         #endif
         float hairClump;
         float strand = hairStrands(vHair.yz, hairClump);
@@ -393,6 +399,15 @@ function hairMaterial(name, hex, pattern = "straight", opts = {}) {
         // hairline or brow fades out rather than stops.)
         float aa = mix(max(fwidth(strand), 0.02), 0.12, blur);
         diffuseColor.a = smoothstep(need - aa, need + aa, strand);
+        #ifdef HAIR_BROWS
+          // A brow is hairs with skin between them: as dense as the driver's
+          // own (browDensity), thinning out a layer at a time; seen from
+          // afar, the share of the skin they cover rather than a solid bar
+          // (alpha to coverage dithers it).
+          float cover = hairEdge * browDensity * (1.0 - 0.3 * vLayer);
+          float sharp = smoothstep(1.0 - cover - aa, 1.0 - cover + aa, strand);
+          diffuseColor.a = mix(sharp, min(1.0, cover * 1.1), blur);
+        #endif
         if (hairEdge <= 0.0 || diffuseColor.a < 0.02) discard;
         // Self-shadowed down in the hair; each strand a slightly different tone.
         diffuseColor.rgb *= mix(hairDeep, 1.0, pow(vLayer, 0.7)) * mix(0.8, 1.15, faceNoise(vec3(vHair.yz * strandScale * 0.5, 2.0)));
@@ -672,7 +687,8 @@ export function buildDriver(driver, team, options = {}) {
       eyes: hex("eye_iris"),
       stubble: materials.has("skin") && materials.get("skin").userData.uniforms ? materials.get("skin").userData.uniforms.stubble.value : null,
       // The brows' shape and the hair's fullness the shaders really draw.
-      brows: materials.has("brows") && materials.get("brows").userData.uniforms ? materials.get("brows").userData.uniforms.browShape.value.toArray() : null,
+      brows: materials.has("brows") && materials.get("brows").userData.uniforms
+        ? [...materials.get("brows").userData.uniforms.browShape.value.toArray(), materials.get("brows").userData.uniforms.browDensity.value] : null,
       hairVolume: materials.has("hair") && materials.get("hair").userData.uniforms ? materials.get("hair").userData.uniforms.hairVolume.value : null,
       keys,
     };
