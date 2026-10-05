@@ -1875,6 +1875,9 @@ function startRace(index) {
   state.phase = "countdown";
   if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
+  // Its Safety Car's entrances placed now, before the start, never mid-race
+  // (the 2D view builds no world to place them).
+  void state.track.entrances;
   setRaceWeather(index);
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
@@ -2324,16 +2327,15 @@ function spinRacer(racer, duration = 900, now = raceNow()) {
   return true;
 }
 
-// Its spell leading the field (it holds every rival behind it until then).
-function safetyCarActive(now) {
-  const sc = state.safetyCar;
-  return Boolean(sc) && Boolean(sc.leading) && !sc.leaving && now < sc.until;
-}
-
 // Whether a car is held to safety-car pace (entrances.js holds): every rival
 // once it leads, and before that only the cars it is coming up to.
+const scBodyOf = { id: "", d: 0, lat: 0 };
 function safetyCarHolds(racer, now) {
-  return Boolean(state.track) && Entrances.holds(state.safetyCar, { id: racer.id, d: racer.trackDistance || 0 }, state.track.totalLength, now);
+  const sc = state.safetyCar;
+  if (!sc || sc.parked || !state.track) return false;
+  scBodyOf.id = racer.id;
+  scBodyOf.d = racer.trackDistance || 0;
+  return Entrances.holds(sc, scBodyOf, state.track.totalLength, now);
 }
 
 // The ways onto the track (entrances.js): the pit lane, and the circuit's
@@ -2360,10 +2362,14 @@ function safetyCarFieldSpeed() {
 // A new call brings it out by whichever way gets it in front of the leader
 // soonest (entrances.js choose): out of its garage and down the pit lane, or
 // from the standby spot of one of the circuit's service entrances, through
-// its gate. Already in the pit lane on its way in, it carries on to its bay
-// and comes straight back out; still on the road on its way in, it turns
-// back to catch the leader from where it is.
-const SC_DEADLINE_MS = 15000;
+// its gate. (After a spell it parks at its bay, then backs into its garage
+// and is put away: it is never in two places at once.) Already in the pit
+// lane on its way in, it carries on to its bay and comes straight back out;
+// still on the road on its way in, it turns back to catch the leader from
+// where it is; on its way on or catching up, it carries on (its deadline
+// starting again); leading, its spell is stretched.
+// It goes in if it has not caught the leader in the time it always should.
+const SC_DEADLINE_MS = Entrances.TARGET_WORST_S * 1000;
 function deploySafetyCar(racer, now) {
   const track = state.track;
   const lane = track.pitLane;
@@ -2383,7 +2389,7 @@ function deploySafetyCar(racer, now) {
   }
   if (was && !was.parked) {
     was.ownerId = racer.id;
-    if (was.leading) was.until = Math.max(was.until, now + PowerUps.TIMINGS.safetyCarMs);
+    was.until = was.leading ? Math.max(was.until, now + PowerUps.TIMINGS.safetyCarMs) : now + SC_DEADLINE_MS;
     addFeed("Safety Car deployed.");
     return;
   }
@@ -2404,8 +2410,10 @@ function deploySafetyCar(racer, now) {
     bodies: itemBodies().filter((b) => b.id !== leader.id), ownerId: racer.id,
   });
   const way = pick.way;
+  // (Still in its garage, backing in: out of the pit lane from where it is.)
+  const fromGarage = was && was.parked && way.kind === "pit";
   Object.assign(sc, {
-    phase: "hold", way: { kind: way.kind, index: way.index }, d: way.startD, lat: way.startLat,
+    phase: "hold", way: { kind: way.kind, index: way.index }, d: way.startD, lat: fromGarage ? was.lat : way.startLat,
     inLane: way.kind === "pit", exiting: way.kind === "pit", holdUntil: now + Entrances.HOLD_MAX_MS,
   });
   state.safetyCar = sc;
@@ -2432,20 +2440,35 @@ function titleCase(name) {
 // lane, slows to the pit limit and parks at its own bay (pitlane.js), where
 // it stays until called again.
 const SC_LEAVING_PACE = 0.85;
+// Parked: this long at its bay, then backed this far into its garage.
+const SC_STOW_AFTER_MS = 6000;
+const SC_STOW_DEPTH = 14;
+const SC_STOW_SPEED = 8;
 const SC_PIT_LIMIT = Entrances.PIT_SPEED;
 function updateSafetyCar(dt, now) {
   const sc = state.safetyCar;
   if (sc) sc.drawFrom = null;
-  if (!sc || sc.parked) return;
+  if (!sc) return;
+  const lane = state.track.pitLane;
+  if (sc.parked) {
+    // A while at its bay, then it backs into its garage and is put away.
+    if (sc.parkedAt === undefined) sc.parkedAt = now;
+    if (!lane || now < sc.parkedAt + SC_STOW_AFTER_MS) return;
+    sc.drawFrom = { d: sc.d, lat: sc.lat };
+    const inside = lane.side * (lane.garages.front + SC_STOW_DEPTH);
+    sc.lat += clamp(inside - sc.lat, -SC_STOW_SPEED * dt, SC_STOW_SPEED * dt);
+    if (Math.abs(inside - sc.lat) < 1e-6) state.safetyCar = null;
+    return;
+  }
   sc.drawFrom = { d: sc.d, lat: sc.lat };
   const route = getItemRoute(state.track);
-  const lane = state.track.pitLane;
   // (Only from the road: it never turns for the pits from its way on.)
   if ((now >= sc.until && sc.phase === "road") || sc.callBack) {
     if (!sc.leaving) {
       sc.leaving = true;
+      // (Its spell over; or, never having caught the leader, simply in.)
+      addFeed(sc.led ? "Safety Car in this lap. Racing resumes." : "Safety Car called in.");
       sc.leading = false;
-      addFeed("Safety Car in this lap. Racing resumes.");
     }
     if (!lane) {
       // No pit lane to go to: off to the edge of the road, and gone.
@@ -2470,6 +2493,7 @@ function updateSafetyCar(dt, now) {
           return;
         }
         sc.parked = true;
+        sc.parkedAt = now;
         return;
       }
       // On the road it eases across to the edge; in the lane it follows it.
@@ -2495,7 +2519,10 @@ function updateSafetyCar(dt, now) {
     fieldSpeed: sc.fieldSpeed, scPace: sc.fieldSpeed * PowerUps.FACTORS.safetyCar,
     spellMs: PowerUps.TIMINGS.safetyCarMs, halfWidthAt: (d) => route.halfWidthAt(d),
   });
-  if (event === "leading") addFeed("Safety Car leading the field.");
+  if (event === "leading") {
+    sc.led = true;
+    addFeed("Safety Car leading the field.");
+  }
 }
 
 function applyTrackBarrier(racer, surface) {
@@ -2685,7 +2712,8 @@ function updateRacer(racer, dt, now) {
     // Off the line by its own margin, in proportion where the road narrows;
     // over to one side to let the Safety Car by while it catches up
     // (entrances.js yieldLat).
-    const aside = state.safetyCar ? Entrances.yieldLat(state.safetyCar, { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat || 0 }, state.track.totalLength, aim.width) : null;
+    const sc = state.safetyCar;
+    const aside = sc && sc.phase === "road" && !sc.leading && !sc.leaving ? Entrances.yieldLat(state.safetyCar, { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat || 0 }, state.track.totalLength, aim.width) : null;
     const offset = aside !== null ? aside : racer.aiOffset * (aim.width / state.track.roadWidth);
     const aimX = aim.point.x + aim.normalX * offset;
     const aimY = aim.point.y + aim.normalY * offset;
@@ -3096,12 +3124,13 @@ const SC_BLEND = 40;
 function safetyCarPlace(d, lat) {
   const at = getItemRoute(state.track).toWorld(d, lat);
   const e = Entrances.entranceAt(state.track.entrances, d, lat);
-  if (!e) return { d, ...at };
+  if (!e) return { d, ...at, entrance: null };
   const on = Entrances.pointOn(e, d, lat);
   const left = Entrances.wrap(e.mergeD - d, state.track.totalLength);
   const w = Math.min(1, left / SC_BLEND);
   const turn = normalizeAngle(on.heading - at.heading);
-  return { d, x: at.x + (on.x - at.x) * w, y: at.y + (on.y - at.y) * w, heading: at.heading + turn * w };
+  // (Which access road it is on: its gate opens, r3d/entrances.js.)
+  return { d, x: at.x + (on.x - at.x) * w, y: at.y + (on.y - at.y) * w, heading: at.heading + turn * w, entrance: e.index };
 }
 
 // World positions of everything the renderers draw.

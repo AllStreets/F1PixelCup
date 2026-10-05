@@ -87,7 +87,10 @@ test("each slip road runs from its standby spot, through the barrier at its gate
       const at = (d) => e.latAt(d);
       assert.ok(Math.abs(at(e.startD) - e.side * e.far) < 1e-6, `${c.id}: starts at its standby spot`);
       assert.ok(Math.abs(at(e.mergeD) - e.side * (W - Pit.EDGE_IN)) < 1e-6, `${c.id}: ends on the edge lane`);
-      assert.ok(Math.abs(e.far - e.runoff - e.out) < 1e-9 || e.far > e.barrier + 20, `${c.id}: standby past the barrier`);
+      // The carport (its half-depth either side of the standby line) stands
+      // wholly outside the barrier.
+      const carportIn = Math.abs(at(e.startD)) - Entrances.CARPORT.half;
+      assert.ok(carportIn > e.barrier + 2, `${c.id}: carport ${carportIn.toFixed(1)} inside the barrier at ${e.barrier}`);
       assert.ok(Math.abs(Math.abs(at(e.gateD)) - e.barrier) < 0.5, `${c.id}: crosses the barrier at its gate`);
       // Inward all the way, and the gap is over the gate.
       let last = Infinity;
@@ -111,9 +114,36 @@ test("every entrance is clear of the start, its pit lane's side of the pit zone,
       const to = e.mergeD;
       const hits = (a, b) => inSpan(a, from, to, c.total) || inSpan(b, from, to, c.total) || inSpan(from, a, b, c.total);
       assert.ok(!hits(-Entrances.START_BEFORE, Entrances.START_AFTER), `${c.id}: on the start`);
-      if (e.side === c.lane.side) assert.ok(!hits(c.lane.entry - 100, c.lane.exit + 100), `${c.id}: in the pit zone`);
-      if (c.shape.tunnel) assert.ok(!hits(c.shape.tunnel.from - 100, c.shape.tunnel.to + 100), `${c.id}: in the tunnel`);
-      c.bridges.filter((b) => b.raised).forEach((b) => assert.ok(!hits(b.d - 470, b.d + 470), `${c.id}: on the bridge's ramp`));
+      if (e.side === c.lane.side) assert.ok(!hits(c.lane.entry - Entrances.PIT_MARGIN, c.lane.exit + Entrances.PIT_MARGIN), `${c.id}: in the pit zone`);
+      if (c.shape.tunnel) assert.ok(!hits(c.shape.tunnel.from - Entrances.TUNNEL_MARGIN, c.shape.tunnel.to + Entrances.TUNNEL_MARGIN), `${c.id}: in the tunnel`);
+      c.bridges.forEach((b) => {
+        const m = b.raised ? Entrances.BRIDGE_MARGIN : Entrances.UNDER_MARGIN;
+        assert.ok(!hits(b.d - m, b.d + m), `${c.id}: on or under a bridge`);
+      });
+    });
+  });
+});
+
+test("every slip road's line never folds over itself: never on the inside of a bend tighter than its reach", () => {
+  CIRCUITS.forEach((c) => {
+    const lap = dense(c.points, c.total);
+    c.entrances.forEach((e) => {
+      // Its line, measured afresh from the dense lap: each point's offset
+      // along the local normal; consecutive points must keep moving along
+      // the lap (no backwards step), and stay on its side.
+      let prev = null;
+      for (let r = 0; r <= e.length; r += 3) {
+        const d = (e.startD + r) % c.total;
+        const p = e.lap.point(d, e.latAt(d));
+        if (prev) {
+          const q = lap.reduce((best, x) => (Math.abs(((x.d - d) % c.total + c.total * 1.5) % c.total - c.total / 2) < Math.abs(((best.d - d) % c.total + c.total * 1.5) % c.total - c.total / 2) ? x : best));
+          const tx = q.ny;
+          const ty = -q.nx;
+          const step = (p.x - prev.x) * tx + (p.y - prev.y) * ty;
+          assert.ok(step > 0, `${c.id}: entrance ${e.index} runs backwards at ${Math.round(d)}`);
+        }
+        prev = p;
+      }
     });
   });
 });
@@ -224,6 +254,28 @@ test("passingLat: a clear line past the cars just ahead, or the centre line on a
   assert.equal(Entrances.passingLat({ d: 100, lat: 0 }, [{ d: 40, lat: 0 }, { d: 400, lat: 0 }], total, W), 0);
 });
 
+test("drive: on its way on its speed is its pace (what the cars behind it see), and it never moves while still easing out of its garage", () => {
+  const c = CIRCUITS.find((x) => x.id === "monza");
+  const list = Entrances.ways(c.entrances, c.lane, c.total);
+  const way = list[1];
+  const sc = { phase: "join", way: { kind: way.kind, index: way.index }, d: way.startD, lat: way.startLat, speed: 0, pace: 0, leading: false, until: 1e9, holdUntil: 1e9 };
+  const ctx = { now: 0, dt: 1 / 60, total: c.total, way, bodies: [], leader: null, fieldSpeed: 190, scPace: 100, spellMs: 5000, halfWidthAt: () => W };
+  for (let i = 0; i < 30; i += 1) Entrances.drive(sc, ctx);
+  assert.ok(sc.speed > 0 && sc.pace === sc.speed, `${sc.pace} vs ${sc.speed}`);
+  // Called while still backing into its garage: out to its spot first, in place.
+  const pit = list[0];
+  const parked = { phase: "hold", way: { kind: "pit", index: -1 }, d: pit.startD, lat: pit.startLat + 14 * c.lane.side, speed: 0, pace: 0, leading: false, until: 1e9, holdUntil: 0 };
+  let last = parked.lat;
+  let steps = 0;
+  while (parked.phase === "hold" && steps < 600) {
+    Entrances.drive(parked, { ...ctx, way: pit });
+    assert.ok(Math.abs(parked.lat - last) <= 0.5, "eases, never jumps");
+    last = parked.lat;
+    steps += 1;
+  }
+  assert.equal(parked.phase, "join");
+});
+
 test("holds: a rival is slowed only once the Safety Car leads, or while it is coming up to them; never its caller, never off the road", () => {
   const total = 5000;
   const sc = { phase: "road", d: 1000, lat: 0, ownerId: "me", leading: false, leaving: false, until: 0 };
@@ -266,7 +318,7 @@ function simulate(c, leaderD, seed) {
   const lead = leaderOf();
   const pick = Entrances.choose(list, { leaderD: lead.d, leaderSpeed: 0.85 * lead.max, total, fieldSpeed, scPace, bodies: cars.filter((x) => x !== lead), ownerId: owner.id });
   const way = pick.way;
-  const sc = { phase: "hold", way: { kind: way.kind, index: way.index }, d: way.startD, lat: way.startLat, speed: 0, ownerId: owner.id, leading: false, leaving: false, until: 30000, holdUntil: Entrances.HOLD_MAX_MS };
+  const sc = { phase: "hold", way: { kind: way.kind, index: way.index }, d: way.startD, lat: way.startLat, speed: 0, pace: 0, ownerId: owner.id, leading: false, leaving: false, until: 30000, holdUntil: Entrances.HOLD_MAX_MS };
   const dt = 1 / 60;
   const problems = [];
   const bodies = () => cars.map((x) => ({ id: x.id, d: x.d, lat: x.lat, speed: x.speed }));

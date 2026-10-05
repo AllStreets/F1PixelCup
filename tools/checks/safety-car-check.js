@@ -20,6 +20,8 @@
 //   median and worst, in seconds.
 // - calledBackOnItsWayInEveryCircuit: called again in the pit lane on its
 //   way in, it parks and comes straight back out of the pit exit.
+// - callsAndEdges: called again in every phase, its deadline passing, put
+//   away after parking, every rival finished (see the test).
 // Run with the Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/safety-car-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors []. Returns
@@ -86,6 +88,7 @@ async (page) => {
         const spot = Pit.parkAt(track.pitLane);
         let last = { d: sc.d, lat: sc.lat };
         let joined = false;
+        let crossed = false;
         const L = track.totalLength;
         for (let i = 0; i < 60 * 400 && !sc.parked; i += 1) {
           t += 1000 / 60;
@@ -100,8 +103,21 @@ async (page) => {
           if (!where(track, sc)) { bad.push(tag("off the road, its lane and its access road")); break; }
           const along = Entrances.delta(sc.d, last.d, L);
           if (Math.abs(along) > 10 || Math.abs(sc.lat - last.lat) > 4) { bad.push(tag(`a jump of ${along.toFixed(1)}, ${(sc.lat - last.lat).toFixed(1)}`)); break; }
+          // Through the barrier only where the 3D world leaves it open: where
+          // it crosses the barrier's line (r3d/track.js lays it at the
+          // run-off's edge, buildCourse) the barrier must have its gap.
+          if (way.kind === "access") {
+            const e = track.entrances[way.index];
+            const line = e.barrier;
+            if ((Math.abs(last.lat) - line) * (Math.abs(sc.lat) - line) <= 0 && last.lat !== sc.lat) {
+              const into = Entrances.wrap(sc.d - e.gap.from, L);
+              if (into > e.gap.length) bad.push(tag("through the barrier outside its gate"));
+              crossed = true;
+            }
+          }
           last = { d: sc.d, lat: sc.lat };
         }
+        if (way.kind === "access" && !crossed) bad.push(tag("never came through its gate"));
         if (!joined) bad.push(tag("never reached the road"));
         if (!sc.parked) bad.push(tag("never parked"));
         else if (Math.abs(sc.d - spot.d) > 1e-6 || Math.abs(sc.lat - spot.lat) > 1e-6) bad.push(tag("parked somewhere other than its spot"));
@@ -258,6 +274,80 @@ async (page) => {
     state.track = home;
     state.racers = racers;
     state.safetyCar = null;
+    return bad.length === 0 || JSON.stringify(bad).slice(0, 500);
+  });
+  // Called again in every phase, and the edges: never a jump, never in two
+  // places (parked, it is put away in its garage before it can be anywhere
+  // else), a new call while catching up restarts its deadline, a deadline
+  // passed on its way on sends it in without claiming a spell, and with every
+  // rival finished it simply goes in. On the season's first circuit, with the
+  // race's own field racing as the game races it (updateRace).
+  results.callsAndEdges = await step(() => {
+    const bad = [];
+    const { home, racers } = window.scCheck;
+    state.track = home;
+    state.racers = racers;
+    const L = home.totalLength;
+    const caller = racers[racers.length - 1];
+    const race = (n, t, each) => {
+      for (let i = 0; i < n; i += 1) {
+        t += 1000 / 60;
+        const sc = state.safetyCar;
+        const was = sc ? { d: sc.d, lat: sc.lat, sc } : null;
+        updateRace(1 / 60, t);
+        const now = state.safetyCar;
+        if (was && now === was.sc && (Math.abs(Entrances.delta(now.d, was.d, L)) > 10 || Math.abs(now.lat - was.lat) > 4)) { bad.push(`a jump in ${now.phase}`); return t; }
+        if (each && each(t) === false) return t;
+      }
+      return t;
+    };
+    racers.forEach((r, i) => { r.finished = false; r.lap = 1; r.trackDistance = (L - i * 60 + L) % L; r.speed = r.physics.maxSpeed * 0.8; });
+    state.paused = false;
+    // Each phase in turn: called again there, it carries on from where it is.
+    for (const phase of ["hold", "join", "road", "leading"]) {
+      state.safetyCar = null;
+      let t = 3e7;
+      deploySafetyCar(caller, t);
+      const sc = state.safetyCar;
+      const reached = () => (phase === "leading" ? sc.leading : sc.phase === phase);
+      t = race(60 * 20, t, () => !reached());
+      if (!reached()) { bad.push(`never reached ${phase}`); continue; }
+      const before = { d: sc.d, lat: sc.lat, phase: sc.phase };
+      const untilBefore = sc.until;
+      deploySafetyCar(caller, t + 1);
+      if (state.safetyCar !== sc || sc.d !== before.d || sc.lat !== before.lat || sc.phase !== before.phase) bad.push(`${phase}: a new call moved it`);
+      if (phase !== "leading" && !(sc.until > untilBefore || sc.until >= t + 1 + Entrances.TARGET_WORST_S * 1000 - 1)) bad.push(`${phase}: deadline not restarted`);
+      race(60, t + 1);
+    }
+    // Its deadline passing on its way on: it joins and goes in, "called in".
+    state.safetyCar = null;
+    let t = 5e7;
+    deploySafetyCar(caller, t);
+    const sc = state.safetyCar;
+    sc.holdUntil = t;
+    t = race(60 * 2, t, () => sc.phase !== "join");
+    sc.until = t;
+    t = race(60 * 30, t, () => !sc.leaving);
+    if (!sc.leaving) bad.push("deadline: never went in");
+    else if (sc.led || !state.feed.some((f) => f.message === "Safety Car called in.")) bad.push("deadline: claimed a spell it never led");
+    // Parked: a while at its bay, then backed into its garage and put away.
+    t = race(60 * 120, t, () => !sc.parked);
+    if (!sc.parked) bad.push("never parked");
+    else {
+      t = race(60 * 12, t, () => state.safetyCar === sc);
+      if (state.safetyCar !== null) bad.push("parked: never put away");
+    }
+    // Every rival finished: called, it goes on and simply goes in.
+    racers.forEach((r) => { if (r !== caller) r.finished = true; });
+    state.safetyCar = null;
+    t = 7e7;
+    deploySafetyCar(caller, t);
+    const alone = state.safetyCar;
+    t = race(60 * 60, t, () => !(alone.parked || state.safetyCar !== alone));
+    if (!(alone.parked || state.safetyCar !== alone)) bad.push("alone: never went in");
+    racers.forEach((r) => { r.finished = false; r.lap = 0; r.trackDistance = 0; });
+    state.safetyCar = null;
+    state.paused = true;
     return bad.length === 0 || JSON.stringify(bad).slice(0, 500);
   });
   await context.close();

@@ -55,8 +55,10 @@
   const UNDER_MARGIN = 150;
   // A straight: the heading changes by less than this over the slip road.
   const STRAIGHT = 1.2;
-  // On the inside of a bend, its radius must be this many times the road's reach.
-  const INSIDE = 1.1;
+  // On the inside of a bend its line (and the carport's far side) runs
+  // shorter than the lap by its offset times the bend's curvature: never by
+  // more than this share (it would bunch up, and nearer 1 fold over).
+  const FOLD = 0.6;
   // Two stretches of the lap closer than this along it are the same stretch
   // (r3d/track.js buildCourse's minArc).
   const SAME_STRETCH = 260;
@@ -81,6 +83,8 @@
   const CLOSE_UP = 70;
   // Giving way: no car may reach the merge point this soon after it.
   const GIVE_WAY_S = 0.35;
+  // Its give-way point at a gate: this far before it (its nose at the gate).
+  const GIVE_WAY_BACK = 18;
   // What each car to pass on the way to the leader costs.
   const PASS_S = 0.6;
   const NEAR = 350;
@@ -96,7 +100,7 @@
   // Called, it should be in front of the leader within these (the tests and
   // the checks), from wherever the leader is: on average over every circuit;
   // half the time on each; and always. (The worst are the circuits with long
-  // stretches where no service road fits: Sepang, Suzuka, Estoril.)
+  // stretches where no service road fits: Sepang, Suzuka, Estoril, Mugello.)
   const TARGET_TYPICAL_S = 5.5;
   const TARGET_MEDIAN_S = 8.5;
   const TARGET_WORST_S = 15;
@@ -283,12 +287,12 @@
     const own = [];
     for (let r = from - e.startD; r <= to - e.startD; r += STEP) own.push(lap.at(e.startD + r));
     if (own.some((p) => Math.abs(p.w - 1) > 1e-6)) return false;
-    // Never on the inside of a bend tighter than its own reach (its line
-    // would fold over itself), and no sharp kink in it.
+    // Never on the inside of a bend so tight its line bunches up (FOLD), and
+    // no sharp kink in it.
     const road = [];
     for (let r = -CARPORT.back; r <= e.length; r += STEP) road.push(lap.at(e.startD + r));
     for (const p of road) {
-      if (lap.curveAt(p.d) * e.side > 1 / (INSIDE * e.far)) return false;
+      if (lap.curveAt(p.d) * e.side * (e.far + CARPORT.half) > FOLD) return false;
     }
     const mid = lap.at(e.startD + e.length / 2);
     if (road.some((p) => Math.acos(Math.max(-1, Math.min(1, p.tx * mid.tx + p.ty * mid.ty))) > STRAIGHT)) return false;
@@ -432,7 +436,7 @@
       kind: "access", index: e.index, side: e.side, entrance: e,
       startD: e.startD, startLat: e.side * e.far,
       // (Stopped with its nose at the gate.)
-      giveWayD: wrap(e.startD + e.gateU - 18, total), giveWayU: e.gateU - 18,
+      giveWayD: wrap(e.startD + e.gateU - GIVE_WAY_BACK, total), giveWayU: e.gateU - GIVE_WAY_BACK,
       mergeD: e.mergeD, length: e.length,
       latAt: (d) => e.latAt(d),
       onRoadAt: (d) => wrap(d - e.startD, total) >= e.length - 1e-9,
@@ -526,24 +530,29 @@
     const clear = CAR_WIDTH + 6;
     let lo = -Math.max(0, half - 10);
     let hi = -lo;
-    const near = [];
-    bodies.forEach((b) => {
+    let near = 0;
+    for (const b of bodies) {
       const ahead = delta(b.d, me.d, total);
       if (Math.abs(ahead) < CAR_LENGTH * 1.1) {
         if (b.lat >= me.lat) hi = Math.min(hi, b.lat - CAR_WIDTH * 1.2);
         else lo = Math.max(lo, b.lat + CAR_WIDTH * 1.2);
       }
-      if (ahead > -CAR_LENGTH && ahead < CAR_LENGTH * 5) near.push(b);
-    });
-    if (lo > hi) return me.lat;
-    if (!near.length) return Math.max(lo, Math.min(hi, 0));
-    let best = null;
-    for (let lat = lo; lat <= hi + 1e-9; lat += 2) {
-      const room = Math.min(...near.map((b) => Math.abs(lat - b.lat)));
-      const score = Math.min(room, clear) * 1000 - Math.abs(lat - me.lat);
-      if (!best || score > best.score) best = { lat, score };
+      if (ahead > -CAR_LENGTH && ahead < CAR_LENGTH * 5) near += 1;
     }
-    return best.lat;
+    if (lo > hi) return me.lat;
+    if (!near) return Math.max(lo, Math.min(hi, 0));
+    let bestLat = lo;
+    let bestScore = -Infinity;
+    for (let lat = lo; lat <= hi + 1e-9; lat += 2) {
+      let room = Infinity;
+      for (const b of bodies) {
+        const ahead = delta(b.d, me.d, total);
+        if (ahead > -CAR_LENGTH && ahead < CAR_LENGTH * 5) room = Math.min(room, Math.abs(lat - b.lat));
+      }
+      const score = Math.min(room, clear) * 1000 - Math.abs(lat - me.lat);
+      if (score > bestScore) { bestScore = score; bestLat = lat; }
+    }
+    return bestLat;
   }
 
   // Where a car moves over to let it by: a rival just ahead of it while it
@@ -612,8 +621,14 @@
     };
     if (sc.phase === "hold") {
       sc.d = way.startD;
-      sc.lat = way.startLat;
       sc.speed = 0;
+      sc.pace = 0;
+      // (Still backing into its garage when called: out to its spot first.)
+      if (sc.lat !== way.startLat) {
+        sc.lat += Math.max(-LAT_RATE * dt * 0.25, Math.min(LAT_RATE * dt * 0.25, way.startLat - sc.lat));
+        if (Math.abs(sc.lat - way.startLat) > 1e-6) return null;
+        sc.lat = way.startLat;
+      }
       // Still far off (reckoned as if they come fast: better early than
       // late, as it can wait at its give-way point): it waits here.
       const eta = leaderEta(Math.max(leader ? leader.speed || 0 : 0, fieldSpeed));
@@ -640,6 +655,7 @@
             sc.d = wrap(way.startD + way.giveWayU, total);
             sc.lat = way.latAt(sc.d);
             sc.speed = 0;
+            sc.pace = 0;
             return event;
           } else target = Math.min(target, Math.sqrt(2 * BRAKE * toStop));
         }
@@ -651,6 +667,7 @@
         sc.d = way.mergeD;
         sc.lat = way.latAt(way.mergeD);
         sc.phase = "road";
+        sc.pace = sc.speed;
         sc.inLane = false;
         sc.exiting = false;
         sc.committed = false;
@@ -658,6 +675,8 @@
       }
       sc.d = wrap(way.startD + next, total);
       sc.lat = way.latAt(sc.d);
+      // (Its speed, for the cars behind it once it is on the road's edge.)
+      sc.pace = sc.speed;
       sc.inLane = way.kind === "pit" ? !way.onRoadAt(sc.d) : false;
       return event;
     }
@@ -755,9 +774,9 @@
   }
 
   return {
-    STEP, SHAPES, LENGTH, OUT, INSIDE, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
+    STEP, SHAPES, LENGTH, OUT, FOLD, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
     START_BEFORE, START_AFTER, PIT_MARGIN, TUNNEL_MARGIN, BRIDGE_MARGIN, UNDER_MARGIN, STRAIGHT, CARPORT, BOOTH,
-    ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
+    ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, GIVE_WAY_BACK, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
     place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,
   };
 }));

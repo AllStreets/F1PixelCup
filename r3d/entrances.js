@@ -33,7 +33,8 @@ function strip(e, course, r0, r1, a, b, lift, vScale = 20) {
   const idx = [];
   const at = (r) => {
     const d = e.startD + r;
-    const lat = r < 0 ? e.side * e.far : e.latAt(d);
+    // (Past either end, the end's own offset: never the centreline.)
+    const lat = r < 0 ? e.side * e.far : r > e.length ? e.side * e.edge : e.latAt(d);
     return { p: e.lap.point(d, lat), h: course.heightAt(d) };
   };
   const steps = Math.max(2, Math.ceil((r1 - r0) / 3));
@@ -139,16 +140,15 @@ export function buildEntrances(course, venue) {
     parts.road.push(strip(e, course, from, e.length, -e.halfWidth, e.halfWidth, ROAD_LIFT));
     const linesTo = e.gateU + e.halfWidth;
     [[-e.halfWidth + 0.4, -e.halfWidth + 1.6], [e.halfWidth - 1.6, e.halfWidth - 0.4]].forEach(([a, b]) => parts.lines.push(strip(e, course, from, linesTo, a, b, LINE_LIFT)));
-    const stopAt = e.gateU - 20;
+    // (Where the Safety Car's nose is when it stops to give way.)
+    const stopAt = e.gateU - Entrances.GIVE_WAY_BACK + Entrances.CAR_LENGTH / 2;
     parts.lines.push(strip(e, course, stopAt, stopAt + 1.6, -e.halfWidth + 0.4, e.halfWidth - 0.4, LINE_LIFT));
 
     // The gate: a post at each end of the gap in the barrier (where the
     // barrier, laid sample by sample, stops: r3d/track.js), two leaves hinged
-    // on them.
-    // (Just outside the barrier's line: a straight gate across a gap on a
-    // bend would otherwise cut in over the run-off.)
-    // On a bend the straight gate between them would sag in towards the
-    // road: the posts go out as far as it takes to keep it outside.
+    // on them; just outside the barrier's line, and on a bend (where the
+    // straight gate between them would sag in towards the road) as far out
+    // as it takes to keep it outside.
     const gapAt = barrierEnds(e, course);
     let out = GATE_OUT;
     let ends = null;
@@ -184,22 +184,20 @@ export function buildEntrances(course, venue) {
       hinge.position.set(end.x, end.h, end.z);
       // Closed, each leaf runs from its post to the middle of the gap.
       hinge.rotation.y = -along + (i ? Math.PI : 0);
-      const leaf = new THREE.Group();
-      const bar = (lx, ly, lz, len, ht) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(len, ht, 0.5), steel);
-        m.position.set(lx, ly, lz);
-        m.castShadow = true;
-        leaf.add(m);
-      };
-      bar(leafLength / 2, 1.2, 0, leafLength, 0.6);
-      bar(leafLength / 2, GATE_H - 0.3, 0, leafLength, 0.6);
-      bar(leafLength / 2, GATE_H / 2 + 0.4, 0, leafLength, 0.4);
-      for (let k = 0; k <= 4; k += 1) bar(0.6 + ((leafLength - 1.2) * k) / 4, GATE_H / 2 + 0.4, 0, 0.35, GATE_H - 1);
+      // Its frame (rails and uprights) one mesh, its board another.
+      const bars = [];
+      const bar = (lx, ly, len, ht) => bars.push(new THREE.BoxGeometry(len, ht, 0.5).translate(lx, ly, 0));
+      bar(leafLength / 2, 1.2, leafLength, 0.6);
+      bar(leafLength / 2, GATE_H - 0.3, leafLength, 0.6);
+      bar(leafLength / 2, GATE_H / 2 + 0.4, leafLength, 0.4);
+      for (let k = 0; k <= 4; k += 1) bar(0.6 + ((leafLength - 1.2) * k) / 4, GATE_H / 2 + 0.4, 0.35, GATE_H - 1);
+      const frame = new THREE.Mesh(mergeGeometries(bars), steel);
+      frame.castShadow = true;
+      hinge.add(frame);
       // A red-and-white board across its middle, to be seen from the track.
       const board = new THREE.Mesh(new THREE.BoxGeometry(leafLength * 0.8, 1.6, 0.7), i ? white : stripe);
       board.position.set(leafLength / 2, GATE_H / 2 + 0.4, 0);
-      leaf.add(board);
-      hinge.add(leaf);
+      hinge.add(board);
       // Opening swings it out, away from the track, back against the barrier.
       hinge.userData = { closed: hinge.rotation.y, swing: (i ? 1 : -1) * outward * Math.PI * 0.92 };
       group.add(hinge);
@@ -281,12 +279,13 @@ export function buildEntrances(course, venue) {
   return group;
 }
 
-// Per frame: each gate opens while the Safety Car (as drawn: { x, y, parked })
-// is near it, and its beacon flashes; then it shuts again.
+// Per frame: each gate opens while the Safety Car (as drawn: { x, y, parked,
+// entrance }) is on its access road near it, and its beacon flashes; then it
+// shuts again. (Passing by on the track, it leaves the gates shut.)
 export function updateEntrances(group, sc, t, dt, cut = false) {
   if (!group || !group.userData.gates) return;
   group.userData.gates.forEach((gate) => {
-    const near = Boolean(sc) && !sc.parked && Math.hypot(sc.x - gate.x, sc.y - gate.z) < OPEN_NEAR;
+    const near = Boolean(sc) && !sc.parked && sc.entrance === gate.entrance && Math.hypot(sc.x - gate.x, sc.y - gate.z) < OPEN_NEAR;
     const want = near ? 1 : 0;
     gate.open = cut ? want : gate.open + Math.max(-dt / OPEN_S, Math.min(dt / OPEN_S, want - gate.open));
     const ease = gate.open * gate.open * (3 - 2 * gate.open);

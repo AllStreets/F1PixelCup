@@ -187,7 +187,11 @@ async (page) => {
     const now = performance.now();
     useItem(pl, now);
     const sc = state.safetyCar;
-    const fromAWay = Boolean(sc) && Boolean(sc.way) && sc.phase === "hold";
+    // It first shows at its way's start (a service road's standby spot, or
+    // its garage), off the road: never popping up on the track.
+    const way = sc && sc.way && safetyCarWay(state.track, sc);
+    const fromAWay = Boolean(way) && sc.d === way.startD && sc.lat === way.startLat
+      && Math.abs(sc.lat) > getItemRoute(state.track).halfWidthAt(sc.d) + PowerUps.CAR_WIDTH;
     let t = now;
     // In front of the leader within the target (entrances.js), then a second more.
     for (let i = 0; i < 60 * Entrances.TARGET_WORST_S && !sc.leading; i += 1) { t += 16.7; updateRace(1 / 60, t); }
@@ -204,7 +208,7 @@ async (page) => {
   results.safetyCarLeaves = await run(() => {
     let t = performance.now();
     state.safetyCar.until = t;
-    const resumed = !safetyCarActive(t + 1);
+    const resumed = state.racers.every((r) => !safetyCarHolds(r, t + 1));
     // Called in just past the pit entry, it goes round a whole lap first: the
     // race is kept going meanwhile (nobody reaches the flag).
     for (let i = 0; i < 60 * 200 && !state.safetyCar.parked; i += 1) {
