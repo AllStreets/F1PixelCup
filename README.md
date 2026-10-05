@@ -50,9 +50,9 @@
 
 **An F1 racing game that runs in a browser tab, with nothing to install.** Pick any of the 20 drivers from the 2025 season, climb into their team's car and race the other nineteen on real circuits: all 24 of the 2025 calendar, plus eight legends that F1 has left behind.
 
-It is F1 with a Mario Kart heart. The circuits are traced from their real outlines, the pit lanes are where OpenStreetMap puts them, it rains at Spa about as often as it really does, and the scoring is 25, 18, 15. But the races are five laps, item boxes sit on the straights and a blue shell (here, a Steward Penalty) can still ruin the leader's afternoon.
+It is F1 with a Mario Kart heart. The circuits are traced from their real outlines, most pit lanes are where OpenStreetMap puts them, it rains at Spa about as often as it really does, and the scoring is 25, 18, 15. But the races are five laps, item boxes sit on the straights and a blue shell (here, a Steward Penalty) can still ruin the leader's afternoon.
 
-Then the TV bit: replays from four broadcast cameras, a 3D podium where the top three, each with their own face, step up, the winner lifts the trophy and all three spray the champagne, and a second player on the same keyboard if you want a fight.
+Then the TV bit: replays from four broadcast cameras; a 3D podium where the top three, each with their own face, take their steps, the winner lifts the trophy and the champagne goes everywhere; and a second player on the same keyboard if you want a fight.
 
 > [!TIP]
 > Fastest way in: open **[f1-pixel-cup.vercel.app/play.html](https://f1-pixel-cup.vercel.app/play.html)**, press **Enter** and you're on the grid of the Opening Cup as Charles Leclerc. `W A S D` to drive, `Space` to fire whatever the box gave you.
@@ -61,7 +61,7 @@ Then the TV bit: replays from four broadcast cameras, a 3D podium where the top 
 
 ## Gallery
 
-Every picture here is the game's own renderer in a 1600x900 window, taken by [`tools/capture-shots.js`](tools/capture-shots.js) (its `readme` part). Some are posed like a photo: a real race, paused, with the named cars placed on the road and a camera set by hand. The others are the game exactly as you see it.
+Every picture here comes from the game's own renderer in a 1600x900 window, taken by [`tools/capture-shots.js`](tools/capture-shots.js) (its `readme` part). Some are posed like a photo: a real race, paused, with the named cars placed on the road and a camera set by hand. The others are the game as it plays (the rain shot with its HUD hidden).
 
 <table>
 <tr>
@@ -118,19 +118,35 @@ Every picture here is the game's own renderer in a 1600x900 window, taken by [`t
 
 ## Features
 
-| | | |
-|---|---|---|
-| 🏁 **32 real circuits**<br/><sub>All 24 of 2025 in calendar order, plus 8 historic ones. Real outlines, real pit lanes, named corners.</sub> | 🏎️ **The 2025 grid**<br/><sub>20 drivers, 10 teams, each car in its team's paint with its driver's number and helmet.</sub> | 🏆 **8 cups and a season**<br/><sub>Six calendar cups, two historic cups and the full 24-race 2025 Season, saved after every race.</sub> |
-| 🎲 **Race your way**<br/><sub>A random cup, a custom cup of any four circuits, or a single race.</sub> | 🌧️ **Weather**<br/><sub>Dry, Wet, or Changeable: each circuit rains as often as it really does.</sub> | 🍌 **8 power-ups**<br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub> |
-| 🎥 **TV replays**<br/><sub>Director, Trackside, Onboard and Helicopter cameras, 0.25x to 4x, with broadcast graphics.</sub> | 🥂 **A 3D podium**<br/><sub>The top three with their own faces: arms up, the trophy, the champagne.</sub> | 🎮 **Two players**<br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub> |
-| 🏟️ **Trackside life**<br/><sub>Stands and 3D crowds at every venue, marshals with flags, a TV helicopter, fireworks at the flag.</sub> | 📈 **A career per driver**<br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub> | 🔊 **All sound synthesised**<br/><sub>Engine, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub> |
+<table>
+<tr>
+<td width="33%" valign="top">🏁 <b>32 real circuits</b><br/><sub>All 24 of 2025 in calendar order, plus 8 historic ones. Real outlines, real pit lanes, named corners.</sub></td>
+<td width="33%" valign="top">🏎️ <b>The 2025 grid</b><br/><sub>20 drivers, 10 teams, each car in its team's paint with its driver's number and helmet.</sub></td>
+<td width="33%" valign="top">🏆 <b>8 cups and a season</b><br/><sub>Six calendar cups, two historic cups and the full 24-race 2025 Season, saved after every race.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top">🎲 <b>Race your way</b><br/><sub>A random cup, a custom cup of any four circuits, or a single race.</sub></td>
+<td width="33%" valign="top">🌧️ <b>Weather</b><br/><sub>Dry, Wet, or Changeable: each circuit rains as often as it really does.</sub></td>
+<td width="33%" valign="top">🍌 <b>8 power-ups</b><br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, 0.25x to 4x, with broadcast graphics.</sub></td>
+<td width="33%" valign="top">🥂 <b>A 3D podium</b><br/><sub>The top three with their own faces: arms up, the trophy, the champagne.</sub></td>
+<td width="33%" valign="top">🎮 <b>Two players</b><br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
+</tr>
+<tr>
+<td width="33%" valign="top">🏟️ <b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, a TV helicopter, fireworks at the flag.</sub></td>
+<td width="33%" valign="top">📈 <b>A career per driver</b><br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub></td>
+<td width="33%" valign="top">🔊 <b>All sound synthesised</b><br/><sub>Engine, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub></td>
+</tr>
+</table>
 
 ---
 
 ## How to play
 
 1. **Open the game** at [f1-pixel-cup.vercel.app/play.html](https://f1-pixel-cup.vercel.app/play.html) (or from the site's front page).
-2. **Pick a driver** with `←` `→` or a click. Leclerc is first in line.
+2. **Pick a driver** with `←` `→` or a click. Leclerc is already picked.
 3. **Choose the race**: a cup, the season, a random or custom cup, or a single race. Set the difficulty (Rookie, Pro, Legend), the grid and the weather.
 4. **Press Enter.** Five red lights, then lights out.
 5. **Drive.** Hold `Shift` through a corner to charge a drift boost (the smoke turns white, blue, then orange as it charges), let go for the kick. Drive through the red boxes for a power-up; `Space` uses it.
@@ -190,16 +206,16 @@ All 32, at one scale, five laps each. 🌙 marks the night races, under floodlig
 | 22 | Las Vegas, United States 🌙 | 6.201 km | 2% | The Sphere and the Strip |
 | 23 | Lusail, Qatar 🌙 | 5.380 km | 2% | Its grandstand and Lusail's towers |
 | 24 | Yas Marina, Abu Dhabi 🌙 | 5.281 km | 2% | The Yas hotel, yachts in the marina |
-| 🕰️ | Hockenheimring, Germany | 4.574 km | 25% | The short Grand Prix circuit, raced in F1 to 2019 |
-| 🕰️ | Nürburgring, Germany | 5.148 km | 40% | The Grand Prix circuit, raced in F1 to 2020 |
-| 🕰️ | Estoril, Portugal | 4.182 km | 15% | The Atlantic coast beside it |
-| 🕰️ | Kyalami, South Africa | 4.529 km | 15% | The city skyline on the horizon |
-| 🕰️ | Sepang, Malaysia | 5.543 km | 45% | The F1 circuit of 1999 to 2017 |
-| 🕰️ | Istanbul Park, Türkiye | 5.338 km | 15% | The F1 circuit of 2005 to 2011 and 2020 to 2021 |
-| 🕰️ | Mugello, Italy | 5.245 km | 15% | As raced in F1 in 2020 |
-| 🕰️ | Watkins Glen, United States | 5.430 km | 30% | The long circuit with the Boot |
+| 🕰️ | Hockenheimring, Germany | 4.574 km | 25% | The Rhine plain's pine forest |
+| 🕰️ | Nürburgring, Germany | 5.148 km | 40% | Dark Eifel forest on rolling hills |
+| 🕰️ | Estoril, Portugal | 4.182 km | 15% | Pines on the hills, the Atlantic to the south |
+| 🕰️ | Kyalami, South Africa | 4.529 km | 15% | The Highveld's dry grass and acacias, Johannesburg on the horizon |
+| 🕰️ | Sepang, Malaysia | 5.543 km | 45% | Oil palms everywhere |
+| 🕰️ | Istanbul Park, Türkiye | 5.338 km | 15% | Dry hills and scrub |
+| 🕰️ | Mugello, Italy | 5.245 km | 15% | A Tuscan valley of cypresses and olive groves |
+| 🕰️ | Watkins Glen, United States | 5.430 km | 30% | The Finger Lakes' woods in autumn colours |
 
-Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. The landmarks are the 2025 venues'; the historic circuits are raced with stands, crowds and their country around them.
+Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. The landmarks are the 2025 venues'; the historic circuits have their stands, crowds and their own country's ground, trees and sky, but no landmark yet.
 
 > [!NOTE]
 > **Where the pits are.** Where OpenStreetMap maps the real pit lane, the game's sits beside it, on its real side. Three don't: at Interlagos the real lane leaves the track through the Senna S and at Singapore its side bends too tightly for garages, so theirs are across the road, and Monaco's is placed by hand. Albert Park, Monza, Suzuka and Las Vegas have none mapped, so theirs come from the circuit's shape.
@@ -231,18 +247,18 @@ Every circuit has its pit lane and garages, stands and a crowd, marshal posts an
 | **Legends Cup** 🕰️ | Hockenheimring · Nürburgring · Estoril · Kyalami |
 | **Golden Era Cup** 🕰️ | Sepang · Istanbul Park · Mugello · Watkins Glen |
 
-The historic circuits are raced by the 2025 grid, each as the layout its outline data holds and named honestly (Watkins Glen is the long circuit with the Boot, close to its F1 layout of 1975 to 1980; Estoril and Kyalami are today's circuits, not the ones F1 raced).
+The 2025 grid races the historic circuits too. Each is the layout its outline data holds, and the game says which: Hockenheim is the short Grand Prix circuit raced from 2002 to 2019, the Nürburgring the Grand Prix circuit of 2002 to 2020, Sepang the F1 circuit of 1999 to 2017, Istanbul Park as raced in 2005 to 2011 and 2020 to 2021, Mugello as raced in 2020, and Watkins Glen the long circuit with the Boot, close to its F1 layout of 1975 to 1980; Estoril and Kyalami are today's circuits, not the ones F1 raced.
 
 ### The settings that change a race
 
 - **Difficulty:** Rookie, Pro (the default) or Legend. What changes is how the CPU drivers drive (how far ahead they look, how close to the limit they corner, how tidy their line is, how often they make a mistake) and a pace factor; [the physics section](#the-honest-physics) has the numbers.
-- **Grid:** *From the back* (the default, Mario Kart style: you start last and the CPU cars line up in cup order) or *Qualifying*: one flying lap from a rolling start, every CPU lap simulated with the same physics.
+- **Grid:** *From the back* (the default, Mario Kart style: you start last and the CPU cars line up by the cup standings, leader on pole) or *Qualifying*: one flying lap from a rolling start, every CPU lap simulated with the same physics.
 - **Weather:** *Dry*, *Wet* (every race) or *Changeable*, where each race rolls once against how often it really rains there: Spa one race in two, Sepang, Interlagos and the Nürburgring nearly as often, the desert races almost never.
 - **Scoring:** 25, 18, 15, 12, 10, 8, 6, 4, 2, 1, and a point for the fastest lap if you finish in the top ten.
 
 ### Your career
 
-Every driver keeps their own career, saved in the browser. **Career points** only go up: the race's F1 points times the difficulty (Rookie x1, Pro x2, Legend x3), a cup bonus of 50, 30 or 20 for the top three, and points for qualifying. The **rating** goes up and down: it starts at 1200 and moves Elo-style against a field of fixed strength for each difficulty, through the tiers Karting, F4, F3, F2, F1 and World Champion (1850 and up). Best laps, poles, wins and the race history are kept too.
+Every driver keeps their own career, saved in the browser. **Career points** only go up: the race's F1 points, a cup bonus of 50, 30 or 20 for the top three and points for qualifying, all times the difficulty (Rookie x1, Pro x2, Legend x3). The **rating** goes up and down: it starts at 1200 and moves Elo-style against a field of fixed strength for each difficulty, through the tiers Karting, F4, F3, F2, F1 and World Champion (1850 and up). Best laps, poles, wins and the race history are kept too.
 
 ### The power-ups
 
@@ -265,9 +281,9 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 
 ## Race day
 
-**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between the other cameras, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x.
+**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x.
 
-**The podium.** After a cup, the season or a single race, the top three walk out in 3D. The camera sweeps in, the arms go up (third, then second, then first, each stepping forward), the camera pushes in on the winner lifting the trophy, then the champagne and the confetti, and a slow orbit for as long as you want to watch. The name plates carry the points and the banners the team colours.
+**The podium.** After a cup, the season or a single race, the top three stand on their steps in 3D. The camera sweeps in, the arms go up (third, then second, then first, each stepping forward), the camera pushes in on the winner lifting the trophy, then the champagne and the confetti, and a slow orbit for as long as you want to watch. The name plates carry the points and the banners the team colours.
 
 **Two players.** Turn on *2 players* in the pit lane, pick P2's driver (it can't be P1's), and both of you race the same field, each with your own view, HUD, mini map and career. Each view keeps a sensible shape on any window: stacked on a normal screen, side by side on an ultrawide.
 
@@ -319,7 +335,7 @@ The first pad is P1's, the second P2's (standard mapping), and a pad and the key
 | Play or pause | `Space` |
 | Back or forward 5 s | `←` `→` |
 | Previous or next car | `↑` `↓` |
-| Slower or faster (0.25x to 4x) | `-` `+` |
+| Slower or faster (0.25x to 4x) | `-`, `=` (or `+`) |
 | Next camera | `C` |
 | Leave the replay | `X` or `Esc` |
 
@@ -334,7 +350,7 @@ It's an arcade game, and it says where.
 - **CPU drivers brake like drivers.** They look down the road, work out how fast their car can take what's coming and brake for it (`racecraft.js`). They also steer round traffic, which your own hands do for you.
 - **Difficulty, in numbers.** Rookie CPU cars run at 90% pace, Pro at 100%, Legend at 105%. There is catch-up, and it's in the open: on Rookie a CPU car's pace moves up to 12% with its gap to you (quicker behind, slower ahead), on Pro up to 5%, and on Legend not at all.
 - **Rain is real grip.** In the wet a car has 72% of its dry cornering grip, 85% of its traction and 75% of its braking, oil spins last longer and sliding tyres scrub. Under Monaco's tunnel roof the road stays dry.
-- **Same scale everywhere,** so Spa is the longest lap and Monaco the shortest. But the road is wider, next to its cars, than a real one: corners tighter than it can turn are opened out, and stretches that would overlap once widened are nudged apart. Shanghai's snail is the exception: there the road narrows to half its width so the loops can come as close as the real ones.
+- **Same scale everywhere,** so Spa is the longest lap and Monaco the shortest. But for the size of its cars the road is wider than a real one: corners tighter than it can turn are opened out, and stretches that would overlap once widened are nudged apart. Shanghai's snail is the exception: there the road narrows to half its width so the loops can come as close as the real ones.
 - **Suzuka really crosses itself,** on a bridge, and each car only looks for road near where it already is, so nobody snaps across the crossover or cuts between two stretches side by side.
 - **Nothing over the track, ever.** Every stand, tree, tower, yacht and hill checks its whole footprint against the circuit before it's placed, and `Render3D.auditScenery` drops rays right across the road and run-off all the way round each lap. Every circuit comes back with zero hits.
 
@@ -357,10 +373,10 @@ tools/checks/      the browser checks          tests/      the Node tests
 
 - **No build step.** Plain scripts and one ES module renderer on [three.js](https://threejs.org) r186 (vendored, loaded through an import map), and a 2D canvas over the top for the HUD. If WebGL isn't there, the original 2D renderer takes over.
 - **Built in Blender, from code.** The car, the driver figure, the power-up models, the landmarks, the grandstands, the crowd and crews, and the yachts are all generated by Python scripts in `tools/blender/`, run headless (`Blender -b --factory-startup -P <script>`). Each script checks its own result and refuses to write a broken model; the trackside models are compressed with meshopt.
-- **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (about forty sliders, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
-- **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
+- **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (shape sliders from a set of about forty, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
+- **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
 - **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one and stepping down if the first seconds run slow.
-- **Checked twice.** `npm test` runs 399 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 26 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars.
+- **Checked twice.** `npm test` runs 399 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 26 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
 
 ### Run it yourself
 
@@ -380,7 +396,7 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 
 **Live:** https://f1-pixel-cup.vercel.app. The Vercel project follows this repo: every push to `main` deploys, other branches get preview URLs, and `.vercelignore` keeps `docs/`, `tests/` and `tools/` out of the upload.
 
-**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg` and `sips -Z 800 -s formatOptions 78 <picture>.jpg` for the rest. The website's own pictures are the script's other parts; its header lists them.
+**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
 
 </details>
 
@@ -388,14 +404,15 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 
 ## How it came together
 
-It didn't start in 3D. It started as a top-down pixel-art kart racer, which is where the name comes from.
+It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D road drawn on a canvas, which is where the name comes from (and that view is still there, as the fallback when WebGL isn't available).
 
 | When | What arrived |
 |---|---|
 | **Apr 2026** · *pixels* | A Mario Kart clone becomes F1 Pixel Cup 2025: the 2025 grid in pixel-art cars, F1 power-ups and F1 points, on eight hand-drawn tracks named after real circuits. |
 | **Sep 7** · *a real race* | One chase camera, the heading-up mini map and the race HUD, five-lap races, sound, difficulties, a whole field that finishes the distance. |
-| **Sep 27** · *3D* | The race moves to three.js with a Blender-built car, onto the real circuits, with landmarks and liveries, and scenery that never touches the track. |
-| **Sep 29 to 30** · *a world* | A career per driver, the power-ups' beauty pass, painted helmets, the website, broadcast post-processing, pit lanes from OpenStreetMap, marshals and the helicopter, rain with real wet grip, car v2 and the Blender driver figure. |
+| **Sep 27** · *3D, and a website* | The race moves to three.js with a Blender-built car, onto the real circuits, with landmarks and liveries, and scenery that never touches the track. Career scoring, and the website. |
+| **Sep 28** · *power-ups and qualifying* | The eight F1 power-ups rebuilt to follow the track, a real Safety Car and DRS flap, real race times, qualifying and a difficulty that changes the field. |
+| **Sep 29 to 30** · *a world* | A career per driver, the power-ups' beauty pass, painted helmets, the 2025 grid's pages on the site, broadcast post-processing, pit lanes from OpenStreetMap, marshals and the helicopter, rain with real wet grip, car v2 and the Blender driver figure. |
 | **Oct 1 to 2** · *race day* | TV-camera replays, the 3D podium ceremony and two-player split screen. |
 | **Oct 4 to 5** · *the whole calendar* | The drivers' own faces; landmarks, yachts, stands and 3D crowds at every venue; all 24 circuits of 2025 in six cups and the Season; random, custom and single races; the Legends and Golden Era cups. Then this README. |
 
@@ -411,7 +428,7 @@ It didn't start in 3D. It started as a top-down pixel-art kart racer, which is w
 | What | From | Licence |
 |---|---|---|
 | Circuit outlines | [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) | MIT |
-| Pit lanes, start lines, the Monaco tunnel, corner names | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
+| Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
 | The website's race data (the drivers' and teams' pages) | [F1DB](https://github.com/f1db/f1db) by Marcel Overdijk | CC BY 4.0 |
 | Ground textures | [Poly Haven](https://polyhaven.com) | CC0 |
 | The drivers' heads (base mesh and shape targets, data only) | [MakeHuman](https://github.com/makehumancommunity/makehuman) | CC0 |
@@ -419,6 +436,6 @@ It didn't start in 3D. It started as a top-down pixel-art kart racer, which is w
 | Model decompression | [meshoptimizer](https://github.com/zeux/meshoptimizer)'s decoder, shipped with three.js | MIT |
 | Typeface | [Titillium Web](https://fonts.google.com/specimen/Titillium+Web), from Google Fonts | SIL OFL 1.1 |
 
-The game's own code is released under the [MIT License](LICENSE). The pieces above keep their own licences, and their notices are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
+The game's own code is released under the [MIT License](LICENSE). The pieces above keep their own licences, and the notices for those shipped here are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
 
 F1 Pixel Cup is a fan-made game. It isn't affiliated with Formula 1, the FIA or any team, and it carries no official logos or sponsor marks: the names on the cars are the drivers', and the paint is each team's colours.

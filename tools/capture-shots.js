@@ -7,10 +7,12 @@
 //   sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team,trackside}-*.jpg
 //   sips -Z 960 assets/shots/items/*.jpg
 //   sips -Z 360 assets/shots/helmets/*.jpg
-// The race-day shots (assets/shots/race-day/) get an 800 px copy each,
+// The race-day shots (assets/shots/race-day/) get an 800 px and a 400 px copy each,
 //   sips -Z 800 -s formatOptions 74 <shot>.jpg --out <shot>-800.jpg
-// (and a 400 px one the same way), then sips -Z 1600 -s formatOptions 76 <shot>.jpg.
-// The README's (docs/readme/): sips -s formatOptions 80 hero.jpg, and
+//   sips -Z 400 -s formatOptions 72 <shot>.jpg --out <shot>-400.jpg
+// then sips -Z 1600 -s formatOptions 76 <shot>.jpg. The README's (docs/readme/):
+//   sips -s formatOptions 80 hero.jpg
+//   sips -Z 1200 -s formatOptions 80 pitlane.jpg picker.jpg
 //   sips -Z 800 -s formatOptions 78 <each other picture>.jpg
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside and
@@ -342,7 +344,7 @@ async (page) => {
   };
   const dayShot = async (name, dir = RD) => {
     await p.screenshot({ path: `${dir}${name}.jpg`, type: "jpeg", quality: 92, scale: "css" });
-    written.push(`${dir}${name}`);
+    written.push(`${dir === RD ? "race-day" : "readme"}/${name}`);
   };
   const freshGame = async () => {
     await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
@@ -525,10 +527,13 @@ async (page) => {
   // above, written here too. sips makes the GitHub sizes (see the header).
   if (parts.includes("readme")) {
     const RM = "docs/readme/";
-    // Set globalThis.README_ONLY to a list of names to retake only those.
+    // Set globalThis.README_ONLY to a list of names to retake only those:
+    // hero, harbour, cars, night, sphere, rain, replay (both replay
+    // pictures), podium (both), split, pitlane (with the picker).
     const want = (name) => !globalThis.README_ONLY || globalThis.README_ONLY.includes(name);
     // Who and where: Leclerc leads the hero with Hamilton beside him, and
-    // the rest of the gallery spreads across the grid.
+    // the rest of the gallery spreads across the grid. The README's captions
+    // name these drivers by hand: change both together.
     const POSED = [
       { name: "hero", circuit: "monaco", anchor: "yachts", shift: 100,
         cars: [["leclerc", 0, -6], ["hamilton", -16, 9], ["norris", -44, -3], ["piastri", -60, 7], ["verstappen", -86, 0], ["russell", -104, -7]],
@@ -631,25 +636,29 @@ async (page) => {
     // The pit lane with the hero's driver picked, and the circuit picker
     // choosing a custom cup.
     if (want("pitlane")) {
-    await sizeTo(1600, 900);
-    await freshGame();
-    await p.evaluate(() => {
-      Game.selectDriver(DRIVERS.findIndex((d) => d.id === SHOT_DRIVERS.hero));
-      Game.selectPlayers(1);
-      Game.selectRaceMode("cup");
-    });
-    await p.waitForTimeout(1500);
-    await rmShot("pitlane");
-    await p.evaluate(() => {
-      Game.selectRaceMode("custom");
-      Game.clearCustomCircuits();
-      ["monaco", "spa", "suzuka"].forEach(Game.toggleCustomCircuit);
-      Screens.showCircuitPicker();
-      document.activeElement.blur();
-    });
-    await p.waitForTimeout(800);
-    await rmShot("picker");
-    await p.evaluate(() => Screens.closeOverlay());
+      // A fresh browser store first: the pit lane shows the career, which
+      // the capture's own races would otherwise have scored.
+      await sizeTo(1600, 900);
+      await p.evaluate(() => localStorage.clear());
+      await freshGame();
+      await p.evaluate(() => {
+        Game.selectDriver(DRIVERS.findIndex((d) => d.id === SHOT_DRIVERS.hero));
+        Game.selectPlayers(1);
+        Game.selectRaceMode("cup");
+        Game.selectCup(0);
+      });
+      await p.waitForTimeout(1500);
+      await rmShot("pitlane");
+      await p.evaluate(() => {
+        Game.selectRaceMode("custom");
+        Game.clearCustomCircuits();
+        ["monaco", "spa", "suzuka"].forEach(Game.toggleCustomCircuit);
+        Screens.showCircuitPicker();
+        document.activeElement.blur();
+      });
+      await p.waitForTimeout(800);
+      await rmShot("picker");
+      await p.evaluate(() => Screens.closeOverlay());
     }
   }
   await p.evaluate(() => Screens.setShowroomArea(null));

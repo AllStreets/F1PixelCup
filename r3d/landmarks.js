@@ -1222,7 +1222,7 @@ const SITES = {
   melbourneSkyline: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [800, 1100, 1400, 1800], step: 40 }),
   shanghaiGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220, 280, 360], step: 20, gapFirst: true, faceTrack: true }),
   hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
-  barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
+  barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160], step: 18, gapFirst: true, faceTrack: true }),
   biosphere: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [120, 200, 320, 480], step: 24 }),
   spielbergGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
   // Its arc's pieces claimed one by one, so the hairpin sits in its curve.
