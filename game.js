@@ -2377,7 +2377,7 @@ function deploySafetyCar(racer, now) {
     return;
   }
   if (was && !was.parked && was.leaving) {
-    Object.assign(was, { ownerId: racer.id, leaving: false, leading: false, phase: "road", until: now + SC_DEADLINE_MS, leaveUntil: 0, fieldSpeed });
+    Object.assign(was, { ownerId: racer.id, leaving: false, leading: false, phase: "road", until: now + SC_DEADLINE_MS, leaveUntil: 0, fieldSpeed: fieldSpeed || was.fieldSpeed });
     addFeed("Safety Car deployed.");
     return;
   }
@@ -2466,7 +2466,7 @@ function updateSafetyCar(dt, now) {
         if (sc.callBack) {
           // Called again on its way in: straight back out of the pit exit.
           const pit = safetyCarWays(state.track).find((w) => w.kind === "pit");
-          Object.assign(sc, { callBack: false, leaving: false, leading: false, phase: "hold", way: { kind: "pit", index: pit.index }, inLane: true, exiting: true, until: now + SC_DEADLINE_MS, holdUntil: now + Entrances.HOLD_MAX_MS, fieldSpeed: safetyCarFieldSpeed() });
+          Object.assign(sc, { callBack: false, leaving: false, leading: false, phase: "hold", way: { kind: "pit", index: pit.index }, inLane: true, exiting: true, until: now + SC_DEADLINE_MS, holdUntil: now + Entrances.HOLD_MAX_MS, fieldSpeed: safetyCarFieldSpeed() || sc.fieldSpeed });
           return;
         }
         sc.parked = true;

@@ -15,6 +15,7 @@ import { wettable, WET_ROAD, WET_PAINT } from "./rain.js";
 const ROAD_LIFT = 0.12;
 const LINE_LIFT = 0.16;
 const GATE_H = 9;
+const GATE_OUT = 3;
 const CARPORT_H = 15;
 // The gate opens once the Safety Car is this near it, over OPEN_S.
 const OPEN_NEAR = 170;
@@ -144,10 +145,28 @@ export function buildEntrances(course, venue) {
     // The gate: a post at each end of the gap in the barrier (where the
     // barrier, laid sample by sample, stops: r3d/track.js), two leaves hinged
     // on them.
-    const ends = barrierEnds(e, course).map((d) => {
-      const p = e.lap.point(d, e.side * e.barrier);
-      return { d, x: p.x, z: p.y, h: H(d) };
-    });
+    // (Just outside the barrier's line: a straight gate across a gap on a
+    // bend would otherwise cut in over the run-off.)
+    // On a bend the straight gate between them would sag in towards the
+    // road: the posts go out as far as it takes to keep it outside.
+    const gapAt = barrierEnds(e, course);
+    let out = GATE_OUT;
+    let ends = null;
+    for (let k = 0; k < 8; k += 1) {
+      ends = gapAt.map((d) => {
+        const p = e.lap.point(d, e.side * (e.barrier + out));
+        return { d, x: p.x, z: p.y, h: H(d) };
+      });
+      let least = Infinity;
+      for (let f = 0; f <= 1; f += 0.05) {
+        const x = ends[0].x + (ends[1].x - ends[0].x) * f;
+        const z = ends[0].z + (ends[1].z - ends[0].z) * f;
+        const q = course.nearestSample(x, z);
+        if (q) least = Math.min(least, Math.abs((x - q.x) * q.nx + (z - q.y) * q.ny) - e.barrier);
+      }
+      if (least >= 1.5) break;
+      out += 1.5 - least;
+    }
     const span = Math.hypot(ends[1].x - ends[0].x, ends[1].z - ends[0].z);
     const along = Math.atan2(ends[1].z - ends[0].z, ends[1].x - ends[0].x);
     ends.forEach((end) => {

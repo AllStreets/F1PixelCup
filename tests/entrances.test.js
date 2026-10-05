@@ -193,6 +193,10 @@ test("choose: waits for the leader where there is time to drive the whole way fi
   const pack = Array.from({ length: 6 }, (_, i) => ({ id: `p${i}`, d: 3050 - 40 * (i + 1), speed: 160 }));
   const packed = Entrances.choose([access(3000)], { ...opts, leaderD: 3050, bodies: pack });
   assert.ok(packed.time > pick.time + 1, `${packed.time} vs ${pick.time}`);
+  // Well over half a lap ahead is still ahead (not "just gone by").
+  pick = Entrances.choose([access(5000)], { ...opts, leaderD: 1500 });
+  assert.equal(pick.ahead, true);
+  assert.ok(Math.abs(pick.time - (3500 / 160 - Entrances.LEAD)) < 1e-9);
   // Of several, the sooner: the pit lane when it is.
   pick = Entrances.choose([access(3000), access(2600)], { ...opts, leaderD: 1800 });
   assert.equal(pick.way.mergeD, 2600);

@@ -440,6 +440,13 @@
     return list;
   }
 
+  // How far a car at lap distance d has to go to reach `at`, or null if it
+  // went by within the last quarter of a lap (it is then past it).
+  function comingTo(at, d, total) {
+    const ahead = wrap(at - d, total);
+    return total - ahead < total / 4 ? null : ahead;
+  }
+
   // From rest, at ACCEL up to `speed`: the time to cover `length`.
   function runTime(length, speed, accel = ACCEL) {
     return travelTime(length, 0, speed, accel);
@@ -463,10 +470,13 @@
     const catchSpeed = CATCH * fieldSpeed;
     const run = runTime(way.length, wayFactor(way) * fieldSpeed);
     const dist = delta(way.mergeD, leaderD, total);
-    const eta = dist / vL;
+    // How far the leader has to go to it (all the way round, unless they
+    // have only just gone by: then it is behind them).
+    const coming = comingTo(way.mergeD, leaderD, total);
     // (A long way to drive first is a less sure thing: the leader may come
     // sooner than reckoned.)
-    if (eta >= run * (1 + RISK) + LEAD) return { time: eta - LEAD, ahead: true };
+    if (coming !== null && coming / vL >= run * (1 + RISK) + LEAD) return { time: coming / vL - LEAD, ahead: true };
+    const eta = dist / vL;
     // When each car reaches the merge point (negative: already past it).
     const cars = bodies.map((b) => ({ at: delta(way.mergeD, b.d, total) / Math.max(b.speed || 0, 0.5 * vL), behindLeader: delta(leaderD, b.d, total) > 1e-6 }));
     const arrivals = [eta, ...cars.map((c) => c.at)];
@@ -597,8 +607,8 @@
     // How long until the leader reaches the merge point (null once by).
     const leaderEta = (speed) => {
       if (!leader) return null;
-      const dist = delta(way.mergeD, leader.d, total);
-      return dist > 0 ? dist / Math.max(speed, 1) : null;
+      const coming = comingTo(way.mergeD, leader.d, total);
+      return coming === null ? null : coming / Math.max(speed, 1);
     };
     if (sc.phase === "hold") {
       sc.d = way.startD;
@@ -748,6 +758,6 @@
     STEP, SHAPES, LENGTH, OUT, INSIDE, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
     START_BEFORE, START_AFTER, PIT_MARGIN, TUNNEL_MARGIN, BRIDGE_MARGIN, UNDER_MARGIN, STRAIGHT, CARPORT, BOOTH,
     ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
-    place, ways, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,
+    place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,
   };
 }));

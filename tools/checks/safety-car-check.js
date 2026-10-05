@@ -13,7 +13,8 @@
 //   hold-station rule, cars moving over to let it by), the leader started at
 //   six points round the lap. Called, it appears clear of every car (a car
 //   length at least), never overlaps one, is always on the road, its lane or
-//   an access road, never jumps, is in front of the leader soon enough
+//   an access road, never jumps, is in front of the leader (on the road,
+//   ahead of them by no more than 250) soon enough
 //   (Entrances.TARGET_MEDIAN_S half the time, never past TARGET_WORST_S), and
 //   after its spell parks in front of its bay. `timing` has each circuit's
 //   median and worst, in seconds.
@@ -126,6 +127,10 @@ async (page) => {
       const bad = [];
       const times = [];
       state.track = track;
+      // (The game's own rule for who is held; an older game's, where there
+      // is no such function, so the check runs, and fails, on it too.)
+      const holds = window.safetyCarHolds || ((r, now) => safetyCarActive(now) && r.id !== state.safetyCar.ownerId);
+      const wrapDelta = (a, b) => PowerUps.wrapDelta(a, b, L);
       for (let k = 0; k < 6; k += 1) {
         // The field in race order, the quicker cars ahead, spread out behind
         // the leader; the caller last.
@@ -159,11 +164,17 @@ async (page) => {
         const t0 = t;
         let last = { d: sc.d, lat: sc.lat };
         let pickedUp = null;
+        // (Its spell: an older game's ran out on its own clock.)
         for (let i = 0; i < 60 * 240 && !sc.parked; i += 1) {
+          if (!window.Entrances && pickedUp !== null && !sc.leaving) sc.until = Math.min(sc.until, t);
           t += 1000 / 60;
           updateSafetyCar(1 / 60, t);
           if (state.safetyCar !== sc) { bad.push(tag("gone")); break; }
-          if (sc.leading && pickedUp === null) pickedUp = (t - t0) / 1000;
+          // In front of the leader: on the road, ahead of the first car still
+          // racing (not its caller) and within PICKUP of it.
+          const leader = order.find((r) => r !== caller);
+          const ahead = wrapDelta(sc.d, leader.trackDistance);
+          if (pickedUp === null && Math.abs(sc.lat) <= route.halfWidthAt(sc.d) && ahead > PowerUps.CAR_LENGTH && ahead <= 250) pickedUp = (t - t0) / 1000;
           // The field: racing speed, held as game.js holds it; nobody drives
           // through the Safety Car or the car ahead; over to let it by.
           const bodies = itemBodies();
@@ -172,11 +183,11 @@ async (page) => {
           order.forEach((r) => {
             const me = { id: r.id, d: r.trackDistance, lat: r.lat };
             let v = Math.min(r.physics.maxSpeed * 0.82, PowerUps.holdStationSpeed(me, bodies, L));
-            const held = safetyCarHolds(r, t);
+            const held = holds(r, t);
             if (held) v = Math.min(v, r.physics.maxSpeed * PowerUps.FACTORS.safetyCar);
             if (scOnRoad) v = Math.min(v, held ? PowerUps.holdStationSpeed(me, [...bodies, scBody], L, { singleFile: true }) : PowerUps.holdStationSpeed(me, [scBody], L));
             r.speed += Math.max(-400 / 60, Math.min(150 / 60, v - r.speed));
-            const aside = Entrances.yieldLat(sc, me, L, route.halfWidthAt(r.trackDistance));
+            const aside = window.Entrances ? Entrances.yieldLat(sc, me, L, route.halfWidthAt(r.trackDistance)) : null;
             if (aside !== null) r.lat += Math.max(-25 / 60, Math.min(25 / 60, aside - r.lat));
           });
           order.forEach((r) => {
@@ -185,10 +196,10 @@ async (page) => {
             r.trackDistance = next % L;
           });
           if (!where(track, sc)) { bad.push(tag("off the road, its lane and its access road")); break; }
-          const along = Entrances.delta(sc.d, last.d, L);
+          const along = wrapDelta(sc.d, last.d);
           if (Math.abs(along) > 10 || Math.abs(sc.lat - last.lat) > 4) { bad.push(tag(`a jump of ${along.toFixed(1)}, ${(sc.lat - last.lat).toFixed(1)}`)); break; }
           last = { d: sc.d, lat: sc.lat };
-          const hit = order.find((r) => Math.abs(Entrances.delta(r.trackDistance, sc.d, L)) < PowerUps.CAR_LENGTH && Math.abs(r.lat - sc.lat) < PowerUps.CAR_WIDTH);
+          const hit = order.find((r) => Math.abs(wrapDelta(r.trackDistance, sc.d)) < PowerUps.CAR_LENGTH && Math.abs(r.lat - sc.lat) < PowerUps.CAR_WIDTH);
           if (hit) { bad.push(tag(`overlapped ${hit.id}`)); break; }
         }
         times.push(pickedUp === null ? Infinity : pickedUp);
@@ -206,8 +217,9 @@ async (page) => {
     timing[id] = { median: +sorted[sorted.length >> 1].toFixed(1), worst: +sorted[sorted.length - 1].toFixed(1) };
     problems.push(...r.bad);
   }
-  const targets = await step(() => (window.Entrances ? { median: Entrances.TARGET_MEDIAN_S, worst: Entrances.TARGET_WORST_S } : null));
-  const slow = targets ? Object.entries(timing).filter(([, v]) => !(v.median <= targets.median) || !(v.worst <= targets.worst)) : ["no targets"];
+  // The targets (entrances.js; the same numbers here for an older game).
+  const targets = await step(() => (window.Entrances ? { median: Entrances.TARGET_MEDIAN_S, worst: Entrances.TARGET_WORST_S } : { median: 8.5, worst: 15 }));
+  const slow = Object.entries(timing).filter(([, v]) => !(v.median <= targets.median) || !(v.worst <= targets.worst));
   results.reachesLeaderEveryCircuit = (problems.length === 0 && slow.length === 0 && Array.isArray(ids) && Object.keys(timing).length === ids.length)
     || JSON.stringify({ problems: problems.slice(0, 6), slow }).slice(0, 700);
 

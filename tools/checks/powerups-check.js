@@ -177,7 +177,9 @@ async (page) => {
       && state.boxHiddenUntil.every((t) => !t) && state.lastSafetyCarAt === null;
   });
 
-  // Safety Car: a car on track ahead of the leader, rivals capped and held, user free.
+  // Safety Car: it comes on by one of the circuit's ways (a service gate or
+  // the pit lane), gets in front of the leader, and then every rival is
+  // capped and held behind it; the user who called it is free.
   await setup();
   results.safetyCar = await run(() => {
     const pl = getSortedRacers()[10];
@@ -185,14 +187,17 @@ async (page) => {
     const now = performance.now();
     useItem(pl, now);
     const sc = state.safetyCar;
-    const leader = firstUnfinished();
-    const ahead = sc && PowerUps.wrapDelta(sc.d, leader.trackDistance, state.track.totalLength) > 0;
+    const fromAWay = Boolean(sc) && Boolean(sc.way) && sc.phase === "hold";
     let t = now;
-    for (let i = 0; i < 120; i += 1) { t += 16.7; updateRace(1 / 60, t); }
+    // In front of the leader within the target (entrances.js), then a second more.
+    for (let i = 0; i < 60 * Entrances.TARGET_WORST_S && !sc.leading; i += 1) { t += 16.7; updateRace(1 / 60, t); }
+    const leading = sc.leading;
+    for (let i = 0; i < 60; i += 1) { t += 16.7; updateRace(1 / 60, t); }
     const rivals = state.racers.filter((r) => r.id !== pl.id && !r.finished);
     const capped = rivals.every((r) => r.speed <= r.physics.maxSpeed * PowerUps.FACTORS.safetyCar + 1);
-    const leaderBehind = PowerUps.wrapDelta(state.safetyCar.d, firstUnfinished().trackDistance, state.track.totalLength) > 0;
-    return Boolean(sc) && ahead && capped && leaderBehind && state.lastSafetyCarAt !== null;
+    const leader = getSortedRacers().find((r) => !r.finished && r.id !== pl.id);
+    const leaderBehind = PowerUps.wrapDelta(state.safetyCar.d, leader.trackDistance, state.track.totalLength) > 0;
+    return (fromAWay && leading && capped && leaderBehind && state.lastSafetyCarAt !== null) || JSON.stringify({ fromAWay, leading, capped, leaderBehind });
   });
   // Called in, it heads for the pits with the race running round it, and
   // parks at its own bay; racing resumes at once.
@@ -400,7 +405,7 @@ async (page) => {
       const sc = state.safetyCar;
       // Out on the road leading (its way out of the pits is safety-car-check's):
       // from leader + 90, on the racing line.
-      Object.assign(sc, { exiting: false, inLane: false, lat: 0, d: (((firstUnfinished() || pl).trackDistance || 0) + 90) % L });
+      Object.assign(sc, { phase: "road", leading: true, exiting: false, inLane: false, lat: 0, d: (((firstUnfinished() || pl).trackDistance || 0) + 90) % L });
       if (how === "late") { sc.d = ((lane.entry - 60) % L + L) % L; sc.lat = 0; }
       sc.until = performance.now();
       let t = performance.now();
@@ -463,7 +468,7 @@ async (page) => {
     const pl = getSortedRacers()[10];
     pl.currentItem = "safetyCar"; useItem(pl, performance.now());
     // Out on the road leading, on the racing line.
-    Object.assign(state.safetyCar, { exiting: false, inLane: false, lat: 0, d: ((firstUnfinished().trackDistance || 0) + 90) % state.track.totalLength });
+    Object.assign(state.safetyCar, { phase: "road", leading: true, until: performance.now() + 5000, exiting: false, inLane: false, lat: 0, d: ((firstUnfinished().trackDistance || 0) + 90) % state.track.totalLength });
     const others = state.racers.filter((r) => r.id !== pl.id && !r.finished);
     const [front, back] = others.slice(0, 2);
     const route = getItemRoute(state.track);
