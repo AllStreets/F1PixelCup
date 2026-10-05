@@ -76,7 +76,7 @@
           <p>All ${num(SEASON.circuitIds.length)} rounds in calendar order, for the drivers' and the constructors' titles. Points as the cups score them, ties split on countback, and the season is saved after every race: quit at round 9 and it is waiting at round 9.</p>
           <ul class="season-facts">
             <li><b>${num(SEASON.circuitIds.length)}</b><span>rounds</span></li>
-            <li><b>${num(CUP_DEFS.length)}</b><span>cups of four</span></li>
+            <li><b>${num(CUP_DEFS.filter((c) => !c.historic).length)}</b><span>cups of four</span></li>
             ${lit ? `<li><b>${num(lit)}</b><span>under floodlights</span></li>` : ""}
           </ul>
           <a class="go-btn" href="./play.html?cup=season"><span>Start the season ›</span></a>
@@ -87,7 +87,42 @@
         <p class="kicker">Historic cups</p>
         <h3 class="it-title">Circuits of the past</h3>
         <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid in two cups, H1 and H2. Each is the layout the outline data holds, and each card says which.</p>
-      </header>${historic}` : ""}`;
+      </header>${historic}` : ""}
+      ${choicesCard()}`;
+  }
+
+  // Your way (docs/superpowers/specs/2026-10-01-race-choices-design.md): a
+  // random cup, a custom cup or a single race, each a link into the pit lane
+  // with that choice picked.
+  function choicesCard() {
+    const n = num(CIRCUITS.length);
+    const ways = [
+      { id: "random", name: "Random cup", link: "Draw a random cup",
+        copy: `Four circuits drawn at random from all ${n}, never one twice in a cup. You see the four before the start, and Reroll deals another four. It ends on the podium, with the cup bonus.` },
+      { id: "custom", name: "Custom cup", link: "Build a custom cup",
+        copy: "Any four circuits, in any order. Search by name or country, pick them by their maps, and move them up and down the running order. It ends on the podium, with the cup bonus." },
+      { id: "single", name: "Single race", link: "Start a single race",
+        copy: `One circuit, drawn at random from all ${n} or chosen. Its race points and best lap count, and the top three take a podium. One race is not a cup, so there is no cup bonus.` },
+    ];
+    return `
+      <section id="race-choices" class="choices-card" aria-labelledby="race-choices-title">
+        <header class="choices-head">
+          <p class="kicker">Or race your way</p>
+          <h3 id="race-choices-title" class="it-title">Random, custom or one race</h3>
+          <p>Pick <b>Race</b> in the pit lane: a cup, the season, a random cup, a custom cup or a single race. Difficulty, the grid, the weather and two players work in the random cup, the custom cup and the single race as in any cup, and every race counts in your driver's career and best laps.</p>
+        </header>
+        <div class="choices-shots">
+          <figure><img src="./assets/shots/choices-pitlane.jpg" alt="The pit lane with a random cup drawn: four circuits shown before the start, and Reroll" loading="lazy"><figcaption>A random cup, drawn before the start</figcaption></figure>
+          <figure><img src="./assets/shots/choices-picker.jpg" alt="The circuit picker: a search box, the running order of a custom cup and every circuit by its map" loading="lazy"><figcaption>The circuit picker for a custom cup</figcaption></figure>
+        </div>
+        <ul class="choices-ways">${ways.map((w) => `
+          <li data-way="${w.id}">
+            <h4 class="it-title">${esc(w.name)}</h4>
+            <p>${esc(w.copy)}</p>
+            <a class="ghost-btn" href="./play.html?race=${w.id}">${esc(w.link)} ›</a>
+          </li>`).join("")}
+        </ul>
+      </section>`;
   }
 
   // "Lando Norris's McLaren": who is in a promo shot (SHOT_DRIVERS, game-data.js).

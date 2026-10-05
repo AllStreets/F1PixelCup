@@ -41,6 +41,23 @@ html, body { height: 100%; overflow: hidden; }
 .cup-circuits { margin: 2px 0 0; padding: 0; list-style: none; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font: 600 0.8rem/1.3 var(--font); }
 .cup-circuits li + li::before { content: "›"; margin-right: 12px; color: var(--red); }
 .cup-circuits small { display: block; color: #d8c48a; font-weight: 600; font-size: 0.72rem; }
+/* Random and custom cups: the circuits numbered in race order. */
+.cup-circuits.is-numbered { counter-reset: race; }
+.cup-circuits.is-numbered li + li::before { content: none; }
+.cup-circuits.is-numbered li[data-circuit] { counter-increment: race; display: inline-flex; align-items: center; gap: 6px; }
+.cup-circuits.is-numbered li[data-circuit]::before {
+  content: counter(race); display: inline-grid; place-items: center; min-width: 1.35em; height: 1.35em;
+  background: var(--red); color: #fff; font: italic 900 0.72rem/1 var(--font);
+  transform: skew(-12deg);
+}
+.cup-circuits li.is-todo { color: rgba(255, 255, 255, 0.5); font-style: italic; }
+.cup-circuits li.is-todo::before { content: none; }
+/* The row under Race: the reroll, the picker, the single race's pick. */
+#cup-row[hidden], #pick-row[hidden] { display: none; }
+.pick-controls { display: inline-flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.pick-btn { border-color: rgba(255, 255, 255, 0.5); background: rgba(225, 6, 0, 0.12); }
+.pick-btn:hover, .pick-btn:focus-visible { border-color: #fff; background: rgba(225, 6, 0, 0.28); }
+.pick-btn i { font-style: normal; display: inline-block; margin-right: 2px; }
 .pitlane-driver { grid-area: driver; align-self: center; max-width: 440px; }
 .driver-name { margin: 8px 0 4px; font-size: clamp(2rem, min(5vw, 7vh), 4.2rem); }
 .driver-title { margin: 0 0 18px; color: var(--muted); font-weight: 600; }
@@ -62,6 +79,14 @@ html, body { height: 100%; overflow: hidden; }
 .driver-tile.is-on { outline: 2px solid #fff; outline-offset: 2px; }
 #start-cup { grid-area: start; justify-self: end; align-self: end; font-size: clamp(1rem, 1.6vw, 1.35rem); }
 
+/* A very short window: the grid and weather hints are left out, and the
+   players' unless it says something (the season's reason, the two players'
+   keys); the race's and the season's stay. */
+@media (max-height: 680px) and (min-width: 761px) {
+  #grid-hint, #weather-hint, #players-hint.is-plain { display: none; }
+  .pitlane-choices { gap: 7px; }
+}
+
 @media (max-height: 620px) {
   .pitlane { gap: 8px 24px; }
   .driver-title { margin-bottom: 8px; }
@@ -77,7 +102,7 @@ html, body { height: 100%; overflow: hidden; }
     overflow-y: auto;
   }
   .pitlane-choices { justify-self: start; text-align: left; }
-  .choice-row, .cup-circuits { justify-content: flex-start; }
+  .choice-row, .cup-circuits, .pick-controls { justify-content: flex-start; }
   #start-cup { justify-self: stretch; text-align: center; }
 }
 
@@ -423,3 +448,65 @@ html, body { height: 100%; overflow: hidden; }
 .result-row.is-p2 { background: rgba(255, 122, 198, 0.16); }
 /* Side by side, the feed ticker sits under the first view, clear of the divider. */
 body[data-split="side"] .ticker { left: 25%; max-width: 44vw; }
+
+/* ---- The circuit picker: a custom cup's four, or a single race's one ---- */
+.picker-card { width: min(1040px, 100%); display: flex; flex-direction: column; }
+.picker-card .overlay-title { margin-bottom: 12px; }
+.picker-search input {
+  width: 100%; box-sizing: border-box; padding: 0.7em 0.9em;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.22); border-left: 3px solid var(--red);
+  color: var(--ink); font: 600 1rem/1.2 var(--font);
+}
+.picker-search input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.picker-search input:focus { outline: none; border-color: #fff; border-left-color: var(--red); background: rgba(255, 255, 255, 0.09); }
+.circuit-order { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.circuit-order[hidden] { display: none; }
+.circuit-order li {
+  display: flex; align-items: center; gap: 4px; min-height: 2.6rem; padding: 0 5px 0 0;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); font: 700 0.8rem/1.2 var(--font);
+}
+.circuit-order li > b {
+  align-self: stretch; display: grid; place-items: center; min-width: 2rem;
+  background: var(--red); color: #fff; font: italic 900 1rem/1 var(--font);
+}
+.circuit-order li > span { flex: 1; min-width: 0; margin-left: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.circuit-order li.is-empty { border-style: dashed; color: rgba(255, 255, 255, 0.4); font-style: italic; }
+.circuit-order li.is-empty > b { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.5); }
+.cc-btn {
+  flex: 0 0 auto; width: 1.45rem; height: 1.7rem; padding: 0; border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(7, 7, 12, 0.6); color: var(--ink); font: 800 0.95rem/1 var(--font); cursor: pointer;
+}
+.cc-btn:hover:not(:disabled), .cc-btn:focus-visible { border-color: #fff; }
+.cc-btn:disabled { opacity: 0.3; cursor: default; }
+.picker-count { text-align: left; margin-top: 10px; }
+.circuit-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px;
+  margin-top: 10px; padding: 2px; overflow-y: auto; min-height: 7rem; max-height: min(52vh, 560px);
+}
+.circuit-card {
+  position: relative; display: grid; grid-template-rows: auto auto auto; gap: 2px; text-align: left;
+  padding: 8px 10px 10px; border: 1px solid var(--line); background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01));
+  color: var(--ink); cursor: pointer; font: inherit;
+}
+.circuit-card:hover, .circuit-card:focus-visible { border-color: rgba(255, 255, 255, 0.6); }
+.circuit-card.is-on { border-color: var(--red); background: linear-gradient(160deg, rgba(225, 6, 0, 0.28), rgba(225, 6, 0, 0.06)); }
+.circuit-card.is-full:not(.is-on) { opacity: 0.45; }
+.circuit-card strong { font: 700 0.84rem/1.2 var(--font); }
+.circuit-card span { color: var(--muted); font: 600 0.72rem/1.2 var(--font); }
+.cc-map { width: 100%; height: auto; aspect-ratio: 120 / 76; margin-bottom: 4px; }
+.cc-map path { fill: none; stroke: rgba(255, 255, 255, 0.55); stroke-width: 2.6; stroke-linejoin: round; }
+.cc-map circle { fill: var(--red); }
+.circuit-card.is-on .cc-map path { stroke: #fff; }
+.cc-slot {
+  position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 1.6rem; height: 1.6rem;
+  background: var(--red); color: #fff; font: italic 900 0.95rem/1 var(--font); transform: skew(-12deg);
+}
+.picker-empty { grid-column: 1 / -1; margin: 18px 0; }
+.picker-card .overlay-actions { margin-top: 14px; }
+.picker-card .overlay-actions [hidden] { display: none; }
+@media (max-width: 1000px) {
+  .circuit-order { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .circuit-cards { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); max-height: none; }
+}

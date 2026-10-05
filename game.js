@@ -69,7 +69,7 @@ function worldView() {
   // Only the 3D renderer's own files count as progress -- not, say, the
   // showroom photo the 2D view loads.
   const files = performance.getEntriesByType("resource")
-    .filter((entry) => /\/(vendor\/three|r3d|render3d|assets\/(f1_car|textures))/.test(entry.name)).length;
+    .filter((entry) => /\/(vendor\/three|r3d|render3d|assets\/(f1_car|textures|landmarks|people))/.test(entry.name)).length;
   if (files !== downloadWatch.files) {
     downloadWatch.files = files;
     downloadWatch.at = now;
@@ -280,6 +280,18 @@ const CUPS = [...CUP_DEFS, SEASON].map((cup) => ({
   tracks: cup.circuitIds.map((id) => TRACKS.find((track) => track.id === id)),
 }));
 
+// The circuits a random, custom or single race is chosen from: every circuit
+// in the game (choices.js; nothing assumes how many there are).
+const POOL_IDS = TRACKS.map((track) => track.id);
+const trackById = (id) => TRACKS.find((track) => track.id === id);
+
+// A random cup, a custom cup or a single race, as a cup the race weekend can
+// run (docs/superpowers/specs/2026-10-01-race-choices-design.md).
+function choiceCup(kind, ids) {
+  const { id, name } = Choices.KINDS[kind];
+  return { id, name, icon: name, kind, season: false, single: kind === "single", tracks: ids.map(trackById).filter(Boolean) };
+}
+
 // The season's save (season.js checks it against this game: the same
 // calendar and drivers).
 const SEASON_CONTEXT = {
@@ -332,6 +344,20 @@ const state = {
   selectedDriver: Math.max(0, DRIVERS.findIndex((driver) => driver.id === "leclerc")),
   selectedKart: Math.max(0, TEAMS.findIndex((team) => team.id === "ferrari")),
   selectedCup: 0,
+  // How to race (choices.js MODES): a calendar cup or the season (selectedCup
+  // says which), a random cup, a custom cup or a single race. calendarCup is
+  // the Cup row's pick, kept while another choice is shown.
+  raceMode: "cup",
+  calendarCup: 0,
+  // The random cup's and the random single race's draws, by seed; the custom
+  // cup's circuits in race order; the single race's pick.
+  drawSeeds: { cup: 1, single: 1 },
+  customIds: [],
+  single: { pick: "random", circuitId: null },
+  // The cup being raced (a snapshot taken at the start: the pit lane's
+  // choices can't change it). getActiveCup reads it when activeCupIndex is
+  // -1 (a random cup, a custom cup or a single race).
+  activeCup: null,
   // The season being raced (season.js), and whether "New season" is asking
   // once more before it throws a saved one away.
   season: null,
@@ -817,8 +843,15 @@ function addFeed(message) {
 
 // The pit lane is drawn by screens.js; this keeps the game's side in step.
 function renderGarage() {
-  if (state.phase === "garage") state.track = getSelectedCup().tracks[0];
+  if (state.phase === "garage") state.track = pitLaneTrack();
   if (window.Screens) window.Screens.refreshPitLane();
+  if (window.Screens && window.Screens.refreshCircuitPicker) window.Screens.refreshCircuitPicker();
+}
+
+// The circuit the pit lane stands for: the chosen cup's first (a custom cup
+// with none chosen yet: the first circuit there is).
+function pitLaneTrack() {
+  return getSelectedCup().tracks[0] || TRACKS[0];
 }
 
 function getPitLaneState() {
@@ -834,6 +867,28 @@ function getPitLaneState() {
     // (A historic circuit's era: the layout it is, named honestly.)
     cups: CUPS.map((cup, index) => ({ index, name: cup.name, season: cup.season, circuits: cup.tracks.map((track) => track.name), eras: cup.tracks.map((track) => track.era || "") })),
     selectedCup: state.selectedCup,
+    // How to race, and what the pit lane is about to start.
+    race: (() => {
+      const cup = getSelectedCup();
+      const custom = Choices.validateCustom(state.customIds, POOL_IDS);
+      return {
+        mode: state.raceMode,
+        modes: RACE_MODES,
+        calendarCup: state.calendarCup,
+        current: { id: cup.id, name: cup.name, kind: cup.kind || (cup.season ? "season" : "cup"), season: Boolean(cup.season), single: Boolean(cup.single), circuits: cup.tracks.map((t) => ({ id: t.id, name: t.name, era: t.era || "" })) },
+        custom: [...state.customIds],
+        cupSize: Choices.CUP_SIZE,
+        single: { ...state.single },
+        poolSize: POOL_IDS.length,
+        // Whether Start starts (a custom cup of four, a single race with its circuit).
+        ready: state.raceMode === "custom" ? custom.ok : cup.tracks.length > 0,
+        // The circuits to choose from, in calendar order, with their cup.
+        pool: TRACKS.map((t) => {
+          const home = CUP_DEFS.find((c) => c.circuitIds.includes(t.id));
+          return { id: t.id, name: t.name, short: t.short || t.name, country: t.country, theme: t.theme, cup: home ? home.name : "" };
+        }),
+      };
+    })(),
     // A saved season, to resume (with its own driver and settings).
     savedSeason: (() => {
       const saved = getSelectedCup().season ? loadSavedSeason() : null;
@@ -1005,18 +1060,131 @@ function loadDriverPreference() {
 function selectCup(index) {
   if (state.phase !== "garage") return;
   state.selectedCup = clamp(index, 0, CUPS.length - 1);
+  if (!CUPS[state.selectedCup].season) state.calendarCup = state.selectedCup;
+  state.raceMode = CUPS[state.selectedCup].season ? "season" : "cup";
   state.confirmNewSeason = false;
   // Remembered by id, never by index (season.js resolveCup).
+  storeChoice("f1pixelcup.cup", CUPS[state.selectedCup].id);
+  storeChoice("f1pixelcup.race", state.raceMode);
+  renderGarage();
+}
+
+const RACE_MODES = [
+  { id: "cup", name: "Cup" },
+  { id: "season", name: "Season" },
+  { id: "random", name: "Random cup" },
+  { id: "custom", name: "Custom cup" },
+  { id: "single", name: "Single race" },
+];
+
+function storeChoice(key, value) {
   try {
-    window.localStorage.setItem("f1pixelcup.cup", CUPS[state.selectedCup].id);
+    window.localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
   } catch (err) {
     // Preference just will not persist.
   }
+}
+
+// How to race: a cup (the Cup row's), the season, a random cup, a custom cup
+// or a single race (choices.js).
+function selectRaceMode(mode) {
+  if (state.phase !== "garage" || !Choices.MODES.includes(mode)) return;
+  state.confirmNewSeason = false;
+  setRaceMode(mode);
+  storeChoice("f1pixelcup.race", mode);
+  if (mode === "cup" || mode === "season") storeChoice("f1pixelcup.cup", CUPS[state.selectedCup].id);
   renderGarage();
+}
+
+function setRaceMode(mode) {
+  state.raceMode = mode;
+  if (mode === "season") state.selectedCup = Math.max(0, CUPS.findIndex((cup) => cup.season));
+  else if (mode === "cup") state.selectedCup = state.calendarCup;
+}
+
+// Another draw, never the one on screen: the random cup's four, or the
+// random single race's circuit.
+function rerollDraw() {
+  if (state.phase !== "garage") return;
+  const which = state.raceMode === "random" ? "cup" : state.raceMode === "single" && state.single.pick === "random" ? "single" : null;
+  if (!which) return;
+  const count = which === "cup" ? Choices.CUP_SIZE : 1;
+  const current = Choices.draw(POOL_IDS, count, state.drawSeeds[which]);
+  state.drawSeeds[which] = Choices.reroll(POOL_IDS, count, state.drawSeeds[which], current).seed;
+  storeChoice("f1pixelcup.draw", state.drawSeeds);
+  renderGarage();
+}
+
+// The custom cup's circuits: in or out, one place earlier or later, or none.
+function setCustomCircuits(ids) {
+  if (state.phase !== "garage") return;
+  state.customIds = ids;
+  storeChoice("f1pixelcup.custom", ids);
+  renderGarage();
+}
+const toggleCustomCircuit = (id) => POOL_IDS.includes(id) && setCustomCircuits(Choices.toggle(state.customIds, id, Choices.CUP_SIZE));
+const moveCustomCircuit = (index, dir) => setCustomCircuits(Choices.move(state.customIds, index, dir));
+const clearCustomCircuits = () => setCustomCircuits([]);
+
+// The single race: a random circuit (the draw) or a chosen one.
+function selectSinglePick(pick) {
+  if (state.phase !== "garage" || !Choices.SINGLE_PICKS.includes(pick)) return;
+  state.single = { ...state.single, pick };
+  storeChoice("f1pixelcup.single", state.single);
+  renderGarage();
+}
+
+function chooseSingleCircuit(id) {
+  if (state.phase !== "garage" || !POOL_IDS.includes(id)) return;
+  state.single = { pick: "chosen", circuitId: id };
+  storeChoice("f1pixelcup.single", state.single);
+  renderGarage();
+}
+
+// A fresh seed for a first visit.
+function freshSeed() {
+  try {
+    return window.crypto.getRandomValues(new Uint32Array(1))[0];
+  } catch (err) {
+    return Math.floor(Math.random() * 2 ** 32) >>> 0;
+  }
+}
+
+// The choices remembered from the last visit, each read safely (choices.js),
+// and a ?race= link (the site's), which picks the choice.
+function loadRaceChoices(storedCup, linkedCup) {
+  const read = (key) => {
+    try {
+      return window.localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  };
+  let mode = read("f1pixelcup.race");
+  // A ?cup= link picks that cup (or the season), whatever was last chosen.
+  if (linkedCup) mode = linkedCup === SEASON.id ? "season" : "cup";
+  try {
+    const url = new URL(window.location.href);
+    const linked = url.searchParams.get("race");
+    if (linked !== null) {
+      if (Choices.MODES.includes(linked)) mode = linked;
+      url.searchParams.delete("race");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch (err) {
+    // No link choice.
+  }
+  state.customIds = Choices.parseCustom(read("f1pixelcup.custom"), POOL_IDS);
+  state.single = Choices.parseSingle(read("f1pixelcup.single"), POOL_IDS);
+  const seeds = Choices.parseDraw(read("f1pixelcup.draw"));
+  state.drawSeeds = { cup: seeds.cup ?? freshSeed(), single: seeds.single ?? freshSeed() };
+  if (seeds.cup === null || seeds.single === null) storeChoice("f1pixelcup.draw", state.drawSeeds);
+  setRaceMode(Choices.resolveMode(mode, storedCup, SEASON.id));
 }
 
 function loadCupPreference() {
   let stored = null;
+  let linkedCup = null;
   try {
     stored = window.localStorage.getItem("f1pixelcup.cup");
   } catch (err) {
@@ -1028,7 +1196,10 @@ function loadCupPreference() {
     const url = new URL(window.location.href);
     const linked = url.searchParams.get("cup");
     if (linked !== null) {
-      if (CUPS.some((cup) => cup.id === linked)) stored = linked;
+      if (CUPS.some((cup) => cup.id === linked)) {
+        stored = linked;
+        linkedCup = linked;
+      }
       url.searchParams.delete("cup");
       window.history.replaceState(null, "", url.pathname + url.search + url.hash);
     }
@@ -1037,7 +1208,9 @@ function loadCupPreference() {
   }
   const id = Season.resolveCup(stored, [...CUP_DEFS, SEASON]);
   state.selectedCup = Math.max(0, CUPS.findIndex((cup) => cup.id === id));
-  state.track = getSelectedCup().tracks[0];
+  if (!CUPS[state.selectedCup].season) state.calendarCup = state.selectedCup;
+  loadRaceChoices(stored, linkedCup);
+  state.track = pitLaneTrack();
 }
 
 function selectDifficulty(index) {
@@ -1052,12 +1225,20 @@ function selectDifficulty(index) {
   renderGarage();
 }
 
+// What the pit lane would start: a calendar cup or the season, or a random
+// cup (the draw on screen), a custom cup (as chosen so far) or a single race.
 function getSelectedCup() {
+  if (state.raceMode === "random") return choiceCup("random", Choices.draw(POOL_IDS, Choices.CUP_SIZE, state.drawSeeds.cup));
+  if (state.raceMode === "custom") return choiceCup("custom", state.customIds);
+  if (state.raceMode === "single") {
+    const id = state.single.pick === "random" ? Choices.draw(POOL_IDS, 1, state.drawSeeds.single)[0] : state.single.circuitId;
+    return choiceCup("single", id ? [id] : []);
+  }
   return CUPS[state.selectedCup];
 }
 
 function getActiveCup() {
-  return CUPS[state.activeCupIndex];
+  return state.activeCupIndex >= 0 ? CUPS[state.activeCupIndex] : state.activeCup;
 }
 
 function loadDifficultyPreference() {
@@ -1408,7 +1589,7 @@ function finishQualifying() {
   if (!window.Screens) return;
   const cup = getActiveCup();
   window.Screens.showQualifying({
-    kicker: `Qualifying · Race ${state.raceIndex + 1} of ${cup.tracks.length} · ${cup.name}`,
+    kicker: cup.single ? `Qualifying · ${cup.name}` : `Qualifying · Race ${state.raceIndex + 1} of ${cup.tracks.length} · ${cup.name}`,
     title: state.track.name,
     note,
     rows: rows.map((row, i) => {
@@ -1543,12 +1724,28 @@ function startCup() {
     startSeason(loadSavedSeason());
     return;
   }
+  // A custom cup needs its four, a chosen single race its circuit: Start
+  // opens the circuit picker instead.
+  const unready = state.raceMode === "custom"
+    ? !Choices.validateCustom(state.customIds, POOL_IDS).ok
+    : getSelectedCup().tracks.length === 0;
+  if (unready) {
+    if (window.Screens && window.Screens.showCircuitPicker) window.Screens.showCircuitPicker();
+    return;
+  }
   state.season = null;
   // One id per cup attempt ties its races to its cup bonus (see career.js).
   beginCup({
     runId: window.Career ? window.Career.startCupRun() : null,
     difficulty: state.difficulty, gridMode: state.gridMode, weatherMode: state.weatherMode, raceIndex: 0, players: state.players,
   });
+  // The draw raced is the cup's now; a fresh one waits for next time.
+  const drew = state.raceMode === "random" ? "cup" : state.raceMode === "single" && state.single.pick === "random" ? "single" : null;
+  if (drew) {
+    const count = drew === "cup" ? Choices.CUP_SIZE : 1;
+    state.drawSeeds[drew] = Choices.reroll(POOL_IDS, count, state.drawSeeds[drew], state.activeCup.tracks.map((t) => t.id)).seed;
+    storeChoice("f1pixelcup.draw", state.drawSeeds);
+  }
 }
 
 // The pit lane's "New season": asks once more on the button itself, then
@@ -1596,7 +1793,9 @@ function startSeason(saved) {
 function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players }) {
   initAudio();
   if (audio.ctx && audio.ctx.state === "suspended") audio.ctx.resume();
-  state.activeCupIndex = state.selectedCup;
+  const cup = getSelectedCup();
+  state.activeCupIndex = CUPS.indexOf(cup);
+  state.activeCup = cup;
   state.raceIndex = raceIndex;
   // The season is one player's championship; a cup may be two players'.
   state.cupPlayers = players;
@@ -1614,12 +1813,13 @@ function beginCup({ runId, difficulty, gridMode, weatherMode, raceIndex, players
   state.cupGridMode = gridMode;
   state.cupWeatherMode = weatherMode;
   state.qualifying = null;
+  const gridName = getActiveCup().single ? "The grid" : `${getActiveCup().name} grid`;
   if (state.season && raceIndex > 0) addFeed(`${getActiveCup().name} resumed: race ${raceIndex + 1} of ${getActiveCup().tracks.length}.`);
   addFeed(state.cupGridMode === "qualifying"
-    ? `${getActiveCup().name}: qualifying sets every grid.`
+    ? (getActiveCup().single ? "Qualifying sets the grid." : `${getActiveCup().name}: qualifying sets every grid.`)
     : state.cupPlayers === 2
-      ? `Lights out soon. ${getActiveCup().name} grid is forming: P1 and P2 start from the back.`
-      : `Lights out soon. ${getActiveCup().name} grid is forming: you start from the back.`);
+      ? `Lights out soon. ${gridName} is forming: P1 and P2 start from the back.`
+      : `Lights out soon. ${gridName} is forming: you start from the back.`);
   enterFullscreenMode();
   startRaceWeekend(raceIndex);
 }
@@ -3271,6 +3471,12 @@ function careerForCup(cup, playerPlace, driver = humanEntry(0)) {
 // here and again inside career.js by cupRunId, so it is added exactly once.
 function recordPlayerCup() {
   if (!window.Career || !state.cupRunId || state.cupRecordedFor === state.cupRunId) return;
+  // A single race is not a cup: its race points count, no cup bonus.
+  if (getActiveCup().single) {
+    state.lastCupCareer = null;
+    state.lastSecondCupCareer = null;
+    return;
+  }
   state.cupRecordedFor = state.cupRunId;
   const playerEntry = humanEntry(0);
   // Player 2's first (each on their own cup run id), so player 1's driver is
@@ -3323,6 +3529,13 @@ function finalizeRace() {
   state.lastSecondRaceCareer = recordSecondPlayerRace(finishers, fastest);
   state.lastRaceCareer = recordPlayerRace(finishers, fastest);
   state.cupEntries.sort((a, b) => b.points - a.points || a.driver.name.localeCompare(b.driver.name));
+  // A single race's standings are its finishing order (the drivers out of
+  // the points are level on nothing, and the fastest lap's point can't lift
+  // a driver past the one who beat them to the flag).
+  if (getActiveCup().single) {
+    const order = finishers.map((racer) => racer.driver.id);
+    state.cupEntries.sort((a, b) => order.indexOf(a.driver.id) - order.indexOf(b.driver.id));
+  }
   if (state.season && getActiveCup().season) {
     // The season moves on and is saved: quit now and it resumes at the next race.
     try {
@@ -3382,10 +3595,11 @@ function showResults(finishers) {
   if (state.raceIndex === activeCup.tracks.length - 1 && !state.quittingToPitLane) beginPodium();
   if (!window.Screens) return;
   window.Screens.showResults({
-    pointsLabel: activeCup.season ? "Season" : "Cup",
+    // (A single race's total is its race points and the fastest lap's.)
+    pointsLabel: activeCup.season ? "Season" : activeCup.single ? "Total" : "Cup",
     constructors: activeCup.season && state.season ? constructorRows() : null,
     drivers: activeCup.season && state.season ? driverRows() : null,
-    kicker: `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
+    kicker: activeCup.single ? activeCup.name : `Race ${state.raceIndex + 1} of ${activeCup.tracks.length} · ${activeCup.name}`,
     title: state.track.name,
     nextLabel: state.raceIndex === activeCup.tracks.length - 1 ? "Show podium" : "Next race",
     rows: finishers.map((racer, index) => {
@@ -3445,7 +3659,7 @@ function podiumSummary() {
   }));
   // Two players: each one's result, e.g. "Cup winner: Leclerc" or "Leclerc 3rd · Hamilton 6th".
   const name = (entry) => surnameOf(entry.driver.name);
-  const winner = activeCup.season ? "World champion" : "Cup winner";
+  const winner = activeCup.season ? "World champion" : activeCup.single ? "Race winner" : "Cup winner";
   const title = !secondEntry
     ? (playerPlace === 1 ? winner : `You finished ${formatOrdinal(playerPlace)}`)
     : playerPlace === 1 || secondPlace === 1
@@ -3453,13 +3667,15 @@ function podiumSummary() {
       : `${name(humanEntry(0))} ${formatOrdinal(playerPlace)} · ${name(secondEntry)} ${formatOrdinal(secondPlace)}`;
   const constructors = activeCup.season && state.season ? constructorRows() : null;
   return {
-    kicker: constructors ? `${activeCup.name} complete · Constructors' champions: ${constructors[0].name}` : `${activeCup.name} complete`,
+    kicker: constructors ? `${activeCup.name} complete · Constructors' champions: ${constructors[0].name}`
+      : activeCup.single ? `${activeCup.name} · ${activeCup.tracks[0].name}` : `${activeCup.name} complete`,
     title,
     podium,
     playerPlace,
     secondPlace,
     secondEntry,
-    scene: { cup: { id: activeCup.id, name: activeCup.name }, podium },
+    // (A single race's wall names its country, as a Grand Prix's would.)
+    scene: { cup: { id: activeCup.id, name: activeCup.single ? activeCup.tracks[0].country : activeCup.name }, podium },
   };
 }
 
@@ -3550,7 +3766,10 @@ function showPodium() {
     kicker: summary.kicker,
     title: summary.title,
     podium: summary.podium,
-    career: bothCareers(careerForCup(state.lastCupCareer, summary.playerPlace), summary.secondEntry ? careerForCup(state.lastSecondCupCareer, summary.secondPlace, summary.secondEntry) : null),
+    // A single race has no cup bonus: its podium shows the race's career lines.
+    career: getActiveCup().single
+      ? bothCareers(careerForRace(state.lastRaceCareer), state.humanIds.length > 1 ? careerForRace(state.lastSecondRaceCareer) : null)
+      : bothCareers(careerForCup(state.lastCupCareer, summary.playerPlace), summary.secondEntry ? careerForCup(state.lastSecondCupCareer, summary.secondPlace, summary.secondEntry) : null),
   }, { threeD });
   state.podium3d = threeD;
 }
@@ -3632,7 +3851,7 @@ function resetToGarage() {
     state.secondDriver = state.driverBeforeSeason.second;
   }
   state.driverBeforeSeason = null;
-  state.track = getSelectedCup().tracks[0];
+  state.track = pitLaneTrack();
   // Nothing run from the pit lane is wet.
   state.weather = "dry";
   state.cupEntries = [];
@@ -6695,6 +6914,13 @@ window.Game = {
   getPitLaneState,
   selectDriver,
   selectCup,
+  selectRaceMode,
+  rerollDraw,
+  toggleCustomCircuit,
+  moveCustomCircuit,
+  clearCustomCircuits,
+  selectSinglePick,
+  chooseSingleCircuit,
   selectDifficulty,
   selectGridMode,
   selectWeatherMode,

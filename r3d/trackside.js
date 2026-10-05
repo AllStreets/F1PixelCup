@@ -35,13 +35,18 @@ function waveCloth(cloth, t, strength) {
 
 const FLAG_COLOURS = { yellow: 0xffd400, green: 0x16a34a };
 
-export function buildMarshalPosts(course, posts, venue) {
+// `figures`: the marshal is drawn by r3d/people.js (a figure from the
+// people model) rather than here.
+export function buildMarshalPosts(course, posts, venue, { figures = false } = {}) {
   const group = new THREE.Group();
   group.name = "marshals";
   const hut = mat(0xf2f2f2);
   const roof = mat(0xe10600);
-  const orange = mat(0xff7a00);
-  const skin = mat(0xd9a07a);
+  const orange = figures ? null : mat(0xff7a00);
+  const skin = figures ? null : mat(0xd9a07a);
+  // A figure (r3d/people.js) stands at the car's scale, 10.7 tall: the hut
+  // and its roof stand over them, and the flag is in their right hand.
+  const hutH = figures ? 13 : 7;
   const pole = mat(0x333338, { metalness: 0.5 });
   const flagMats = {
     yellow: new THREE.MeshStandardMaterial({ color: FLAG_COLOURS.yellow, roughness: 0.6, side: THREE.DoubleSide, emissive: FLAG_COLOURS.yellow, emissiveIntensity: venue.night ? 0.4 : 0.05 }),
@@ -68,15 +73,17 @@ export function buildMarshalPosts(course, posts, venue) {
       const deck = 8 + p.h;
       [[-3.5, -1], [3.5, -1], [-3.5, 6], [3.5, 6]].forEach(([lx, lz]) => add(new THREE.BoxGeometry(0.6, deck, 0.6), pole, lx, deck / 2, lz));
       add(new THREE.BoxGeometry(9, 0.6, 8.5), pole, 0, deck, 2.5);
-      add(new THREE.BoxGeometry(8, 7, 4.5), hut, 0, deck + 3.5, 4);
-      add(new THREE.BoxGeometry(9, 0.8, 8.5), roof, 0, deck + 7.4, 2.5);
+      add(new THREE.BoxGeometry(8, hutH, 4.5), hut, 0, deck + hutH / 2, 4);
+      add(new THREE.BoxGeometry(9, 0.8, 8.5), roof, 0, deck + hutH + 0.4, 2.5);
       // The marshal, in orange, at the front of the platform (local -z faces
       // the road), the flag in hand.
-      add(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), orange, 2, deck + 2.3, -0.5);
-      add(new THREE.SphereGeometry(0.8, 10, 8), skin, 2, deck + 4.9, -0.5);
+      if (!figures) {
+        add(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), orange, 2, deck + 2.3, -0.5);
+        add(new THREE.SphereGeometry(0.8, 10, 8), skin, 2, deck + 4.9, -0.5);
+      }
       // The flag on its pole, held at the marshal's hand, swung to and fro.
       const hand = new THREE.Group();
-      hand.position.set(2.9, deck + 3.6, -0.5);
+      hand.position.set(figures ? 3.0 : 2.9, figures ? deck + 5.6 : deck + 3.6, -0.5);
       const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 7, 6), pole);
       staff.position.y = 3.2;
       hand.add(staff);
@@ -88,7 +95,8 @@ export function buildMarshalPosts(course, posts, venue) {
       g.position.set(x, 0, z);
       // Local -z toward the road.
       g.rotation.y = Math.atan2(x - p.x, z - p.y);
-      g.userData.post = { index: post.index, d: post.d, flag, hand, flagMats, state: "none" };
+      // Where the marshal stands (local), for r3d/people.js.
+      g.userData.post = { index: post.index, d: post.d, flag, hand, flagMats, state: "none", standAt: new THREE.Vector3(1.6, deck + 0.3, -0.5), roofAt: deck + hutH };
       group.add(g);
       return;
     }

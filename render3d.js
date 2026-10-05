@@ -24,6 +24,9 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels } from "./r3d/models.js";
+import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
+import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
 import { createPostFx } from "./r3d/postfx.js";
@@ -154,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -178,6 +181,9 @@ function setPhotoCamera(shot) {
 // (compileAsync), so the loading panel keeps moving instead of the page
 // freezing; until then it returns false, and the game asks again next frame.
 function prepare(track, racers, weather) {
+  // The venue's own models (its landmarks, its yachts) first: the loading
+  // panel stays up until they have loaded or failed.
+  if (!venueModelsSettled(track.id)) return false;
   const world = ensureWorld(track);
   // Wet or dry before the first frame (only uniforms: nothing to compile).
   rain.apply(world, scene, weather === "wet");
@@ -624,6 +630,14 @@ function inspect() {
   };
   const cars = {};
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
+  // The trackside models and people (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+  const landmarks = [];
+  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
+  const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
+  // What the GPU holds (for the checks: a circuit change must not leak).
+  const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
+  const stats = { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: +frameStats.cpuMs.toFixed(2) };
+  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
   // Where each car was drawn (game x, y), and whether it was.
   const drawn = {};
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
@@ -633,7 +647,7 @@ function inspect() {
   const split = viewports ? { rects: viewports.map((r) => ({ ...r })), cams: viewCams.slice(0, viewports.length).map((c) => ({ ...c })) } : null;
   // The pit lane's showroom: whether the car is drawn, and where.
   const showroom = garage.group.visible ? { shown: Boolean(garage.car && garage.car.root.visible), car: garageCarRect() } : null;
-  return { garage: showroom, cameraOffset: Boolean(camera.view && camera.view.enabled), drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
+  return { garage: showroom, cameraOffset: Boolean(camera.view && camera.view.enabled), drawing, view, split, scissor: renderer.getScissorTest(), drawn, weather, cars, flaps, helmets, life, trackside, tunnel: current ? { ...current.tunnel } : null, postfx: fx, graphics: graphics(), ...layer, boxScales: current ? current.boxes.map((b) => b.userData.scale ?? 1) : [], items: itemsInspect(layer) };
 }
 window.Render3D = api;
 
@@ -687,10 +701,17 @@ function itemsInView() {
   return n;
 }
 
-loadCar(() => { api.ready = true; }, (error) => {
+// Ready once the car has loaded and the trackside models (landmarks, the
+// grandstand, the people) have loaded or failed: a circuit is only built
+// with everything it draws, so prepare() compiles all of it.
+let carLoaded = false;
+let tracksideSettled = false;
+const markReady = () => { if (carLoaded && tracksideSettled) api.ready = true; };
+loadCar(() => { carLoaded = true; markReady(); }, (error) => {
   console.warn("3D car model failed to load; using the 2D view.", error);
   api.failed = true;
 });
+loadTracksideModels(() => { tracksideSettled = true; markReady(); });
 
 // ---------------------------------------------------------------------------
 // Venue: sky, ground, lighting
@@ -776,7 +797,7 @@ function finishShot(world, life, player) {
 }
 
 let lastWallMs = 0;
-function updateTrackside(world, track, life, now, dt) {
+function updateTrackside(world, track, life, now, dt, { players, racers } = {}) {
   const wall = performance.now();
   const wallDt = lastWallMs ? Math.min(100, wall - lastWallMs) : 0;
   lastWallMs = wall;
@@ -807,6 +828,8 @@ function updateTrackside(world, track, life, now, dt) {
   updateHelicopter(helicopter, world, life && life.helicopter, dt);
   world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
   world.life.starter = updateStarter(world.starter, flag, show.ms, t);
+  updatePeople(world.people, { players, racers, t, dt: paused ? 0 : dt });
+  updateYachts(world.yachts, t);
 }
 // In the tunnel the light is the tunnel's own (r3d/tunnel-light.js); the
 // camera only adapts its exposure -- in over half a second, as a TV camera
@@ -866,12 +889,19 @@ function buildWorld(track) {
   group.add(decor);
   const landmarks = buildLandmarks(course, venue);
   group.add(landmarks);
+  const yachts = landmarks.getObjectByName("yachts");
   // Trackside life: the marshal posts (after everything else has claimed its
   // ground) and the starter by the line.
-  const marshals = buildMarshalPosts(course, track.marshalPosts, venue);
+  // The marshals are figures when the people model has the one they wear.
+  const people0 = tracksideModel("people");
+  const marshals = buildMarshalPosts(course, track.marshalPosts, venue, { figures: Boolean(people0 && people0.getObjectByName("crew")) });
   group.add(marshals);
   const starter = buildStarter(course);
   if (starter) group.add(starter);
+  // The people (r3d/people.js): the crowd in the stands, the pit crews, the
+  // photographers and the TV crew, after everything else has its ground.
+  const people = buildPeople(course, { decor, landmarks, marshals });
+  group.add(people);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -881,7 +911,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, marshals, starter, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
+  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -889,19 +919,39 @@ function disposeWorld(world) {
   world.cars.forEach((car) => scene.remove(car.root));
   // The item boxes' geometry belongs to the shared models: leave it; free only
   // what each box owns (its cloned glow materials).
+  // So does the trackside models' (landmarks, stands, the TV platform): their
+  // copies share it. The materials made for this world (marked worldOwned:
+  // the people's, the landmarks' and the stands' own) and their textures go.
   const shared = new Set();
-  Object.values(itemTemplates()).forEach((t) => t.traverse((n) => { if (n.geometry) shared.add(n.geometry); }));
+  [...Object.values(itemTemplates()), ...tracksideTemplates()].forEach((t) => t.traverse((n) => { if (n.geometry) shared.add(n.geometry); }));
   world.boxes.forEach((b) => { if (b.userData.body.userData.fromGlb) disposeItemCopy(b.userData.body); });
+  // Every texture the circuit drew with leaves the GPU too: one another
+  // circuit shares (a cached photo) is simply uploaded again when it is next
+  // drawn (prepare() does that behind the loading panel).
+  const owned = new Set();
+  const textures = new Set();
   world.group.traverse((o) => {
     if (o.geometry && !shared.has(o.geometry)) o.geometry.dispose();
+    // An instanced mesh's matrices are its own buffer, freed only with it.
+    if (o.isInstancedMesh) o.dispose();
+    [].concat(o.material || []).forEach((m) => {
+      if (m.userData.worldOwned) owned.add(m);
+      Object.values(m).forEach((v) => { if (v && v.isTexture) textures.add(v); });
+      Object.values(m.uniforms || {}).forEach((u) => { if (u && u.value && u.value.isTexture) textures.add(u.value); });
+    });
   });
+  textures.forEach((t) => t.dispose());
+  owned.forEach((m) => m.dispose());
   world.warmMaterials.forEach((m) => m.dispose());
 }
 
 function ensureWorld(track) {
-  if (current && current.trackId === track.id) return current;
+  // Built before its venue's models had all arrived (an audit run early):
+  // built again with them once they have.
+  if (current && current.trackId === track.id && (current.modelsComplete || !venueModelsSettled(track.id))) return current;
   if (current) disposeWorld(current);
   current = buildWorld(track);
+  current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);
   // The tunnel's light: its shape for the shaders, and every lit material
   // taught it (before the circuit's shaders are compiled).
@@ -1171,6 +1221,7 @@ function surfaceUnder(world, player) {
 const jitter = (t, seed) => Math.sin(t * 61 + seed) * 0.5 + Math.sin(t * 97 + seed * 2.3) * 0.3 + Math.sin(t * 143 + seed * 4.1) * 0.2;
 
 let lastNow = 0;
+let lastPlayers = [];
 const lookTarget = new THREE.Vector3();
 
 // Called by game.js each frame in place of the 2D road, scenery and cars.
@@ -1178,8 +1229,46 @@ const lookTarget = new THREE.Vector3();
 // the first view also does the frame's own work (the cars, the power-ups, the
 // particles, the boxes, trackside life); each view has its own camera.
 let lastDt = 0;
+// What each race frame drew (every view and pass) and the time its drawing
+// took on the main thread, for the checks' budgets. Counted as the change in
+// the renderer's totals across render() (it keeps counting across a frame's
+// passes and views), so the garage's or the podium's drawing never adds in.
+const frameStats = { calls: 0, triangles: 0, cpuMs: 0 };
+const building = { calls: 0, triangles: 0, cpuMs: 0 };
+renderer.info.autoReset = false;
+
 function render(frame) {
   if (!api.ready) return null;
+  const started = performance.now();
+  const info = renderer.info.render;
+  const calls0 = info.calls;
+  const tris0 = info.triangles;
+  // A new frame starts at the first view (split screen draws two).
+  if (!frame.viewIndex) {
+    frameStats.calls = building.calls;
+    frameStats.triangles = building.triangles;
+    frameStats.cpuMs = building.cpuMs;
+    building.calls = 0;
+    building.triangles = 0;
+    building.cpuMs = 0;
+  }
+  try {
+    return drawFrame(frame);
+  } finally {
+    building.calls += info.calls - calls0;
+    building.triangles += info.triangles - tris0;
+    building.cpuMs += performance.now() - started;
+    // Totals that only grow would lose precision some day: start them again.
+    if (info.triangles > 1e12) renderer.info.reset();
+  }
+}
+
+// The last whole frame's drawing, cheaply (for the frame-time check).
+function frameStatsNow() {
+  return { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: frameStats.cpuMs };
+}
+
+function drawFrame(frame) {
   const { track, player, racers, cameraHeading, camPos, roll, shake, powerUps, particles: list, now } = frame;
   const index = viewports && frame.viewIndex !== undefined ? frame.viewIndex : 0;
   const rect = viewports && frame.viewIndex !== undefined ? viewports[index] || null : null;
@@ -1192,6 +1281,15 @@ function render(frame) {
     lastDt = dt;
   }
   resize();
+  // The venue's own models still on their way: nothing built yet (it would
+  // only be built again when they land), the loading panel up.
+  if (!venueModelsSettled(track.id)) {
+    useViewport(null);
+    renderer.setRenderTarget(null);
+    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
+    renderer.clear();
+    return { onKerb: false };
+  }
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would
@@ -1297,7 +1395,15 @@ function render(frame) {
     setTyreCompound(frame.weather);
   }
   updateTunnelLight(world, track, dt, own.tunnel);
-  if (first) updateTrackside(world, track, frame.trackside, now, dt);
+  // Split screen: both players, so the crowd cheers each of them.
+  const players = [player, ...(frame.alsoShow !== undefined ? racers.filter((r) => r.id === frame.alsoShow && r !== player) : [])];
+  if (first) {
+    lastPlayers = players;
+    updateTrackside(world, track, frame.trackside, now, dt, { players, racers });
+  }
+  // Each view draws the near stands' crowd in 3D for its own camera.
+  showCrowdFor(world.people, camera, currentTier());
+  showYachtsFor(world.yachts, camera, currentTier(), scene.fog ? scene.fog.far : Infinity);
   // In the helicopter view the camera is in it.
   if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet, view: index });
@@ -1584,7 +1690,7 @@ const SIGHT_SPLIT = 96;
 // Before a replay opens: its circuit's TV cameras, so no frame of it waits
 // on placing them.
 function prepareReplay(track) {
-  if (!api.ready || !track) return;
+  if (!api.ready || !track || !venueModelsSettled(track.id)) return;
   tvCameras(ensureWorld(track));
 }
 
@@ -1701,7 +1807,9 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   const world = ensureWorld(track);
   const { course } = world;
   world.group.updateMatrixWorld(true);
-  const targets = [world.decor, world.landmarks, world.marshals, world.starter].filter(Boolean);
+  // Every yacht drawn (a view may have left some out of sight).
+  showYachtsFor(world.yachts, null, "high");
+  const targets = [world.decor, world.landmarks, world.marshals, world.starter, world.people].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
@@ -1766,6 +1874,56 @@ function auditItemBoxes(track) {
     });
   });
   return problems;
+}
+
+// Every yacht at a circuit, against the track: the least clearance over
+// its hull's footprint (it must be past the quays, on the water).
+function auditYachts(track) {
+  const world = ensureWorld(track);
+  const info = inspectYachts(world.yachts);
+  if (!info) return null;
+  let least = Infinity;
+  info.yachts.forEach((y) => {
+    const c = Math.cos(y.heading);
+    const s = Math.sin(y.heading);
+    for (const u of [-0.5, -0.25, 0, 0.25, 0.5]) {
+      for (const v of [-0.5, 0, 0.5]) {
+        const x = y.x + u * y.length * c - v * y.beam * s;
+        const z = y.z + u * y.length * s + v * y.beam * c;
+        least = Math.min(least, world.course.clearance(x, z, 600));
+      }
+    }
+  });
+  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
+}
+
+// Every person placed at a circuit, against the track: none may stand
+// inside the barriers (on the road, its run-off or the pit lane). Their
+// clearance is how far outside the nearest barrier each one's feet are.
+function auditPeople(track) {
+  const world = ensureWorld(track);
+  const figures = world.people ? world.people.userData.figures : [];
+  const byKind = {};
+  const onRoad = [];
+  const samples = {};
+  let least = Infinity;
+  figures.forEach((f) => {
+    byKind[f.kind] = (byKind[f.kind] || 0) + 1;
+    if (!samples[f.kind]) samples[f.kind] = [];
+    if (samples[f.kind].length < 6) samples[f.kind].push({ x: Math.round(f.x), y: Math.round(f.y), z: Math.round(f.z) });
+    // A body's half width at the car's scale: about 0.3 m.
+    const clear = world.course.clearance(f.x, f.z) - 2;
+    least = Math.min(least, clear);
+    if (clear < 0) onRoad.push({ kind: f.kind, x: Math.round(f.x), z: Math.round(f.z), clear: Math.round(clear * 10) / 10 });
+  });
+  // Every figure, where it stands and which way it faces at rest (its +x
+  // turned by yaw), for the checks.
+  const all = figures.map((f) => ({ kind: f.kind, x: +f.x.toFixed(2), y: +f.y.toFixed(2), z: +f.z.toFixed(2), yaw: +f.yaw.toFixed(4), base: f.base === undefined ? undefined : +f.base.toFixed(4) }));
+  // Under a roof (the marshals' posts): the least room over a head (a
+  // figure is 1.78 m, 10.7 units, tall).
+  const roofed = figures.filter((f) => f.roof !== undefined);
+  const headroom = roofed.length ? Math.round(Math.min(...roofed.map((f) => f.roof - (f.y + 1.8 * PERSON_SCALE))) * 10) / 10 : null;
+  return { count: figures.length, byKind, onRoad, samples, figures: all, headroom, leastClearance: Math.round(least * 10) / 10 };
 }
 
 // ---------------------------------------------------------------------------

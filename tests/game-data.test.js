@@ -240,3 +240,9 @@ test("no title sponsors in team names or descriptions", () => {
     assert.doesNotMatch(t.style, SPONSORS, t.id);
   });
 });
+
+test("every circuit has a short name, its own, for where a full name won't fit", () => {
+  const shorts = Data.CIRCUITS.map((c) => c.short);
+  shorts.forEach((s, i) => assert.ok(typeof s === "string" && s.length > 1 && s.length <= 14, Data.CIRCUITS[i].id));
+  assert.equal(new Set(shorts).size, shorts.length);
+});

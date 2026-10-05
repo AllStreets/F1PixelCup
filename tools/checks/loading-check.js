@@ -148,7 +148,9 @@ async (page) => {
     await p.reload();
     let everFallback = false;
     let readyAt = 0;
-    for (let i = 0; i < 100 && !readyAt; i += 1) {
+    // At 60 kB/s the 3D files (the car, the items, the trackside models)
+    // take about a minute: allow two.
+    for (let i = 0; i < 240 && !readyAt; i += 1) {
       await p.waitForTimeout(500);
       const s = await p.evaluate(() => ({ ready: Boolean(window.Render3D && window.Render3D.ready), fallback: typeof state === "undefined" ? 0 : state.fallbackFrames, at: performance.now() }));
       everFallback = everFallback || s.fallback > 0;
