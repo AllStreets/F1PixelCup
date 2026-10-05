@@ -131,6 +131,10 @@ export const VENUES = {
     hills: { tint: "#8f9a62", count: 16, height: [160, 360] },
     extras: ["siteLandmarks"],
     landmarks: ["barcelonaGrandstand"],
+    // Its main grandstand stands across the straight from the pits, at the
+    // barrier: placed before the circuit data's stands, which move along the
+    // straight round it (buildMainStand, r3d/track.js slideStand).
+    mainStand: "barcelonaGrandstand",
   },
   montreal: {
     // An island in the St Lawrence: the river to the east, the rowing basin
@@ -151,7 +155,7 @@ export const VENUES = {
     extras: ["siteLandmarks"],
     // The main grandstand in its bank across from the pits, the bank at the
     // first corner; the hills all round.
-    landmarks: ["spielbergGrandstand", "hillside"],
+    landmarks: ["hillside", "spielbergGrandstand"],
     hillside: { corner: "NIKI LAUDA KURVE" },
   },
   hungaroring: {
@@ -1077,7 +1081,7 @@ function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps
   made.position.set(spot.x, 0, spot.z);
   made.rotation.y = spot.yaw;
   made.name = `landmark:${name}`;
-  made.userData.landmark = { name, fromModel: true, yaw: spot.yaw, side: spot.side, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  made.userData.landmark = { name, fromModel: true, yaw: spot.yaw, side: spot.side, gap: spot.gap, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
   group.add(made);
   return made;
 }
@@ -1086,8 +1090,19 @@ function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps
 function pitMiddle(course) {
   const lane = course.pitLane;
   if (!lane) return null;
-  const inZone = course.samples.filter((p) => lane.outerAt(p.d) !== null);
-  return inZone.length ? inZone[Math.floor(inZone.length / 2)].d : null;
+  const total = course.track.totalLength;
+  const inZone = course.samples.filter((p) => lane.outerAt(p.d) !== null).map((p) => p.d);
+  if (!inZone.length) return null;
+  // A zone across the line wraps round the lap: start it after its widest
+  // gap (where it is not), so its middle is the middle of the lane.
+  let cut = 0;
+  let widest = -1;
+  inZone.forEach((d, i) => {
+    const next = i + 1 < inZone.length ? inZone[i + 1] : inZone[0] + total;
+    if (next - d > widest) { widest = next - d; cut = i + 1; }
+  });
+  const run = [...inZone.slice(cut), ...inZone.slice(0, cut)];
+  return run[Math.floor(run.length / 2)];
 }
 
 // The Casino de Monte-Carlo and the Hôtel de Paris, at Casino Square: about
@@ -1382,6 +1397,8 @@ function stadiumInside(course, group, venue) {
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
   for (const name of venue.landmarks || []) {
+    // (The main stand, if built, was placed before the decor.)
+    if (name === venue.mainStand && course.mainStandBuilt) continue;
     if (name === "jeddahFountain") fountainAtSea(course, group, venue);
     else if (name === "yasHotel") yasHotelHalves(course, group, venue);
     else if (name === "miamiStadium") stadiumInside(course, group, venue);
@@ -1414,7 +1431,7 @@ const EXTRAS = {
     const mid = pitMiddle(course);
     const side = course.pitLane ? course.pitLane.side : 1;
     modelLandmark(course, group, venue, {
-      name: "silverstoneWing", model: "silverstoneWing", gaps: [10, 30, 60, 100, 160, 240], step: 20,
+      name: "silverstoneWing", model: "silverstoneWing", gaps: [10, 30, 60, 100, 160, 240], step: 20, gapFirst: true,
       anchors: anchorsAround(course, (mid ?? 0) / course.track.totalLength, 40, () => [side, -side]),
     });
   },
@@ -1777,8 +1794,24 @@ const EXTRAS = {
 
 // ---------------------------------------------------------------------------
 
-export function buildLandmarks(course, venue) {
+// A venue's main grandstand (venue.mainStand), placed before the circuit
+// data's decor so it takes the ground across the straight from the pits, at
+// the barrier, where it stands in life; the decor's stands move round it
+// (r3d/track.js slideStand). Returns its group (for buildLandmarks), or null.
+export function buildMainStand(course, venue) {
+  const name = venue.mainStand;
+  if (!name || !SITES[name]) return null;
   const group = new THREE.Group();
+  const made = modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
+  if (!made) return null;
+  course.mainStandBuilt = true;
+  return group;
+}
+
+// `early`: what was placed before the decor (buildMainStand), joined in.
+export function buildLandmarks(course, venue, early = null) {
+  const group = new THREE.Group();
+  if (early) [...early.children].forEach((o) => group.add(o));
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
   const animated = [];
   garages(course, group, venue);

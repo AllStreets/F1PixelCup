@@ -866,11 +866,20 @@ export function buildDecor(course, venue) {
   const { track } = course;
   const bg = track.bg || {};
   let dropped = 0;
-  track.decor.forEach((d, i) => {
+  let moved = 0;
+  track.decor.forEach((d0, i) => {
+    let d = d0;
     const fp = FOOTPRINT[d.type];
     if (!fp) return;
     const [hl, hd] = fp;
     if (!footprintClear(course, d.x, d.y, d.angle, hl, hd, 6)) { dropped += 1; return; }
+    // A stand whose ground a venue's main stand took (placed first:
+    // r3d/landmarks.js buildMainStand) moves along the lap round it.
+    if (course.occupied.blocked(d.x, d.y, Math.max(hl, hd)) && d.type === "grandstand" && course.mainStandBuilt) {
+      d = slideStand(course, d, hl, hd);
+      if (d) moved += 1;
+      else { dropped += 1; return; }
+    }
     if (course.occupied.blocked(d.x, d.y, Math.max(hl, hd))) { dropped += 1; return; }
     course.occupied.add(d.x, d.y, Math.max(hl, hd));
     const obj = buildDecorPiece(d, bg, venue, i);
@@ -880,7 +889,33 @@ export function buildDecor(course, venue) {
     group.add(obj);
   });
   group.userData.dropped = dropped;
+  group.userData.moved = moved;
   return group;
+}
+
+// A stand moved along the lap from where the track data put it: on its own
+// side, as far from the barrier as it was, to the nearest place (either way,
+// up to 600 along the lap) where its whole footprint is clear of the circuit
+// and of everything placed. Returns the moved piece, or null.
+export function slideStand(course, d, hl, hd) {
+  const total = course.track.totalLength;
+  const p0 = course.sampleAt(d.d);
+  const off0 = (d.x - p0.x) * p0.nx + (d.y - p0.y) * p0.ny;
+  const side = off0 >= 0 ? 1 : -1;
+  const back = Math.abs(off0) - (side > 0 ? p0.outerR : p0.outerL);
+  for (let k = 1; k <= 15; k += 1) {
+    for (const sgn of [1, -1]) {
+      const at = (((d.d + sgn * k * 40) % total) + total) % total;
+      const q = course.sampleAt(at);
+      const off = side * ((side > 0 ? q.outerR : q.outerL) + back);
+      const x = q.x + q.nx * off;
+      const y = q.y + q.ny * off;
+      const angle = Math.atan2(q.ty, q.tx);
+      if (!footprintClear(course, x, y, angle, hl, hd, 6) || course.occupied.blocked(x, y, Math.max(hl, hd))) continue;
+      return { ...d, x, y, angle, face: Math.atan2(q.y - y, q.x - x), d: at, moved: true };
+    }
+  }
+  return null;
 }
 
 function buildDecorPiece(d, bg, venue, i) {

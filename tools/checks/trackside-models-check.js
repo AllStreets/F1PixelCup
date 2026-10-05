@@ -69,6 +69,23 @@ async (page) => {
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   }, WANT);
 
+  // Barcelona's main grandstand where the real one stands: across the main
+  // straight from the pits' middle, at the barrier (the smallest gaps), and
+  // the circuit data's three stands rearranged round it, none dropped
+  // (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+  results.barcelonaMainStand = await step(() => {
+    const track = TRACKS.find((t) => t.id === "barcelona");
+    const hits = Render3D.auditScenery(track, { step: 50, lanes: 1 });
+    const ts = Render3D.inspect().trackside;
+    const L = ts.landmarks.find((l) => l.name === "barcelonaGrandstand");
+    const pit = track.pitLane;
+    const total = track.totalLength;
+    const mid = ((((pit.entry + pit.exit) / 2) % total) + total) % total;
+    const along = L ? Math.abs(((L.trackAt.d - mid + total * 1.5) % total) - total / 2) : null;
+    const ok = L && L.gap <= 16 && L.side === -pit.side && along <= (pit.exit - pit.entry) / 4 && ts.modelStands === 3 && hits.length === 0;
+    return ok || JSON.stringify({ L, mid, along, stands: ts.modelStands, hits: hits.length });
+  });
+
   // Miami's stadium inside the circuit's loop, as in life (the track runs
   // round it), at no more than the city's scale and no less than the map's.
   results.miamiStadiumInside = await step(() => {
