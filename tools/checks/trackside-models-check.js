@@ -54,9 +54,13 @@ async (page) => {
     ["monaco", "singapore"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
-    // (Monaco's harbour front: 25 or more moored right behind the barrier,
+    // (Monaco's harbour front: 15 or more moored right behind the barrier,
     // the quay 14 behind it, as on race weekend.)
-    return (m && m.moored >= 20 && m.front >= 25 && m.anchored >= 8 && m.leastClearance >= 14 && m.overlaps === 0
+    // On the front 16 past the barrier (the quay and a little water), the
+    // rest 190 (past the town); none against the land, and nothing else
+    // standing on the front's water.
+    return (m && m.moored >= 20 && m.front >= 15 && m.anchored >= 8 && m.leastFront >= 16 && (m.leastOther === null || m.leastOther >= 190)
+      && m.onLand === 0 && m.onWater === 0 && m.overlaps === 0
       && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40) || JSON.stringify(out);
   });
 

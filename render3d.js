@@ -1603,7 +1603,7 @@ function sightIndex(world) {
         const at = m.clone().premultiply(o.matrixWorld);
         // (An instance's own sight box where it has one: a yacht's hull and
         // superstructure, not the air round its mast and rigging.)
-        file(box.copy(o.userData.sightBox || o.geometry.boundingBox).applyMatrix4(at), 1, { o, i, at }, fence);
+        file(box.copy(o.userData.sightBox || o.geometry.boundingBox).applyMatrix4(at), 1, { o, at }, fence);
       }
     } else if (o.geometry.attributes.position.count > SIGHT_SPLIT) {
       const pos = o.geometry.attributes.position;
@@ -1886,19 +1886,58 @@ function auditYachts(track) {
   const world = ensureWorld(track);
   const info = inspectYachts(world.yachts);
   if (!info) return null;
-  let least = Infinity;
+  const { course } = world;
+  const harbour = course.harbour;
+  // The least clearance over each yacht's hull, front and elsewhere apart;
+  // and any hull point over the ground (the plate's reach at its nearest
+  // stretch, on its side: the quay or the town).
+  let leastFront = Infinity;
+  let leastOther = Infinity;
+  let onLand = 0;
+  const overGround = (x, z) => {
+    const p = course.nearestSample(x, z);
+    if (!p || !harbour || !harbour.reach) return false;
+    const off = (x - p.x) * p.nx + (z - p.y) * p.ny;
+    const s = off >= 0 ? 1 : -1;
+    return Math.abs(off) < (s > 0 ? p.outerR : p.outerL) + harbour.reach(p, s);
+  };
   info.yachts.forEach((y) => {
     const c = Math.cos(y.heading);
     const s = Math.sin(y.heading);
+    let ground = false;
     for (const u of [-0.5, -0.25, 0, 0.25, 0.5]) {
       for (const v of [-0.5, 0, 0.5]) {
         const x = y.x + u * y.length * c - v * y.beam * s;
         const z = y.z + u * y.length * s + v * y.beam * c;
-        least = Math.min(least, world.course.clearance(x, z, 600));
+        const cl = course.clearance(x, z, 600);
+        if (y.front) leastFront = Math.min(leastFront, cl);
+        else leastOther = Math.min(leastOther, cl);
+        if (y.moored && overGround(x, z)) ground = true;
       }
     }
+    if (ground) onLand += 1;
   });
-  return { count: info.count, moored: info.moored, front: info.front, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
+  // What stands on the harbour front's water side (the decor, the landmarks'
+  // boards): each must have ground under it (the quay widens to carry it).
+  let onWater = 0;
+  if (harbour && harbour.reach) {
+    [world.decor, world.landmarks].forEach((root) => root.children.forEach((o) => {
+      if (o.name === "yachts" || o.userData.ground || !o.isObject3D) return;
+      const at = new THREE.Vector3();
+      o.getWorldPosition(at);
+      const p = course.nearestSample(at.x, at.z);
+      if (!p || !harbour.side(p)) return;
+      const off = (at.x - p.x) * p.nx + (at.z - p.y) * p.ny;
+      if (Math.sign(off) !== harbour.side(p) || Math.abs(off) > 400) return;
+      if (!overGround(at.x, at.z)) onWater += 1;
+    }));
+  }
+  const r = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+  return {
+    count: info.count, moored: info.moored, front: info.front, anchored: info.anchored,
+    leastClearance: r(Math.min(leastFront, leastOther)), leastFront: r(leastFront), leastOther: r(leastOther), onLand, onWater,
+    ...auditFleet(world.yachts),
+  };
 }
 
 // Every person placed at a circuit, against the track: none may stand

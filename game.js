@@ -3542,8 +3542,8 @@ function finalizeRace() {
   // The race done: the cup's next circuit's trackside models are fetched now
   // (behind the results, where their unpacking can't make a racing frame
   // stutter), so its loading panel is short.
-  const nextCup = CUPS[state.activeCupIndex];
-  const nextTrack = nextCup && nextCup.tracks[state.raceIndex + 1];
+  const nextCup = getActiveCup();
+  const nextTrack = nextCup && !state.quittingToPitLane && nextCup.tracks[state.raceIndex + 1];
   if (nextTrack && window.Render3D && window.Render3D.preloadVenues) window.Render3D.preloadVenues([nextTrack.id]);
   const finishers = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition);
   finishers.forEach((racer, index) => {
