@@ -1591,10 +1591,19 @@ function sightIndex(world) {
   };
   meshes.forEach(({ o, fence }) => {
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    if (o.userData.sightSkip) return;
     if (o.isInstancedMesh) {
-      for (let i = 0; i < o.count; i += 1) {
-        o.getMatrixAt(i, m);
-        file(box.copy(o.geometry.boundingBox).applyMatrix4(m.premultiply(o.matrixWorld)), 1, { o, i }, fence);
+      // (Instances a view re-orders each frame, the yachts, give their
+      // places once and for all in `sightMatrices`.)
+      const fixed = o.userData.sightMatrices;
+      const n = fixed ? fixed.length : o.count;
+      for (let i = 0; i < n; i += 1) {
+        if (fixed) m.copy(fixed[i]);
+        else o.getMatrixAt(i, m);
+        const at = m.clone().premultiply(o.matrixWorld);
+        // (An instance's own sight box where it has one: a yacht's hull and
+        // superstructure, not the air round its mast and rigging.)
+        file(box.copy(o.userData.sightBox || o.geometry.boundingBox).applyMatrix4(at), 1, { o, i, at }, fence);
       }
     } else if (o.geometry.attributes.position.count > SIGHT_SPLIT) {
       const pos = o.geometry.attributes.position;
@@ -1656,9 +1665,8 @@ function sightIndex(world) {
           if (!box.containsPoint(from) && (!ray.ray.intersectBox(box, hit) || hit.distanceTo(from) > far)) continue;
           if (kinds[k] === 1) {
             // An instance, exactly: its shape where that instance stands.
-            const { o, i } = refs[k];
-            o.getMatrixAt(i, one.matrixWorld);
-            one.matrixWorld.premultiply(o.matrixWorld);
+            const { o, at } = refs[k];
+            one.matrixWorld.copy(at);
             one.geometry = o.geometry;
             one.material = o.material;
             if (ray.intersectObject(one, false).length > 0) return false;
@@ -1890,7 +1898,7 @@ function auditYachts(track) {
       }
     }
   });
-  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
+  return { count: info.count, moored: info.moored, front: info.front, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
 }
 
 // Every person placed at a circuit, against the track: none may stand

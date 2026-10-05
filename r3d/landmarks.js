@@ -9,7 +9,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { color, seeded, hashString, canvasTexture, buildingMaterial, photo } from "./textures.js";
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
 import { tracksideModel, LANDMARK_SCALE } from "./models.js";
-import { buildYachts } from "./yachts.js";
+import { buildYachts, harbourSide } from "./yachts.js";
 
 // ---------------------------------------------------------------------------
 // Venue settings
@@ -49,7 +49,10 @@ export const VENUES = {
     extras: ["casino", "monacoCity", "yachts", "mountains"],
     // The harbour: yachts moored stern-to at the town's edge, more at anchor.
     // The start straight's harbour front first, where the pit lane is not.
-    harbour: { quay: 190, moored: 46, anchored: 22, wind: 0.5, prefer: { side: -1, from: -560, to: 560 } },
+    // The harbour front: from the tunnel's exit by Tabac, the Swimming Pool
+    // and Rascasse to the start straight (the pit lane is up the hill), the
+    // quay 14 behind the barrier, yachts packed stern-to along it.
+    harbour: { quay: 190, moored: 60, anchored: 22, wind: 0.5, front: { from: -1500, to: 80, side: -1, quay: 14 } },
     runoffTint: "#b8b4ac",
   },
   singapore: {
@@ -496,8 +499,9 @@ function ferrisWheel(group, x, z, radius, { lit = false, rimColour = "#e8e8f0" }
   return g;
 }
 
-// Buildings along the circuit, as one instanced mesh.
-function streetBlocks(course, group, rand, { rows, height, depth, width, palette, night, glass, maxCount, spacing = 7, setback = 6, lit }) {
+// Buildings along the circuit, as one instanced mesh. `keepOff(p, side)`:
+// none on that side of that sample (a harbour front's water).
+function streetBlocks(course, group, rand, { rows, height, depth, width, palette, night, glass, maxCount, spacing = 7, setback = 6, lit, keepOff = null }) {
   const mat = buildingMaterial({ night, glass, litShare: lit ?? 0.45 });
   const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, maxCount);
   mesh.castShadow = true;
@@ -513,6 +517,7 @@ function streetBlocks(course, group, rand, { rows, height, depth, width, palette
       if (p.h > 0.5) continue;
       for (const side of [-1, 1]) {
         if (count >= maxCount) break;
+        if (keepOff && keepOff(p, side)) continue;
         const d = depth[0] + rand() * (depth[1] - depth[0]);
         const w = width[0] + rand() * (width[1] - width[0]);
         const h = (height[0] + rand() * (height[1] - height[0])) * (1 + row * 0.5);
@@ -1071,10 +1076,17 @@ const EXTRAS = {
   },
 
   // Monaco: the circuit runs on a strip of town between the harbour and the
-  // hill, lined with apartment blocks.
+  // hill, lined with apartment blocks; along the harbour front (the start
+  // straight, Tabac, the Swimming Pool, Rascasse) the quay is right behind
+  // the barrier, the yachts moored to it, and the town stands back across
+  // the water.
   monacoCity(course, group, venue, rand) {
     const land = new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 1, 1), color: color("#d6cfc2"), roughness: 0.95, side: THREE.DoubleSide });
-    const plate = new THREE.Mesh(ribbon(course.samples, (p) => -(p.outerL + 190), (p) => p.outerR + 190, 0.01, 80), land);
+    const front = harbourSide(course, venue);
+    // The ground: out to the town's edge, or on the water side of the front
+    // to the quay's edge.
+    const reach = (p, side) => (front.side(p) === side ? front.quay + 2 : 190);
+    const plate = new THREE.Mesh(ribbon(course.samples, (p) => -(p.outerL + reach(p, -1)), (p) => p.outerR + reach(p, 1), 0.01, 80), land);
     plate.receiveShadow = true;
     plate.userData.ground = true;
     group.add(plate);
@@ -1082,11 +1094,14 @@ const EXTRAS = {
       rows: 2, height: [26, 70], depth: [38, 64], width: [30, 58], maxCount: 700, spacing: 6,
       palette: ["#f1dcc0", "#e9c9a0", "#f6e8d0", "#dba98c", "#f0d0b4", "#e6d6b6", "#fff1dc", "#d9c2a4"],
       night: false, glass: "#5b7690",
+      // (Nothing between the harbour front and its water; the claim of the
+      // quay keeps the second row off it too.)
+      keepOff: (p, side) => front.side(p) === side,
     });
   },
 
   yachts(course, group, venue, rand) {
-    if (buildYachts(course, group, venue, rand)) return;
+    if (buildYachts(course, group, venue)) return;
     if (!venue.harbour || venue.harbour.anchorIn) return;
     const b = course.bounds;
     const hullMat = std(0xffffff, { roughness: 0.3 });
@@ -1387,6 +1402,17 @@ export function buildLandmarks(course, venue) {
   (venue.extras || []).forEach((name) => {
     const made = EXTRAS[name]?.(course, group, venue, rand);
     if (made?.userData?.animate) animated.push(made);
+  });
+  // A harbour front's water, out past its yachts: nothing else stands on it
+  // (no tree or hill on the water).
+  const front = harbourSide(course, venue);
+  course.samples.forEach((p) => {
+    const side = front.side(p);
+    if (!side) return;
+    for (let k = 0; k <= 280; k += 20) {
+      const off = side * ((side > 0 ? p.outerR : p.outerL) + 2 + front.quay + 10 + k);
+      course.occupied.add(p.x + p.nx * off, p.y + p.ny * off, 12);
+    }
   });
   if (venue.hills) hills(course, group, venue.hills, rand);
   (venue.trees || []).forEach((t, i) => {
