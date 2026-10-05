@@ -395,6 +395,9 @@ async (page) => {
       const pl = getSortedRacers()[10];
       pl.currentItem = "safetyCar"; useItem(pl, performance.now());
       const sc = state.safetyCar;
+      // Out on the road leading (its way out of the pits is safety-car-check's):
+      // from leader + 90, on the racing line.
+      Object.assign(sc, { exiting: false, inLane: false, lat: 0, d: (((firstUnfinished() || pl).trackDistance || 0) + 90) % L });
       if (how === "late") { sc.d = ((lane.entry - 60) % L + L) % L; sc.lat = 0; }
       sc.until = performance.now();
       let t = performance.now();
@@ -456,6 +459,8 @@ async (page) => {
   results.safetyCarSingleFile = await run(() => {
     const pl = getSortedRacers()[10];
     pl.currentItem = "safetyCar"; useItem(pl, performance.now());
+    // Out on the road leading, on the racing line.
+    Object.assign(state.safetyCar, { exiting: false, inLane: false, lat: 0, d: ((firstUnfinished().trackDistance || 0) + 90) % state.track.totalLength });
     const others = state.racers.filter((r) => r.id !== pl.id && !r.finished);
     const [front, back] = others.slice(0, 2);
     const route = getItemRoute(state.track);

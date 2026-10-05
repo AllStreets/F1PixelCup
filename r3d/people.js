@@ -13,7 +13,7 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { tracksideModel } from "./models.js";
+import { tracksideModel, floats } from "./models.js";
 import { footprintClear } from "./track.js";
 import { color, seeded, hashString } from "./textures.js";
 import { suitColours } from "./driver.js";
@@ -74,14 +74,16 @@ function figureGeometry(kind) {
   const node = root && root.getObjectByName(kind);
   if (!node) return null;
   node.updateMatrixWorld(true);
-  const inverse = node.matrixWorld.clone().invert();
+  // In the model's own frame: the node's parent's (a compressed model keeps
+  // its unpacking scale and offset on the node itself).
+  const inverse = node.parent ? node.parent.matrixWorld.clone().invert() : new THREE.Matrix4();
   const parts = [];
   node.traverse((m) => {
     if (!m.isMesh) return;
     const g = new THREE.BufferGeometry();
     const src = m.geometry;
-    g.setAttribute("position", src.attributes.position.clone());
-    g.setAttribute("normal", src.attributes.normal.clone());
+    g.setAttribute("position", floats(src.attributes.position));
+    g.setAttribute("normal", floats(src.attributes.normal));
     const n = src.attributes.position.count;
     const role = new Float32Array(n).fill(Math.max(0, ROLES.indexOf(m.material.name)));
     const part = new Float32Array(n);

@@ -47,9 +47,15 @@ test("every circuit has a pit lane long enough for ten garages and the Safety Ca
     const pit = shape.pit;
     assert.ok(pit, `${id}: no pit lane`);
     assert.ok(pit.side === 1 || pit.side === -1, `${id}: side ${pit.side}`);
-    // Along the stretch either side of the line, reaching it.
-    assert.ok(pit.entry >= -900 && pit.exit <= 900 && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit}`);
-    assert.ok(pit.entry < 0 && pit.exit >= (pit.wall ? -short : 0), `${id}: the lane should reach the line`);
+    // Along the stretch either side of the line, reaching it; or, where the
+    // circuit's lane is placed elsewhere (build_tracks.py PIT_STRETCH), inside
+    // that stretch.
+    if (pit.stretch) {
+      assert.ok(pit.entry >= pit.stretch.lo && pit.exit <= pit.stretch.hi && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit} outside its stretch`);
+    } else {
+      assert.ok(pit.entry >= -900 && pit.exit <= 900 && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit}`);
+      assert.ok(pit.entry < 0 && pit.exit >= (pit.wall ? -short : 0), `${id}: the lane should reach the line`);
+    }
     const { total } = lapOf(shape.points);
     const lane = Pit.lane(pit, total, W);
     assert.ok(lane.flatTo - lane.flatFrom >= Pit.BAY * Pit.BAYS, `${id}: flat part ${lane.flatTo - lane.flatFrom}`);
@@ -223,4 +229,41 @@ test("the lane's own ends are in it exactly, whatever the lap's length", () => {
   assert.notEqual(lane.outerAt(440), null);
   assert.equal(lane.rel(total - 10), -10);
   assert.equal(lane.inZone(450), false);
+});
+
+// Monaco's garages leave the harbour front of the start straight to the
+// yachts (the user, 2026-10-04): its pit lane runs up the climb from Sainte
+// Devote, clear of the straight either side of the line.
+test("Monaco's pit lane is off the start straight", () => {
+  const pit = SHAPES.monaco.pit;
+  assert.ok(pit.entry > 300, `Monaco's lane starts at ${pit.entry}`);
+});
+
+// The Safety Car's way out, called again from its garage: from its bay out to
+// the lane, down it to the exit, and back onto the road's edge on the pit
+// side; on every circuit, its whole path on its own lane or on the road, and
+// no jump anywhere along it.
+test("the Safety Car's way out: from its bay, down the lane, onto the road at the exit", () => {
+  Object.entries(SHAPES).forEach(([id, shape]) => {
+    const { total } = lapOf(shape.points);
+    const lane = Pit.lane(shape.pit, total, W);
+    const bay = lane.garages.bays[Pit.BAYS - 1];
+    const start = Pit.wayOut(lane, bay.d);
+    const park = Pit.wayIn(lane, bay.d + 1, true).lat;
+    assert.ok(Math.abs(start.lat - park) < 1e-9 && !start.onRoad, `${id}: it starts where it parked`);
+    let last = start.lat;
+    let joined = null;
+    for (let r = bay.rel; r <= lane.exit + 40; r += 2) {
+      const d = ((r % total) + total) % total;
+      const w = Pit.wayOut(lane, d);
+      assert.ok(Math.abs(w.lat - last) < 2.5, `${id}: a jump at ${r} (${last.toFixed(1)} to ${w.lat.toFixed(1)})`);
+      assert.ok(Math.sign(w.lat) === lane.side, `${id}: on the pit side`);
+      const inLane = lane.latAt(d);
+      if (!w.onRoad) assert.ok(inLane !== null && Math.abs(w.lat) <= lane.workOut + 1e-6, `${id}: off its lane at ${r}`);
+      if (w.onRoad && joined === null) joined = r;
+      last = w.lat;
+    }
+    assert.ok(joined !== null && joined <= lane.exit + 2, `${id}: it joins the road by the exit (${joined})`);
+    assert.ok(Math.abs(last - lane.side * (W - Pit.EDGE_IN)) < 1e-6, `${id}: it ends on the road's edge`);
+  });
 });

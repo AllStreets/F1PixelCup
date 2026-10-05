@@ -3,7 +3,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { load, read, part, node } = require("./glb-read.js");
+const { ready, load, read, part, node, walk, apply } = require("./glb-read.js");
+
+// The models ship compressed: the decoder first.
+test.before(ready);
 
 const FILE = path.join(__dirname, "..", "assets", "people.glb");
 const CROWD = ["crowd_a", "crowd_b", "crowd_c", "crowd_d"];
@@ -72,8 +75,12 @@ test("each crowd figure's limbs are marked for the shader, with their joints", (
     assert.ok(j.hip_L[1] > j.knee_L[1] + 0.3 && j.shoulder_L[1] > j.hip_L[1] + 0.35, `${n}: proportions`);
     // Every part is there, and each sits where its joint says.
     const byPart = new Map();
+    // Through the node's own transform (a compressed model keeps its
+    // unpacking scale and offset there).
+    let m = null;
+    walk(glb, (x, mat) => { if (x.name === n) m = mat; });
     glb.doc.meshes[nd.mesh].primitives.forEach((p) => {
-      const pos = read(glb, p.attributes.POSITION);
+      const pos = read(glb, p.attributes.POSITION).map((v) => apply(m, v));
       assert.ok(p.attributes.TEXCOORD_0 !== undefined, `${n} has no part marks`);
       read(glb, p.attributes.TEXCOORD_0).forEach(([u], i) => {
         const k = Math.floor(u * 16);
