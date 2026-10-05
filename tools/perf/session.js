@@ -12,10 +12,28 @@ const [W, H] = String(args.size || "1728x1117").split("x").map(Number);
 const tier = args.tier || "auto";
 const circuits = String(args.circuits || "monaco,lasvegas").split(",");
 const RACE_S = Number(args.race || 30);
-const harnessSrc = fs.readFileSync(__dirname + "/harness.js", "utf8");
+const harnessSrc = fs.readFileSync("/private/tmp/claude-501/perf/harness.js", "utf8");
 const INIT = eval(harnessSrc.match(/const INIT = (`[\s\S]*?`);/)[1]);
 
+const SLOT_DIR = "/private/tmp/claude-501/pw/slots";
+async function takeSlot() {
+  const path = require("path");
+  fs.mkdirSync(SLOT_DIR, { recursive: true });
+  for (;;) {
+    for (let i = 0; i < 2; i += 1) {
+      const d = path.join(SLOT_DIR, String(i));
+      try { fs.mkdirSync(d); fs.writeFileSync(path.join(d, "pid"), String(process.pid)); return d; } catch (e) {
+        try { process.kill(Number(fs.readFileSync(path.join(d, "pid"), "utf8")), 0); } catch (gone) { fs.rmSync(d, { recursive: true, force: true }); }
+      }
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
 (async () => {
+  const held = await takeSlot();
+  const release = () => { try { fs.rmSync(held, { recursive: true, force: true }); } catch (e) {} };
+  process.on("exit", release);
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { release(); process.exit(130); });
   const isWebkit = args.browser === "webkit";
   const browser = isWebkit ? await webkit.launch({ headless: false }) : await chromium.launch({
     headless: false,

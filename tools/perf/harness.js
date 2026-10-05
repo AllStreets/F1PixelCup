@@ -86,12 +86,30 @@ const SCENES = {
   monza: { circuit: "monza", weather: "dry" },
 };
 
+const SLOT_DIR = "/private/tmp/claude-501/pw/slots";
+async function takeSlot() {
+  const path = require("path");
+  fs.mkdirSync(SLOT_DIR, { recursive: true });
+  for (;;) {
+    for (let i = 0; i < 2; i += 1) {
+      const d = path.join(SLOT_DIR, String(i));
+      try { fs.mkdirSync(d); fs.writeFileSync(path.join(d, "pid"), String(process.pid)); return d; } catch (e) {
+        try { process.kill(Number(fs.readFileSync(path.join(d, "pid"), "utf8")), 0); } catch (gone) { fs.rmSync(d, { recursive: true, force: true }); }
+      }
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
 (async () => {
+  const held = await takeSlot();
+  const release = () => { try { fs.rmSync(held, { recursive: true, force: true }); } catch (e) {} };
+  process.on("exit", release);
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { release(); process.exit(130); });
   const isWebkit = args.browser === "webkit";
   const browser = isWebkit ? await webkit.launch({ headless: false }) : await chromium.launch({
     headless: false,
     args: [`--window-size=${Math.min(W, 1500)},${Math.min(H, 940)}`, "--window-position=0,0", "--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist",
-      "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--autoplay-policy=no-user-gesture-required"],
+      "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling", "--autoplay-policy=no-user-gesture-required", ...(args.unlimited ? ["--disable-gpu-vsync", "--disable-frame-rate-limit"] : [])],
   });
   const ctx = isWebkit ? await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: dpr }) : await browser.newContext({ viewport: null });
   await ctx.addInitScript(INIT);
@@ -106,7 +124,7 @@ const SCENES = {
     await cdp.send("Emulation.setDeviceMetricsOverride", { width: W, height: H, deviceScaleFactor: dpr, mobile: false });
     await cdp.send("Performance.enable");
     try {
-      await page.goto(`${base}/play.html?perf=${Date.now()}`);
+      await page.goto(`${base}/play.html?perf=${Date.now()}${args.query ? "&" + args.query : ""}`);
       await page.evaluate(() => { try { localStorage.setItem("f1pixelcup.graphics", "high"); } catch (e) {} });
       await page.reload();
       await page.waitForFunction(() => window.Render3D && Render3D.ready && window.Game, null, { timeout: 60000 });
