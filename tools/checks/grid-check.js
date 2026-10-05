@@ -479,7 +479,7 @@ async (page) => {
   });
   measured.contest = contest;
   results.poleBeatsACleanLap = Object.values(contest).every((c) => c.pole < c.clean) || JSON.stringify(contest);
-  // The README states the measured margins: Pro 7-15% quicker than Rookie, Legend 2.5-9.5% quicker than Pro.
+  // The measured margins: Pro 7-15% quicker than Rookie, Legend 2.5-9.5% quicker than Pro.
   const ordered = (xs) => xs[0] > xs[1] * 1.05 && xs[1] > xs[2] * 1.02;
   results.difficultyLadder = Object.values(ladder.lap).every(ordered) && Object.values(ladder.race).every(ordered);
 
