@@ -348,8 +348,11 @@ async (page) => {
     await new Promise((r) => setTimeout(r, 600));
     return hiddenScale < 0.05 && otherScale > 0.95 && Render3D.inspect().boxScales[0] > 0.95;
   });
-  results.auditClean = await run(() => CIRCUITS.map((c) => TRACKS.find((t) => t.id === c.id))
-    .every((track) => Render3D.auditScenery(track).length === 0));
+  // (Every venue's models in first: each circuit audited with its landmarks.)
+  results.auditClean = await run(async () => {
+    await Render3D.loadAllModels();
+    return CIRCUITS.map((c) => TRACKS.find((t) => t.id === c.id)).every((track) => Render3D.auditScenery(track).length === 0);
+  });
 
   // HUD: the slot shows the real icon, cycles real icons while rolling, and says TRAILING.
   await setup();

@@ -22,6 +22,8 @@ async (page) => {
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 30000 });
+  // Every venue's models in, so each circuit is audited with its landmarks.
+  await p.evaluate(() => Render3D.loadAllModels());
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
 
   // Every circuit has its pit complex: eleven bays with the Safety Car's

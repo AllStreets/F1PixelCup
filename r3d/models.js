@@ -10,7 +10,10 @@
 //   its shaders compile. When a race ends, the cup's next circuit's models
 //   are fetched behind the results (preloadVenues), so the next loading
 //   panel is short and no racing frame is spent unpacking them; a slow
-//   connection fetches only what the cup shows.
+//   connection fetches only what the cup shows. Only the venue raced (and
+//   the ones fetched ahead) are held: 24 venues' landmarks would be a lot to
+//   hold for one race (releaseOtherVenues); loadAllVenueModels is for the
+//   checks.
 // The models are compressed (tools/compress-models.mjs): meshoptimizer's
 // decoder, as three.js ships it, unpacks them. A model that fails to load
 // leaves its procedural stand-in in place.
@@ -24,7 +27,7 @@ import { Float32BufferAttribute } from "three";
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
 export const LANDMARK_SCALE = 2.5;
 
-const FILES = {
+export const FILES = {
   casino: "./assets/landmarks/casino.glb",
   marinaBaySands: "./assets/landmarks/marina_bay_sands.glb",
   singaporeFlyer: "./assets/landmarks/singapore_flyer.glb",
@@ -34,6 +37,25 @@ const FILES = {
   silverstoneWing: "./assets/landmarks/silverstone_wing.glb",
   sakhirTower: "./assets/landmarks/sakhir_tower.glb",
   spTowers: "./assets/landmarks/sp_towers.glb",
+  // The 2025 calendar's other venues (tools/blender/build_landmarks_2025.py).
+  melbourneSkyline: "./assets/landmarks/melbourne_skyline.glb",
+  shanghaiGrandstand: "./assets/landmarks/shanghai_grandstand.glb",
+  jeddahFountain: "./assets/landmarks/jeddah_fountain.glb",
+  miamiStadium: "./assets/landmarks/miami_stadium.glb",
+  hillside: "./assets/landmarks/hillside.glb",
+  barcelonaGrandstand: "./assets/landmarks/barcelona_grandstand.glb",
+  biosphere: "./assets/landmarks/biosphere.glb",
+  spielbergGrandstand: "./assets/landmarks/spielberg_grandstand.glb",
+  hugenholtz: "./assets/landmarks/hugenholtz.glb",
+  flameTowers: "./assets/landmarks/flame_towers.glb",
+  bakuOldCity: "./assets/landmarks/baku_old_city.glb",
+  cotaTower: "./assets/landmarks/cota_tower.glb",
+  foroSol: "./assets/landmarks/foro_sol.glb",
+  vegasSphere: "./assets/landmarks/vegas_sphere.glb",
+  vegasStrip: "./assets/landmarks/vegas_strip.glb",
+  losailGrandstand: "./assets/landmarks/losail_grandstand.glb",
+  lusailTowers: "./assets/landmarks/lusail_towers.glb",
+  yasHotel: "./assets/landmarks/yas_hotel.glb",
   grandstand: "./assets/landmarks/grandstand.glb",
   grandstandOpen: "./assets/landmarks/grandstand_open.glb",
   people: "./assets/people.glb",
@@ -53,6 +75,22 @@ export const VENUE_MODELS = {
   silverstone: ["silverstoneWing"],
   bahrain: ["sakhirTower"],
   interlagos: ["spTowers"],
+  albertpark: ["melbourneSkyline"],
+  shanghai: ["shanghaiGrandstand"],
+  jeddah: ["jeddahFountain", "yachts"],
+  miami: ["miamiStadium"],
+  imola: ["hillside"],
+  barcelona: ["barcelonaGrandstand"],
+  montreal: ["biosphere"],
+  redbullring: ["spielbergGrandstand", "hillside"],
+  hungaroring: ["hillside"],
+  zandvoort: ["hugenholtz"],
+  baku: ["flameTowers", "bakuOldCity", "yachts"],
+  cota: ["cotaTower", "hillside"],
+  mexico: ["foroSol"],
+  lasvegas: ["vegasSphere", "vegasStrip"],
+  losail: ["losailGrandstand", "lusailTowers"],
+  yasmarina: ["yasHotel", "yachts"],
 };
 
 const templates = {};
@@ -135,20 +173,25 @@ export function loadTracksideModels(done, files = FILES) {
 }
 
 // Every venue's models (for the checks, which audit every circuit);
-// resolves when all have settled.
+// resolves when all have settled. From then on none is released.
+let keepAll = false;
 export function loadAllVenueModels(files = FILES) {
+  keepAll = true;
   return Promise.all([...Object.values(VENUE_MODELS).flat(), ...Object.values(STAND_MODELS)].map((n) => load(n, files)));
 }
 
 // Models that failed while fetched ahead (not for a circuit being
 // prepared): tried again when a circuit needs them.
 const failedAhead = new Set();
+// Models fetched ahead for circuits still to come: held until raced.
+const fetchedAhead = new Set();
 let ahead = Promise.resolve();
 
 // The cup's next circuits' models, one circuit at a time, after whatever is
 // already being fetched.
 export function preloadVenues(groups, files = FILES) {
   groups.forEach((names) => {
+    names.forEach((n) => fetchedAhead.add(n));
     ahead = ahead.then(() => Promise.all(names.map((n) => {
       const known = n in loading;
       return load(n, files).then(() => { if (!known && failed.includes(n)) failedAhead.add(n); });
@@ -169,6 +212,28 @@ export function venueModelsSettled(venueId, extra = [], files = FILES) {
   });
   names.forEach((n) => load(n, files));
   return names.every((n) => n in templates || failed.includes(n));
+}
+
+// Release every model but this venue's (with `extra`, its stand's), the
+// core's and those fetched ahead for the circuits to come: their geometry
+// leaves the GPU, and they load again if their venue comes round. Called as
+// a new circuit's world is built (the last one's already gone), so a season
+// holds one venue's landmarks at a time. (Not once every venue's were asked
+// for: the checks visit every circuit in turn.)
+export function releaseOtherVenues(venueId, extra = []) {
+  const mine = [...(VENUE_MODELS[venueId] || []), ...extra];
+  mine.forEach((n) => fetchedAhead.delete(n));
+  if (keepAll) return [];
+  const keep = new Set([...CORE_MODELS, ...mine, ...fetchedAhead]);
+  const released = [];
+  Object.keys(templates).forEach((name) => {
+    if (keep.has(name)) return;
+    templates[name].traverse((n) => { if (n.geometry) n.geometry.dispose(); });
+    delete templates[name];
+    delete loading[name];
+    released.push(name);
+  });
+  return released;
 }
 
 // An attribute as plain floats, its values unpacked (a compressed model's are

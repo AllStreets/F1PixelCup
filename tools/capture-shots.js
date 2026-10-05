@@ -4,9 +4,10 @@
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
-// ["items"]; the default takes circuits, teams, items, helmets and trackside. The race-day
-// parts are "replay", "podium" and "split" (assets/shots/race-day/); "choices"
-// takes the pit lane's race choices and the circuit picker.
+// ["items"]; the default takes circuits, teams, items, helmets, trackside and
+// trackside2025 (the 2025 venues' landmarks). The race-day parts are
+// "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
+// the pit lane's race choices and the circuit picker.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -14,7 +15,7 @@ async (page) => {
     const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
     await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
   } catch (e) { /* not fatal */ }
-  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets", "trackside"];
+  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets", "trackside", "trackside2025"];
   // Relative to the Playwright server, which runs from the repo root.
   const OUT = "assets/shots/";
   const context = await page.context().browser().newContext({ viewport: null });
@@ -218,8 +219,15 @@ async (page) => {
     { name: "trackside-crowd", circuit: "monaco", aim: "stand" },
     { name: "trackside-crews", circuit: "monaco", aim: "crew" },
     { name: "trackside-wing", circuit: "silverstone", aim: "silverstoneWing", back: 60, h: 30, ah: 30, fov: 60, side: 40 },
+    // The 2025 venues (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
+    { part: "trackside2025", name: "trackside-sphere", circuit: "lasvegas", aim: "vegasSphere", back: 20, h: 18, ah: 150, fov: 70, side: 0 },
+    { part: "trackside2025", name: "trackside-flames", circuit: "baku", aim: "flameTowers", back: 30, h: 15, ah: 200, fov: 55, side: 0 },
+    { part: "trackside2025", name: "trackside-biosphere", circuit: "montreal", aim: "biosphere", back: 30, h: 15, ah: 70, fov: 55, side: 0 },
+    { part: "trackside2025", name: "trackside-austin", circuit: "cota", aim: "cotaTower", back: 30, h: 15, ah: 90, fov: 60, side: 0 },
+    { part: "trackside2025", name: "trackside-forosol", circuit: "mexico", aim: "foroSol", back: 25, h: 30, ah: 40, fov: 70, side: 0 },
+    { part: "trackside2025", name: "trackside-miami", circuit: "miami", aim: "miamiStadium", back: 20, h: 18, ah: 45, fov: 70, side: 0 },
   ];
-  for (const t of parts.includes("trackside") ? TRACKSIDE : []) {
+  for (const t of TRACKSIDE.filter((x) => parts.includes(x.part || "trackside"))) {
     const c = circuits.find((x) => x.id === t.circuit);
     await p.evaluate(() => Render3D.loadAllModels && Render3D.loadAllModels());
     await drive(c, SHOTS.circuits[c.id]);

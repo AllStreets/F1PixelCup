@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -159,10 +159,15 @@ const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
 const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => preloadModels(ids.map((id) => [...(VENUE_MODELS[id] || []), ...(STAND_MODELS[(VENUES[id] || {}).stand] ? [STAND_MODELS[(VENUES[id] || {}).stand]] : [])])), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
+// A venue's type of stand's model (none listed: none).
+function venueStand(id) {
+  const stand = STAND_MODELS[(VENUES[id] || {}).stand];
+  return stand ? [stand] : [];
+}
+
 // A venue's models all in (or failed): its own, and its type of stand's.
 function venueModelsSettled(id) {
-  const stand = STAND_MODELS[(VENUES[id] || {}).stand];
-  return modelsSettled(id, stand ? [stand] : []);
+  return modelsSettled(id, venueStand(id));
 }
 
 // A driver's painted helmet, read back (for the checks).
@@ -953,6 +958,8 @@ function ensureWorld(track) {
   // built again with them once they have.
   if (current && current.trackId === track.id && (current.modelsComplete || !venueModelsSettled(track.id))) return current;
   if (current) disposeWorld(current);
+  // The venues not raced give their models back (r3d/models.js).
+  releaseOtherVenues(track.id, venueStand(track.id));
   current = buildWorld(track);
   current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);

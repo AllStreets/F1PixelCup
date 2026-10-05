@@ -8,11 +8,12 @@
 // stern-to there, side by side, along the longest stretches of open water);
 // moored and anchored: how many at most; anchorIn: the name of a landmark
 // whose bay they anchor in (else open water beyond the quays; none if that
-// landmark has no bay); wind: the heading (radians) their bows point to at
-// anchor; front: { from, to, quay }, the harbour front (signed lap
-// distances from the line) where the quay is `quay` behind the barrier on the
-// water side (harbourSide), filled first, packed stern-to with some bow-to as
-// on race weekend. Every yacht claims its water; tenders run among them.
+// landmark has no bay), or "sea" (offshore, past the coast's shore); wind:
+// the heading (radians) their bows point to at anchor; front: { from, to,
+// quay }, the harbour front (signed lap distances from the line) where the
+// quay is `quay` behind the barrier on the water side (harbourSide), filled
+// first, packed stern-to with some bow-to as on race weekend. Every yacht
+// claims its water; tenders run among them.
 //
 // One material draws them: each vertex's role (hull, superstructure, ...)
 // takes the yacht's own colours; the vertex shader bobs, pitches and rolls
@@ -244,7 +245,7 @@ function moor(course, rand, quay, max, front) {
 function anchor(course, rand, { count, area, quay, wind, others }) {
   const out = [];
   for (let t = 0; t < count * 60 && out.length < count; t += 1) {
-    const tender = !area && rand() < 0.2;
+    const tender = (!area || area.sea) && rand() < 0.2;
     const kind = tender ? "tender" : KINDS[Math.floor(rand() * KINDS.length) % KINDS.length];
     const { L, W } = size(kind);
     const heading = wind + (rand() - 0.5) * (tender ? 3 : 0.5);
@@ -256,8 +257,7 @@ function anchor(course, rand, { count, area, quay, wind, others }) {
       x = area.o.x + area.u.x * u + area.v.x * v;
       z = area.o.z + area.u.z * u + area.v.z * v;
       // The whole hull inside the bay, clear of the promenade.
-      const reach = Math.hypot(L, W) / 2 + 10;
-      if (!area.contains(x, z, reach)) continue;
+      if (area.holds ? !area.holds({ x, z, heading, L, W }) : !area.contains(x, z, Math.hypot(L, W) / 2 + 10)) continue;
     } else {
       const b = course.bounds;
       x = b.minX - 700 + rand() * (b.maxX - b.minX + 1400);
@@ -272,6 +272,39 @@ function anchor(course, rand, { count, area, quay, wind, others }) {
     out.push(hull);
   }
   return out;
+}
+
+// The hull's corners and middle (for the water areas).
+function hullPoints(h) {
+  const c = Math.cos(h.heading);
+  const s = Math.sin(h.heading);
+  return [[0, 0], ...[-0.5, 0, 0.5].flatMap((u) => [-0.5, 0.5].map((v) => [u, v]))].map(([u, v]) => ({
+    x: h.x + u * h.L * c - v * h.W * s,
+    z: h.z + u * h.L * s + v * h.W * c,
+  }));
+}
+
+// The sea past the coast's shore (r3d/landmarks.js coastline), as an area:
+// out to 900 past the shore, along the circuit's length; clear of what
+// stands at sea (the fountain).
+function seaArea(course) {
+  const sea = course.seas && course.seas[0];
+  if (!sea) return null;
+  const b = course.bounds;
+  const along = b.cx * sea.ux + b.cz * sea.uz;
+  const px = -sea.uz;
+  const pz = sea.ux;
+  const half = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 300;
+  // (What stands at sea is read each time: placed before or after this.)
+  const wetEnough = (x, z, margin) => x * sea.ux + z * sea.uz - margin > sea.shore + 60
+    && (course.seaClaims || []).every((c) => Math.hypot(x - c.x, z - c.z) > c.r + margin);
+  const o = { x: b.cx + sea.ux * (sea.shore + 80 - along) - px * half, z: b.cz + sea.uz * (sea.shore + 80 - along) - pz * half };
+  return {
+    sea: true,
+    o, u: { x: px * half * 2, z: pz * half * 2 }, v: { x: sea.ux * 820, z: sea.uz * 820 },
+    contains: (x, z, margin) => wetEnough(x, z, margin),
+    holds: (h) => hullPoints(h).every((p) => wetEnough(p.x, p.z, 8)),
+  };
 }
 
 // A landmark's bay (its corners in the world) as an area to anchor in.
@@ -314,7 +347,7 @@ export function buildYachts(course, group, venue) {
   out.name = "yachts";
   const quay = harbour.quay ?? 190;
   const moored = moor(course, rand, quay, harbour.moored || 0, harbourSide(course, venue));
-  const area = harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
+  const area = harbour.anchorIn === "sea" ? seaArea(course) : harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
   // A bay to anchor in that isn't there (its landmark fell back): none.
   const anchored = harbour.anchorIn && !area ? [] : anchor(course, rand, {
     count: harbour.anchored || 0, area, quay, wind: harbour.wind ?? 0.6, others: moored,
@@ -431,7 +464,7 @@ export function auditFleet(group) {
   const { yachts, area } = group.userData;
   let overlaps = 0;
   yachts.forEach((a, i) => yachts.slice(i + 1).forEach((b) => { if (hullsMeet(a, b, 0)) overlaps += 1; }));
-  const outsideBay = area ? yachts.filter((y) => !y.moored && !area.contains(y.x, y.z, Math.hypot(y.L, y.W) / 2)).length : 0;
+  const outsideBay = area ? yachts.filter((y) => !y.moored && (area.holds ? !area.holds(y) : !area.contains(y.x, y.z, Math.hypot(y.L, y.W) / 2))).length : 0;
   return { overlaps, outsideBay, inBay: Boolean(area) };
 }
 
