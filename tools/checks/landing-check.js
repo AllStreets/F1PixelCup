@@ -73,11 +73,15 @@ async (page) => {
   // each card numbered by its round, and the season beside them.
   out.circuitsByCup = await p.evaluate(() => {
     const groups = [...document.querySelectorAll("#circuits .cup-group")];
+    const calendar = CIRCUITS.filter((c) => !c.historic);
     const ok = groups.length === CUP_DEFS.length && groups.every((g, i) => {
       const ids = [...g.querySelectorAll(".circuit-card")].map((c) => c.dataset.circuit);
-      return g.querySelector(".cup-name").textContent.includes(CUP_DEFS[i].name)
-        && JSON.stringify(ids) === JSON.stringify(CUP_DEFS[i].circuitIds)
-        && ids.every((id, k) => g.querySelectorAll(".circuit-round")[k].textContent.trim() === `R${CIRCUITS.findIndex((c) => c.id === id) + 1}`);
+      const cup = CUP_DEFS[i];
+      // Calendar cards are numbered by their round; historic ones name their era.
+      const marks = cup.historic
+        ? ids.every((id, k) => g.querySelectorAll(".circuit-era")[k].textContent === CIRCUITS.find((c) => c.id === id).era) && !g.querySelector(".circuit-round")
+        : ids.every((id, k) => g.querySelectorAll(".circuit-round")[k].textContent.trim() === `R${calendar.findIndex((c) => c.id === id) + 1}`);
+      return g.querySelector(".cup-name").textContent.includes(cup.name) && JSON.stringify(ids) === JSON.stringify(cup.circuitIds) && marks;
     });
     return ok || groups.map((g) => g.textContent.slice(0, 60)).join(" | ");
   });

@@ -1,6 +1,6 @@
 # F1 Pixel Cup
 
-An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** on all 24 circuits of its calendar: six four-race cups in calendar order, or the whole season.
+An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** on all 24 circuits of its calendar: six four-race cups in calendar order, or the whole season, plus two historic cups of eight legendary circuits.
 
 ---
 
@@ -9,6 +9,7 @@ An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the H
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
 - **All 24 circuits of 2025**, in calendar order, traced from the real layouts, with their pit lanes placed from OpenStreetMap (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
 - **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
+- **Two historic cups**: the Legends Cup (Hockenheimring, Nürburgring, Estoril, Kyalami) and the Golden Era Cup (Sepang, Istanbul Park, Mugello, Watkins Glen), each circuit's layout and era named honestly
 - **Six calendar cups and a season**: the Opening, Spring, Summer, Classics, Autumn and Finale Cups, four races each in the order of the 2025 calendar, or the **2025 Season**, all 24 races for the drivers' and constructors' titles, saved after every race and resumed from the pit lane
 - **Weather that fits the place**: on Changeable, each race rains as often as it really does there, from Spa's one in two to almost never in the desert
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
@@ -149,6 +150,19 @@ of 2025, in calendar order, and the cup each is raced in:
 | 22 | Las Vegas Strip Circuit | United States | 6.201 km | Finale Cup |
 | 23 | Lusail International Circuit | Qatar | 5.380 km | Finale Cup |
 | 24 | Yas Marina Circuit | United Arab Emirates | 5.281 km | Finale Cup |
+
+Then two historic cups of famous circuits no longer on the calendar, raced by the 2025 grid. Each is the layout the outline data holds, named honestly:
+
+| Circuit | Country | Lap | Cup | The layout |
+|---|---|---|---|---|
+| Hockenheimring | Germany | 4.574 km | Legends Cup | The short Grand Prix circuit, raced in F1 2002 to 2019 |
+| Nürburgring GP-Strecke | Germany | 5.148 km | Legends Cup | The Grand Prix circuit of 1984, raced in F1 1984 to 2020 |
+| Autódromo do Estoril | Portugal | 4.349 km | Legends Cup | The circuit as last raced in F1, 1994 to 1996 (raced 1984 to 1996) |
+| Kyalami | South Africa | 4.529 km | Legends Cup | Today's circuit; F1 raced older Kyalami layouts 1967 to 1993 |
+| Sepang International Circuit | Malaysia | 5.543 km | Golden Era Cup | The F1 circuit, raced 1999 to 2017 |
+| Istanbul Park | Türkiye | 5.338 km | Golden Era Cup | The F1 circuit, raced 2005 to 2011 and 2020 to 2021 |
+| Mugello | Italy | 5.245 km | Golden Era Cup | The circuit as raced in F1 in 2020 |
+| Watkins Glen | United States | 5.430 km | Golden Era Cup | The long circuit with the Boot, as raced in F1 1975 to 1980 |
 
 Each one has its pit lane and garages beside the real pit lane's stretch, as
 near as room allows, where OpenStreetMap maps it, and on its real side: where

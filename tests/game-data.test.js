@@ -66,13 +66,21 @@ test("every circuit has a real outline, a country, a real length and its own wea
   assert.ok(chance("bahrain") < 0.05);
 });
 
-test("all 24 circuits of 2025, in the order of the calendar", () => {
-  assert.deepEqual(Data.CIRCUITS.map((c) => c.id), CALENDAR_2025);
+// The historic cups (docs/superpowers/specs/2026-10-04-historic-cups-design.md).
+const HISTORIC = ["hockenheim", "nurburgring", "estoril", "kyalami", "sepang", "istanbul", "mugello", "watkinsglen"];
+const HISTORIC_CUPS = [["legendsCup", "Legends Cup"], ["goldenEraCup", "Golden Era Cup"]];
+
+test("all 24 circuits of 2025, in the order of the calendar, then the eight historic ones", () => {
+  assert.deepEqual(Data.CIRCUITS.map((c) => c.id), [...CALENDAR_2025, ...HISTORIC]);
+  Data.CIRCUITS.forEach((c) => assert.equal(Boolean(c.historic), HISTORIC.includes(c.id), c.id));
+  // Each historic circuit names its layout's era honestly (shown on its card).
+  Data.CIRCUITS.filter((c) => c.historic).forEach((c) => assert.match(c.era, /\d{4}/, c.id));
 });
 
-test("the six calendar cups are the only cups; the season races the whole calendar", () => {
-  assert.deepEqual(Data.CUP_DEFS.map((cup) => [cup.id, cup.name]), CALENDAR_CUPS);
-  assert.deepEqual(Data.CUP_DEFS.flatMap((cup) => cup.circuitIds), CALENDAR_2025);
+test("the six calendar cups, then the two historic cups; the season races the 2025 calendar only", () => {
+  assert.deepEqual(Data.CUP_DEFS.map((cup) => [cup.id, cup.name]), [...CALENDAR_CUPS, ...HISTORIC_CUPS]);
+  assert.deepEqual(Data.CUP_DEFS.flatMap((cup) => cup.circuitIds), [...CALENDAR_2025, ...HISTORIC]);
+  Data.CUP_DEFS.forEach((cup) => assert.equal(Boolean(cup.historic), HISTORIC_CUPS.some(([id]) => id === cup.id), cup.id));
   assert.equal(Data.SEASON.id, "season");
   assert.equal(Data.SEASON.name, "2025 Season");
   assert.deepEqual(Data.SEASON.circuitIds, CALENDAR_2025);

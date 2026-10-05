@@ -54,6 +54,15 @@ PIT_LANES = {
     "losail": (1037707300, 196193732),
     # Yas Marina's runs beside the straight and under the track to turn 2.
     "yasmarina": (176695254, 176695255, 176695253),
+    # The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md).
+    "hockenheim": 15446020,
+    "nurburgring": 30815119,
+    "estoril": 363050271,
+    "kyalami": 793806972,
+    "sepang": 144359483,
+    "istanbul": 295742111,
+    "mugello": 197788411,
+    "watkinsglen": (50289311, 20164027),
     "spa": 323851541,
     "silverstone": 227902927,  # the International (Wing) pit lane
     "monaco": 850261588,       # Voie des stands
@@ -88,6 +97,15 @@ CORNERS = {
         (1311566937, "SCHEIVLAK", ""),
         (1311879069, "ARIE LUYENDYKBOCHT", ""),
     ],
+    # (No corner named for a sponsor: Hockenheim's Mobil 1 and Sachs, the
+    # Nürburgring's Ford, NGK and Goodyear corners, Sepang's resort names.)
+    "hockenheim": [(117570506, "PARABOLIKA", ""), (117568832, "SÜDKURVE", "")],
+    "nurburgring": [(820330153, "SCHUMACHER-S", "")],
+    "estoril": [(363138869, "PARABÓLICA", "AYRTON SENNA"), (638617010, "ORELHA", "")],
+    "kyalami": [(1359379866, "CROWTHORNE", ""), (1359379870, "BARBEQUE", ""), (1359379871, "SUNSET", "")],
+    "sepang": [(1561055757, "LANGKAWI", ""), (1561055764, "KENYIR LAKE", "")],
+    "mugello": [(612265027, "SAN DONATO", ""), (612265004, "ARRABBIATA", ""), (612265034, "CORRENTAIO", "")],
+    "watkinsglen": [(293208067, "THE NINETY", ""), ((293208063, 293208062, 293208064), "THE ESSES", ""), (293208068, "THE BOOT", "")],
 }
 # The start/finish line, where the source outline puts it somewhere else:
 # level with the middle of the real pit lane.

@@ -52,6 +52,15 @@ CIRCUITS = {
     "lasvegas": ("us-2023", False),
     "losail": ("qa-2004", False),
     "yasmarina": ("ae-2009", False),
+    # The historic circuits.
+    "hockenheim": ("de-1932", False),
+    "nurburgring": ("de-1927", False),
+    "estoril": ("pt-1972", False),
+    "kyalami": ("za-1961", False),
+    "sepang": ("my-1999", False),
+    "istanbul": ("tr-2005", False),
+    "mugello": ("it-1914", False),
+    "watkinsglen": ("us-1956", False),
     "monza": ("it-1922", False),
     "spa": ("be-1925", False),
     "silverstone": ("gb-1948", False),
@@ -87,7 +96,7 @@ NARROW_RAMP = 120   # the road narrows and widens again over this much
 # brings too close for it: this much more room between them along the real
 # pit lane's stretch, so the pit lane goes on its real side (the Hungaroring's
 # lies between the main straight and turns 2 to 3).
-PIT_ROOM = {"hungaroring": 50}
+PIT_ROOM = {"hungaroring": 50, "hockenheim": 50, "estoril": 50}
 
 
 def narrow_scale(fine, zones):

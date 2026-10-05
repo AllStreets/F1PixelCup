@@ -118,6 +118,7 @@
   const CUP_COLOURS = {
     openingCup: "#b3122e", springCup: "#1d47c4", summerCup: "#0f7a55",
     classicsCup: "#7a2fb3", autumnCup: "#c4621d", finaleCup: "#13808f", season: "#a8861a",
+    legendsCup: "#5a5f6e", goldenEraCup: "#b8902a",
     // The two cups before the calendar, for an old replay or record.
     trophyCup: "#b3122e", constructorCup: "#1d47c4",
   };
