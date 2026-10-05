@@ -587,3 +587,100 @@ test("with no battle at the front the director alternates between two players", 
   const late = shots.filter((s) => s.start > 601 * rec.sampleMs);
   assert.ok(late.length > 0 && late.every((s) => s.focusId === "car1"), JSON.stringify(late.map((s) => s.focusId)));
 });
+
+// ---- The viewer's choices: cameras and cars ----
+
+test("switching cameras never changes the car the viewer is watching", () => {
+  // The director has car "b" on screen when the viewer takes a camera.
+  let view = Replay.viewChoice();
+  view = Replay.chooseCamera(view, "trackside", "b");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "z" }, "p").focusId, "b");
+  for (const mode of ["onboard", "helicopter", "director", "trackside", "director", "onboard", "helicopter"]) {
+    view = Replay.chooseCamera(view, mode, "x");
+    // Whatever the director would cut to, and whichever car it would pick.
+    for (const shot of [{ mode: "trackside", focusId: "q" }, { mode: "helicopter", focusId: "r" }]) {
+      assert.equal(Replay.viewShot(view, shot, "p").focusId, "b", `${mode}`);
+    }
+  }
+});
+
+test("under the director with no car chosen, the director picks the cars; a chosen car stays", () => {
+  let view = Replay.viewChoice();
+  assert.deepEqual(Replay.viewShot(view, { mode: "helicopter", focusId: "q" }, "p"), { mode: "helicopter", focusId: "q", director: true, carChosen: false });
+  // Picking a car keeps the director cutting cameras, on that car.
+  view = Replay.chooseCar(view, "c");
+  assert.deepEqual(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p"), { mode: "onboard", focusId: "c", director: true, carChosen: true });
+  // A camera chosen: that camera, still on that car.
+  view = Replay.chooseCamera(view, "trackside", "q");
+  assert.deepEqual(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p"), { mode: "trackside", focusId: "c", director: false, carChosen: true });
+  // Director again: cuts cameras on the same car.
+  view = Replay.chooseCamera(view, "director", "q");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p").focusId, "c");
+  // Director pressed while it is on: the car choice goes back to the director.
+  view = Replay.chooseCamera(view, "director", "c");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p").focusId, "q");
+});
+
+test("a camera chosen with no car on screen yet watches the player", () => {
+  const view = Replay.chooseCamera(Replay.viewChoice(), "onboard", null);
+  assert.equal(Replay.viewShot(view, { mode: "trackside", focusId: "q" }, "p").focusId, "p");
+});
+
+// ---- What happened between two moments (the replay's sounds) ----
+
+function eventsRecording() {
+  const h = header(2);
+  const rec = Replay.createRecording(h);
+  const car = (extra = {}) => ({ x: 10, y: 20, d: 5, heading: 0, speed: 100, lat: 0, gap: 0, steer: 0, throttle: 1, lap: 0, place: 1, item: "none", ...extra });
+  const boxes = (taken) => Array.from({ length: 15 }, (_, i) => taken && i === 4);
+  for (let k = 0; k < 60; k += 1) {
+    rec.push({
+      cars: [car({ boosting: k >= 20 && k < 30, x: 10 + k }), car({ spinning: k >= 40, x: 500 })],
+      objects: k >= 10 ? [{ id: 7, type: "undercut", d: 50 + k, lat: 0, age: 0 }] : [],
+      safetyCar: null, boxes: boxes(k >= 25), flags: [], keys: {},
+    });
+  }
+  rec.addFlash({ x: 300, y: 40, d: 9, color: "#ff3b30", size: 12, at: h.t0 + 35 * rec.sampleMs, until: h.t0 + 45 * rec.sampleMs });
+  return rec;
+}
+
+test("the replay's events between two moments: a hit, an item fired, a box taken, a boost, a spin", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  const at = (a, b) => Replay.eventsBetween(rec, rec.header.t0 + a * ms, rec.header.t0 + b * ms).map((e) => e.type).sort();
+  assert.deepEqual(at(9, 10), ["item"]);
+  assert.deepEqual(at(19, 20), ["boost"]);
+  assert.deepEqual(at(24, 25), ["box"]);
+  assert.deepEqual(at(34, 35), ["impact"]);
+  assert.deepEqual(at(39, 40), ["spin"]);
+  assert.deepEqual(at(0, 9), []);
+  // Each is placed where it happened, for how loud it is from the camera.
+  const hit = Replay.eventsBetween(rec, rec.header.t0 + 34 * ms, rec.header.t0 + 35 * ms)[0];
+  assert.deepEqual([hit.x, hit.y], [300, 40]);
+  const boost = Replay.eventsBetween(rec, rec.header.t0 + 19 * ms, rec.header.t0 + 20 * ms)[0];
+  assert.equal(boost.car, 0);
+  assert.equal(boost.x, 30);
+});
+
+test("a seek (or going backwards, or a long jump) has no events: they are heard only as the race plays", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0 + 35 * ms, rec.header.t0 + 34 * ms), []);
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0, rec.header.t0 + 59 * ms), []);
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0 + 20 * ms, rec.header.t0 + 20 * ms), []);
+});
+
+test("contacts between cars are kept (once per knock) and heard; so is the player's chequered flag", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  const t0 = rec.header.t0;
+  // A knock, felt over several steps: kept once.
+  for (let i = 0; i < 6; i += 1) rec.addContact({ x: 200 + i, y: 50, at: t0 + 15 * ms + i * 5 });
+  // Another, elsewhere at the same time: kept too.
+  rec.addContact({ x: 900, y: 50, at: t0 + 15 * ms + 3 });
+  assert.equal(rec.contacts.length, 2);
+  const at = (a, b) => Replay.eventsBetween(rec, t0 + a * ms, t0 + b * ms).map((e) => e.type).sort();
+  assert.deepEqual(at(14, 16), ["contact", "contact"]);
+  rec.chequerAt = t0 + 50 * ms;
+  assert.deepEqual(at(49, 50), ["finish"]);
+});

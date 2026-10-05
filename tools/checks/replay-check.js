@@ -262,8 +262,55 @@ async (page) => {
     // The car the director has at this moment (no frame drawn since the seek).
     const before = replayShot().focusId;
     key("ArrowDown");
-    const manual = r.camera !== "director" && r.focusId && r.focusId !== before;
+    // A car chosen: the viewer's from now on.
+    const manual = Boolean(r.focusId) && r.focusId !== before;
     return (paused && seeked && manual) || JSON.stringify({ paused, seeked, manual, before, after: r.focusId, camera: r.camera });
+  });
+
+  // Switching cameras never takes the car away: starting under the director
+  // (no car chosen), the first camera keeps the car on screen, and every
+  // camera after it (buttons, the C key, the director's own cuts, seeks)
+  // stays on that car, frame after frame. Director pressed while it is on
+  // hands the cars back to it.
+  results.switchingCamerasKeepsTheCar = await step(async () => {
+    const r = state.replay;
+    const frame = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const shown = () => Render3D.inspect().view && Render3D.inspect().view.focusId;
+    const click = (mode) => document.querySelector(`#replay-screen [data-replay=camera][data-value="${mode}"]`).click();
+    const key = (k) => window.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    // Back to the director, with the car choice its own.
+    click("director");
+    if (r.focusId) click("director");
+    // A moment when the director is on a car other than the player's (the
+    // player's is where a lost choice would fall back to).
+    let start = 0.5;
+    for (let f = 0.5; f < 0.95; f += 0.01) {
+      if (Replay.shotAt(r.shots, r.rec.duration * f).focusId !== r.rec.header.playerId) { start = f; break; }
+    }
+    Game.replay.seek(r.rec.duration * start);
+    await frame();
+    const watched = shown();
+    if (watched === r.rec.header.playerId) return "the director is on the player's car throughout: nothing to tell";
+    const seen = [];
+    const sequence = ["trackside", "onboard", "helicopter", "director", "onboard", "C", "C", "C", "C", "director", "trackside"];
+    for (let i = 0; i < sequence.length; i += 1) {
+      if (sequence[i] === "C") key("c"); else click(sequence[i]);
+      // Through the director's cuts, every six seconds of race.
+      Game.replay.seek(r.rec.duration * Math.min(0.99, start + i * 0.03));
+      await frame();
+      seen.push([sequence[i], r.camera, shown()]);
+    }
+    const kept = seen.every(([, , id]) => id === watched);
+    // Director pressed while on: the director picks the car again (the
+    // car it has at this moment, whichever that is).
+    click("director");
+    const keptUnderDirector = r.focusId === watched;
+    // Auto (the button) gives the director the cars back.
+    document.querySelector("#replay-screen [data-replay=auto]").click();
+    await frame();
+    const handedBack = r.focusId === null && r.camera === "director" && shown() === Replay.shotAt(r.shots, r.time).focusId
+      && document.querySelector("#replay-screen [data-replay=auto]").getAttribute("aria-pressed") === "true";
+    return (watched && kept && keptUnderDirector && handedBack) || JSON.stringify({ watched, seen, keptUnderDirector, handedBack, focusId: r.focusId });
   });
 
   // The broadcast graphics: the tag, the tower (20 cars' worth, the car in
