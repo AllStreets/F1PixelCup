@@ -4,12 +4,14 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Siting = require("../siting.js");
 
-test("the pit lane's middle, also where the lane runs across the line", () => {
-  // Barcelona's: from 270 before the line to 460 after it.
-  assert.equal(Siting.laneMiddle(-270, 460, 5934), 95);
-  assert.equal(Siting.laneMiddle(100, 500, 5000), 300);
-  // Entered late in the lap, left after the line.
-  assert.equal(Siting.laneMiddle(4800, 5200, 5000), 0);
+test("the pit lane's middle, also where its zone runs across the line", () => {
+  const every = (from, to, step = 30) => { const out = []; for (let d = from; d <= to; d += step) out.push(d); return out; };
+  // Barcelona's: from 270 before the line to 460 after it (as lap distances,
+  // ascending: 0..460, then 5664..5934).
+  assert.equal(Siting.zoneMiddle([...every(0, 450), ...every(5670, 5910)], 5934), 90);
+  // (Read from the list's own middle, it was 360: the wrong end of the lane.)
+  assert.equal(Siting.zoneMiddle(every(100, 500, 100), 5000), 300);
+  assert.equal(Siting.zoneMiddle([], 5000), null);
 });
 
 test("the lap from a point: nearest first, the far side first at each, half the lap each way", () => {
@@ -41,7 +43,9 @@ test("a stand moved along the lap: its own side, its own distance past the barri
   assert.equal(Siting.slidePiece(course, piece, (x) => x <= 760).d, 760);
   // Nowhere within its reach: none.
   assert.equal(Siting.slidePiece(course, piece, () => false), null);
-  assert.equal(Siting.slidePiece(course, piece, (x) => x > 2300), null);
+  // (Past its reach either way round the lap: 2200 on, or back 200 past the line.)
+  assert.equal(Siting.slidePiece(course, piece, (x) => x > 2300 && x < 3500), null);
+  assert.equal(Siting.slidePiece(course, piece, (x) => x > 3700).d, 3960, "back across the line");
 });
 
 test("a round footprint against a placed model's rectangles, turned and scaled", () => {

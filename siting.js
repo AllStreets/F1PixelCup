@@ -1,5 +1,5 @@
 // Where trackside pieces go round a circuit (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
-// Pure: the pit lane's middle round the lap, the lap's anchors from a point,
+// Pure: the middle of the pit lane's zone round the lap, the lap's anchors from a point,
 // a stand moved along the lap round a venue's main stand, and whether a round
 // footprint touches a placed model's rectangles. In the page it defines
 // window.Siting (used by r3d/landmarks.js and r3d/track.js); in Node it is
@@ -11,10 +11,19 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const wrap = (d, total) => ((d % total) + total) % total;
 
-  // The middle of a pit lane round the lap, from its ends (lap distances;
-  // its entry may be negative, before the line, when it runs across it).
-  function laneMiddle(entry, exit, total) {
-    return wrap((entry + exit) / 2, total);
+  // The middle of a stretch of the lap given by its points' lap distances
+  // (ascending; the pit lane's zone), also where it runs across the line:
+  // the run starts after its widest gap (where the stretch is not).
+  function zoneMiddle(ds, total) {
+    if (!ds.length) return null;
+    let cut = 0;
+    let widest = -1;
+    ds.forEach((d, i) => {
+      const next = i + 1 < ds.length ? ds[i + 1] : ds[0] + total;
+      if (next - d > widest) { widest = next - d; cut = i + 1; }
+    });
+    const run = [...ds.slice(cut), ...ds.slice(0, cut)];
+    return run[Math.floor(run.length / 2)];
   }
 
   // The whole lap from a lap distance, `spread` apart, nearest first; at
@@ -74,5 +83,5 @@
     });
   }
 
-  return { laneMiddle, lapFrom, slidePiece, touchesRects };
+  return { zoneMiddle, lapFrom, slidePiece, touchesRects };
 }));

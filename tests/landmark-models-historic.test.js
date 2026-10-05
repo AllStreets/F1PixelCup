@@ -104,8 +104,9 @@ test("Sepang: the grandstand faces both ways, a leaf canopy over each side", () 
   assert.ok(canopy.materials.includes("canopy"), "its fabric");
   // Pointed leaves: narrow at the tip, wide in the middle.
   const tri = triangles(glb, "canopy").flat();
-  // (One leaf: the first bay's, on the front side.)
-  const width = (z0, z1) => { const s = tri.filter((v) => v[0] < -88 && v[2] < -z0 && v[2] > -z1).map((v) => v[0]); return Math.max(...s) - Math.min(...s); };
+  // (One leaf: the first bay's, on the front side; a bay is a tenth of the canopy.)
+  const bay = canopy.lo[0] + canopy.size[0] / 10;
+  const width = (z0, z1) => { const s = tri.filter((v) => v[0] < bay && v[2] < -z0 && v[2] > -z1).map((v) => v[0]); return Math.max(...s) - Math.min(...s); };
   assert.ok(canopy.tris > 2000, `${canopy.tris} triangles of leaves`);
   assert.ok(width(37, 45) < width(18, 24) * 0.6, `the tip ${width(37, 45).toFixed(1)} m wide, the middle ${width(18, 24).toFixed(1)} m`);
 });

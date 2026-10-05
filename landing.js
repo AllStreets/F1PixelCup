@@ -88,7 +88,7 @@
         <h3 class="it-title">Circuits of the past</h3>
         <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid in two cups, H1 and H2. Each is the layout the outline data holds, and each card says which.</p>
       </header>${historic}
-      <div class="trackside-grid historic-sights" aria-label="The historic circuits' landmarks">${HISTORIC_SIGHTS.map(sight).join("")}</div>` : ""}
+      <div class="trackside-grid historic-sights" role="group" aria-label="The historic circuits' landmarks">${HISTORIC_SIGHTS.map(sight).join("")}</div>` : ""}
       ${choicesCard()}`;
   }
 
@@ -102,7 +102,7 @@
     { id: "kyalami", title: "Johannesburg from Kyalami", alt: "Johannesburg's skyline with the Hillbrow Tower and the cylinder of Ponte City across the Highveld", text: "The Hillbrow Tower, Ponte City and the Carlton Centre across the Highveld." },
     { id: "sepang", title: "Sepang's leaf canopies", alt: "Sepang's double-fronted grandstand under white canopies shaped like palm leaves", text: "The double-fronted grandstand under canopies shaped like the leaves of oil palms." },
     { id: "istanbul", title: "Istanbul Park", alt: "Istanbul Park's main grandstand with its roof hung from tall white masts", text: "The main grandstand across from the pits, its roof hung from tall white masts." },
-    { id: "mugello", title: "Tuscany at Mugello", alt: "A Tuscan hill terraced with olive groves, a farmhouse and a line of cypresses on top", text: "A hill terraced with olive groves, a farmhouse and its cypresses on top." },
+    { id: "mugello", title: "Tuscany at Mugello", alt: "A Tuscan hill terraced with olive groves, a line of cypresses climbing to a farmhouse on its crest", text: "A hill terraced with olive groves, a line of cypresses climbing to a farmhouse on its crest." },
     { id: "watkinsglen", title: "The Finger Lakes", alt: "A long lake running away between wooded hills in their autumn colours beside Watkins Glen", text: "A long lake running away between wooded hills in their autumn colours." },
   ];
   const sight = (s) => `

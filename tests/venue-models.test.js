@@ -44,6 +44,14 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
 });
 
 // The historic circuits' landmarks (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+// (The settings only; that each is built from its model, where it should
+// stand, is tools/checks/trackside-models-check.js's.)
+// The track data (tracks-data.js), for the corners' boards.
+const SHAPES = (() => {
+  const w = {};
+  new Function("window", `${fs.readFileSync(path.join(ROOT, "tracks-data.js"), "utf8")};window.SHAPES = TRACK_SHAPES;`)(w);
+  return w.SHAPES;
+})();
 const HISTORIC = {
   hockenheim: ["motodrom"], nurburgring: ["nurburgCastle"], estoril: ["estorilGrandstand", "sintraHills"], kyalami: ["joburgSkyline", "hillside"],
   sepang: ["sepangGrandstand"], istanbul: ["istanbulGrandstand", "hillside"], mugello: ["tuscanHill", "hillside"], watkinsglen: ["fingerLakes", "hillside"],
@@ -55,8 +63,12 @@ test("every historic venue builds its landmarks, from models it loads", () => {
     assert.deepEqual([...v.landmarks].sort(), [...want].sort(), `${id}'s landmarks`);
     want.forEach((n) => assert.ok((VENUE_MODELS[id] || []).includes(n), `${id} doesn't load ${n}`));
     assert.ok(v.extras.includes("siteLandmarks"), `${id} doesn't build its landmarks`);
-    // A bank at a named corner names one the track data has.
-    if (v.landmarks.includes("hillside")) assert.ok(v.hillside && (v.hillside.corner || v.hillside.share), `${id}: where its bank stands`);
+    // A bank at a named corner names one the track data has (else it would
+    // silently stand at a share of the lap).
+    if (v.landmarks.includes("hillside")) {
+      assert.ok(v.hillside && (v.hillside.corner || v.hillside.share), `${id}: where its bank stands`);
+      if (v.hillside.corner) assert.ok((SHAPES[id].corners || []).some((k) => k.board === v.hillside.corner), `${id} has no corner ${v.hillside.corner}`);
+    }
   });
 });
 
