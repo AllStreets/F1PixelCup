@@ -46,15 +46,17 @@ async (page) => {
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   }, WANT);
 
-  // The yachts: Monaco's moored at the quays and anchored out, Singapore's in
-  // the bay; every hull past the quays (190 past the barrier at Monaco), no
+  // The yachts: Monaco's moored at the quays (packed along the harbour front)
+  // and anchored out, Singapore's in the bay; every hull past the quay, no
   // two touching, Singapore's wholly inside Marina Bay.
   results.yachtsOnTheWater = await step(() => {
     const out = {};
     ["monaco", "singapore"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
-    return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && m.overlaps === 0
+    // (Monaco's harbour front: 25 or more moored right behind the barrier,
+    // the quay 14 behind it, as on race weekend.)
+    return (m && m.moored >= 20 && m.front >= 25 && m.anchored >= 8 && m.leastClearance >= 14 && m.overlaps === 0
       && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40) || JSON.stringify(out);
   });
 

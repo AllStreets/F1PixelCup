@@ -28,6 +28,10 @@ async (page) => {
   await resize(1600, 900);
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 30000 });
+  // The circuits here are started without their loading panels (which wait
+  // for each venue's trackside models): every venue's models in first, so
+  // the replays are of the circuits as raced, not their stand-ins.
+  await p.evaluate(() => (Render3D.loadAllModels ? Render3D.loadAllModels() : null));
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 200)}`; } };
   const frames = (n = 2) => p.evaluate((n) => new Promise((done) => { let i = 0; const f = () => (++i >= n ? done() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
 

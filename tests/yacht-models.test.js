@@ -4,7 +4,10 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { load, part, node, signedVolume } = require("./glb-read.js");
+const { ready, load, part, node, signedVolume } = require("./glb-read.js");
+
+// The models ship compressed: the decoder first.
+test.before(ready);
 
 const glb = () => load(path.join(__dirname, "..", "assets", "yachts.glb"));
 

@@ -16,7 +16,7 @@ import {
   makeAdvertTexture, makeBillboardTexture, makeCrowdTexture, makeFenceTexture, buildingMaterial, luminance,
 } from "./textures.js";
 import { wettable, WET_ROAD, WET_RUNOFF, WET_GRAVEL, WET_PAINT } from "./rain.js";
-import { tracksideModel } from "./models.js";
+import { tracksideModel, STAND_MODELS } from "./models.js";
 
 export const SAMPLE_STEP = 6;
 export const BRIDGE_HEIGHT = 26;
@@ -928,8 +928,6 @@ function buildDecorPiece(d, bg, venue, i) {
 // row_k empties, with their seats) are kept for the 3D crowd (r3d/people.js);
 // the painted crowd on each row is what the stand shows from far away.
 export const STAND_SCALE = 6;
-// Each venue's stand type (r3d/landmarks.js VENUES: stand), and its model.
-const STAND_MODELS = { covered: "grandstand", open: "grandstandOpen" };
 function modelStand(venue, bg, i, name) {
   const g = new THREE.Group();
   const model = tracksideModel(name).clone(true);
