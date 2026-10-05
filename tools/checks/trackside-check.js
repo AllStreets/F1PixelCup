@@ -76,16 +76,23 @@ async (page) => {
     state.paused = true; state.pausedAt = performance.now();
     const pl = getSortedRacers()[10];
     pl.currentItem = "safetyCar"; useItem(pl, performance.now());
-    await frame();
-    const out = Render3D.inspect().safetyCarAt;
-    const sc = state.safetyCar;
-    sc.until = performance.now();
+    let sc = state.safetyCar;
     let t = performance.now();
+    // Out of its garage and down the lane, onto the road at the exit, its
+    // lights flashing as it leads; then (its time up) round to the entry,
+    // down the lane with its lights off, and parked at its own garage.
+    let out = null;
     let lane = null;
-    for (let i = 0; i < 60 * 150 && !sc.parked; i += 1) {
+    for (let i = 0; i < 60 * 200 && !sc.parked; i += 1) {
       t += 16.7;
       updateSafetyCar(1 / 60, t);
-      if (!lane && sc.inLane && state.track.pitLane.wallAt(sc.d) !== null) {
+      sc = state.safetyCar;
+      if (!out && !sc.exiting && !sc.inLane) {
+        await frame();
+        out = Render3D.inspect().safetyCarAt;
+        sc.until = t;
+      }
+      if (out && !lane && sc.leaving && sc.inLane && state.track.pitLane.wallAt(sc.d) !== null) {
         await frame();
         lane = Render3D.inspect().safetyCarAt;
       }

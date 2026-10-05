@@ -957,34 +957,95 @@ def build_monza_banking():
 # =============================================================================
 
 def build_spa_pits():
-    """The old pit building: long and low, painted white, its garages'
-    doors along the ground floor, a strip of windows above, a terrace on the
-    roof behind a rail, and the old timing tower at one end."""
+    """The old pit building at the foot of Eau Rouge: long, white, two
+    storeys. Its pit boxes along the ground floor, each a recess behind a
+    roller door between pilasters, a canopy over the lane on brackets; a
+    ribbon of windows above with its mullions and a balcony along it; the
+    roof a terrace behind a rail, with sun shades, stair housings and
+    flagpoles; the old timing tower at the end nearest the hill, louvred,
+    glass round its top. Faces +Y (the circuit)."""
     clear()
     root = empty("spa_pits", (0, 0, 0))
     m = Mesh("pit_building")
     L, D = 110.0, 12.0
-    m.box((-L / 2, -D / 2, 0.0), (L / 2, D / 2, 7.2), "render")
-    for k in range(18):
-        x = -L / 2 + 3.0 + k * (L - 6.0) / 18
-        m.box((x, D / 2, 0.0), (x + 4.4, D / 2 + 0.08, 3.4), "gear")
-        m.box((x, D / 2, 4.2), (x + 4.4, D / 2 + 0.08, 6.0), "glass")
-    m.box((-L / 2 - 0.2, D / 2 - 0.2, 3.6), (L / 2 + 0.2, D / 2 + 0.9, 3.9), "render")
-    m.box((-L / 2, -D / 2, 7.2), (L / 2, D / 2, 7.6), "concrete")
+    x0, x1 = -L / 2, L / 2
+    front = D / 2
+    # The body, set back a little at the ground floor for the boxes' recesses.
+    m.box((x0, -front, 0.0), (x1, front - 1.2, 3.9), "render")
+    m.box((x0, -front, 3.9), (x1, front, 7.2), "render")
+    bays = 18
+    bay = (L - 4.0) / bays
+    for k in range(bays + 1):
+        x = x0 + 2.0 + k * bay
+        # Pilasters between the boxes, proud of the recess.
+        m.box((x - 0.35, front - 1.2, 0.0), (x + 0.35, front + 0.1, 3.9), "render")
+    for k in range(bays):
+        xa = x0 + 2.0 + k * bay + 0.45
+        xb = xa + bay - 0.9
+        # The roller door, slats in two tones, its housing over it.
+        for s in range(6):
+            z = 0.2 + s * 0.55
+            m.box((xa, front - 1.15, z), (xb, front - 1.05, z + 0.5), "concrete" if s % 2 else "concrete_dark")
+        m.box((xa - 0.1, front - 1.2, 3.45), (xb + 0.1, front - 0.75, 3.85), "steel")
+    # The canopy over the lane: a thin slab on brackets, its fascia.
+    m.box((x0 + 1.0, front, 3.95), (x1 - 1.0, front + 3.2, 4.15), "white_steel")
+    m.box((x0 + 1.0, front + 3.0, 3.75), (x1 - 1.0, front + 3.2, 4.15), "render")
+    for k in range(0, bays + 1, 2):
+        x = x0 + 2.0 + k * bay
+        m.box((x - 0.08, front + 0.1, 3.4), (x + 0.08, front + 2.8, 3.95), "steel",
+              rot=Matrix.Rotation(math.radians(-12), 3, "X"), about=(x, front + 0.1, 3.4))
+    # The first floor: a ribbon of glass with mullions, a balcony along it.
+    m.box((x0 + 1.5, front, 4.6), (x1 - 1.5, front + 0.05, 6.6), "glass")
+    for k in range(int((L - 3.0) / 1.6) + 1):
+        x = x0 + 1.5 + k * 1.6
+        m.box((x - 0.06, front, 4.6), (x + 0.06, front + 0.12, 6.6), "white_steel")
+    m.box((x0 + 1.5, front, 4.3), (x1 - 1.5, front + 1.3, 4.5), "render")
+    for k in range(int((L - 3.0) / 2.0) + 1):
+        x = x0 + 1.5 + k * 2.0
+        m.box((x - 0.03, front + 1.15, 4.5), (x + 0.03, front + 1.25, 5.5), "steel")
+    m.box((x0 + 1.5, front + 1.12, 5.45), (x1 - 1.5, front + 1.28, 5.55), "steel")
+    # The back: small windows, downpipes.
+    for k in range(14):
+        x = x0 + 5.0 + k * 7.5
+        m.box((x - 0.7, -front - 0.05, 4.8), (x + 0.7, -front, 6.2), "glass")
+        m.box((x + 3.0, -front - 0.25, 0.0), (x + 3.15, -front - 0.1, 7.3), "steel")
+    # The roof: coping, a terrace with its rail, shades, stair housings.
+    m.box((x0 - 0.2, -front - 0.2, 7.2), (x1 + 0.2, front + 0.2, 7.6), "concrete")
     for k in range(56):
-        x = -L / 2 + 1.0 + k * (L - 2.0) / 55
-        tube(m, (x, D / 2 - 0.2, 7.6), (x, D / 2 - 0.2, 8.6), 0.04, "steel", 3)
-    tube(m, (-L / 2 + 1.0, D / 2 - 0.2, 8.6), (L / 2 - 1.0, D / 2 - 0.2, 8.6), 0.05, "steel", 4)
+        x = x0 + 1.0 + k * (L - 2.0) / 55
+        tube(m, (x, front - 0.2, 7.6), (x, front - 0.2, 8.6), 0.04, "steel", 3)
+    tube(m, (x0 + 1.0, front - 0.2, 8.6), (x1 - 1.0, front - 0.2, 8.6), 0.05, "steel", 4)
+    tube(m, (x0 + 1.0, front - 0.2, 8.1), (x1 - 1.0, front - 0.2, 8.1), 0.03, "steel", 4)
+    for xc in (-36.0, -12.0, 12.0):
+        for xx in (xc - 5.0, xc + 5.0):
+            for yy in (-2.0, 3.0):
+                tube(m, (xx, yy, 7.6), (xx, yy, 10.0), 0.06, "steel", 4)
+        m.box((xc - 5.6, -2.6, 10.0), (xc + 5.6, 3.6, 10.15), "roof_membrane")
+    for xs in (-48.0, 30.0):
+        m.box((xs - 2.0, -4.5, 7.6), (xs + 2.0, -1.0, 10.2), "render")
+        m.box((xs - 2.2, -4.7, 10.2), (xs + 2.2, -0.8, 10.45), "concrete")
+        m.box((xs - 0.6, -1.0, 7.6), (xs + 0.6, -0.95, 9.6), "gear")
+    for xf in (-30.0, -20.0, -10.0, 0.0, 10.0):
+        tube(m, (xf, front - 0.6, 7.6), (xf, front - 0.6, 13.0), 0.05, "steel", 4)
     # The timing tower at the end nearest the hill.
-    tx = L / 2 - 6.0
-    m.box((tx - 5.0, -5.0, 7.6), (tx + 5.0, 5.0, 13.0), "render")
+    tx = x1 - 6.0
+    m.box((tx - 5.0, -5.0, 7.6), (tx + 5.0, 5.0, 10.0), "render")
+    for z in (7.9, 8.5, 9.1):
+        m.box((tx - 5.1, 5.0, z), (tx + 5.1, 5.35, z + 0.25), "white_steel")
     m.box((tx - 5.2, -5.2, 10.0), (tx + 5.2, 5.2, 12.6), "glass")
-    m.box((tx - 6.0, -6.0, 13.0), (tx + 6.0, 6.0, 13.5), "concrete")
-    # Its stairs up the side.
+    for k in range(9):
+        x = tx - 5.2 + k * 1.3
+        m.box((x - 0.05, 5.2, 10.0), (x + 0.05, 5.32, 12.6), "white_steel")
+    m.box((tx - 6.0, -6.0, 12.6), (tx + 6.0, 6.0, 13.1), "concrete")
+    m.box((tx - 1.2, 5.25, 12.0), (tx + 1.2, 5.6, 12.55), "gear")
+    tube(m, (tx + 3.5, -3.5, 13.1), (tx + 3.5, -3.5, 13.45), 0.05, "steel", 3)
+    # Its stairs up the side, and a railing beside them.
     for k in range(12):
-        m.box((-L / 2 - 2.2, -D / 2 + 1 + k * 0.8, k * 0.6), (-L / 2, -D / 2 + 1.8 + k * 0.8, k * 0.6 + 0.6), "concrete")
+        m.box((x0 - 2.2, -front + 1 + k * 0.8, k * 0.6), (x0, -front + 1.8 + k * 0.8, k * 0.6 + 0.6), "concrete")
+    tube(m, (x0 - 2.1, -front + 1.0, 1.0), (x0 - 2.1, -front + 10.6, 7.6), 0.04, "steel", 3)
     m.finish(parent=root)
     return root
+
 
 
 # =============================================================================
@@ -1090,33 +1151,90 @@ def build_sakhir_tower():
 # =============================================================================
 
 def build_sp_towers():
-    """An art deco tower stepping up to its spire (161 m), and a modernist
-    slab of rounded-triangle plan (165 m): the windows are the facade
-    shader's (the UVs in metres), stone at the setbacks."""
+    """Two São Paulo towers for the skyline: an art deco tower on a stone
+    podium with arched doorways, stepping back in tiers (piers up every face,
+    a parapet and urns at each setback) to a lantern and its spire (161 m);
+    and a modernist tower of rounded-triangle plan (165 m), a sun fin round
+    every floor, a glass crown and its mast. The windows are the facade
+    shader's (UVs in metres), stone at the setbacks."""
     clear()
     root = empty("sp_towers", (0, 0, 0))
     a = Mesh("altino")
-    tiers = [(20.0, 15.0, 0.0, 62.0), (15.0, 12.0, 62.0, 104.0), (10.0, 8.0, 104.0, 132.0), (6.0, 5.0, 132.0, 146.0)]
+    # The podium: two storeys of stone, arched doorways on the front.
+    a.box((-24.0, -18.0, 0.0), (24.0, 18.0, 9.0), "stone")
+    a.box((-24.4, -18.4, 8.6), (24.4, 18.4, 9.4), "stone_dark")
+    for k in range(5):
+        x = -16.0 + k * 8.0
+        a.arch(Vector((x - 1.6, 18.0, 0.0)), X, Y, 3.2, 6.0, "glass", segs=6, proud=0.05)
+    tiers = [(20.0, 15.0, 9.0, 62.0), (15.0, 12.0, 62.0, 104.0), (10.0, 8.0, 104.0, 132.0), (6.0, 5.0, 132.0, 146.0)]
     for hx, hy, z0, z1 in tiers:
         a.box((-hx, -hy, z0), (hx, hy, z1), "facade")
         a.box((-hx - 0.4, -hy - 0.4, z1 - 1.2), (hx + 0.4, hy + 0.4, z1), "stone")
-        # Pilasters up the faces.
+        # Piers up the faces, doubled at the corners.
         for k in range(-3, 4):
             x = hx * k / 3.5
             a.box((x - 0.35, hy, z0), (x + 0.35, hy + 0.45, z1), "stone")
             a.box((x - 0.35, -hy - 0.45, z0), (x + 0.35, -hy, z1), "stone")
-    a.lathe([(3.0, 146.0), (2.0, 152.0), (0.6, 158.0), (0.0, 161.0)], (0.0, 0.0), "stone", segs=8)
+        for k in range(-2, 3):
+            y = hy * k / 2.5
+            a.box((hx, y - 0.35, z0), (hx + 0.45, y + 0.35, z1), "stone")
+            a.box((-hx - 0.45, y - 0.35, z0), (-hx, y + 0.35, z1), "stone")
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                a.box((sx * hx - 0.9, sy * hy - 0.9, z0), (sx * hx + 0.9, sy * hy + 0.9, z1 + 0.6), "stone")
+        # Spandrel bands every ten floors.
+        for z in range(int(z0) + 32, int(z1) - 2, 32):
+            a.box((-hx - 0.2, -hy - 0.2, z), (hx + 0.2, hy + 0.2, z + 0.7), "stone_dark")
+    # Parapets and urns at the setbacks.
+    for (hx, hy, _, z1), (nx, ny, _, _) in zip(tiers, tiers[1:]):
+        for sx in (-1, 1):
+            a.box((sx * hx - 0.3 if sx > 0 else -hx, -hy, z1), (hx if sx > 0 else -hx + 0.3, hy, z1 + 1.1), "stone")
+        for sy in (-1, 1):
+            a.box((-hx, sy * hy - 0.3 if sy > 0 else -hy, z1), (hx, hy if sy > 0 else -hy + 0.3, z1 + 1.1), "stone")
+        for sx in (-1, 1):
+            for sy in (-1, 1):
+                a.lathe([(0.0, z1 + 1.1), (0.6, z1 + 1.3), (0.9, z1 + 2.2), (0.4, z1 + 2.8), (0.0, z1 + 3.0)], (sx * (hx - 0.8), sy * (hy - 0.8)), "stone", segs=6)
+    # The lantern and its spire.
+    a.lathe([(4.0, 146.0), (4.0, 149.0), (3.4, 149.4), (3.0, 152.0)], (0.0, 0.0), "stone", segs=8, smooth=False)
+    for k in range(8):
+        ang = 2 * math.pi * (k + 0.5) / 8
+        a.box((math.cos(ang) * 3.0 - 0.4, math.sin(ang) * 3.0 - 0.4, 146.5), (math.cos(ang) * 3.0 + 0.4, math.sin(ang) * 3.0 + 0.4, 148.5), "glass")
+    a.lathe([(3.0, 152.0), (2.0, 154.0), (0.7, 158.0), (0.0, 161.0)], (0.0, 0.0), "stone", segs=8)
     a.finish(parent=root)
     it = Mesh("italia")
+    cx = 90.0
     plan = []
     for k in range(24):
         ang = 2 * math.pi * k / 24
         r = 26.0 * (1.0 + 0.12 * math.cos(3 * ang))
-        plan.append((r * math.cos(ang) + 90.0, r * math.sin(ang)))
-    it.prism(plan, 0.0, 160.0, "facade", cap_top=False)
-    it.prism([(x + (x - 90.0) * 0.04, y * 1.04) for x, y in plan], 160.0, 165.0, "stone")
+        plan.append((r * math.cos(ang) + cx, r * math.sin(ang)))
+    # A base of two storeys, set back under the tower on columns.
+    it.prism([(cx + (x - cx) * 0.92, y * 0.92) for x, y in plan], 0.0, 8.0, "glass", cap_top=False)
+    for k in range(0, 24, 2):
+        x, y = plan[k]
+        it.box((x - 0.5, y - 0.5, 0.0), (x + 0.5, y + 0.5, 8.0), "concrete")
+    it.prism(plan, 8.0, 160.0, "facade", cap_top=False)
+    # A sun fin round every floor (3.2 m), proud of the glass.
+    z = 8.0 + 3.2
+    while z < 159.0:
+        ring_out = [(cx + (x - cx) * 1.045, y * 1.045) for x, y in plan]
+        lo = [(x, y, z) for x, y in ring_out]
+        hi = [(x, y, z + 0.35) for x, y in ring_out]
+        inner_lo = [(x, y, z) for x, y in plan]
+        inner_hi = [(x, y, z + 0.35) for x, y in plan]
+        for k in range(24):
+            j = (k + 1) % 24
+            it.face((lo[k], lo[j], hi[j], hi[k]), "concrete")
+            it.face((inner_hi[k], inner_hi[j], hi[j], hi[k]), "concrete")
+            it.face((lo[k], lo[j], inner_lo[j], inner_lo[k]), "concrete")
+        z += 3.2
+    # The crown: a glass storey stepped in, a roof slab over, a mast.
+    it.prism([(cx + (x - cx) * 0.94, y * 0.94) for x, y in plan], 160.0, 163.5, "glass", cap_top=False)
+    it.prism([(cx + (x - cx) * 1.06, y * 1.06) for x, y in plan], 163.5, 165.0, "stone")
+    tube(it, (cx, 0.0, 165.0), (cx, 0.0, 168.0), 0.25, "steel", 6)
     it.finish(parent=root)
     return root
+
 
 # =============================================================================
 # Build, check, export, preview
@@ -1278,7 +1396,7 @@ for build, name, budget, size_check, shots, night, uvs in (
     (build_flyer, "singapore_flyer", 40000, tall(160, 172), [("front", (60, 330, 70), (0, 0, 85))], True, False),
     (build_suzuka_wheel, "suzuka_wheel", 40000, tall(46, 60), [("front", (30, 90, 20), (0, 0, 26))], False, False),
     (build_monza_banking, "monza_banking", 40000, tall(7, 12), [("front", (30, 45, 6), (-20, 0, 4)), ("under", (0, -40, 4), (0, 2, 5))], False, False),
-    (build_spa_pits, "spa_pits", 40000, tall(10, 20), [("front", (40, 70, 12), (0, 0, 5))], False, False),
+    (build_spa_pits, "spa_pits", 40000, tall(10, 20), [("front", (40, 70, 12), (0, 0, 5)), ("close", (40, 30, 6), (30, 5, 5))], False, False),
     (build_silverstone_wing, "silverstone_wing", 40000, tall(18, 32), [("front", (110, 140, 25), (0, 0, 14))], False, False),
     (build_sakhir_tower, "sakhir_tower", 40000, tall(45, 65), [("front", (45, 75, 30), (0, 0, 35))], False, False),
     (build_sp_towers, "sp_towers", 40000, tall(150, 170), [("front", (60, 320, 70), (45, 0, 80))], False, True),

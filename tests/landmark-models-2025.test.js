@@ -5,7 +5,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
-const { load, part, node, triangles } = require("./glb-read.js");
+const { ready, load, part, node, triangles } = require("./glb-read.js");
+
+// (The models are compressed: the decoder first.)
+test.before(() => ready());
 
 const DIR = path.join(__dirname, "..", "assets", "landmarks");
 const file = (n) => path.join(DIR, `${n}.glb`);

@@ -3,15 +3,17 @@
 // at the city's scale, instanced per model and level of detail.
 //
 // A venue lists its harbour (r3d/landmarks.js VENUES):
-//   harbour: { quay, moored, anchored, anchorIn, wind }
+//   harbour: { quay, moored, anchored, anchorIn, wind, front }
 // quay: how far past the barrier the town's edge is (the yachts moor
 // stern-to there, side by side, along the longest stretches of open water);
 // moored and anchored: how many at most; anchorIn: the name of a landmark
 // whose bay they anchor in (else open water beyond the quays; none if that
 // landmark has no bay), or "sea" (offshore, past the coast's shore); wind:
-// the heading
-// (radians) their bows point to at anchor. Every yacht claims its water;
-// tenders run among them.
+// the heading (radians) their bows point to at anchor; front: { from, to,
+// quay }, the harbour front (signed lap distances from the line) where the
+// quay is `quay` behind the barrier on the water side (harbourSide), filled
+// first, packed stern-to with some bow-to as on race weekend. Every yacht
+// claims its water; tenders run among them.
 //
 // One material draws them: each vertex's role (hull, superstructure, ...)
 // takes the yacht's own colours; the vertex shader bobs, pitches and rolls
@@ -21,9 +23,9 @@
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { tracksideModel, LANDMARK_SCALE } from "./models.js";
+import { tracksideModel, LANDMARK_SCALE, floats } from "./models.js";
 import { footprintClear } from "./track.js";
-import { color } from "./textures.js";
+import { color, seeded, hashString } from "./textures.js";
 
 export const KINDS = ["superyacht", "motor", "explorer", "sail"];
 // Detailed within this of the camera (game units); the light model to the fog.
@@ -42,13 +44,15 @@ function kindGeometry(name) {
   const node = root && root.getObjectByName(name);
   if (!node) return null;
   node.updateMatrixWorld(true);
-  const inverse = node.matrixWorld.clone().invert();
+  // In the model's own frame: the node's parent's (a compressed model keeps
+  // its unpacking scale and offset on the node itself).
+  const inverse = node.parent ? node.parent.matrixWorld.clone().invert() : new THREE.Matrix4();
   const parts = [];
   node.traverse((m) => {
     if (!m.isMesh) return;
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", m.geometry.attributes.position.clone());
-    g.setAttribute("normal", m.geometry.attributes.normal.clone());
+    g.setAttribute("position", floats(m.geometry.attributes.position));
+    g.setAttribute("normal", floats(m.geometry.attributes.normal));
     if (m.geometry.index) g.setIndex(m.geometry.index.clone());
     const role = new Float32Array(g.attributes.position.count).fill(Math.max(0, ROLES.indexOf(m.material.name)));
     g.setAttribute("aRole", new THREE.BufferAttribute(role, 1));
@@ -139,6 +143,11 @@ function instancedKind(name, capacity, material) {
   geometry.setAttribute("aSuper", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
   geometry.setAttribute("aPhase", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
+  // What blocks a camera's view: the hull and the superstructure (up to its
+  // radar arch), not a sailing yacht's mast and rigging.
+  geometry.computeBoundingBox();
+  mesh.userData.sightBox = geometry.boundingBox.clone();
+  mesh.userData.sightBox.max.y = Math.min(mesh.userData.sightBox.max.y, 22);
   mesh.count = 0;
   mesh.frustumCulled = false;
   mesh.name = `yachts:${name}`;
@@ -149,11 +158,28 @@ function instancedKind(name, capacity, material) {
 // Where they go
 // ---------------------------------------------------------------------------
 
+// A harbour front (a venue's harbour.front: { from, to, side, quay }, signed
+// lap distances from the line): where the circuit runs along the quay, the
+// water on `side` right behind the barrier, no town between. Returns the
+// side of the water at a sample, or 0 off the front.
+export function harbourSide(course, venue) {
+  if (!course.harbour) {
+    const front = venue.harbour && venue.harbour.front;
+    const total = course.track.totalLength;
+    const on = (p) => {
+      const r = ((p.d % total) + total * 1.5) % total - total / 2;
+      return r >= front.from && r <= front.to && p.h <= 0.5;
+    };
+    course.harbour = { side: (p) => (front && on(p) ? front.side : 0), quay: front ? front.quay : 0 };
+  }
+  return course.harbour;
+}
+
 // Stern-to along the quay: the stern just off the town's edge, the bow out
 // over the water, side by side with a gap between. Every spot along the lap
 // is found first; the yachts then fill the longest unbroken stretches of
 // quay (the harbour), not whatever comes first round the lap.
-function moor(course, rand, quay, max) {
+function moor(course, rand, quay, max, front) {
   if (!max) return [];
   const spots = [];
   const { samples } = course;
@@ -165,20 +191,28 @@ function moor(course, rand, quay, max) {
     if (p.h > 0.5) continue;
     for (const side of [1, -1]) {
       if (along < nextAt[side]) continue;
+      // On the harbour front only the water side, the quay just behind the
+      // barrier; its town side is the town's.
+      const onFront = front.side(p) !== 0;
+      if (onFront && front.side(p) !== side) continue;
+      const q = onFront ? front.quay : quay;
       const kind = KINDS[Math.floor(rand() * KINDS.length) % KINDS.length];
       const { L, W } = size(kind);
-      const stern = (side > 0 ? p.outerR : p.outerL) + 2 + quay + 3;
+      const stern = (side > 0 ? p.outerR : p.outerL) + 2 + q + 3;
       const off = side * (stern + L / 2);
       const x = p.x + p.nx * off;
       const z = p.y + p.ny * off;
       const heading = Math.atan2(p.ny * side, p.nx * side);
       // Clear water the whole length (beyond every quay), nothing there.
-      if (!footprintClear(course, x, z, heading, L / 2, W / 2 + 4, quay + 2)) continue;
-      const hull = { kind, x, z, heading, L, W, moored: true, side, along };
+      if (!footprintClear(course, x, z, heading, L / 2, W / 2 + 4, q + 2)) continue;
+      // A few moored bow-to (the bow to the quay).
+      const bowTo = rand() < 0.2;
+      const hull = { kind, x, z, heading: bowTo ? heading + Math.PI : heading, L, W, moored: true, side, along, d: p.d, front: onFront };
       if ([-0.35, 0, 0.35].some((f) => course.occupied.blocked(x + Math.cos(heading) * L * f, z + Math.sin(heading) * L * f, W / 2 + 2))) continue;
-      if (spots.some((o) => hullsMeet(o, hull, 4))) continue;
+      if (spots.some((o) => hullsMeet(o, hull, hull.front ? 1.5 : 4))) continue;
       spots.push(hull);
-      nextAt[side] = along + W + 10 + rand() * 8;
+      // Packed side by side on the front, as on race weekend.
+      nextAt[side] = along + W + (onFront ? 5 + rand() * 3 : 10 + rand() * 8);
     }
   }
   // Runs: the same side, each a berth or two from the last.
@@ -191,11 +225,16 @@ function moor(course, rand, quay, max) {
     });
     if (run.length) runs.push(run);
   });
-  runs.sort((x, y) => y.length - x.length);
+  // The harbour front comes first, then the longest runs.
+  const inPrefer = (h) => h.front;
+  const score = (run) => run.filter(inPrefer).length * 1000 + run.length;
+  runs.sort((x, y) => score(y) - score(x));
   const out = [];
   for (const run of runs) {
     if (out.length >= max) break;
-    out.push(...run.slice(0, max - out.length));
+    // The berths in the named stretch first, then the rest of the run.
+    const order = [...run.filter(inPrefer), ...run.filter((h) => !inPrefer(h))];
+    out.push(...order.slice(0, max - out.length));
   }
   out.forEach((h) => [-0.35, 0, 0.35].forEach((f) => course.occupied.add(h.x + Math.cos(h.heading) * h.L * f, h.z + Math.sin(h.heading) * h.L * f, h.W / 2 + 3)));
   return out;
@@ -228,7 +267,8 @@ function anchor(course, rand, { count, area, quay, wind, others }) {
     }
     const hull = { kind, x, z, heading, L, W, moored: false };
     if ([...out, ...others].some((o) => hullsMeet(o, hull, 12))) continue;
-    if (!area) course.occupied.add(x, z, L / 2 + 10);
+    // (Claimed in a bay too: nothing, a TV camera say, is put on its water.)
+    course.occupied.add(x, z, L / 2 + 10);
     out.push(hull);
   }
   return out;
@@ -297,13 +337,16 @@ function bayArea(group, name) {
 
 // ---------------------------------------------------------------------------
 
-export function buildYachts(course, group, venue, rand) {
+export function buildYachts(course, group, venue) {
   const harbour = venue.harbour;
+  // Their own random stream: the fleet changing never reshuffles the town,
+  // the trees or the TV cameras placed after it.
+  const rand = seeded(hashString(course.track.id) ^ 0x7ac3e5d1);
   if (!harbour || !tracksideModel("yachts") || !size(KINDS[0])) return null;
   const out = new THREE.Group();
   out.name = "yachts";
   const quay = harbour.quay ?? 190;
-  const moored = moor(course, rand, quay, harbour.moored || 0);
+  const moored = moor(course, rand, quay, harbour.moored || 0, harbourSide(course, venue));
   const area = harbour.anchorIn === "sea" ? seaArea(course) : harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
   // A bay to anchor in that isn't there (its landmark fell back): none.
   const anchored = harbour.anchorIn && !area ? [] : anchor(course, rand, {
@@ -333,6 +376,15 @@ export function buildYachts(course, group, venue, rand) {
   });
   const yachts = list.filter((y) => meshes[y.kind]);
   yachts.forEach((y, i) => { y.index = i; });
+  // For the TV cameras' line of sight (render3d.js sightIndex): every
+  // yacht's place, fixed (the views re-order the instances), on the near
+  // model; the far model is never looked at.
+  Object.entries(meshes).forEach(([kind, { near, far }]) => {
+    near.userData.sightMatrices = yachts.filter((y) => y.kind === kind).map((y) => new THREE.Matrix4().compose(
+      new THREE.Vector3(y.x, 0, y.z), new THREE.Quaternion().setFromAxisAngle(UP, -y.heading), S,
+    ));
+    far.userData.sightSkip = true;
+  });
   out.userData = { yachts, meshes, area, night: Boolean(venue.night), written: new Int8Array(yachts.length).fill(-1), want: new Int8Array(yachts.length) };
   // Every one detailed until a view picks (prepare() compiles both models).
   showYachtsFor(out, null, "high");
@@ -426,6 +478,8 @@ export function inspectYachts(group) {
   return {
     count: yachts.length,
     moored: yachts.filter((y) => y.moored).length,
+    // Moored on the harbour front, right behind the barrier.
+    front: yachts.filter((y) => y.front).length,
     anchored: yachts.filter((y) => !y.moored).length,
     near,
     far,

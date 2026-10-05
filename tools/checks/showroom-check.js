@@ -1,6 +1,7 @@
 // Browser check: the pit lane's showroom car never sits under the pit lane's
 // own controls (the cups, the circuits, the driver, the strip, Start), at any
-// window size, for every cup and the season, with one or two players. Run with
+// window size, for every cup and the season, the random and custom cups and
+// the single race, with one or two players. Run with
 // the Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/showroom-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors []. Returns { results, errors }.
@@ -58,6 +59,12 @@ async (page) => {
       ["season", () => { Game.selectCup(CUPS.findIndex((c) => c.season)); }],
       ["two players", () => { Game.selectCup(0); Game.selectPlayers(2); }],
       ["season, two players picked", () => { Game.selectCup(CUPS.findIndex((c) => c.season)); }],
+      // The ways to choose races (choices.js): each one's own row and list.
+      ["random cup", () => { Game.selectPlayers(1); Game.selectRaceMode("random"); }],
+      ["custom cup, four", () => { Game.selectRaceMode("custom"); Game.clearCustomCircuits(); ["monaco", "spa", "suzuka", "interlagos"].forEach(Game.toggleCustomCircuit); }],
+      ["custom cup, two players", () => { Game.selectPlayers(2); }],
+      ["custom cup, one chosen", () => { Game.selectPlayers(1); Game.clearCustomCircuits(); Game.toggleCustomCircuit("yasmarina"); }],
+      ["single race, chosen", () => { Game.selectRaceMode("single"); Game.chooseSingleCircuit("hungaroring"); }],
     ]) {
       await p.evaluate(setup);
       // Three looks a second apart: the car turns.
@@ -77,7 +84,7 @@ async (page) => {
       }
     }
   }
-  await p.evaluate(() => { Game.selectPlayers(1); Game.selectCup(0); });
+  await p.evaluate(() => { Game.selectPlayers(1); Game.clearCustomCircuits(); Game.selectSinglePick("random"); Game.selectCup(0); });
   results.carClearOfThePitLane = bad.length === 0 || JSON.stringify(bad).slice(0, 1200);
   // Leaving the pit lane, the camera is plain again (no showroom framing
   // carried into the race).

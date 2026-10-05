@@ -121,13 +121,38 @@
     const atEdge = Math.abs(lat - side * (W - EDGE_IN)) <= 0.5;
     const takingEntry = atEdge && r >= lane.entry && r <= lane.entry + TURN_IN;
     if (!entered && !takingEntry) return { lat: side * (W - EDGE_IN), inLane: false, park: false };
-    const park = side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2);
-    const bay = lane.garages.bays[lane.garages.bays.length - 1].rel;
+    const { lat: park, rel: bay } = parkAt(lane);
     if (r >= bay) return { lat: park, inLane: true, park: true };
     const inLane = lane.latAt(d);
     const t = Math.max(0, Math.min(1, (r - (bay - EASE)) / EASE));
     return { lat: inLane + (park - inLane) * smooth(t), inLane: true, park: false };
   }
 
-  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, GARAGE_OUT_SHALLOW, GARAGE_FRONT, CLEAR, CLEAR_STREET, EDGE_IN, MOUTH, BAY, BAYS, lane, wayIn };
+  // Where the Safety Car parks: across the working lane, in front of its bay
+  // (the last, nearest the exit).
+  function parkAt(lane) {
+    const W = lane.halfWidth;
+    const bay = lane.garages.bays[lane.garages.bays.length - 1];
+    return { d: bay.d, rel: bay.rel, lat: lane.side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2) };
+  }
+
+  // Its way out, called again (game.js): from its bay, easing out of the
+  // working lane into the lane over the first 80, down the lane to the exit,
+  // where the lane itself brings it back to the road's edge on the pit side.
+  // Every step derived from the lane, so it can't leave it. Returns
+  // { lat, onRoad }: onRoad once it is on the road's edge (at the exit).
+  function wayOut(lane, d) {
+    const W = lane.halfWidth;
+    const edge = lane.side * (W - EDGE_IN);
+    const park = parkAt(lane);
+    const r = lane.rel(d);
+    if (r < park.rel) return { lat: park.lat, onRoad: false };
+    const inLane = lane.latAt(d);
+    if (inLane === null || r >= lane.exit) return { lat: edge, onRoad: true };
+    const t = Math.max(0, Math.min(1, (r - park.rel) / EASE));
+    const lat = park.lat + (inLane - park.lat) * smooth(t);
+    return { lat, onRoad: Math.abs(lat - edge) < 1e-6 };
+  }
+
+  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, GARAGE_OUT_SHALLOW, GARAGE_FRONT, CLEAR, CLEAR_STREET, EDGE_IN, MOUTH, BAY, BAYS, lane, wayIn, wayOut, parkAt };
 }));

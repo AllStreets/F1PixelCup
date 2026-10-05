@@ -8,6 +8,10 @@ Run headless, so it never touches an open Blender session:
 Set F1_LANDMARKS_PREVIEW=<dir> to also render each model there for review,
 and F1_LANDMARKS_ONLY=name,name to build only some.
 
+Then compress what was built, as every trackside model is:
+
+  node tools/compress-models.mjs assets/landmarks/<name>.glb ...
+
 Real metres, the ground at z = 0, the front toward +Y (the side that faces
 the circuit; glTF's -z). No logos, no trademarks, no text: the shapes are
 from public photographs, used only as reference. The mesh kit is the one of

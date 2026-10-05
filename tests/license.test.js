@@ -23,7 +23,9 @@ test("third-party notices carry each upstream licence and are linked from the RE
   const text = fs.readFileSync(path.join(root, "THIRD-PARTY-NOTICES"), "utf8");
   assert.match(text, /Copyright \(c\) 2019-2025 Tomislav Bacinger/);
   assert.match(text, /Copyright © 2010-2026 three\.js authors/);
-  assert.equal((text.match(/Permission is hereby granted, free of charge/g) || []).length, 2);
+  assert.match(text, /Copyright \(C\) 2016-2026, by Arseny Kapoulkine/);
+  // Each MIT licence in full: the circuits, three.js, meshoptimizer's decoder.
+  assert.equal((text.match(/Permission is hereby granted, free of charge/g) || []).length, 3);
   assert.match(text, /Poly Haven[\s\S]*CC0/);
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   assert.match(readme, /\[THIRD-PARTY-NOTICES\]\(THIRD-PARTY-NOTICES\)/);

@@ -86,8 +86,8 @@ async (page) => {
     return (inside && L.scale >= 1.3 && L.scale <= 2.5) || JSON.stringify(L);
   });
 
-  // The yachts: Monaco's moored at the quays and anchored out, Singapore's in
-  // the bay; every hull past the quays (190 past the barrier at Monaco), no
+  // The yachts: Monaco's moored at the quays (packed along the harbour front)
+  // and anchored out, Singapore's in the bay; every hull past the quay, no
   // two touching, Singapore's wholly inside Marina Bay. The 2025 harbours:
   // Yas Marina's, Baku's and Jeddah's at anchor at sea, every hull on its
   // water.
@@ -96,8 +96,10 @@ async (page) => {
     ["monaco", "singapore", "yasmarina", "baku", "jeddah"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
+    // (Monaco's harbour front: 25 or more moored right behind the barrier,
+    // the quay 14 behind it, as on race weekend.)
     const onWater = (y, least, clear) => y && y.anchored >= least && y.inBay && y.outsideBay === 0 && y.overlaps === 0 && y.leastClearance >= clear;
-    return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && m.overlaps === 0
+    return (m && m.moored >= 20 && m.front >= 25 && m.anchored >= 8 && m.leastClearance >= 14 && m.overlaps === 0
       && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40
       && onWater(out.yasmarina, 10, 100) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
   });

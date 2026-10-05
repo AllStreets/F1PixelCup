@@ -5,8 +5,9 @@
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside and
-// trackside2025 (the 2025 venues' landmarks). The race-day
-// parts are "replay", "podium" and "split" (assets/shots/race-day/).
+// trackside2025 (the 2025 venues' landmarks). The race-day parts are
+// "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
+// the pit lane's race choices and the circuit picker.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -213,7 +214,8 @@ async (page) => {
   const TRACKSIDE = [
     { name: "trackside-casino", circuit: "monaco", aim: "casino", back: 40, h: 12, ah: 40, fov: 60, side: 0 },
     { name: "trackside-yachts", circuit: "monaco", aim: "yachts" },
-    { name: "trackside-singapore", circuit: "singapore", aim: "singaporeFlyer", back: -260, h: 160, ah: 220, fov: 60, side: 120 },
+    // Down the main straight to the Flyer, the pits and Marina Bay Sands beside it.
+    { name: "trackside-singapore", circuit: "singapore", aim: "road", from: -500, to: 100, h: 14, fov: 62 },
     { name: "trackside-crowd", circuit: "monaco", aim: "stand" },
     { name: "trackside-crews", circuit: "monaco", aim: "crew" },
     { name: "trackside-wing", circuit: "silverstone", aim: "silverstoneWing", back: 60, h: 30, ah: 30, fov: 60, side: 40 },
@@ -238,7 +240,15 @@ async (page) => {
       let from;
       let at;
       let fov = 55;
-      if (t.aim === "yachts") {
+      if (t.aim === "road") {
+        const route = getItemRoute(state.track);
+        const L = state.track.totalLength;
+        const a = route.toWorld(((t.from % L) + L) % L, 0);
+        const b = route.toWorld(((t.to % L) + L) % L, 0);
+        from = { x: a.x, y: a.y, h: t.h };
+        at = { x: b.x, y: b.y, h: 10 };
+        fov = t.fov;
+      } else if (t.aim === "yachts") {
         // Over the water, the moored yachts sterns to the quay.
         const moored = ts.yachts.yachts.filter((v) => v.moored);
         const y = moored[Math.min(12, moored.length - 1)];
@@ -459,6 +469,34 @@ async (page) => {
     }, DAY);
     await p.waitForTimeout(1500);
     await dayShot("split-pitlane");
+  }
+
+  // ---- Choosing races (the site's "Your way" card): the pit lane with a
+  // random cup drawn, and the circuit picker with a custom cup being chosen, both
+  // at 1600x900 as the game draws them. sips makes the web size (README).
+  if (parts.includes("choices")) {
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate(() => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === SHOT_DRIVERS.hero));
+      Game.selectPlayers(1);
+      Game.selectRaceMode("random");
+    });
+    await p.waitForTimeout(1500);
+    await p.screenshot({ path: `${OUT}choices-pitlane.jpg`, type: "jpeg", quality: 90, scale: "css" });
+    written.push("choices-pitlane");
+    await p.evaluate(() => {
+      Game.selectRaceMode("custom");
+      Game.clearCustomCircuits();
+      // Three of four chosen: the running order, and a slot still to fill.
+      ["monaco", "spa", "suzuka"].forEach(Game.toggleCustomCircuit);
+      Screens.showCircuitPicker();
+      document.activeElement.blur();
+    });
+    await p.waitForTimeout(800);
+    await p.screenshot({ path: `${OUT}choices-picker.jpg`, type: "jpeg", quality: 90, scale: "css" });
+    written.push("choices-picker");
+    await p.evaluate(() => Screens.closeOverlay());
   }
   await p.evaluate(() => Screens.setShowroomArea(null));
   await context.close();

@@ -325,6 +325,14 @@ PIT_CLEAR = 46
 PIT_CLEAR_STREET = 22
 STREET = {"monaco", "singapore", "jeddah", "miami", "baku", "lasvegas"}
 
+# Where a circuit's pit lane goes when not by the line (the user, 2026-10-04):
+# Monaco's garages stood along the harbour front of the start straight, the
+# view the race opens on; that waterfront is the yachts' (r3d/yachts.js), and
+# the pit lane runs instead along the town's side of the climb from Sainte
+# Devote, backed by the hill. A stretch: its side and the signed distances it
+# may use; the lane is a real lane off the road there, entry and exit on it.
+PIT_STRETCH = {"monaco": {"side": -1, "lo": 560, "hi": 1700}}
+
 
 class Lap:
     """The lap as the game builds it: straight segments between the points."""
@@ -389,7 +397,7 @@ def pit_room(lap, side, r, reach, clear=PIT_CLEAR, spare=30):
 PIT_STEP = 10
 
 
-def place_pit_lane(pts, bridges, report, real=None, street=False):
+def place_pit_lane(pts, bridges, report, real=None, street=False, stretch=None):
     """The pit lane: along the stretch either side of the line, on whichever
     side has room. Every point of the lane must have room for the lane and
     working lane (W + PIT_WORK_OUT), and its bays for the garages as well
@@ -410,14 +418,14 @@ def place_pit_lane(pts, bridges, report, real=None, street=False):
         report["real_pit"] = f"side {real_side}, {round(real_lo)}..{round(real_hi)}"
     # Along the stretch either side of the line (the item boxes keep out of
     # the zone: place_item_boxes).
-    lo, hi = -START_ZONE_BEFORE - 260, 900
+    lo, hi = (stretch["lo"], stretch["hi"]) if stretch else (-START_ZONE_BEFORE - 260, 900)
     rs = list(range(lo, hi + 1, PIT_STEP))
     bridge_d = [lap.cum[k] for b in bridges for k in (b["under"], b["over"])]
     near_bridge = [any(lap.gap(bd, r) < 7 * WAYPOINT_STEP + PIT_MOUTH for bd in bridge_d) for r in rs]
     def search(garage_out):
         best = None
         maps = []
-        for side in (1, -1):
+        for side in ((stretch["side"],) if stretch else (1, -1)):
             clear = PIT_CLEAR_STREET if street else PIT_CLEAR
             # The lane's tarmac can take a tighter bend than the garages'
             # boxes (which would crowd each other at the back).
@@ -437,7 +445,7 @@ def place_pit_lane(pts, bridges, report, real=None, street=False):
                     # A pit lane runs past the line, its garages facing the
                     # grid: where the real side can't reach the line
                     # (Shanghai's snail crowds it), the other side does.
-                    if not entry < 0 <= exit_:
+                    if not stretch and not entry < 0 <= exit_:
                         continue
                     # The garages: eleven bays along the flat part, on slots
                     # with room, nearest its middle (one run where it can be,
@@ -466,6 +474,8 @@ def place_pit_lane(pts, bridges, report, real=None, street=False):
     pit = best[1]
     if depth != PIT_GARAGE_OUT:
         pit["garageOut"] = depth
+    if stretch:
+        pit["stretch"] = {"lo": stretch["lo"], "hi": stretch["hi"]}
     report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']}" + (" (shallow garages)" if depth != PIT_GARAGE_OUT else "")
     return pit
 
@@ -729,7 +739,7 @@ def main():
             real = {"side": side, "lo": signed(to_lap(i)), "hi": signed(to_lap(j))}
             if real["hi"] < real["lo"]:
                 real["lo"], real["hi"] = real["hi"], real["lo"]
-        pit = place_pit_lane(pts, bridges, report, real, game_id in STREET)
+        pit = place_pit_lane(pts, bridges, report, real, game_id in STREET, PIT_STRETCH.get(game_id))
         if real:
             # Where the real pit lane is, for the record (and the tests).
             pit["real"] = {"side": real["side"], "from": round(real["lo"]), "to": round(real["hi"])}

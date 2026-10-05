@@ -24,7 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
-import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled, loadAllVenueModels, releaseOtherVenues } from "./r3d/models.js";
+import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -157,7 +157,18 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => preloadModels(ids.map((id) => [...(VENUE_MODELS[id] || []), ...(STAND_MODELS[(VENUES[id] || {}).stand] ? [STAND_MODELS[(VENUES[id] || {}).stand]] : [])])), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+
+// A venue's type of stand's model (none listed: none).
+function venueStand(id) {
+  const stand = STAND_MODELS[(VENUES[id] || {}).stand];
+  return stand ? [stand] : [];
+}
+
+// A venue's models all in (or failed): its own, and its type of stand's.
+function venueModelsSettled(id) {
+  return modelsSettled(id, venueStand(id));
+}
 
 // A driver's painted helmet, read back (for the checks).
 function helmetInfo(driverId) {
@@ -948,7 +959,7 @@ function ensureWorld(track) {
   if (current && current.trackId === track.id && (current.modelsComplete || !venueModelsSettled(track.id))) return current;
   if (current) disposeWorld(current);
   // The venues not raced give their models back (r3d/models.js).
-  releaseOtherVenues(track.id);
+  releaseOtherVenues(track.id, venueStand(track.id));
   current = buildWorld(track);
   current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);
@@ -1280,15 +1291,11 @@ function drawFrame(frame) {
     lastDt = dt;
   }
   resize();
-  // The venue's own models still on their way: nothing built yet (it would
-  // only be built again when they land), the loading panel up.
-  if (!venueModelsSettled(track.id)) {
-    useViewport(null);
-    renderer.setRenderTarget(null);
-    renderer.setClearColor(scene.fog ? scene.fog.color : 0x000000, 1);
-    renderer.clear();
-    return { onKerb: false };
-  }
+  // (The venue's own models still on their way, the circuit is built at once
+  // with its stand-ins, so the race's world is there behind the results and
+  // for the ceremony's handoff; nothing is drawn of it until prepare() has
+  // its models, and it is built again with them. The cup fetches its next
+  // circuits' models ahead, so that is rare.)
   const world = ensureWorld(track);
   // Its shaders still compiling in the background (prepare): nothing to draw
   // yet but the sky's colour, under the loading panel -- drawing now would
@@ -1591,10 +1598,19 @@ function sightIndex(world) {
   };
   meshes.forEach(({ o, fence }) => {
     if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    if (o.userData.sightSkip) return;
     if (o.isInstancedMesh) {
-      for (let i = 0; i < o.count; i += 1) {
-        o.getMatrixAt(i, m);
-        file(box.copy(o.geometry.boundingBox).applyMatrix4(m.premultiply(o.matrixWorld)), 1, { o, i }, fence);
+      // (Instances a view re-orders each frame, the yachts, give their
+      // places once and for all in `sightMatrices`.)
+      const fixed = o.userData.sightMatrices;
+      const n = fixed ? fixed.length : o.count;
+      for (let i = 0; i < n; i += 1) {
+        if (fixed) m.copy(fixed[i]);
+        else o.getMatrixAt(i, m);
+        const at = m.clone().premultiply(o.matrixWorld);
+        // (An instance's own sight box where it has one: a yacht's hull and
+        // superstructure, not the air round its mast and rigging.)
+        file(box.copy(o.userData.sightBox || o.geometry.boundingBox).applyMatrix4(at), 1, { o, i, at }, fence);
       }
     } else if (o.geometry.attributes.position.count > SIGHT_SPLIT) {
       const pos = o.geometry.attributes.position;
@@ -1656,9 +1672,8 @@ function sightIndex(world) {
           if (!box.containsPoint(from) && (!ray.ray.intersectBox(box, hit) || hit.distanceTo(from) > far)) continue;
           if (kinds[k] === 1) {
             // An instance, exactly: its shape where that instance stands.
-            const { o, i } = refs[k];
-            o.getMatrixAt(i, one.matrixWorld);
-            one.matrixWorld.premultiply(o.matrixWorld);
+            const { o, at } = refs[k];
+            one.matrixWorld.copy(at);
             one.geometry = o.geometry;
             one.material = o.material;
             if (ray.intersectObject(one, false).length > 0) return false;
@@ -1890,7 +1905,7 @@ function auditYachts(track) {
       }
     }
   });
-  return { count: info.count, moored: info.moored, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
+  return { count: info.count, moored: info.moored, front: info.front, anchored: info.anchored, leastClearance: Math.round(least), ...auditFleet(world.yachts) };
 }
 
 // Every person placed at a circuit, against the track: none may stand
