@@ -101,7 +101,6 @@ function deviceInfo() {
 
 let graphicsChoice = storedGraphics();
 let autoTier = Quality.initialTier(deviceInfo());
-let autoSettled = false;
 const frameSamples = [];
 let lastFrameAt = 0;
 const currentTier = () => Quality.effectiveTier(graphicsChoice, autoTier);
@@ -110,23 +109,40 @@ postfx.setTier(currentTier());
 const rain = createRain(scene);
 rain.setTier(currentTier());
 
-// The first 90 frames of racing (not paused) decide whether auto steps down.
+// The render pixel ratio: the tier's cap (never above the screen's own), lowered
+// by dynamic resolution when racing frames run slow
+// (docs/superpowers/specs/2026-10-05-performance-headroom-design.md).
+const screenRatio = () => window.devicePixelRatio || 1;
+const ratioLimits = () => ({ cap: Quality.ratioCap(currentTier(), screenRatio()), floor: Quality.ratioFloor(currentTier(), screenRatio()) });
+const scaler = Quality.createScaler(ratioLimits());
+let scalerFor = "";
+function renderRatio() {
+  const key = `${currentTier()}|${screenRatio()}`;
+  if (key !== scalerFor) {
+    scalerFor = key;
+    scaler.reset(ratioLimits());
+  }
+  return scaler.ratio;
+}
+
+// Racing frames (not paused, not loading) feed dynamic resolution; once it is
+// at its floor and they are still slow, auto steps the tier down.
 function sampleFrame(racing) {
-  if (autoSettled || graphicsChoice !== "auto") return;
   const t = performance.now();
   if (!racing) { lastFrameAt = 0; return; }
-  if (lastFrameAt) frameSamples.push(t - lastFrameAt);
-  lastFrameAt = t;
-  if (frameSamples.length >= 90) {
-    autoSettled = true;
-    // The first frames of a race carry one-off work: judge the rest.
-    const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
+  if (lastFrameAt) {
+    const ms = t - lastFrameAt;
+    renderRatio();
+    scaler.sample(ms);
+    if (graphicsChoice === "auto" && frameSamples.length < 90) frameSamples.push(ms);
+    const next = graphicsChoice === "auto" ? Quality.nextAutoTier(autoTier, scaler) : autoTier;
     if (next !== autoTier) {
       autoTier = next;
       postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
   }
+  lastFrameAt = t;
 }
 
 function setGraphics(choice) {
@@ -143,7 +159,8 @@ function setGraphics(choice) {
 }
 
 function graphics() {
-  return { choice: graphicsChoice, autoTier, tier: currentTier(), sampled: frameSamples.length, settled: autoSettled };
+  renderRatio();
+  return { choice: graphicsChoice, autoTier, tier: currentTier(), sampled: frameSamples.length, ratio: scaler.ratio, cap: scaler.cap, floor: scaler.floor };
 }
 
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.1);
@@ -1136,7 +1153,7 @@ function setFov(fov) {
 function resize() {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = renderRatio();
   // The effects work at the size of one split-screen view, or the canvas.
   const split = viewports ? viewports[0] : null;
   const effects = split ? `${split.w}x${split.h}` : "";

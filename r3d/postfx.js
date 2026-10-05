@@ -15,10 +15,8 @@
 // and work on it in display space -- High is Low plus the effects, never a
 // different exposure.
 import * as THREE from "three";
-import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { ShaderPass } from "three/addons/postprocessing/ShaderPass.js";
-import { CopyShader } from "three/addons/shaders/CopyShader.js";
 
 // Per-circuit grades, in display space: lift and gain per channel, then
 // contrast and saturation. Night circuits bloom more (the floodlights).
@@ -70,6 +68,9 @@ const QUAD_CAMERA = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const FinishShader = {
   uniforms: {
     tDiffuse: { value: null },
+    // The bloom (half size and smaller), added wherever the frame is read.
+    tBloom: { value: null },
+    uBloom: { value: 0 },
     uLift: { value: new THREE.Vector3() },
     uGain: { value: new THREE.Vector3(1, 1, 1) },
     uContrast: { value: 1 },
@@ -92,10 +93,17 @@ const FinishShader = {
     void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tBloom;
+    uniform float uBloom;
     uniform vec3 uLift, uGain;
     uniform float uContrast, uSaturation, uVignette, uAspect, uSunVisible, uFlare, uBlur, uHaze, uTime, uGold, uRed, uRain, uStreak;
     uniform vec2 uSun;
     varying vec2 vUv;
+    // The frame with its bloom added, as an additive blend would have it.
+    vec3 frameAt(vec2 p) {
+      vec4 b = texture2D(tBloom, p);
+      return texture2D(tDiffuse, p).rgb + b.rgb * b.a * uBloom;
+    }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     // Rain on the lens: in each cell of a grid, maybe a drop, that lands,
     // slides down a little and dries; it bends the picture behind it like a
@@ -137,21 +145,21 @@ const FinishShader = {
         float band = smoothstep(0.38, 0.5, uv.y) * smoothstep(0.66, 0.52, uv.y);
         uv.x += sin(uv.y * 140.0 + uTime * 7.0) * 0.0011 * uHaze * band;
       }
-      vec3 col = texture2D(tDiffuse, uv).rgb;
+      vec3 col = frameAt(uv);
       col *= 1.0 - rim * 0.18;
       // Speed: a radial blur that only touches the edges of the frame.
       if (uBlur > 0.001) {
         vec2 dir = uv - 0.5;
         float edge = smoothstep(0.18, 0.72, length(dir));
         vec3 acc = col;
-        for (int i = 1; i < 6; i++) acc += texture2D(tDiffuse, uv - dir * float(i) * 0.011 * uBlur * edge).rgb;
+        for (int i = 1; i < 6; i++) acc += frameAt(uv - dir * float(i) * 0.011 * uBlur * edge);
         col = acc / 6.0;
       }
       // Arcade punch: a quick colour split on a hit or Overtake Mode.
       float split = uRed * 0.006 + uGold * 0.004;
       if (split > 0.0001) {
-        col.r = mix(col.r, texture2D(tDiffuse, uv + (uv - 0.5) * split).r, 0.85);
-        col.b = mix(col.b, texture2D(tDiffuse, uv - (uv - 0.5) * split).b, 0.85);
+        col.r = mix(col.r, frameAt(uv + (uv - 0.5) * split).r, 0.85);
+        col.b = mix(col.b, frameAt(uv - (uv - 0.5) * split).b, 0.85);
       }
       // The grade.
       col = (col - 0.5) * uContrast + 0.5;
@@ -185,7 +193,8 @@ const FinishShader = {
 export function createPostFx(renderer, scene, camera) {
   let tier = "low";
   let passes = { composer: false, bloom: false, grade: false, flare: false, speedBlur: false, haze: false, bursts: false };
-  let composer = null;
+  // Built (the effects tiers) or not (Low).
+  let built = false;
   let bloom = null;
   let finish = null;
   let frameTexture = null;
@@ -231,38 +240,86 @@ export function createPostFx(renderer, scene, camera) {
     return pixels ? new THREE.Vector2(pixels.w, pixels.h) : renderer.getDrawingBufferSize(new THREE.Vector2());
   }
 
+  // The copied frame is read straight by the bloom (at half size and down)
+  // and by the finish pass, which adds the bloom as it reads the frame: no
+  // full-size copy of the frame into a buffer, and no full-size blend of the
+  // bloom back over it (docs/superpowers/specs/2026-10-05-performance-headroom-design.md).
+  function makeFrameTexture(size) {
+    const t = new THREE.FramebufferTexture(size.x, size.y);
+    // The bloom samples it at half size: filtered, as the old buffer was.
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    return t;
+  }
+
   function build() {
-    const size = sized ? new THREE.Vector2(sized.w, sized.h) : renderer.getSize(new THREE.Vector2());
     const drawn = frameSize();
-    frameTexture = new THREE.FramebufferTexture(drawn.x, drawn.y);
-    const target = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType });
-    composer = new EffectComposer(renderer, target);
-    composer.setPixelRatio(renderer.getPixelRatio());
-    composer.setSize(size.x, size.y);
-    // The first pass reads the copied frame, not the composer's buffer.
-    const frame = new ShaderPass(CopyShader, "frame");
-    frame.uniforms.tDiffuse.value = frameTexture;
-    composer.addPass(frame);
-    bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.25, 0.4, 0.9);
-    composer.addPass(bloom);
-    finish = new ShaderPass(FinishShader);
-    composer.addPass(finish);
+    frameTexture = makeFrameTexture(drawn);
+    bloom = new UnrealBloomPass(new THREE.Vector2(drawn.x, drawn.y), 0.25, 0.4, 0.9);
+    // A texture name the finish shader has none of: it reads the frame and
+    // the bloom from its own uniforms, not from a composer's buffer.
+    finish = new ShaderPass(FinishShader, "none");
+    finish.renderToScreen = true;
+    finish.uniforms.tDiffuse.value = frameTexture;
+    finish.uniforms.tBloom.value = bloom.renderTargetsHorizontal[0].texture;
+    built = true;
     ready = false;
     warming = null;
     if (renderer.compileAsync) warm();
     else ready = true;
   }
 
-  // Low keeps nothing on the GPU: the composer's buffers, the bloom's mips
-  // and the frame copy are freed, and built again if a higher tier returns.
+  // The bloom of the copied frame, into its first mip's buffer (UnrealBloomPass's
+  // own steps, less its blend back over a full-size buffer).
+  const oldClear = new THREE.Color();
+  function renderBloom() {
+    renderer.getClearColor(oldClear);
+    const oldAlpha = renderer.getClearAlpha();
+    const oldAutoClear = renderer.autoClear;
+    renderer.autoClear = false;
+    renderer.setClearColor(bloom.clearColor, 0);
+    const quad = bloom._fsQuad;
+    bloom.highPassUniforms.tDiffuse.value = frameTexture;
+    bloom.highPassUniforms.luminosityThreshold.value = bloom.threshold;
+    quad.material = bloom.materialHighPassFilter;
+    renderer.setRenderTarget(bloom.renderTargetBright);
+    renderer.clear();
+    quad.render(renderer);
+    let input = bloom.renderTargetBright;
+    for (let i = 0; i < bloom.nMips; i += 1) {
+      const m = bloom.separableBlurMaterials[i];
+      quad.material = m;
+      m.uniforms.colorTexture.value = input.texture;
+      m.uniforms.direction.value = UnrealBloomPass.BlurDirectionX;
+      renderer.setRenderTarget(bloom.renderTargetsHorizontal[i]);
+      renderer.clear();
+      quad.render(renderer);
+      m.uniforms.colorTexture.value = bloom.renderTargetsHorizontal[i].texture;
+      m.uniforms.direction.value = UnrealBloomPass.BlurDirectionY;
+      renderer.setRenderTarget(bloom.renderTargetsVertical[i]);
+      renderer.clear();
+      quad.render(renderer);
+      input = bloom.renderTargetsVertical[i];
+    }
+    quad.material = bloom.compositeMaterial;
+    bloom.compositeMaterial.uniforms.bloomStrength.value = bloom.strength;
+    bloom.compositeMaterial.uniforms.bloomRadius.value = bloom.radius;
+    bloom.compositeMaterial.uniforms.bloomTintColors.value = bloom.bloomTintColors;
+    renderer.setRenderTarget(bloom.renderTargetsHorizontal[0]);
+    renderer.clear();
+    quad.render(renderer);
+    renderer.setClearColor(oldClear, oldAlpha);
+    renderer.autoClear = oldAutoClear;
+  }
+
+  // Low keeps nothing on the GPU: the bloom's mips and the frame copy are
+  // freed, and built again if a higher tier returns.
   function release() {
-    if (!composer) return;
+    if (!built) return;
     bloom.dispose();
     finish.material.dispose();
-    composer.passes.forEach((pass) => { if (pass !== bloom && pass !== finish && pass.material) pass.material.dispose(); });
-    composer.dispose();
     frameTexture.dispose();
-    composer = null;
+    built = false;
     bloom = null;
     finish = null;
     frameTexture = null;
@@ -273,7 +330,7 @@ export function createPostFx(renderer, scene, camera) {
   function setTier(next) {
     tier = next;
     passes = (window.Quality ? window.Quality.passesFor(next) : passes);
-    if (passes.composer && !composer) build();
+    if (passes.composer && !built) build();
     if (!passes.composer) release();
     if (bloom) bloom.enabled = passes.bloom;
     if (!passes.bursts) views.forEach((v) => { v.burst.gold = 0; v.burst.red = 0; v.burst.blur = 0; });
@@ -284,14 +341,13 @@ export function createPostFx(renderer, scene, camera) {
   function setSize(w, h, dpr, view = false) {
     sized = { w, h };
     pixels = view ? { w: Math.round(w * dpr), h: Math.round(h * dpr) } : null;
-    if (!composer) return;
-    composer.setPixelRatio(dpr);
-    composer.setSize(w, h);
+    if (!built) return;
     const drawn = frameSize();
+    bloom.setSize(drawn.x, drawn.y);
     if (frameTexture.image.width !== drawn.x || frameTexture.image.height !== drawn.y) {
       frameTexture.dispose();
-      frameTexture = new THREE.FramebufferTexture(drawn.x, drawn.y);
-      composer.passes[0].uniforms.tDiffuse.value = frameTexture;
+      frameTexture = makeFrameTexture(drawn);
+      finish.uniforms.tDiffuse.value = frameTexture;
     }
   }
 
@@ -336,7 +392,7 @@ export function createPostFx(renderer, scene, camera) {
     burst.gold *= Math.exp(-dt / 0.5);
     burst.red *= Math.exp(-dt / 0.3);
     burst.blur *= Math.exp(-dt / 0.7);
-    if (!passes.composer || !composer || !ready) {
+    if (!passes.composer || !built || !ready) {
       renderer.render(scene, camera);
       return;
     }
@@ -378,7 +434,10 @@ export function createPostFx(renderer, scene, camera) {
     const ratio = renderer.getPixelRatio();
     if (at) copyFrom.set(Math.round(at.x * ratio), Math.round(at.y * ratio));
     renderer.copyFramebufferToTexture(frameTexture, at ? copyFrom : null);
-    composer.render(dt);
+    u.uBloom.value = bloom.enabled ? 1 : 0;
+    if (bloom.enabled) renderBloom();
+    // Back to the screen (the view's viewport and scissor are the renderer's own).
+    finish.render(renderer, null, null);
   }
   const copyFrom = new THREE.Vector2();
 
@@ -386,19 +445,18 @@ export function createPostFx(renderer, scene, camera) {
   // the targets they draw to: all but the last into the effects' buffers, the
   // last to the screen.
   function warm() {
-    if (!composer) return Promise.resolve();
+    if (!built) return Promise.resolve();
     if (warming) return warming;
     const quads = (list) => { const g = new THREE.Group(); list.forEach((m) => g.add(new THREE.Mesh(QUAD, m))); return g; };
-    const offscreen = [composer.passes[0].material, composer.copyPass.material, bloom.materialHighPassFilter,
-      ...bloom.separableBlurMaterials, bloom.compositeMaterial, bloom.blendMaterial];
+    const offscreen = [bloom.materialHighPassFilter, ...bloom.separableBlurMaterials, bloom.compositeMaterial];
     const before = renderer.getRenderTarget();
-    renderer.setRenderTarget(composer.readBuffer);
+    renderer.setRenderTarget(bloom.renderTargetBright);
     const jobs = [renderer.compileAsync(quads(offscreen), QUAD_CAMERA)];
     renderer.setRenderTarget(null);
     jobs.push(renderer.compileAsync(quads([finish.material]), QUAD_CAMERA));
     renderer.setRenderTarget(before);
-    const built = composer;
-    const done = () => { if (composer === built) ready = true; };
+    const forBloom = bloom;
+    const done = () => { if (bloom === forBloom) ready = true; };
     warming = Promise.all(jobs).then(done, done);
     return warming;
   }
@@ -422,7 +480,7 @@ export function createPostFx(renderer, scene, camera) {
     inspect: (index = 0) => ({
       tier,
       // Whether the effects are drawing (their shaders compiled).
-      drawing: Boolean(composer && ready),
+      drawing: Boolean(built && ready),
       passes: { ...passes, bloom: Boolean(bloom && bloom.enabled && passes.bloom) },
       burst: { ...viewFor(index).burst },
       sunVisible: viewFor(index).sunVisible,

@@ -2,9 +2,9 @@
 // (docs/superpowers/specs/2026-09-29-postfx-design.md). Pure rules; in the page
 // this defines window.Quality, in Node it is require()-able for the tests.
 //
-// A first guess comes from the device. In the first seconds of racing the
-// frame times are measured and the tier steps down once if they run slow; it
-// never steps up on its own. The player's choice in Settings (auto, high,
+// A first guess comes from the device. While racing, dynamic resolution
+// lowers the render pixel ratio when frames run slow; once it is at its floor
+// and they still do, auto steps the tier down (never up on its own). The player's choice in Settings (auto, high,
 // medium, low) overrides it and is kept.
 (function attach(root, factory) {
   const api = factory();
@@ -62,5 +62,118 @@
     return { composer: on, bloom: on, grade: on, flare: high, speedBlur: high, haze: high, bursts: on };
   }
 
-  return { TIERS, CHOICES, SLOW_FRAME_MS, MIN_FRAMES, initialTier, adjustTier, parseChoice, effectiveTier, passesFor };
+  // The render pixel ratio (docs/superpowers/specs/2026-10-05-performance-
+  // headroom-design.md): each tier's cap, never above the screen's own, and
+  // the floor dynamic resolution may lower it to.
+  const PIXEL_RATIO = { high: 2, medium: 1.5, low: 1 };
+  const RATIO_FLOOR = { high: 1.25, medium: 1, low: 0.75 };
+  const ratioCap = (tier, screen) => Math.min(screen || 1, PIXEL_RATIO[tier] ?? 1);
+  const ratioFloor = (tier, screen) => Math.min(ratioCap(tier, screen), RATIO_FLOOR[tier] ?? 1);
+
+  // Dynamic resolution, judged a window of frames at a time.
+  const SCALE_WINDOW = 60;
+  const SCALE_STEP = 0.125;
+  // Steady windows before probing a step up when no headroom can be seen (a
+  // 60 Hz screen); doubled each time a probe fails.
+  const PROBE_WINDOWS = 5;
+  // Longer than this is a pause or a load, not a frame.
+  const GAP_MS = 250;
+  // Missing 60 fps: the median frame, or the slowest tenth.
+  const SLOW_MEDIAN_MS = 18.5;
+  const SLOW_P90_MS = 26;
+  // Clear headroom: the slowest tenth well inside a 60 fps frame.
+  const HEADROOM_P90_MS = 12;
+
+  function createScaler({ cap, floor }) {
+    let frames = [];
+    let steady = 0;
+    let probeWait = PROBE_WINDOWS;
+    let block = 0;
+    let windowIndex = 0;
+    let lastUp = -Infinity;
+    const s = {
+      ratio: cap,
+      cap,
+      floor: Math.min(floor, cap),
+      slowAtFloor: false,
+      get atFloor() { return s.ratio <= s.floor; },
+      sample(ms) {
+        if (!(ms > 0) || ms > GAP_MS) return s.ratio;
+        frames.push(ms);
+        if (frames.length >= SCALE_WINDOW) {
+          judge(frames);
+          frames = [];
+        }
+        return s.ratio;
+      },
+      reset(next) {
+        s.cap = next.cap;
+        s.floor = Math.min(next.floor, next.cap);
+        s.ratio = s.cap;
+        s.slowAtFloor = false;
+        frames = [];
+        steady = 0;
+        block = 0;
+        probeWait = PROBE_WINDOWS;
+        lastUp = -Infinity;
+      },
+    };
+    function judge(list) {
+      windowIndex += 1;
+      const sorted = [...list].sort((a, b) => a - b);
+      const at = (p) => sorted[Math.min(sorted.length - 1, Math.floor(p * sorted.length))];
+      const med = at(0.5);
+      const p90 = at(0.9);
+      // The screen's own refresh, near enough: the quicker frames.
+      const refresh = at(0.1);
+      const slow = med > SLOW_MEDIAN_MS || p90 > SLOW_P90_MS;
+      // A high-refresh screen's frames alternating between one refresh and
+      // two: each makes 60 fps, but the motion judders.
+      const late = sorted.filter((v) => v > refresh * 1.5).length / sorted.length;
+      const judder = !slow && refresh < 12 && late > 0.2 && late < 0.8;
+      if (slow || judder) {
+        steady = 0;
+        if (s.ratio <= s.floor) {
+          s.slowAtFloor = slow;
+          return;
+        }
+        // Down soon after a step up: that step failed, so wait longer next time.
+        if (windowIndex - lastUp <= 2) {
+          probeWait *= 2;
+          block = probeWait;
+        } else {
+          block = 0;
+        }
+        s.ratio = Math.max(s.floor, s.ratio - SCALE_STEP);
+        return;
+      }
+      s.slowAtFloor = false;
+      if (s.ratio >= s.cap) {
+        steady = 0;
+        return;
+      }
+      steady += 1;
+      if (block > 0) block -= 1;
+      const headroom = p90 < HEADROOM_P90_MS;
+      if ((headroom && block === 0) || steady >= probeWait) {
+        s.ratio = Math.min(s.cap, s.ratio + SCALE_STEP);
+        lastUp = windowIndex;
+        steady = 0;
+      }
+    }
+    return s;
+  }
+
+  // Auto's tier: one down when dynamic resolution has done all it can.
+  function nextAutoTier(tier, scaler) {
+    if (!scaler || !scaler.slowAtFloor) return tier;
+    const i = TIERS.indexOf(tier);
+    return i >= 0 && i < TIERS.length - 1 ? TIERS[i + 1] : tier;
+  }
+
+  return {
+    nextAutoTier,
+    TIERS, CHOICES, SLOW_FRAME_MS, MIN_FRAMES, initialTier, adjustTier, parseChoice, effectiveTier, passesFor,
+    PIXEL_RATIO, RATIO_FLOOR, ratioCap, ratioFloor, SCALE_WINDOW, SCALE_STEP, PROBE_WINDOWS, createScaler,
+  };
 }));

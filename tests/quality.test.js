@@ -59,3 +59,96 @@ test("what each tier draws", () => {
   assert.deepEqual(Quality.passesFor("medium"), { composer: true, bloom: true, grade: true, flare: false, speedBlur: false, haze: false, bursts: true });
   assert.deepEqual(Quality.passesFor("low"), { composer: false, bloom: false, grade: false, flare: false, speedBlur: false, haze: false, bursts: false });
 });
+
+// docs/superpowers/specs/2026-10-05-performance-headroom-design.md
+test("each tier caps the render pixel ratio, never above the screen's own", () => {
+  assert.deepEqual(Quality.PIXEL_RATIO, { high: 2, medium: 1.5, low: 1 });
+  assert.deepEqual(Quality.RATIO_FLOOR, { high: 1.25, medium: 1, low: 0.75 });
+  assert.equal(Quality.ratioCap("high", 2), 2);
+  assert.equal(Quality.ratioCap("high", 3), 2);
+  assert.equal(Quality.ratioCap("medium", 2), 1.5);
+  assert.equal(Quality.ratioCap("low", 2), 1);
+  assert.equal(Quality.ratioCap("medium", 1), 1);
+  assert.equal(Quality.ratioCap("high", 1.25), 1.25);
+  // The floor is never above the cap (a DPR 1 screen on High stays at 1).
+  assert.equal(Quality.ratioFloor("high", 1), 1);
+  assert.equal(Quality.ratioFloor("low", 1), 0.75);
+  assert.equal(Quality.ratioFloor("high", 2), 1.25);
+});
+
+const WIN = (ms, n = Quality.SCALE_WINDOW) => Array.from({ length: n }, (_, i) => (typeof ms === "function" ? ms(i) : ms));
+const feed = (scaler, frames) => { let r; frames.forEach((f) => { r = scaler.sample(f); }); return r; };
+
+test("dynamic resolution: steps down when frames miss 60 fps, to the tier's floor and no further", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  assert.equal(s.ratio, 2);
+  assert.equal(feed(s, WIN(25)), 1.875);
+  assert.equal(feed(s, WIN(25)), 1.75);
+  for (let i = 0; i < 10; i += 1) feed(s, WIN(25));
+  assert.equal(s.ratio, 1.25);
+  assert.equal(s.atFloor, true);
+  // A machine at its floor and still slow: the auto tier may step down.
+  assert.equal(s.slowAtFloor, true);
+});
+
+test("dynamic resolution: one hitch is not slow, a steady 60 Hz screen is not slow", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  feed(s, WIN((i) => (i === 5 ? 120 : 16.7)));
+  assert.equal(s.ratio, 2);
+  feed(s, WIN(16.7));
+  assert.equal(s.ratio, 2);
+  feed(s, WIN(8.33));
+  assert.equal(s.ratio, 2);
+});
+
+test("dynamic resolution: a 120 Hz screen juddering between one and two refreshes steps down", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  // Half the frames at 8.3 ms, half at 16.7: uneven, though every one makes 60 fps.
+  feed(s, WIN((i) => (i % 2 ? 16.7 : 8.33)));
+  assert.equal(s.ratio, 1.875);
+  // Steady again at the screen's rate: it stays.
+  feed(s, WIN(8.33));
+  feed(s, WIN(8.33));
+  assert.ok(s.ratio >= 1.875);
+});
+
+test("dynamic resolution: steps back up with clear headroom, or by a probe on a 60 Hz screen", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  feed(s, WIN(25));
+  feed(s, WIN(25));
+  assert.equal(s.ratio, 1.75);
+  // Clear headroom (a 120 Hz screen keeping up easily): up at once.
+  feed(s, WIN(8.33));
+  assert.equal(s.ratio, 1.875);
+  // 60 Hz screen, steady: no headroom visible, so after a few steady windows it probes up.
+  const t = Quality.createScaler({ cap: 2, floor: 1.25 });
+  feed(t, WIN(25));
+  assert.equal(t.ratio, 1.875);
+  for (let i = 0; i < Quality.PROBE_WINDOWS - 1; i += 1) feed(t, WIN(16.7));
+  assert.equal(t.ratio, 1.875);
+  feed(t, WIN(16.7));
+  assert.equal(t.ratio, 2);
+  // The probe fails: back down, and the next probe waits twice as long.
+  feed(t, WIN(25));
+  assert.equal(t.ratio, 1.875);
+  for (let i = 0; i < Quality.PROBE_WINDOWS * 2 - 1; i += 1) feed(t, WIN(16.7));
+  assert.equal(t.ratio, 1.875);
+  feed(t, WIN(16.7));
+  assert.equal(t.ratio, 2);
+});
+
+test("dynamic resolution: pauses and loading gaps are not frames", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  feed(s, WIN(400));
+  assert.equal(s.ratio, 2);
+  // A new cap (the tier changed) starts again from it.
+  s.reset({ cap: 1.5, floor: 1 });
+  assert.equal(s.ratio, 1.5);
+});
+
+test("auto steps a tier down only once dynamic resolution is at its floor and still slow", () => {
+  assert.equal(Quality.nextAutoTier("high", { slowAtFloor: false }), "high");
+  assert.equal(Quality.nextAutoTier("high", { slowAtFloor: true }), "medium");
+  assert.equal(Quality.nextAutoTier("medium", { slowAtFloor: true }), "low");
+  assert.equal(Quality.nextAutoTier("low", { slowAtFloor: true }), "low");
+});
