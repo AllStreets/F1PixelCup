@@ -24,12 +24,14 @@ test("strong items are held back for the first 15 seconds", () => {
 });
 
 test("a blocked roll moves to the next allowed item in that column, wrapping to the top", () => {
-  // safetyCar is last in the order, so a blocked one wraps to oilSlick (5% in tail).
-  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "safetyCar") }), "oilSlick");
-  // stewardPenalty blocked early -> formationLap blocked early -> safetyCar blocked -> oilSlick.
-  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "stewardPenalty") }), "oilSlick");
-  // In flight: stewardPenalty -> formationLap once the time gate has passed.
-  assert.equal(P.rollItem({ ...base, raceTime: 60, stewardInFlight: true, rng: rngFor("tail", "stewardPenalty") }), "formationLap");
+  // safetyCar is last in the order, so a blocked one wraps to DRS (29% in tail).
+  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "safetyCar") }), "drs");
+  // formationLap blocked early -> stewardPenalty blocked early -> safetyCar blocked -> drs.
+  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "formationLap") }), "drs");
+  // In flight: stewardPenalty -> safetyCar once its time gate has passed.
+  assert.equal(P.rollItem({ ...base, raceTime: 60, stewardInFlight: true, rng: rngFor("tail", "stewardPenalty") }), "safetyCar");
+  // In flight with the safety car on its cooldown: round to DRS.
+  assert.equal(P.rollItem({ ...base, raceTime: 60, lastSafetyCarAt: 50, stewardInFlight: true, rng: rngFor("tail", "stewardPenalty") }), "drs");
 });
 
 test("no safety car before 20 seconds or within 30 seconds of the last", () => {

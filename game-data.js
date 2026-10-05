@@ -141,6 +141,8 @@ DRIVERS.forEach((d) => { d.look = LOOKS[d.id]; });
 // Difficulty changes how well the AI drives, not what its cars are made of.
 // On Pro the rivals run exactly the player's physics (aiPace 1); Legend adds a 5% pace edge.
 // Rookie is the only setting that hands out a machinery handicap.
+// rubberBand: how much a CPU car well ahead of the player eases off
+// (racecraft.js rubberBand); cars near the player and behind are untouched.
 const DIFFICULTIES = [
   {
     id: "rookie", name: "Rookie",
@@ -148,12 +150,12 @@ const DIFFICULTIES = [
     cornerMargin: 0.7, // takes corners well inside what the car can do (racecraft.js)
     lineNoise: 36,     // wanders off the ideal line
     mistakeRate: 0.5,  // errors per second
-    catchUp: 0.12,
+    rubberBand: 0.14,
     lookBase: 52, lookSpeed: 0.34,   // barely looks past the next corner
   },
   {
     id: "pro", name: "Pro",
-    aiPace: 1.0, cornerMargin: 0.85, lineNoise: 20, mistakeRate: 0.16, catchUp: 0.05,
+    aiPace: 1.0, cornerMargin: 0.85, lineNoise: 20, mistakeRate: 0.16, rubberBand: 0.11,
     lookBase: 76, lookSpeed: 0.52,
   },
   {
@@ -163,7 +165,7 @@ const DIFFICULTIES = [
     // tools/checks/grid-check.js, which requires Legend at least 2% quicker
     // than Pro and Pro at least 5% quicker than Rookie.
     id: "legend", name: "Legend",
-    aiPace: 1.05, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
+    aiPace: 1.05, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, rubberBand: 0.10,
     lookBase: 76, lookSpeed: 0.52,
   },
 ];
@@ -233,27 +235,27 @@ const SEASON = { id: "season", name: "2025 Season", icon: "2025 Season", circuit
 // Each is an F1 idea with a Mario Kart counterpart. The site's cards and the
 // game's HUD both read this copy, so it must say exactly what the game does.
 const POWER_UPS = [
+  { id: "drs", name: "DRS", counterpart: "Mushroom",
+    effect: "Opens your rear wing for a three-second boost, or four and a half seconds if you use it on a straight: less drag and a higher top speed.",
+    controls: "Space to open the wing." },
   { id: "oilSlick", name: "Oil Slick", counterpart: "Banana",
     effect: "Drops a slick behind you that spins whoever drives through it, you included. Trail it behind your car and it blocks one Undercut or Debris from behind.",
     controls: "Tap Space to drop it. Hold Space to trail it; let go to drop it." },
   { id: "debris", name: "Debris", counterpart: "Green shell",
     effect: "Fired straight ahead. It bounces off the edges of the track for six seconds and spins anyone it hits, you included.",
     controls: "Space to fire." },
-  { id: "drs", name: "DRS", counterpart: "Mushroom",
-    effect: "Opens your rear wing for a two-second boost, or three seconds if you use it on a straight.",
-    controls: "Space to open the wing." },
   { id: "undercut", name: "Undercut", counterpart: "Red shell",
     effect: "Follows the track round the corners to the car ahead of you and spins it. A trailed Oil Slick stops it.",
     controls: "Space to fire." },
   { id: "overtakeMode", name: "Overtake Mode", counterpart: "Star",
-    effect: "Five seconds faster and untouchable: shots, oil and contact can't spin you, and any car you touch spins.",
+    effect: "Eight seconds faster and untouchable: shots, oil and contact can't spin or slow you, and any car you touch spins and is knocked aside.",
     controls: "Space to deploy." },
+  { id: "formationLap", name: "Formation Lap", counterpart: "Bullet Bill",
+    effect: "Six seconds of autopilot at huge speed along the racing line, untouchable, passing through the field like a ghost. It sets you down only where you are clear of other cars.",
+    controls: "Space to engage." },
   { id: "stewardPenalty", name: "Steward Penalty", counterpart: "Blue shell",
     effect: "Flies over the field to the race leader and hands them a long spin, and anyone right beside them.",
     controls: "Space to call the stewards." },
-  { id: "formationLap", name: "Formation Lap", counterpart: "Bullet Bill",
-    effect: "Four seconds of autopilot at huge speed along the racing line, untouchable, spinning anyone in the way.",
-    controls: "Space to engage." },
   { id: "safetyCar", name: "Safety Car", counterpart: "Lightning",
     effect: "A safety car comes out ahead of the leader for five seconds. Every rival is slowed to its pace and can't overtake. You aren't.",
     controls: "Space to deploy it." },
@@ -265,7 +267,7 @@ const POWER_UPS = [
 const SHOT_DRIVERS = {
   hero: "leclerc",
   items: {
-    oilSlick: "leclerc", debris: "hamilton", drs: "norris", undercut: "verstappen",
+    drs: "leclerc", oilSlick: "hamilton", debris: "norris", undercut: "verstappen",
     overtakeMode: "piastri", stewardPenalty: "russell", formationLap: "alonso", safetyCar: "albon",
   },
   circuits: {

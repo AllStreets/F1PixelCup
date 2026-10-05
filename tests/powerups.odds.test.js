@@ -14,9 +14,15 @@ function mulberry32(seed) {
 
 const LATE = { raceTime: 600, lastSafetyCarAt: null, stewardInFlight: false };
 const GAP_FOR = { lead: 0, front: 0.03, mid: 0.1, back: 0.2, tail: 0.5 };
+const STRONG = ["overtakeMode", "formationLap", "stewardPenalty", "safetyCar"];
 
 test("the roster order runs common to rare", () => {
-  assert.deepEqual(P.ITEM_ORDER, ["oilSlick", "debris", "drs", "undercut", "overtakeMode", "stewardPenalty", "formationLap", "safetyCar"]);
+  assert.deepEqual(P.ITEM_ORDER, ["drs", "oilSlick", "debris", "undercut", "overtakeMode", "formationLap", "stewardPenalty", "safetyCar"]);
+  // Common to rare is the order of the overall shares.
+  const s = P.overallShares();
+  for (let i = 1; i < P.ITEM_ORDER.length; i += 1) {
+    assert.ok(s[P.ITEM_ORDER[i]] <= s[P.ITEM_ORDER[i - 1]], `${P.ITEM_ORDER[i]} is commoner than ${P.ITEM_ORDER[i - 1]}`);
+  }
 });
 
 test("every column adds up to 100", () => {
@@ -27,14 +33,14 @@ test("every column adds up to 100", () => {
 });
 
 test("the odds table is the one in the spec", () => {
-  assert.deepEqual(P.ODDS.lead, { oilSlick: 55, debris: 35, drs: 10, undercut: 0, overtakeMode: 0, stewardPenalty: 0, formationLap: 0, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.front, { oilSlick: 35, debris: 30, drs: 15, undercut: 20, overtakeMode: 0, stewardPenalty: 0, formationLap: 0, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.mid, { oilSlick: 20, debris: 20, drs: 20, undercut: 25, overtakeMode: 10, stewardPenalty: 5, formationLap: 0, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.back, { oilSlick: 10, debris: 10, drs: 20, undercut: 15, overtakeMode: 18, stewardPenalty: 12, formationLap: 10, safetyCar: 5 });
-  assert.deepEqual(P.ODDS.tail, { oilSlick: 5, debris: 5, drs: 20, undercut: 10, overtakeMode: 20, stewardPenalty: 13, formationLap: 18, safetyCar: 9 });
+  assert.deepEqual(P.ODDS.lead, { drs: 10, oilSlick: 55, debris: 35, undercut: 0, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.front, { drs: 15, oilSlick: 40, debris: 33, undercut: 12, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.mid, { drs: 22, oilSlick: 25, debris: 15, undercut: 20, overtakeMode: 12, formationLap: 2, stewardPenalty: 4, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.back, { drs: 26, oilSlick: 5, debris: 8, undercut: 16, overtakeMode: 20, formationLap: 10, stewardPenalty: 8, safetyCar: 7 });
+  assert.deepEqual(P.ODDS.tail, { drs: 29, oilSlick: 0, debris: 4, undercut: 12, overtakeMode: 24, formationLap: 16, stewardPenalty: 8, safetyCar: 7 });
 });
 
-test("columnFor uses the gap to the leader, not the place", () => {
+test("columnFor uses the gap to the leader without a place", () => {
   assert.equal(P.columnFor(0, true), "lead");
   assert.equal(P.columnFor(0, false), "front");
   assert.equal(P.columnFor(0.0599, false), "front");
@@ -45,6 +51,33 @@ test("columnFor uses the gap to the leader, not the place", () => {
   assert.equal(P.columnFor(0.3, false), "tail");
   assert.equal(P.columnFor(4, false), "tail");
   assert.equal(P.columnFor(-0.2, false), "front");
+});
+
+test("columnFor: the place counts too, whichever is further back", () => {
+  // 20 cars: P2-P5 front, P6-P10 mid, P11-P15 back, P16-P20 tail (the
+  // spread overallShares assumes).
+  const col = (place, gap = 0) => P.columnFor(gap, place === 1, place, 20);
+  assert.deepEqual([1, 2, 5, 6, 10, 11, 15, 16, 20].map((p) => col(p)),
+    ["lead", "front", "front", "mid", "mid", "back", "back", "tail", "tail"]);
+  // A bunched field: last, though close behind the leader, rolls from the tail.
+  assert.equal(col(20, 0.02), "tail");
+  // Strung out: P3 a third of a lap down rolls from the tail.
+  assert.equal(col(3, 0.35), "tail");
+  // Other field sizes scale (19 CPU cars and two players is 21).
+  assert.equal(P.columnFor(0, false, 21, 21), "tail");
+  assert.equal(P.columnFor(0, false, 3, 10), "mid");
+  // The leader is the leader, whatever is asked.
+  assert.equal(P.columnFor(0.5, true, 1, 20), "lead");
+});
+
+test("rollItem rolls from the place's column: last in a bunched field gets the strong items", () => {
+  let tail = 0;
+  const rng = mulberry32(99);
+  for (let k = 0; k < 20000; k += 1) {
+    if (STRONG.includes(P.rollItem({ gapFraction: 0.01, isLeader: false, place: 20, field: 20, ...LATE, rng }))) tail += 1;
+  }
+  // The tail column's strong share is 55 %.
+  assert.ok(Math.abs(tail / 200 - 55) < 1.5, `${tail / 200}`);
 });
 
 test("200,000 rolls per column land within one point of the table", () => {
@@ -64,24 +97,28 @@ test("200,000 rolls per column land within one point of the table", () => {
 
 test("overall shares for a typical 20-car spread match the spec", () => {
   const s = P.overallShares();
-  const expected = { oilSlick: 18.5, drs: 18.5, debris: 16.5, undercut: 16.5, overtakeMode: 12, stewardPenalty: 7.5, formationLap: 7, safetyCar: 3.5 };
+  const expected = { drs: 22.75, oilSlick: 18.25, debris: 15.1, undercut: 14.4, overtakeMode: 14, formationLap: 7, stewardPenalty: 5, safetyCar: 3.5 };
   Object.entries(expected).forEach(([id, pct]) => assert.ok(Math.abs(s[id] - pct) < 1e-9, `${id} ${s[id]}`));
 });
 
 test("the stronger the item, the rarer it is", () => {
   const s = P.overallShares();
-  const byStrength = ["oilSlick", "drs", "debris", "undercut", "overtakeMode", "stewardPenalty", "formationLap", "safetyCar"];
-  for (let i = 1; i < byStrength.length; i += 1) {
-    assert.ok(s[byStrength[i]] <= s[byStrength[i - 1]], `${byStrength[i]} should not beat ${byStrength[i - 1]}`);
-  }
+  const weak = P.ITEM_ORDER.filter((id) => !STRONG.includes(id));
+  // Every strong item is rarer than every weak one.
+  STRONG.forEach((strong) => weak.forEach((w) => assert.ok(s[strong] < s[w], `${strong} vs ${w}`)));
+  // Overtake Mode is the commonest strong item, the Safety Car the rarest.
+  ["formationLap", "stewardPenalty", "safetyCar"].forEach((id) => assert.ok(s[id] < s.overtakeMode, id));
+  ["overtakeMode", "formationLap", "stewardPenalty"].forEach((id) => assert.ok(s.safetyCar < s[id], id));
 });
 
 test("rarity badges", () => {
   const s = P.overallShares();
+  assert.equal(P.rarityFor(s.drs), "Common");
   assert.equal(P.rarityFor(s.oilSlick), "Common");
-  assert.equal(P.rarityFor(s.undercut), "Common");
+  assert.equal(P.rarityFor(s.debris), "Common");
+  assert.equal(P.rarityFor(s.undercut), "Uncommon");
   assert.equal(P.rarityFor(s.overtakeMode), "Uncommon");
-  assert.equal(P.rarityFor(s.stewardPenalty), "Rare");
   assert.equal(P.rarityFor(s.formationLap), "Rare");
+  assert.equal(P.rarityFor(s.stewardPenalty), "Rare");
   assert.equal(P.rarityFor(s.safetyCar), "Very rare");
 });

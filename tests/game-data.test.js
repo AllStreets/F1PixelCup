@@ -162,6 +162,29 @@ test("every power-up has a painted SVG icon", () => {
   });
 });
 
+test("card copy states the fast items' real numbers (powerups.js)", () => {
+  const words = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten" };
+  const secs = (ms) => (ms % 1000 ? `${words[Math.floor(ms / 1000)]} and a half` : words[ms / 1000]);
+  const copy = Object.fromEntries(Data.POWER_UPS.map((p) => [p.id, p.effect]));
+  const T = PowerUps.TIMINGS;
+  assert.match(copy.overtakeMode, new RegExp(`^${secs(T.overtakeModeMs)} seconds`, "i"));
+  assert.match(copy.formationLap, new RegExp(`^${secs(T.formationLapMs)} seconds`, "i"));
+  assert.match(copy.drs, new RegExp(`${secs(T.drsMs)}-second boost, or ${secs(T.drsStraightMs)} seconds`));
+  // The Formation Lap ghosts through the field: it no longer spins anyone.
+  assert.match(copy.formationLap, /through/);
+  assert.doesNotMatch(copy.formationLap, /spin/);
+  // Overtake Mode knocks aside the cars it touches.
+  assert.match(copy.overtakeMode, /aside/);
+});
+
+test("the CPU rubber band eases off most on Rookie and least on Legend, and is gentle", () => {
+  const band = Data.DIFFICULTIES.map((d) => d.rubberBand);
+  band.forEach((b) => assert.ok(b > 0 && b <= 0.2, `${b}`));
+  assert.ok(band[0] >= band[1] && band[1] >= band[2]);
+  // (The old two-way catch-up is gone: CPU cars behind the player are never sped up.)
+  Data.DIFFICULTIES.forEach((d) => assert.equal(d.catchUp, undefined, d.id));
+});
+
 test("difficulties match the career multipliers", () => {
   assert.deepEqual(Data.DIFFICULTIES.map((d) => d.id), ["rookie", "pro", "legend"]);
 });

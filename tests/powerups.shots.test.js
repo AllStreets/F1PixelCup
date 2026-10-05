@@ -244,3 +244,43 @@ test("the road's half-width follows the track data where the road narrows", () =
   const plain = P.makeRoute([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], 50);
   assert.equal(plain.halfWidthAt(70), 50);
 });
+
+test("contacts are between car-shaped footprints: wheel to wheel or nose to tail", () => {
+  const L = P.CAR_LENGTH;
+  const W = P.CAR_WIDTH;
+  // Clear either way: no contact. Side by side a car's width apart is not a touch.
+  assert.equal(P.contactKind(L + 1, 0), null);
+  assert.equal(P.contactKind(0, W + 0.5), null);
+  // Alongside, overlapping a little across: wheel to wheel.
+  assert.equal(P.contactKind(4, W - 2), "side");
+  assert.equal(P.contactKind(-4, -(W - 2)), "side");
+  // In line, nose into a gearbox.
+  assert.equal(P.contactKind(L - 3, 2), "rear");
+  assert.equal(P.contactKind(-(L - 3), -2), "rear");
+});
+
+test("a Formation Lap only drops a car where it is clear of every other car", () => {
+  const lap = 4000;
+  const me = { id: "me", d: 100, lat: 0 };
+  assert.equal(P.formationClear(me, [me], lap), true);
+  // A car right on top of it, or just ahead in its lane: not clear.
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 110, lat: 4 }], lap), false);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 + P.CAR_LENGTH, lat: 0 }], lap), false);
+  // Across the start line too.
+  assert.equal(P.formationClear({ id: "me", d: 5, lat: 0 }, [{ id: "a", d: lap - 10, lat: 0 }], lap), false);
+  // Well ahead, well behind or well across the road: clear.
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 + P.CAR_LENGTH * 2, lat: 0 }], lap), true);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 - P.CAR_LENGTH * 2, lat: 0 }], lap), true);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 104, lat: P.CAR_WIDTH * 2 }], lap), true);
+});
+
+test("the fast items: Formation Lap and Overtake Mode outrun DRS and last longer", () => {
+  const F = P.FACTORS;
+  const T = P.TIMINGS;
+  assert.ok(F.formationLap > F.boost && F.boost > F.overtakeMode && F.overtakeMode > 1.1);
+  assert.ok(T.formationLapMs >= 6000 && T.overtakeModeMs >= 8000 && T.drsStraightMs > T.drsMs);
+  // However long the drop takes, a Formation Lap always ends.
+  assert.ok(T.formationGraceMs > 0 && T.formationGraceMs <= 3000);
+  // A broken box is back in a second, so the cars at the back get theirs too.
+  assert.ok(T.boxHiddenMs <= 1000);
+});

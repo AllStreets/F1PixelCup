@@ -1,5 +1,7 @@
 // Racecraft: how fast a CPU driver can take the road ahead, and when it must
-// brake for it (docs/superpowers/specs/2026-09-30-racecraft-design.md). Pure:
+// brake for it (docs/superpowers/specs/2026-09-30-racecraft-design.md); the
+// tow behind another car, and how CPU cars far ahead of the player ease off
+// (docs/superpowers/specs/2026-10-05-balance-design.md). Pure:
 // the corner speed comes from the car's own turning (and, wet, its grip), not
 // from a fixed rule, so a CPU drives the corners the way a good driver would.
 // In the page it defines window.Racecraft; in Node it is require()-able.
@@ -70,5 +72,30 @@
     return false;
   }
 
-  return { curvatureFromHeadings, yawAvailable, cornerSpeed, mustBrake };
+  // The tow (docs/superpowers/specs/2026-10-05-balance-design.md): in a
+  // car's wake the air is already moving, so the car behind meets less drag
+  // and reaches a higher top speed. Strongest right behind it (`from` is
+  // about as close as a car can follow), fading to nothing at `reach`, and
+  // only in its wake (within `width` across). `speed` is the top speed it is
+  // worth at full strength, `drag` how much of the drag it takes away.
+  const TOW = { from: 18, reach: 130, width: 22, speed: 0.09, drag: 0.003 };
+
+  function towShare(gap, latGap) {
+    if (!(gap >= TOW.from && gap <= TOW.reach) || Math.abs(latGap) > TOW.width) return 0;
+    return 1 - (gap - TOW.from) / (TOW.reach - TOW.from);
+  }
+
+  // A CPU car this far ahead of the player (along the race, in world units)
+  // eases off, by up to `strength` of its pace, and more the further ahead it
+  // is. Cars the player is racing (`near`) and cars behind are untouched, so
+  // it never shows where the player can see it.
+  const RUBBER_BAND = { near: 300, span: 1000 };
+
+  function rubberBand(aheadOfPlayer, strength) {
+    if (!(strength > 0)) return 1;
+    const t = Math.min(Math.max((aheadOfPlayer - RUBBER_BAND.near) / RUBBER_BAND.span, 0), 1);
+    return 1 - strength * t;
+  }
+
+  return { curvatureFromHeadings, yawAvailable, cornerSpeed, mustBrake, TOW, towShare, RUBBER_BAND, rubberBand };
 }));

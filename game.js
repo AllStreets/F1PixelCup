@@ -712,7 +712,7 @@ function onSameStretch(a, b, within = SAME_STRETCH) {
   return Math.abs(PowerUps.wrapDelta(a.trackDistance || 0, b.d ?? b.trackDistance ?? 0, state.track.totalLength)) <= within;
 }
 
-function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
+function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
   const cos = Math.cos(racer.heading);
   const sin = Math.sin(racer.heading);
   let throttleScale = 1;
@@ -721,9 +721,13 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
 
   // Two players qualify as ghosts to each other: neither holds the other up.
   const ghosts = state.phase === "qualifying" && isHuman(racer);
+  // A car on a Formation Lap is a ghost: it goes through the field, and the
+  // field doesn't make room for it.
+  if (racer.formationUntil > now) return { throttle, brake, steerInput };
   state.racers.forEach((other) => {
     if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
     if (ghosts && isHuman(other)) return;
+    if (other.formationUntil > now) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
@@ -734,12 +738,13 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
     const sideWeight = 1 - clamp(Math.abs(side) / 42, 0, 1);
     const pressure = forwardWeight * sideWeight;
     const steerAway = side >= 0 ? -1 : 1;
-    // Steering avoidance is the AI's substitute for a human's hands, so it
-    // stays AI-only. The throttle and brake penalty is machinery, so it is
-    // identical for everyone.
-    if (!racer.isPlayer) steerAdjust += steerAway * pressure * 0.88;
-
-    if (forward > 8) {
+    // Avoidance is the AI's substitute for a human's hands, so it stays
+    // AI-only: it steers round a car ahead, and lifts and brakes only when it
+    // is about to run into a slower one. A car close behind another isn't
+    // slowed by it (on a straight it gains, from the tow; updateRacer).
+    if (racer.isPlayer) return;
+    steerAdjust += steerAway * pressure * 0.88;
+    if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0)) {
       throttleScale = Math.min(throttleScale, 0.86 - pressure * 0.10);
       brakeBoost = Math.max(brakeBoost, pressure * 0.16);
     }
@@ -813,6 +818,8 @@ function createRacer(driver, kart, isPlayer, slot) {
     drsUntil: 0,
     protectedUntil: 0,
     formationUntil: 0,
+    formationEndsBy: 0,
+    towShare: 0,
     trailingOil: false,
     trailSince: 0,
     oilHoldStart: 0,
@@ -2151,6 +2158,8 @@ function finishRoulette(racer, now) {
   racer.currentItem = PowerUps.rollItem({
     gapFraction,
     isLeader: leader.id === racer.id,
+    place: getSortedRacers().indexOf(racer) + 1,
+    field: state.racers.length,
     raceTime: raceSeconds(now),
     lastSafetyCarAt: state.lastSafetyCarAt,
     stewardInFlight: state.shots.some((shot) => shot.type === "stewardPenalty"),
@@ -2214,6 +2223,7 @@ function useItem(racer, now, { trail = false } = {}) {
     emitFx("overtakeMode", racer);
   } else if (item === "formationLap") {
     racer.formationUntil = now + T.formationLapMs;
+    racer.formationEndsBy = racer.formationUntil + T.formationGraceMs;
   } else if (item === "oilSlick") {
     dropOil(racer, now, PowerUps.DROP_GAP);
   } else if (item === "undercut" || item === "debris" || item === "stewardPenalty") {
@@ -2581,6 +2591,24 @@ function mustBrakeForCorners(racer, difficulty) {
   return Racecraft.mustBrake(speed, corners, decel);
 }
 
+// How far into another car's tow this one is (racecraft.js towShare): the
+// strongest of the cars ahead of it on this stretch.
+function towShareFor(racer, now) {
+  // (In qualifying the cars on track are ghosts to each other.)
+  if (state.phase === "qualifying") return 0;
+  const L = state.track.totalLength;
+  let best = 0;
+  state.racers.forEach((other) => {
+    if (other === racer || other.finished || other.formationUntil > now) return;
+    const gap = PowerUps.wrapDelta(other.trackDistance || 0, racer.trackDistance || 0, L);
+    best = Math.max(best, Racecraft.towShare(gap, (other.lat || 0) - (racer.lat || 0)));
+  });
+  return best;
+}
+
+// An open DRS wing: this much less drag a step (game.js drag is 0.992).
+const DRS_LESS_DRAG = 0.004;
+
 function updateRacer(racer, dt, now) {
   if (racer.finished) {
     racer.drawFrom = null;
@@ -2678,7 +2706,7 @@ function updateRacer(racer, dt, now) {
     steerInput = clamp(angleDiff * 2.2, -1, 1);
   }
 
-  ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
+  ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput, now));
   // The controls as applied this step: the front wheels turn with the
   // steering, and the replay's input trace reads them.
   racer.steer = clamp(steerInput, -1, 1);
@@ -2703,6 +2731,9 @@ function updateRacer(racer, dt, now) {
   if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
   if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
   if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
+  // In another car's wake: a higher top speed, and less drag (below).
+  racer.towShare = racer.formationUntil > now ? 0 : towShareFor(racer, now);
+  targetSpeed *= 1 + Racecraft.TOW.speed * racer.towShare;
   const sc = state.safetyCar;
   if (sc && safetyCarActive(now) && racer.id !== sc.ownerId) {
     targetSpeed = Math.min(targetSpeed, racer.physics.maxSpeed * PowerUps.FACTORS.safetyCar);
@@ -2711,14 +2742,12 @@ function updateRacer(racer, dt, now) {
   if (!racer.isPlayer) {
     const difficulty = getDifficulty();
     targetSpeed *= difficulty.aiPace;
-    if (difficulty.catchUp) {
-      const people = humans();
-      if (people.length && !people.includes(racer)) {
-        // Positive when this car is behind the (nearest) player, negative when ahead.
-        const gap = TwoPlayer.nearestGap(people.map(getRaceProgress), getRaceProgress(racer));
-        const catchUp = clamp(gap / (state.track.totalLength * 0.5), -1, 1);
-        targetSpeed *= 1 + catchUp * difficulty.catchUp;
-      }
+    // Well ahead of every player (out of their sight), a CPU car eases off a
+    // little (racecraft.js). Cars near a player, and behind, race at full pace.
+    const people = humans();
+    if (difficulty.rubberBand && people.length && !people.includes(racer)) {
+      const ahead = getRaceProgress(racer) - Math.max(...people.map(getRaceProgress));
+      targetSpeed *= Racecraft.rubberBand(ahead, difficulty.rubberBand);
     }
   }
 
@@ -2750,7 +2779,9 @@ function updateRacer(racer, dt, now) {
     }
   }
 
-  racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992, dt * 60);
+  // Drag. An open DRS wing, or a tow, takes some of it away.
+  const lessDrag = Math.max(racer.drsUntil > now ? DRS_LESS_DRAG : 0, (racer.towShare || 0) * Racecraft.TOW.drag);
+  racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992 + lessDrag, dt * 60);
 
   // Behind the safety car nobody passes: rivals hold station behind the car
   // ahead. The safety car itself is solid for everyone, the car that called it
@@ -2851,6 +2882,14 @@ function updateRacer(racer, dt, now) {
       startRoulette(racer, now);
     }
   });
+
+  // A Formation Lap ends only where the car is clear of every other car, so
+  // it is never dropped on top of one (powerups.js formationClear); after its
+  // grace it ends wherever it is.
+  if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS && now < racer.formationEndsBy
+    && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
+    racer.formationUntil += PHYSICS_STEP_MS;
+  }
 
   const boosting = racer.boostUntil > now || racer.formationUntil > now;
   if (boosting !== racer.wasBoosting) {
@@ -3022,86 +3061,96 @@ function powerUpFrame(now) {
   };
 }
 
+// Contacts (docs/superpowers/specs/2026-10-05-balance-design.md). Cars touch
+// when their car-shaped footprints overlap (powerups.js contactKind), and the
+// way they met decides what it costs:
+// - wheel to wheel, they are pushed apart across the road and each scrubs a
+//   little speed; neither is thrown back, so a pass alongside can stick;
+// - nose to tail, the car behind runs into the gearbox in front: it is pushed
+//   back and can go no faster than a little under that car's speed.
+// A car in Overtake Mode loses nothing and isn't moved; the car it touches
+// spins and is knocked aside. A car on a Formation Lap is a ghost: it touches
+// nobody.
+const SIDE_SCRUB = 0.99;
+const REAR_LOSS = 0.9;
+const KNOCK_ASIDE = 14;
 function handleRacerContacts(now) {
   for (let i = 0; i < state.racers.length; i += 1) {
     for (let j = i + 1; j < state.racers.length; j += 1) {
       const a = state.racers[i];
       const b = state.racers[j];
       if (a.finished || b.finished) continue;
+      if (a.formationUntil > now || b.formationUntil > now) continue;
       if (!onSameStretch(a, b)) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy) || 0.001;
-      const minDistance = 28;
-      if (dist < minDistance) {
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const overlap = minDistance - dist;
-        const weightFactorA = clamp(1 - a.stats.weight * 0.45, 0.3, 0.7);
-        const weightFactorB = clamp(1 - b.stats.weight * 0.45, 0.3, 0.7);
-        const totalFactor = weightFactorA + weightFactorB;
-        const moveA = overlap * (weightFactorA / totalFactor);
-        const moveB = overlap * (weightFactorB / totalFactor);
+      if (dx * dx + dy * dy > PowerUps.CAR_LENGTH * PowerUps.CAR_LENGTH * 2) continue;
+      // The road's direction where they are, and b's offset from a along and across it.
+      const surfaceA = getActiveSurfaceInfo(a, state.track, now);
+      const surfaceB = getActiveSurfaceInfo(b, state.track, now);
+      const tangentX = (surfaceA.tangentX + surfaceB.tangentX) * 0.5 || surfaceA.tangentX || 1;
+      const tangentY = (surfaceA.tangentY + surfaceB.tangentY) * 0.5 || surfaceA.tangentY || 0;
+      const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+      const tx = tangentX / tangentLength;
+      const ty = tangentY / tangentLength;
+      const along = dx * tx + dy * ty;
+      const across = -dx * ty + dy * tx;
+      const kind = PowerUps.contactKind(along, across);
+      if (!kind) continue;
 
-        a.x -= nx * moveA;
-        a.y -= ny * moveA;
-        b.x += nx * moveB;
-        b.y += ny * moveB;
-
-        const progressDelta = getRaceProgress(b) - getRaceProgress(a);
-        const leaderIsB = progressDelta >= 0;
-        const surfaceA = getActiveSurfaceInfo(a, state.track, now);
-        const surfaceB = getActiveSurfaceInfo(b, state.track, now);
-        const tangentX = (surfaceA.tangentX + surfaceB.tangentX) * 0.5 || surfaceA.tangentX || 1;
-        const tangentY = (surfaceA.tangentY + surfaceB.tangentY) * 0.5 || surfaceA.tangentY || 0;
-        const tangentLength = Math.hypot(tangentX, tangentY) || 1;
-        const tx = tangentX / tangentLength;
-        const ty = tangentY / tangentLength;
-        const staggerPush = clamp(overlap * 1.5 + 6, 6, 22);
-        const lateralBias = clamp(overlap * 0.5, 1.5, 5);
-
-        if (leaderIsB) {
-          a.x -= tx * staggerPush * 0.55;
-          a.y -= ty * staggerPush * 0.55;
-          b.x += tx * staggerPush * 0.65;
-          b.y += ty * staggerPush * 0.65;
-          a.speed = Math.max(0, a.speed * 0.82);
-          b.speed = Math.min(b.physics.maxSpeed * 1.04, b.speed + 8);
-        } else {
-          b.x -= tx * staggerPush * 0.55;
-          b.y -= ty * staggerPush * 0.55;
-          a.x += tx * staggerPush * 0.65;
-          a.y += ty * staggerPush * 0.65;
-          b.speed = Math.max(0, b.speed * 0.82);
-          a.speed = Math.min(a.physics.maxSpeed * 1.04, a.speed + 8);
-        }
-
-        a.x -= ny * lateralBias;
-        a.y += nx * lateralBias;
-        b.x += ny * lateralBias;
-        b.y -= nx * lateralBias;
-
-        if (a.isPlayer || b.isPlayer) {
-          [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(overlap * 0.7, 2, 9), 220, r); });
-          if (overlap > 4) sfx.impact();
-        }
-        if (isProtected(a, now)) spinRacer(b, PowerUps.SPIN_MS.contact, now);
-        if (isProtected(b, now)) spinRacer(a, PowerUps.SPIN_MS.contact, now);
-
-        a.x = clamp(a.x, 24, WORLD.width - 24);
-        a.y = clamp(a.y, 24, WORLD.height - 24);
-        b.x = clamp(b.x, 24, WORLD.width - 24);
-        b.y = clamp(b.y, 24, WORLD.height - 24);
-
-        const correctedSurfaceA = getActiveSurfaceInfo(a, state.track, now);
-        const correctedSurfaceB = getActiveSurfaceInfo(b, state.track, now);
-        applyTrackBarrier(a, correctedSurfaceA);
-        applyTrackBarrier(b, correctedSurfaceB);
-        alignRacerToSurface(a, getActiveSurfaceInfo(a, state.track, now), 0.18, 0.86);
-        alignRacerToSurface(b, getActiveSurfaceInfo(b, state.track, now), 0.18, 0.86);
+      // Each car gives way in proportion to how light it is; a car in
+      // Overtake Mode doesn't give way at all.
+      const protA = isProtected(a, now);
+      const protB = isProtected(b, now);
+      const giveA = clamp(1 - a.stats.weight * 0.45, 0.3, 0.7);
+      const giveB = clamp(1 - b.stats.weight * 0.45, 0.3, 0.7);
+      const shareA = protA === protB ? giveA / (giveA + giveB) : protA ? 0 : 1;
+      const shareB = 1 - shareA;
+      let depth;
+      if (kind === "side") {
+        depth = PowerUps.CAR_WIDTH - Math.abs(across);
+        // Across the road: the road's normal, pointing from a towards b.
+        const sx = -ty * Math.sign(across || 1);
+        const sy = tx * Math.sign(across || 1);
+        a.x -= sx * depth * shareA;
+        a.y -= sy * depth * shareA;
+        b.x += sx * depth * shareB;
+        b.y += sy * depth * shareB;
+        if (!protA) a.speed *= SIDE_SCRUB;
+        if (!protB) b.speed *= SIDE_SCRUB;
+      } else {
+        depth = PowerUps.CAR_LENGTH - Math.abs(along);
+        const [back, front] = along >= 0 ? [a, b] : [b, a];
+        const backShare = back === a ? shareA : shareB;
+        back.x -= tx * depth * backShare;
+        back.y -= ty * depth * backShare;
+        front.x += tx * depth * (1 - backShare);
+        front.y += ty * depth * (1 - backShare);
+        if (!isProtected(back, now)) back.speed = Math.min(back.speed, Math.max(0, front.speed * REAR_LOSS));
       }
+
+      if (a.isPlayer || b.isPlayer) {
+        [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(depth * 0.7, 2, 9), 220, r); });
+        if (depth > 4) sfx.impact();
+      }
+      if (protA && !protB && spinRacer(b, PowerUps.SPIN_MS.contact, now)) knockAside(b, a, tx, ty);
+      if (protB && !protA && spinRacer(a, PowerUps.SPIN_MS.contact, now)) knockAside(a, b, tx, ty);
+
+      [a, b].forEach((r) => {
+        r.x = clamp(r.x, 24, WORLD.width - 24);
+        r.y = clamp(r.y, 24, WORLD.height - 24);
+        applyTrackBarrier(r, getActiveSurfaceInfo(r, state.track, now));
+        alignRacerToSurface(r, getActiveSurfaceInfo(r, state.track, now), 0.18, 0.86);
+      });
     }
   }
+}
+
+// A car spun by one in Overtake Mode is knocked across the road, away from it.
+function knockAside(victim, by, tx, ty) {
+  const side = (victim.x - by.x) * -ty + (victim.y - by.y) * tx >= 0 ? 1 : -1;
+  victim.x += -ty * side * KNOCK_ASIDE;
+  victim.y += tx * side * KNOCK_ASIDE;
 }
 
 const FLAG_FAST_FORWARD = 7;
