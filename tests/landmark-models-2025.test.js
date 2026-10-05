@@ -5,7 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
-const { load, part, node } = require("./glb-read.js");
+const { load, part, node, triangles } = require("./glb-read.js");
 
 const DIR = path.join(__dirname, "..", "assets", "landmarks");
 const file = (n) => path.join(DIR, `${n}.glb`);
@@ -20,7 +20,7 @@ const MODELS = {
   hillside: { parts: ["slope", "terraces"], top: [16, 34] },
   barcelona_grandstand: { parts: ["stand", "roof"], top: [20, 34] },
   biosphere: { parts: ["lattice", "plinth"], top: [60, 66] },
-  spielberg_bull: { parts: ["bull", "plinth"], top: [9, 14] },
+  spielberg_grandstand: { parts: ["stand", "roof", "bank"], top: [18, 40] },
   hugenholtz: { parts: ["terraces", "dune"], top: [10, 26] },
   flame_towers: { parts: ["flame_1", "flame_2", "flame_3"], top: [178, 192] },
   baku_old_city: { parts: ["walls", "maiden_tower"], top: [28, 34] },
@@ -93,12 +93,29 @@ test("the Biosphère: a 76 m lattice sphere cut at 62 m", () => {
   assert.ok(lat.tris > 6000, "a lattice, not a ball");
 });
 
-test("the Spielberg bull: about 16 m long, bronze-dark steel, on its plinth", () => {
-  const glb = load(file("spielberg_bull"));
-  const bull = part(glb, "bull");
-  assert.ok(bull.size[0] > 13 && bull.size[0] < 19, `${bull.size[0].toFixed(1)} m long`);
-  assert.ok(bull.materials.includes("bronze"));
-  assert.ok(bull.lo[1] > 1, "standing on the plinth");
+test("Spielberg: a neutral grandstand set into its bank (no sculpture, no mark)", () => {
+  assert.ok(!require("node:fs").existsSync(file("spielberg_bull")), "the bull (a brand's emblem) is gone");
+  const glb = load(file("spielberg_grandstand"));
+  const stand = part(glb, "stand");
+  assert.ok(stand.size[0] > 120 && stand.size[0] < 220, `the stand is ${stand.size[0].toFixed(0)} m long`);
+  ["crowd", "seat"].forEach((m) => assert.ok(stand.materials.includes(m), `no ${m}`));
+  assert.ok(part(glb, "bank").materials.includes("grass"), "the hillside behind it");
+});
+
+test("Miami: an open bowl, its ends lower than its sides (the far tiers seen over them)", () => {
+  const glb = load(file("miami_stadium"));
+  const pts = triangles(glb, "bowl").flat();
+  const top = (f) => Math.max(...pts.filter(f).map((v) => v[1]));
+  const ends = top((v) => Math.abs(v[0]) > 120);
+  const sides = top((v) => Math.abs(v[2]) > 100);
+  assert.ok(sides > 34 && ends < sides - 12, `the rim is ${ends.toFixed(0)} m at the ends, ${sides.toFixed(0)} m at the sides`);
+  // Its concourses open in the outer wall (dark bands), not a smooth drum.
+  assert.ok(part(glb, "bowl").materials.includes("gear"), "the concourse openings");
+});
+
+test("Yas Marina: the hotel's rooms are a hotel's (finer than an office's)", () => {
+  const glb = load(file("yas_hotel"));
+  assert.ok(part(glb, "block").materials.includes("facade_hotel"));
 });
 
 test("the Las Vegas Sphere: 157 m wide, 112 m tall, an LED skin", () => {

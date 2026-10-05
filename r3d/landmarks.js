@@ -154,8 +154,9 @@ export const VENUES = {
     fogNear: 900, fogFar: 4400,
     stand: "open",
     extras: ["siteLandmarks"],
-    // The bull by the pit straight, the bank at the first corner.
-    landmarks: ["spielbergBull", "hillside"],
+    // The main grandstand in its bank across from the pits, the bank at the
+    // first corner; the hills all round.
+    landmarks: ["spielbergGrandstand", "hillside"],
     hillside: { corner: "NIKI LAUDA KURVE" },
   },
   hungaroring: {
@@ -724,7 +725,7 @@ export { LANDMARK_SCALE };
 // a share of the rooms lit, warm and a few cool.
 // floors: how much a room's light follows its floor's (1: whole floors
 // together, an office; lower: a hotel, its rooms each their own).
-function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65 } = {}) {
+function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.62 } = {}) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uGlass = { value: color(glass) };
@@ -732,18 +733,20 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
     shader.uniforms.uNight = { value: night ? 1 : 0 };
     shader.uniforms.uLit = { value: lit };
     shader.uniforms.uFloors = { value: floors };
+    shader.uniforms.uRoom = { value: new THREE.Vector2(room[0], room[1]) };
+    shader.uniforms.uGlow = { value: glow };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec2 vFacade;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\n// glTF flips v: back to metres up the wall.\nvFacade = vec2(uv.x, 1.0 - uv.y);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
-        varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit; uniform float uFloors;
+        varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit; uniform float uFloors; uniform vec2 uRoom; uniform float uGlow;
         float facadeHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
         // Rooms 4 m wide, floors 3.2 m: the glass in an inset, its frame
         // and the floor slab round it (the technique of the user's Chicago
         // city, not its assets).
-        vec2 cell = vec2(vFacade.x / 4.0, vFacade.y / 3.2);
+        vec2 cell = vFacade / uRoom;
         vec2 f = fract(cell);
         vec2 room = floor(cell);
         // Where a room is smaller than a pixel or two, the wall's average
@@ -768,9 +771,61 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
         // The unlit rooms keep a faint glow from the corridors.
-        totalEmissiveRadiance += (roomLight * on * 0.62 + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
+        totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.06, 0.05, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v4-${night ? 1 : 0}-${glass}-${lit}-${floors}`;
+  m.customProgramCacheKey = () => `facade-v5-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}`;
+  return m;
+}
+
+// The Sphere's LED skin (Las Vegas): its image drawn per pixel from the
+// direction out of its centre, so it is crisp at any distance: a planet (an
+// abstract image of its own, no mark), its oceans and lands under swirling
+// cloud, turning slowly (sphereTime, advanced by the landmarks' animate).
+// Unlit: the screen is its own light.
+const sphereTime = { value: 0 };
+// Its centre in the model's metres (glTF: y up): build_landmarks_2025.py.
+const SPHERE_CENTRE_Y = 33.5;
+function sphereScreen() {
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSphereTime = sphereTime;
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vSphereDir;")
+      .replace("#include <begin_vertex>", `#include <begin_vertex>\nvSphereDir = normalize(position - vec3(0.0, ${SPHERE_CENTRE_Y.toFixed(1)}, 0.0));`);
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+        varying vec3 vSphereDir; uniform float uSphereTime;
+        float sHash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+        float sNoise(vec3 x) {
+          vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mix(sHash(i), sHash(i + vec3(1, 0, 0)), f.x), mix(sHash(i + vec3(0, 1, 0)), sHash(i + vec3(1, 1, 0)), f.x), f.y),
+                     mix(mix(sHash(i + vec3(0, 0, 1)), sHash(i + vec3(1, 0, 1)), f.x), mix(sHash(i + vec3(0, 1, 1)), sHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+        }
+        float sFbm(vec3 p) { float a = 0.5; float s = 0.0; for (int k = 0; k < 5; k++) { s += a * sNoise(p); p *= 2.03; a *= 0.5; } return s; }`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        // The globe turns about its axis (tilted toward the viewer).
+        vec3 d = normalize(vSphereDir);
+        float spin = uSphereTime * 0.03;
+        float cs = cos(spin); float sn = sin(spin);
+        vec3 g = vec3(d.x * cs - d.z * sn, d.y, d.x * sn + d.z * cs);
+        float land = sFbm(g * 2.2 + 3.1);
+        float lw = fwidth(land) + 0.004;
+        float isLand = smoothstep(0.52 - lw, 0.52 + lw, land);
+        vec3 ocean = mix(vec3(0.01, 0.07, 0.28), vec3(0.03, 0.22, 0.52), smoothstep(0.3, 0.52, land));
+        vec3 ground = mix(vec3(0.16, 0.38, 0.14), vec3(0.6, 0.5, 0.3), smoothstep(0.56, 0.7, land));
+        vec3 col = mix(ocean, ground, isLand);
+        float ice = smoothstep(0.78, 0.84, abs(g.y));
+        col = mix(col, vec3(0.92, 0.95, 1.0), ice);
+        float cloud = sFbm(vec3(g.x * 3.0, g.y * 7.0, g.z * 3.0) + vec3(uSphereTime * 0.01, 0.0, 0.0));
+        float cw = fwidth(cloud) + 0.004;
+        col = mix(col, vec3(0.96, 0.97, 1.0), smoothstep(0.56 - cw, 0.66 + cw, cloud) * 0.9);
+        // Lit from the front left, a dark limb, a thin blue rim of air.
+        float lit = 0.28 + 0.72 * clamp(dot(d, normalize(vec3(-0.35, 0.25, -0.9))), 0.0, 1.0);
+        col *= lit;
+        col += vec3(0.1, 0.25, 0.6) * pow(1.0 - abs(d.z), 3.0) * 0.35;
+        diffuseColor.rgb = col;`);
+  };
+  m.customProgramCacheKey = () => "sphere-screen-v1";
   return m;
 }
 
@@ -785,9 +840,12 @@ function dressLandmark(model, venue) {
     if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#1b283a", slab: "#4b535f", lit: 0.72, floors: 0.3 } : {});
     // Blue glass (Eureka, the Rialto, the Flame Towers) and bronze (the Strip).
     else if (src.name === "facade_blue") out = facadeMaterial(night, night ? { glass: "#16243a", slab: "#3f4b5c", lit: 0.7, floors: 0.4 } : { glass: "#2c4c74", slab: "#b9c3cf" });
+    // A hotel's rooms (Yas): narrower bays, fewer lit, whole floors calm
+    // and warm rather than a checkerboard of offices.
+    else if (src.name === "facade_hotel") out = facadeMaterial(night, night ? { glass: "#141a24", slab: "#1d2026", lit: 0.3, floors: 0.55, room: [2.4, 3.2], glow: 0.3 } : { room: [2.4, 3.2] });
     else if (src.name === "facade_bronze") out = facadeMaterial(night, night ? { glass: "#2a1e14", slab: "#4b3a2a", lit: 0.75, floors: 0.35 } : { glass: "#5a4128", slab: "#8a6a48" });
     // The Sphere's LED skin: its image in its vertex colours, lit by itself.
-    else if (src.name === "screen") out = new THREE.MeshBasicMaterial({ vertexColors: true });
+    else if (src.name === "screen") out = sphereScreen();
     // The landmark stands' rows of fans: the painted crowd, a row to a step
     // (the UVs are in metres: 12 m of crowd across the texture, a row 1.2 m).
     else if (src.name === "crowd") {
@@ -809,13 +867,12 @@ function dressLandmark(model, venue) {
       if (src.name === "seat") out.color = color(venue.standColor || "#c8102e");
       if (src.name === "grass") Object.assign(out, { color: color(venue.groundTint || "#6f9a52").multiplyScalar(0.82), roughness: 1, metalness: 0 });
       if (src.name === "sand") Object.assign(out, { color: color(venue.gravelTint || "#ddd0a8"), roughness: 1 });
-      if (src.name === "bronze") Object.assign(out, { metalness: 0.85, roughness: 0.34 });
       // A fountain's water: white, half see-through, lit from below at night.
       if (src.name === "spray") Object.assign(out, { transparent: true, opacity: 0.85, depthWrite: false, roughness: 0.4, metalness: 0, emissive: color("#eef4ff"), emissiveIntensity: night ? 0.9 : 0.15 });
       if (src.name === "mist") Object.assign(out, { transparent: true, opacity: 0.16, depthWrite: false, roughness: 0.6, metalness: 0, emissive: color("#dfeaff"), emissiveIntensity: night ? 0.22 : 0.05 });
       // The Yas gridshell's lights at night.
-      if (src.name === "gridshell") Object.assign(out, { emissive: color("#7d6bff"), emissiveIntensity: night ? 1.4 : 0 });
-      if (src.name === "dark_glass") Object.assign(out, { roughness: 0.1, metalness: 0.6, emissive: color("#4a34a0"), emissiveIntensity: night ? 0.55 : 0 });
+      if (src.name === "gridshell") Object.assign(out, { emissive: color("#8f86ff"), emissiveIntensity: night ? 0.75 : 0 });
+      if (src.name === "dark_glass") Object.assign(out, { roughness: 0.1, metalness: 0.6, emissive: color("#3c3290"), emissiveIntensity: night ? 0.12 : 0 });
     }
     out.name = src.name;
     out.userData.worldOwned = true;
@@ -1088,7 +1145,7 @@ const SITES = {
   hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
   barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
   biosphere: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [120, 200, 320, 480], step: 24 }),
-  spielbergBull: (c) => ({ anchors: oppositePits(c), gaps: [20, 35, 55, 80, 120], step: 10, gapFirst: true }),
+  spielbergGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
   // Its arc's pieces claimed one by one, so the hairpin sits in its curve.
   hugenholtz: (c) => ({ anchors: cornerAnchors(c, "HUGENHOLTZBOCHT", 0.2, 50), parts: [0, 1, 2, 3, 4, 5].flatMap((k) => [`terraces_${k}`, `dune_${k}`]), gaps: [6, 12, 20, 32, 50, 80, 120, 170, 230, 300], step: 12, gapFirst: true, faceTrack: true }),
   flameTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.15), gaps: [450, 650, 900, 1200], step: 30 }),
@@ -1098,7 +1155,9 @@ const SITES = {
   // Close by the track, its ground in front kept clear (the Strip's blocks
   // fill in round it, not in front of it).
   vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
-  vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30 }),
+  // The Strip's towers with their ground in front kept clear, so the city's
+  // blocks fill in round them, not across the view of them from the track.
+  vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30, forecourt: true }),
   losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
 };
@@ -1243,12 +1302,15 @@ function stadiumInside(course, group, venue) {
 
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
+  // (The Sphere's image turns: returned to be animated.)
+  const turning = venue.landmarks && venue.landmarks.includes("vegasSphere") ? { userData: { animate: (dt) => { sphereTime.value += dt; } } } : null;
   for (const name of venue.landmarks || []) {
     if (name === "jeddahFountain") fountainAtSea(course, group, venue);
     else if (name === "yasHotel") yasHotelHalves(course, group, venue);
     else if (name === "miamiStadium") stadiumInside(course, group, venue);
     else if (SITES[name]) modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
   }
+  return turning;
 }
 
 // ---------------------------------------------------------------------------
@@ -1555,7 +1617,8 @@ const EXTRAS = {
   // The Strip: tall resorts, lit, close along the circuit.
   vegasStrip(course, group, venue, rand) {
     streetBlocks(course, group, rand, {
-      rows: 2, height: [60, 200], depth: [40, 80], width: [40, 80], maxCount: 360, spacing: 10, setback: 14,
+      // One row: the Strip's own towers (the landmarks) stand behind them.
+      rows: 1, height: [50, 160], depth: [40, 80], width: [40, 80], maxCount: 240, spacing: 12, setback: 14,
       palette: ["#d8c79a", "#c9a46a", "#e6dccb", "#9fb3c8", "#c48a9a", "#b9a2d6", "#f0e0b0"],
       night: true, glass: "#2a2440", lit: 0.7,
     });

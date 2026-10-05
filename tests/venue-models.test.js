@@ -43,6 +43,11 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
   });
 });
 
+test("no brand's emblem among the models (the bull at Spielberg is one)", () => {
+  Object.entries(FILES).forEach(([name, f]) => assert.ok(!/bull/i.test(name) && !/bull/i.test(path.basename(f)), `${name}: ${f}`));
+  assert.ok(!fs.readdirSync(path.join(ROOT, "assets", "landmarks")).some((f) => /bull/i.test(f)), "a bull model is still in the assets");
+});
+
 test("every venue has its stand type", () => {
   Object.entries(VENUES).forEach(([id, v]) => assert.ok(["covered", "open"].includes(v.stand), `${id} has no stand type`));
 });

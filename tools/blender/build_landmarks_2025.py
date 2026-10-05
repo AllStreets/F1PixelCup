@@ -20,7 +20,7 @@ build_landmarks.py (Stage J), copied so the two scripts stay independent.
   hillside.glb             a spectator bank: a grass slope, terraces in it
   barcelona_grandstand.glb the main grandstand, two tiers, its trussed roof
   biosphere.glb            the Biosphere's double lattice on its plinth
-  spielberg_bull.glb       the steel bull on its rock
+  spielberg_grandstand.glb the main grandstand in its hillside
   hugenholtz.glb           the bowl of terraces round the hairpin, its dune
   flame_towers.glb         Baku's three Flame Towers
   baku_old_city.glb        the old city's walls and the Maiden Tower
@@ -85,6 +85,7 @@ PALETTE = {
     "facade": ((0.55, 0.60, 0.66), 0.4, 0.3),
     "facade_blue": ((0.40, 0.50, 0.66), 0.4, 0.3),
     "facade_bronze": ((0.55, 0.42, 0.28), 0.5, 0.3),
+    "facade_hotel": ((0.55, 0.60, 0.66), 0.4, 0.3),
     "window_lit": ((0.85, 0.9, 1.0), 0.0, 0.4),
     "planting": ((0.12, 0.32, 0.14), 0.0, 0.9),
     "seat": ((0.8, 0.06, 0.06), 0.0, 0.5),
@@ -105,7 +106,6 @@ PALETTE = {
     "mist": ((0.9, 0.93, 0.96), 0.0, 0.5),
     "grass": ((0.30, 0.50, 0.20), 0.0, 0.95),
     "sand": ((0.86, 0.79, 0.62), 0.0, 1.0),
-    "bronze": ((0.22, 0.18, 0.15), 0.8, 0.38),
     "screen": ((1.0, 1.0, 1.0), 0.0, 0.5),
     "gridshell": ((0.82, 0.85, 0.9), 0.7, 0.3),
     "dark_glass": ((0.05, 0.07, 0.1), 0.4, 0.1),
@@ -507,10 +507,13 @@ def build_fountain():
 # =============================================================================
 
 def build_miami_stadium():
-    """The stadium the circuit runs round: an oval bowl (about 280 by 235 m)
-    of seats stepping up from the field to the rim at 38 m, the outer wall
-    ribbed; the canopy ring over the upper seats at 45 m; four masts at the
-    corners rising to 90 m, cables down to the canopy."""
+    """The stadium the circuit runs round: an open oval bowl (about 280 by
+    235 m) of seats stepping up from the field, its upper tiers along the
+    sides (the rim at 38 m), the ends low (10 m), so from outside the far
+    tiers and the canopy's underside show over them; the outer wall ribbed,
+    its concourses dark bands open in it; the canopy ring over the upper
+    seats at 45 m; four masts at the corners rising to 90 m, their cables
+    fanning down over the canopy."""
     clear()
     root = empty("miami_stadium")
     b = Mesh("bowl")
@@ -518,11 +521,21 @@ def build_miami_stadium():
     A, B = 140.0, 117.0
     a0, b0 = 66.0, 43.0
 
+    def rim(t):
+        """The rim's height round the bowl: 38 m along the sides, 10 at the ends."""
+        return 10.0 + 28.0 * abs(math.sin(t)) ** 1.5
+
     def ring(f, z):
-        """A ring at fraction f from the field's edge (0) to the rim (1)."""
+        """A ring at fraction f from the field's edge (0) to the rim (1), at
+        height z where the rim is highest (lower toward the ends)."""
         a = a0 + (A - a0) * f
         bb = b0 + (B - b0) * f
-        return [(math.cos(2 * math.pi * k / n) * a, math.sin(2 * math.pi * k / n) * bb, z) for k in range(n)]
+        out = []
+        for k in range(n):
+            t = 2 * math.pi * k / n
+            zz = z if z <= 2.0 else 2.0 + (z - 2.0) * (rim(t) - 2.0) / 36.0
+            out.append((math.cos(t) * a, math.sin(t) * bb, zz))
+        return out
 
     rows = [ring(0.0, 0.0), ring(0.0, 2.0)]
     steps = 14
@@ -542,12 +555,24 @@ def build_miami_stadium():
         for k in range(n):
             j = (k + 1) % n
             b.face((r0[k], r0[j], r1[j], r1[k]), role)
-    # The ribs round the outer wall.
+    # The ribs round the outer wall, and the concourses: dark bands open in
+    # it at a third and two thirds of its height.
     for k in range(0, n, 2):
         t = 2 * math.pi * k / n
         x, y = math.cos(t) * (A + 0.8), math.sin(t) * (B + 0.8)
         rot = Matrix.Rotation(math.atan2(y / (B * B), x / (A * A)), 3, "Z")
-        b.box((x - 0.8, y - 1.0, 0), (x + 0.8, y + 1.0, 39.0), "white_steel", rot=rot, about=(x, y, 0))
+        b.box((x - 0.8, y - 1.0, 0), (x + 0.8, y + 1.0, rim(t) + 1.0), "white_steel", rot=rot, about=(x, y, 0))
+    for share in (0.33, 0.66):
+        lo = [(math.cos(2 * math.pi * k / n) * (A + 0.3), math.sin(2 * math.pi * k / n) * (B + 0.3), rim(2 * math.pi * k / n) * share) for k in range(n)]
+        hi = [(x, y, z + 3.0) for x, y, z in lo]
+        lo_in = [(x * 0.995, y * 0.995, z) for x, y, z in lo]
+        hi_in = [(x * 0.995, y * 0.995, z) for x, y, z in hi]
+        for k in range(n):
+            j = (k + 1) % n
+            b.face((lo[k], lo[j], hi[j], hi[k]), "gear")
+            b.face((hi_in[k], hi_in[j], lo_in[j], lo_in[k]), "gear")
+            b.face((hi[k], hi[j], hi_in[j], hi_in[k]), "gear")
+            b.face((lo_in[k], lo_in[j], lo[j], lo[k]), "gear")
     b.prism([(math.cos(2 * math.pi * k / n) * (a0 - 0.5), math.sin(2 * math.pi * k / n) * (b0 - 0.5)) for k in range(n)], 0.0, 0.3, "grass")
     b.finish(parent=root)
     # The canopy: a sloping ring of roof over the upper seats.
@@ -564,7 +589,7 @@ def build_miami_stadium():
     # Its legs down to the rim.
     for k in range(0, n, 4):
         ox, oy = outer[k]
-        tube(c, (ox * 0.99, oy * 0.99, 38.0), (ox * 0.99, oy * 0.99, 44.0), 0.7, "white_steel", 6)
+        tube(c, (ox * 0.99, oy * 0.99, rim(2 * math.pi * k / n) - 0.5), (ox * 0.99, oy * 0.99, 44.0), 0.7, "white_steel", 6)
     c.finish(parent=root)
     # The four masts at the corners, and their cables.
     mm = Mesh("masts")
@@ -573,9 +598,9 @@ def build_miami_stadium():
         bx, by = math.cos(t) * (A + 14), math.sin(t) * (B + 14)
         top = (bx * 0.97, by * 0.97, 90.0)
         tube(mm, (bx, by, 0), top, 2.2, "white_steel", 8)
-        for d in (-0.32, -0.16, 0.0, 0.16, 0.32):
-            ix, iy = math.cos(t + d) * (A - 30), math.sin(t + d) * (B - 30)
-            tube(mm, top, (ix, iy, 44.6), 0.25, "steel", 4)
+        for d in (-0.4, -0.28, -0.16, -0.05, 0.05, 0.16, 0.28, 0.4):
+            ix, iy = math.cos(t + d) * (A - 34), math.sin(t + d) * (B - 34)
+            tube(mm, top, (ix, iy, 44.3), 0.22, "steel", 4)
         mm.lathe([(0.0, 90.0), (2.6, 90.0), (0.0, 94.0)], (top[0], top[1]), "white_steel", segs=8)
     mm.finish(parent=root)
     return root
@@ -758,83 +783,57 @@ def build_biosphere():
 
 
 # =============================================================================
-# Spielberg: the steel bull
+# Spielberg: the main grandstand in its hillside
 # =============================================================================
 
-def cone(m, a, b, r0, r1, role, sides=8):
-    """A tapering bar from a (radius r0) to b (r1), closed at its ends."""
-    a, b = Vector(a), Vector(b)
-    d = (b - a).normalized()
-    side = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
-    u = d.cross(side).normalized()
-    v = d.cross(u)
-    ra = [a + (u * math.cos(2 * math.pi * k / sides) + v * math.sin(2 * math.pi * k / sides)) * r0 for k in range(sides)]
-    rb = [b + (u * math.cos(2 * math.pi * k / sides) + v * math.sin(2 * math.pi * k / sides)) * r1 for k in range(sides)]
-    for k in range(sides):
-        j = (k + 1) % sides
-        m.face((ra[k], ra[j], rb[j], rb[k]), role)
-    m.face(list(reversed(ra)), role)
-    m.face(rb, role)
-
-
-# The bull's body, tail to muzzle: (x, centre height, half-width, half-height).
-BULL_BODY = [
-    (-6.8, 7.3, 0.9, 1.1), (-6.2, 7.3, 1.6, 1.9), (-4.8, 7.1, 1.95, 2.2), (-2.4, 6.9, 2.0, 2.3),
-    (0.0, 7.1, 2.1, 2.5), (1.8, 7.5, 2.05, 2.9), (3.2, 7.0, 1.8, 2.7), (4.4, 6.1, 1.45, 2.0),
-    (5.4, 5.2, 1.15, 1.6), (6.4, 4.5, 1.0, 1.3), (7.3, 3.9, 0.85, 0.9), (7.8, 3.6, 0.55, 0.55),
-]
-
-
-def build_bull():
-    """A charging bull, about 14 m long: its head down and horns forward and
-    up, the hump of its shoulders high over a deep chest, tail raised,
-    forelegs braced and hind legs driving; in dark steel, faceted like the
-    plates of the real sculpture (a body lofted through its sections, the
-    legs and horns tapering bars); on a rough rock plinth. Generic: no mark."""
+def build_spielberg_grandstand():
+    """The main grandstand across from the pits, set into the green bank of
+    the Styrian hillside: 160 m of rows (fans and empty seats), a back wall,
+    a light roof pitched up toward the track on raking masts with their ties,
+    and the grass bank rising behind it. A neutral design: no mark."""
     clear()
-    root = empty("spielberg_bull")
-    k = 0.85
-    base = 1.6
-    at = lambda x, y, z: (x * k, y * k, z * k + base)
-    m = Mesh("bull")
-    n = 14
-    rings = []
-    for x, cz, hw, hh in BULL_BODY:
-        ring = []
-        for i in range(n):
-            t = 2 * math.pi * i / n
-            c, sn = math.cos(t), math.sin(t)
-            # A rounded box section, flatter on the back.
-            yy = hw * math.copysign(abs(c) ** 0.7, c)
-            zz = hh * math.copysign(abs(sn) ** 0.8, sn) * (0.9 if sn > 0 else 1.0)
-            ring.append(at(x, yy, cz + zz))
-        rings.append(ring)
-    for r0, r1 in zip(rings, rings[1:]):
-        for i in range(n):
-            j = (i + 1) % n
-            m.face((r0[i], r0[j], r1[j], r1[i]), "bronze")
-    m.face(list(reversed(rings[0])), "bronze")
-    m.face(rings[-1], "bronze")
-    for side in (1, -1):
-        # Forelegs braced forward, hind legs driving back.
-        cone(m, at(2.6, side * 1.3, 5.6), at(3.5, side * 1.45, 3.0), 1.05 * k, 0.75 * k, "bronze")
-        cone(m, at(3.5, side * 1.45, 3.0), at(4.6, side * 1.5, 0.35), 0.72 * k, 0.5 * k, "bronze")
-        cone(m, at(-4.7, side * 1.35, 6.6), at(-4.1, side * 1.5, 3.6), 1.5 * k, 0.85 * k, "bronze")
-        cone(m, at(-4.1, side * 1.5, 3.6), at(-6.3, side * 1.55, 0.35), 0.8 * k, 0.48 * k, "bronze")
-        # The horns, out and then forward and up.
-        cone(m, at(6.5, side * 0.8, 5.3), at(7.0, side * 2.3, 5.8), 0.42 * k, 0.32 * k, "bronze", 6)
-        cone(m, at(7.0, side * 2.3, 5.8), at(7.9, side * 2.7, 7.0), 0.32 * k, 0.08 * k, "bronze", 6)
-    cone(m, at(-6.6, 0, 7.8), at(-8.0, 0, 9.4), 0.32 * k, 0.2 * k, "bronze", 6)
-    cone(m, at(-8.0, 0, 9.4), at(-8.6, 0, 10.4), 0.2 * k, 0.12 * k, "bronze", 6)
-    m.finish(parent=root)
-    p = Mesh("plinth")
-    rock = []
-    for i in range(14):
-        t = 2 * math.pi * i / 14
-        r = 1.0 + 0.08 * math.sin(3 * t) + 0.05 * math.cos(5 * t)
-        rock.append((math.cos(t) * 9.0 * r, math.sin(t) * 4.2 * r))
-    p.prism(rock, 0.0, base, "stone_dark")
-    p.finish(parent=root)
+    root = empty("spielberg_grandstand")
+    s = Mesh("stand")
+    L = 80.0
+    for k in range(22):
+        y1 = 12.0 - 1.3 * k
+        s.box((-L, y1 - 1.3, 0), (L, y1, 1.6 + 0.62 * (k + 1)), ("concrete", "crowd", "crowd", "seat", "crowd", "crowd", "seat")[k % 7], skip=("-z",))
+    back = 12.0 - 1.3 * 22
+    s.box((-L, back - 2.0, 0), (L, back, 17.5), "concrete", skip=("-z",))
+    s.box((-L - 1.0, back - 2.0, 0), (-L, 13.0, 3.0), "concrete_dark")
+    s.box((L, back - 2.0, 0), (L + 1.0, 13.0, 3.0), "concrete_dark")
+    s.finish(parent=root)
+    r = Mesh("roof")
+    # The deck pitched up toward the track, a fascia along its front.
+    yb, yf, zb, zf = back - 2.0, 14.0, 21.0, 25.0
+    r.face([(-L - 2, yb, zb), (L + 2, yb, zb), (L + 2, yf, zf), (-L - 2, yf, zf)], "roof_membrane")
+    r.face([(L + 2, yb, zb - 0.6), (-L - 2, yb, zb - 0.6), (-L - 2, yf, zf - 0.6), (L + 2, yf, zf - 0.6)], "white_steel")
+    r.face([(-L - 2, yf, zf - 0.6), (L + 2, yf, zf - 0.6), (L + 2, yf, zf), (-L - 2, yf, zf)], "white_steel")
+    r.face([(L + 2, yb, zb - 0.6), (-L - 2, yb, zb - 0.6), (-L - 2, yb, zb), (L + 2, yb, zb)], "white_steel")
+    r.face([(-L - 2, yb, zb - 0.6), (-L - 2, yf, zf - 0.6), (-L - 2, yf, zf), (-L - 2, yb, zb)], "white_steel")
+    r.face([(L + 2, yf, zf - 0.6), (L + 2, yb, zb - 0.6), (L + 2, yb, zb), (L + 2, yf, zf)], "white_steel")
+    for k in range(9):
+        x = -L + k * 20.0
+        mast = (x, yb - 3.0, 32.0)
+        tube(r, (x, yb - 1.0, 0.0), mast, 0.45, "steel", 6)
+        tube(r, mast, (x, yf - 1.0, zf - 0.3), 0.12, "steel", 4)
+        tube(r, mast, (x, yb + 8.0, zb + 0.4), 0.12, "steel", 4)
+    r.finish(parent=root)
+    bank = Mesh("bank")
+    bank.upward = True
+    xs = [-L - 40 + (2 * L + 80) * i / 24 for i in range(25)]
+    ys = [back - 2.0 - 70.0 * k / 10 for k in range(11)]
+
+    def h(x, y):
+        t = (back - 2.0 - y) / 70.0
+        ends = smooth((L + 40 - abs(x)) / 40)
+        return (17.5 * (1 - t) + 28.0 * math.sin(math.pi * t) * 0.8) * ends * (1 - smooth((t - 0.75) / 0.25))
+
+    grid = [[(x, y, h(x, y)) for y in ys] for x in xs]
+    for i in range(len(xs) - 1):
+        for k in range(len(ys) - 1):
+            bank.face((grid[i][k], grid[i + 1][k], grid[i + 1][k + 1], grid[i][k + 1]), "grass")
+    bank.finish(parent=root)
     return root
 
 
@@ -1308,18 +1307,18 @@ def build_yas_hotel():
     b = Mesh("block")
     plan = [(x, -4.0 - 5.0 * math.cos(x / 50 * math.pi / 2)) for x in [-50 + 100 * k / 12 for k in range(13)]]
     back = [(x, y - 18.0) for x, y in reversed(plan)]
-    facade_tower(b, plan + back, 0, 44.0, "facade")
+    facade_tower(b, plan + back, 0, 44.0, "facade_hotel")
     b.finish(parent=root)
     g = Mesh("gridshell")
-    nx, ny = 24, 10
+    nx, ny = 40, 16
     xs = [-62 + 124 * i / nx for i in range(nx + 1)]
     ys = [-40 + 48 * k / ny for k in range(ny + 1)]
     surf = [[(x, y, gridshell_z(x, y)) for y in ys] for x in xs]
     # The diamonds: bars along both diagonals of the grid.
     for i in range(nx):
         for k in range(ny):
-            tube(g, surf[i][k], surf[i + 1][k + 1], 0.45, "gridshell", 4)
-            tube(g, surf[i + 1][k], surf[i][k + 1], 0.45, "gridshell", 4)
+            tube(g, surf[i][k], surf[i + 1][k + 1], 0.26, "gridshell", 4)
+            tube(g, surf[i + 1][k], surf[i][k + 1], 0.26, "gridshell", 4)
     g.finish(parent=root)
     # The glass in it: a thin closed shell just under the bars.
     p = Mesh("panels")
@@ -1466,7 +1465,7 @@ MODELS = (
     (build_hillside, "hillside", (16, 34), True, False, [("front", (40, 140, 20), (0, -10, 10))], False),
     (build_barcelona_grandstand, "barcelona_grandstand", (20, 34), True, False, [("front", (60, 170, 30), (0, 0, 12))], False),
     (build_biosphere, "biosphere", (60, 66), False, False, [("front", (40, 130, 30), (0, 0, 28))], False),
-    (build_bull, "spielberg_bull", (9, 14), False, False, [("front", (6, 26, 6), (0, 0, 6)), ("side", (22, 14, 5), (0, 0, 6))], False),
+    (build_spielberg_grandstand, "spielberg_grandstand", (18, 40), True, False, [("front", (60, 150, 30), (0, -10, 12))], False),
     (build_hugenholtz, "hugenholtz", (10, 26), True, False, [("front", (0, 120, 25), (0, 20, 5))], False),
     (build_flame_towers, "flame_towers", (178, 192), True, False, [("front", (40, 420, 60), (0, 0, 95))], False),
     (build_old_city, "baku_old_city", (28, 34), False, False, [("front", (40, 80, 14), (0, -10, 8))], False),

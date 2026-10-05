@@ -53,7 +53,7 @@ async (page) => {
     monaco: ["casino"], singapore: ["marinaBaySands", "singaporeFlyer"], bahrain: ["sakhirTower"], interlagos: ["spTowers"],
     // The 2025 venues (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
     albertpark: ["melbourneSkyline"], shanghai: ["shanghaiGrandstand"], jeddah: ["jeddahFountain"], miami: ["miamiStadium"],
-    imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergBull", "hillside"],
+    imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergGrandstand", "hillside"],
     hungaroring: ["hillside"], zandvoort: ["hugenholtz"], baku: ["bakuOldCity", "flameTowers"], cota: ["cotaTower", "hillside"],
     mexico: ["foroSol"], lasvegas: ["vegasSphere", "vegasStrip"], losail: ["losailGrandstand", "lusailTowers"], yasmarina: ["yasHotel"],
   };
