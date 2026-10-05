@@ -91,9 +91,9 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
   - frame time holds on all three tiers (Low keeps the far crowd texture only).
 - [x] First look approved (user, 2026-10-02): people are good, the Monaco casino loved. Additions: detailed realistic yachts in the water (Monaco harbour above all, every harbour venue), another really good building or two per venue, inspired by the user's Chicago open world buildings at ultra, with no lag on any tier.
 - [x] Final look approved (user, 2026-10-04). Follow-ups:
-  - [ ] Monaco: move the pit lane and garages somewhere less obvious, with yachts where they stood; the safety car's route derived from the pit lane on every circuit.
-  - [ ] Monaco: remove the buildings between the harbour and the track so the yachts back right up to the fence, as in photos of the real race.
-  - [ ] Calm Marina Bay Sands' windows; Spa's pits and the São Paulo towers to the Wing's level; the Singapore Flyer visible from the track; faster first load.
+  - [x] Monaco: move the pit lane and garages somewhere less obvious, with yachts where they stood; the safety car's route derived from the pit lane on every circuit.
+  - [x] Monaco: remove the buildings between the harbour and the track so the yachts back right up to the fence, as in photos of the real race.
+  - [x] Calm Marina Bay Sands' windows; Spa's pits and the São Paulo towers to the Wing's level; the Singapore Flyer visible from the track; faster first load.
   - [ ] The 16 new venues' landmarks, stands and yachts (branch landmarks-2025).
 - [ ] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
 
@@ -161,15 +161,15 @@ All 24 circuits of 2025. The eight we have are Monza, Spa, Silverstone, Suzuka, 
 
 After everything else is planned, per the user's instruction.
 
-- [ ] **Spec**, in the pit lane next to Cup:
+- [x] **Spec**, in the pit lane next to Cup:
   - **Cup:** the calendar and historical cups, as now.
   - **Random cup:** four circuits drawn at random from all of them (seeded and shown before the start, with a reroll).
   - **Custom cup:** the player picks any four circuits, in any order, from a map or a list with search.
   - **Single race:** one circuit, random or chosen.
 
   Grid, difficulty and weather apply to all of them, and careers and best laps count in all of them.
-- [ ] Node tests for the draw (no repeats in a cup, seeded) and for the custom-cup validation. A browser check covers each mode end to end.
-- [ ] A fresh reviewer, then fix everything. Merge and push.
+- [x] Node tests for the draw (no repeats in a cup, seeded) and for the custom-cup validation. A browser check covers each mode end to end.
+- [x] A fresh reviewer, then fix everything. Merge and push.
 
 ## 6. Stage M: TV-camera replays
 
