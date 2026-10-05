@@ -213,6 +213,12 @@ Committed (user, 2026-10-01: "all the way through the two player option").
 
 Stage R comes last because its screenshots should show the finished game. If a README pass is wanted sooner, a first version can follow Stage K, since the podium is the best image.
 
+## 8b. After the order (user, 2026-10-05)
+
+- [ ] **Safety Car entrances** (branch `sc-entries`): several service entrances round every circuit; the car joins where it reaches the leader soonest without appearing next to anyone, catches up fast, and drives back to the pit lane to park.
+- [ ] **Balance** (branch `balance`): measure comebacks from last on every difficulty first; then a stronger Formation Lap, Overtake Mode and DRS, position-weighted odds, fairer CPU defending; before and after numbers.
+- [ ] **Barcelona's main grandstand** across the straight from the pits, and **landmarks for the eight historic circuits** (branch `historic-landmarks`).
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
