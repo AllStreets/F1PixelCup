@@ -157,7 +157,7 @@ sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
 
-const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => preloadModels(ids.map((id) => [...(VENUE_MODELS[id] || []), ...(STAND_MODELS[(VENUES[id] || {}).stand] ? [STAND_MODELS[(VENUES[id] || {}).stand]] : [])])), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
+const api = { ready: false, failed: false, render, renderGarage, setViewports, prepareReplay, sightOfView, viewShot: () => (viewInfo ? viewInfo.shot : null), viewCamera: () => (viewInfo ? { x: viewInfo.x, y: viewInfo.y, z: viewInfo.z, above: viewInfo.y - viewInfo.ground, shot: viewInfo.shot, key: `${viewInfo.shot}:${viewInfo.cam}` } : null), auditScenery, auditAdverts, auditPits, auditPrint, auditVenue, auditItemBoxes, auditPeople, auditYachts, frameStats: frameStatsNow, preloadVenues: (ids) => preloadModels(ids.map((id) => [...(VENUE_MODELS[id] || []), ...(STAND_MODELS[(VENUES[id] || {}).stand] ? [STAND_MODELS[(VENUES[id] || {}).stand]] : [])])), loadAllModels: () => loadAllVenueModels(), inspect, prepare, setPhotoCamera, helmetInfo, setGraphics, graphics, podium: null };
 
 // A venue's type of stand's model (none listed: none).
 function venueStand(id) {

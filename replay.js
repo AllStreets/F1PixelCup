@@ -380,6 +380,35 @@
     return rec;
   }
 
+  // ---- What happened between two moments (the replay's sounds) ----
+  // Between race times a and b, as the replay plays forward: hits and
+  // bounces (the recorded flashes, at x, y), items fired (a shot or slick
+  // appearing on the road, at d, lat), item boxes taken (by index), and
+  // boosts and spins starting (by car, at its x, y). None for a seek: going
+  // back, standing still, or a jump of more than EVENT_SPAN.
+  const EVENT_SPAN = 500;
+  function eventsBetween(rec, a, b) {
+    if (!(b > a) || b - a > EVENT_SPAN || rec.count < 2) return [];
+    const events = [];
+    rec.flashes.forEach((f) => { if (f.at > a && f.at <= b) events.push({ type: "impact", x: f.x, y: f.y, size: f.size }); });
+    const k0 = rec.indexAt(a);
+    const k1 = rec.indexAt(b);
+    let prev = rec.sampleAt(k0);
+    for (let k = k0 + 1; k <= k1; k += 1) {
+      const cur = rec.sampleAt(k);
+      const before = new Set(prev.objects.map((o) => o.id));
+      cur.objects.forEach((o) => { if (!before.has(o.id)) events.push({ type: "item", d: o.d, lat: o.lat, item: o.type }); });
+      cur.boxes.forEach((taken, i) => { if (taken && !prev.boxes[i]) events.push({ type: "box", box: i }); });
+      cur.cars.forEach((c, i) => {
+        const was = prev.cars[i];
+        if (c.boosting && !was.boosting) events.push({ type: "boost", car: i, x: c.x, y: c.y });
+        if (c.spinning && !was.spinning) events.push({ type: "spin", car: i, x: c.x, y: c.y });
+      });
+      prev = cur;
+    }
+    return events;
+  }
+
   // ---- TV cameras ----
   const TV_CAM = {
     spacing: 450, radius: 5, margin: 10, offsets: [24, 60], search: 160,
@@ -687,6 +716,6 @@
 
   return {
     SAMPLE_EVERY, CHUNK, JUMP, OBJECT_TYPES, FLAGS, KEYS, BITS, TV_CAM, DIRECTOR,
-    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour, viewChoice, chooseCamera, chooseCar, viewShot,
+    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour, viewChoice, chooseCamera, chooseCar, viewShot, eventsBetween,
   };
 }));

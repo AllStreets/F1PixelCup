@@ -1870,6 +1870,10 @@ function startRace(index) {
   // A new race, a new recording (the last one's replay is gone).
   state.recording = null;
   state.replay = null;
+  // And engines fresh from the grid (a replay may have had other cars' in them).
+  if (audio.engine && window.EngineSound) {
+    [[audio.engine, 11], [audio.engine2, 29]].forEach(([voice, seed]) => { voice.model = EngineSound.createModel(seed); voice.carId = null; });
+  }
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
   state.camRoll = 0;
@@ -4211,8 +4215,115 @@ function drawReplay() {
       view: { mode: shot.mode, focusId: focus.id, alsoShow: rec.header.players || rec.header.playerId, cut: r.cut },
     }));
   }
+  updateReplayAudio(ghosts, focus);
   r.cut = false;
   if (window.Screens) window.Screens.updateReplay(replayGraphics(frame, shot, focus));
+}
+
+// The replay's sound, heard from its camera (engine-sound.js): the engine of
+// the car in view, from its recorded speed, throttle and brake, near and
+// level onboard, and from a trackside camera or the helicopter as far off as
+// it is, its note shifted as it comes and goes (Doppler); the car passing
+// the camera nearest it; tyres sliding; the crowd and the venue; and the
+// hits, items, boxes, boosts and spins as the race plays (none on a seek).
+// At half and double speed it is pitched gently, at a quarter and four
+// times only the venue is heard, and paused, nothing.
+const REPLAY_PASSING_RANGE = 600;
+function updateReplayAudio(ghosts, focus) {
+  const r = state.replay;
+  const rec = r.rec;
+  const mix = EngineSound.replayMix(r.speed, r.playing);
+  // The race time heard since the last frame (none across a cut or a seek).
+  const back = r.heardAt === undefined || r.cut || r.time < r.heardAt;
+  const raceDt = back ? 0 : (r.time - r.heardAt) / 1000;
+  const from = back ? r.time : r.heardAt;
+  r.heardAt = r.time;
+  const cam = window.Render3D && Render3D.viewCamera ? Render3D.viewCamera() : null;
+  const onboard = !cam || cam.shot === "onboard";
+  // Where a car is from the camera, and how fast it is going away from it.
+  const hear = (car) => {
+    if (onboard && car === focus) return { gain: 1, pitch: 1, dist: 0 };
+    // (The camera's height over the ground under it stands for its height
+    // over the car: near enough for how loud it is.)
+    const dist = Math.hypot(car.x - cam.x, car.y - cam.z, cam.above || 0);
+    const was = car.heard && car.heard.cam === cam.key ? car.heard.dist : dist;
+    const away = raceDt > 0 ? (dist - was) / raceDt : 0;
+    car.heard = { cam: cam.key, dist };
+    return { gain: Math.min(1, EngineSound.distanceGain(dist) * 1.6), pitch: EngineSound.doppler(away), dist };
+  };
+  const heardFocus = focus ? hear(focus) : { gain: 0, pitch: 1 };
+  // The car passing nearest the camera, if near enough to hear.
+  let passing = null;
+  if (cam && mix.engine > 0) {
+    let best = REPLAY_PASSING_RANGE;
+    ghosts.forEach((g) => {
+      if (g === focus || g.finished) return;
+      const d = onboard ? Math.hypot(g.x - focus.x, g.y - focus.y) : Math.hypot(g.x - cam.x, g.y - cam.z);
+      if (d < best) { best = d; passing = g; }
+    });
+  }
+  const heardPassing = passing ? (onboard ? (() => {
+    const dist = Math.hypot(passing.x - focus.x, passing.y - focus.y);
+    const was = passing.heard && passing.heard.cam === "onboard" ? passing.heard.dist : dist;
+    passing.heard = { cam: "onboard", dist };
+    return { gain: EngineSound.distanceGain(dist), pitch: EngineSound.doppler(raceDt > 0 ? (dist - was) / raceDt : 0) };
+  })() : hear(passing)) : null;
+  // A new car to hear: its engine primed at the speed it is going.
+  const voiceFor = (voice, car) => {
+    const id = car ? car.id : null;
+    if (voice.carId !== id || back) {
+      voice.carId = id;
+      voice.model = EngineSound.createModel(id ? id.length * 131 + 7 : 1);
+      if (car) voice.model.prime({ ratio: Math.abs(car.speed) / Math.max(1, car.physics.maxSpeed), throttle: car.throttleIn || 0 });
+    }
+  };
+  if (audio.ready && audio.engine) {
+    voiceFor(audio.engine, focus);
+    voiceFor(audio.engine2, passing);
+    driveEngineVoice(audio.engine, focus, { on: mix.engine > 0, share: mix.engine * heardFocus.gain, pitch: mix.pitch * heardFocus.pitch, dt: raceDt });
+    driveEngineVoice(audio.engine2, passing, { on: mix.engine > 0 && Boolean(passing), share: mix.engine * 0.8 * (heardPassing ? heardPassing.gain : 0), pitch: mix.pitch * (heardPassing ? heardPassing.pitch : 1), dt: raceDt });
+    const slides = (g) => g && !g.finished && (g.drifting || (g.offroad && Math.abs(g.speed) > 60));
+    const screech = mix.engine > 0 ? Math.max(slides(focus) ? heardFocus.gain : 0, slides(passing) ? heardPassing.gain : 0) : 0;
+    const t = audio.ctx.currentTime;
+    if (audio.screech) audio.screech.gain.gain.setTargetAtTime(0.13 * screech, t, 0.07);
+    if (audio.venue && focus) {
+      const venue = venueSound(focus, true);
+      if (cam && cam.shot === "helicopter") venue.helicopter = 1;
+      const a = mix.ambience;
+      audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9 * (mix.engine > 0 ? 1 : 0), t, 0.08);
+      audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07 * a, t, 0.25);
+      audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012 * a, t, 0.4);
+      audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05 * a, t, 0.3);
+      audio.venue.rain.gain.setTargetAtTime(venue.rain * 0.045 * a, t, 0.4);
+      audio.venue.hiss.gain.setTargetAtTime(venue.hiss * 0.06 * a, t, 0.1);
+    }
+  }
+  // What happened since the last frame, each as loud as it is far.
+  const events = mix.events && !back ? Replay.eventsBetween(rec, rec.header.t0 + from, rec.header.t0 + r.time) : [];
+  const route = getItemRoute(state.track);
+  const listener = onboard ? { x: focus.x, z: focus.y } : cam;
+  events.forEach((e) => {
+    let at = e;
+    if (e.type === "item") at = route.toWorld(e.d, e.lat);
+    else if (e.type === "box") at = state.track.itemBoxes[e.box] || e;
+    const dist = listener && at.x !== undefined ? Math.hypot(at.x - listener.x, at.y - listener.z) : 0;
+    audio.sfxScale = Math.min(1, EngineSound.distanceGain(dist) * 1.6);
+    if (e.type === "impact") sfx.impact();
+    else if (e.type === "item") sfx.itemUse();
+    else if (e.type === "box") sfx.itemGet();
+    else if (e.type === "boost") sfx.boost();
+    else if (e.type === "spin") sfx.spin();
+    audio.sfxScale = 1;
+  });
+  // What the replay sounds like now (for the checks).
+  const last = audio.engine && audio.engine.last;
+  state.replaySound = {
+    mix,
+    engine: { carId: focus ? focus.id : null, gain: mix.engine > 0 ? mix.engine * heardFocus.gain : 0, pitch: mix.pitch * heardFocus.pitch, rpm: last ? last.rpm : 0 },
+    passing: passing ? { carId: passing.id, gain: mix.engine * 0.8 * heardPassing.gain, pitch: mix.pitch * heardPassing.pitch } : null,
+    events: (state.replaySound ? state.replaySound.events : 0) + events.length,
+    heard: events.map((e) => e.type),
+  };
 }
 
 function handleReplayKey(event) {
@@ -5245,6 +5356,8 @@ const audio = {
   ready: false,
   enabled: true,
   lastBeepStep: -1,
+  // One-off sounds' level (a replay sets it by how far from the camera each is).
+  sfxScale: 1,
 };
 
 function loadAudioPreference() {
@@ -5299,34 +5412,84 @@ function initAudio() {
   audio.master.connect(ctxA.destination);
   audio.noiseBuffer = makeNoiseBuffer(ctxA);
 
-  // Engine: two detuned oscillators through a lowpass that opens with revs.
-  // A second voice is player 2's in a two-player race (silent otherwise).
-  const engineVoice = () => {
+  // Engine (engine-sound.js decides what it sounds like, step by step): the
+  // V6's orders (half the firing rate, the firing rate and the crank's
+  // half order) through a soft clip and a lowpass that opens with the
+  // throttle, a vibrato that is the drivetrain's shimmer, a cut for each
+  // upshift; the turbo's whistle and the hybrid's whine above it, quiet.
+  // A second voice is player 2's in a two-player race, or in a replay the
+  // car passing the camera (silent otherwise).
+  const softClip = (() => {
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < curve.length; i += 1) {
+      const x = (i / (curve.length - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * 2.2) / Math.tanh(2.2);
+    }
+    return curve;
+  })();
+  const engineVoice = (seed) => {
     const engineGain = ctxA.createGain();
     engineGain.gain.value = 0;
+    const cut = ctxA.createGain();
     const engineFilter = ctxA.createBiquadFilter();
     engineFilter.type = "lowpass";
-    engineFilter.frequency.value = 700;
-    engineFilter.Q.value = 6;
-    const oscA = ctxA.createOscillator();
-    oscA.type = "sawtooth";
-    oscA.frequency.value = 55;
-    const oscB = ctxA.createOscillator();
-    oscB.type = "square";
-    oscB.frequency.value = 82;
-    const oscBGain = ctxA.createGain();
-    oscBGain.gain.value = 0.4;
-    oscA.connect(engineFilter);
-    oscB.connect(oscBGain);
-    oscBGain.connect(engineFilter);
-    engineFilter.connect(engineGain);
+    engineFilter.frequency.value = 900;
+    engineFilter.Q.value = 2.5;
+    const shaper = ctxA.createWaveShaper();
+    shaper.curve = softClip;
+    const body = ctxA.createGain();
+    body.gain.value = 0.55;
+    const osc = (type, frequency, level) => {
+      const o = ctxA.createOscillator();
+      o.type = type;
+      o.frequency.value = frequency;
+      const g = ctxA.createGain();
+      g.gain.value = level;
+      o.connect(g);
+      g.connect(body);
+      o.start();
+      return o;
+    };
+    const oscA = osc("sawtooth", 100, 0.7);
+    const oscB = osc("sawtooth", 200, 0.3);
+    const oscSub = osc("square", 50, 0.28);
+    // The shimmer: a few cents of vibrato, deeper under load.
+    const lfo = ctxA.createOscillator();
+    lfo.frequency.value = 7.3;
+    const lfoGain = ctxA.createGain();
+    lfoGain.gain.value = 0;
+    lfo.connect(lfoGain);
+    [oscA, oscB, oscSub].forEach((o) => lfoGain.connect(o.detune));
+    lfo.start();
+    body.connect(shaper);
+    shaper.connect(engineFilter);
+    engineFilter.connect(cut);
+    cut.connect(engineGain);
     engineGain.connect(audio.master);
-    oscA.start();
-    oscB.start();
-    return { oscA, oscB, gain: engineGain, filter: engineFilter };
+    // The turbo's whistle, and the hybrid's whine.
+    const whistle = ctxA.createOscillator();
+    whistle.type = "sine";
+    whistle.frequency.value = 2800;
+    const turboGain = ctxA.createGain();
+    turboGain.gain.value = 0;
+    whistle.connect(turboGain);
+    turboGain.connect(audio.master);
+    whistle.start();
+    const whine = ctxA.createOscillator();
+    whine.type = "triangle";
+    whine.frequency.value = 900;
+    const ersGain = ctxA.createGain();
+    ersGain.gain.value = 0;
+    whine.connect(ersGain);
+    ersGain.connect(audio.master);
+    whine.start();
+    return {
+      oscA, oscB, oscSub, lfoGain, cut, gain: engineGain, filter: engineFilter, whistle, turboGain, whine, ersGain,
+      model: window.EngineSound ? EngineSound.createModel(seed) : null, last: null, pops: 0,
+    };
   };
-  audio.engine = engineVoice();
-  audio.engine2 = engineVoice();
+  audio.engine = engineVoice(11);
+  audio.engine2 = engineVoice(29);
   const engineGain = audio.engine.gain;
 
   // Tyre scrub: looping noise through a bandpass, opened while sliding.
@@ -5468,6 +5631,7 @@ function playTone(frequency, { endFrequency, type = "square", duration = 0.16, v
   if (!audioReady()) return;
   const ctxA = audio.ctx;
   const start = ctxA.currentTime + delay;
+  volume *= audio.sfxScale;
   const osc = ctxA.createOscillator();
   const gain = ctxA.createGain();
   osc.type = type;
@@ -5483,10 +5647,11 @@ function playTone(frequency, { endFrequency, type = "square", duration = 0.16, v
 }
 
 // One-shot noise burst, for impacts and scrapes.
-function playNoise({ duration = 0.2, volume = 0.35, frequency = 900, type = "lowpass", sweepTo } = {}) {
+function playNoise({ duration = 0.2, volume = 0.35, frequency = 900, type = "lowpass", sweepTo, delay = 0 } = {}) {
   if (!audioReady()) return;
   const ctxA = audio.ctx;
-  const start = ctxA.currentTime;
+  const start = ctxA.currentTime + delay;
+  volume *= audio.sfxScale;
   const source = ctxA.createBufferSource();
   source.buffer = audio.noiseBuffer;
   const filter = ctxA.createBiquadFilter();
@@ -5587,20 +5752,51 @@ function venueSound(player, racing) {
   return out;
 }
 
-// One engine voice following one car (pitch: player 2's sits a touch higher,
-// so the two can be told apart; share: the level when two are heard).
-function driveEngineVoice(voice, player, racing, now, pitch = 1, share = 1) {
-  const maxSpeed = Math.max(1, player ? player.physics.maxSpeed : 1);
-  const ratio = player ? clamp(Math.abs(player.speed) / maxSpeed, 0, 1.25) : 0;
-  // Fake gearing: the note climbs, drops back, and climbs again.
-  const geared = (ratio * 4) % 1;
-  const base = (46 + geared * 58 + ratio * 66) * pitch;
-  voice.oscA.frequency.setTargetAtTime(base, now, 0.05);
-  voice.oscB.frequency.setTargetAtTime(base * 1.5, now, 0.05);
-  voice.filter.frequency.setTargetAtTime(420 + ratio * 2400, now, 0.06);
-  const idle = racing ? 0.055 : 0;
-  const level = !player || player.finished ? 0 : (idle + ratio * 0.1) * share;
-  voice.gain.gain.setTargetAtTime(level, now, 0.09);
+// One engine voice following one car, through its engine model
+// (engine-sound.js). on: heard at all; share: the level when more than one
+// is heard (and how far from the camera, in a replay); pitch: player 2's
+// sits a touch higher, so the two can be told apart (and a replay's camera
+// hears the Doppler shift); dt: the race time this step covers.
+function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 / 60 } = {}) {
+  const ctxA = audio.ctx;
+  const t = ctxA.currentTime;
+  const maxSpeed = Math.max(1, car && car.physics ? car.physics.maxSpeed : 1);
+  const ratio = car ? clamp(Math.abs(car.speed) / maxSpeed, 0, 1.25) : 0;
+  const alive = Boolean(on && car && !car.finished);
+  const input = { dt: clamp(dt, 0, 0.1), ratio: alive ? ratio : 0, throttle: alive ? car.throttleIn || 0 : 0, brake: alive ? car.brakeIn || 0 : 0 };
+  const s = voice.model ? voice.model.step(input) : { rpm: EngineSound.IDLE_RPM, load: 0, turbo: 0, ers: 0, shift: null, pops: [], whoosh: false };
+  voice.last = s;
+  // The note: half the firing rate (rpm / 40), the firing rate, the half order.
+  const f = (s.rpm / 40) * pitch;
+  voice.oscA.frequency.setTargetAtTime(f, t, 0.012);
+  voice.oscB.frequency.setTargetAtTime(f * 2, t, 0.012);
+  voice.oscSub.frequency.setTargetAtTime(f / 2, t, 0.012);
+  voice.filter.frequency.setTargetAtTime(700 + s.load * 3800 + (s.rpm / EngineSound.LIMIT_RPM) * 600, t, 0.04);
+  voice.lfoGain.gain.setTargetAtTime(4 + 6 * s.load, t, 0.1);
+  // An upshift: the ignition cut, a few hundredths; a downshift: the blip.
+  if (s.shift === "up") {
+    voice.cut.gain.setValueAtTime(0.25, t);
+    voice.cut.gain.setTargetAtTime(1, t + 0.035, 0.02);
+  } else if (s.shift === "down") {
+    voice.cut.gain.setValueAtTime(1.35, t);
+    voice.cut.gain.setTargetAtTime(1, t + 0.03, 0.05);
+  }
+  const level = alive ? (0.055 + ratio * 0.1 + s.load * 0.02) * share : 0;
+  voice.gain.gain.setTargetAtTime(level, t, 0.06);
+  voice.whistle.frequency.setTargetAtTime((2600 + s.turbo * 1800) * pitch, t, 0.1);
+  voice.turboGain.gain.setTargetAtTime(alive ? s.turbo * s.load * 0.006 * share : 0, t, 0.15);
+  voice.whine.frequency.setTargetAtTime((700 + ratio * 2300) * pitch, t, 0.08);
+  voice.ersGain.gain.setTargetAtTime(alive ? s.ers * Math.min(1, ratio * 2) * 0.008 * share : 0, t, 0.2);
+  if (alive && share > 0.03) {
+    // Crackles and pops off the throttle: a sharp crack and a low thump each.
+    s.pops.forEach((pop) => {
+      playNoise({ duration: 0.05, volume: 0.1 * pop.level * share, frequency: 1500 + visualRandom() * 1100, type: "bandpass", delay: pop.delay });
+      playTone(88, { endFrequency: 52, duration: 0.07, volume: 0.07 * pop.level * share, type: "triangle", delay: pop.delay });
+    });
+    voice.pops += s.pops.length;
+    // The rush of air as the turbo lets go.
+    if (s.whoosh) playNoise({ duration: 0.4, volume: 0.05 * share, frequency: 3200, sweepTo: 500 });
+  }
 }
 
 // second: player 2's car in a two-player race.
@@ -5609,8 +5805,17 @@ function updateEngineAudio(player, second = null) {
   const ctxA = audio.ctx;
   const now = ctxA.currentTime;
   const racing = state.phase === "race" || state.phase === "countdown" || state.phase === "qualifying";
-  driveEngineVoice(audio.engine, player, racing, now, 1, second ? 0.75 : 1);
-  driveEngineVoice(audio.engine2, second, racing && Boolean(second), now, 1.12, 0.75);
+  // The race time since the last frame (frozen while paused).
+  const clock = state.paused ? audio.engineClock || 0 : renderClock();
+  const dt = clamp((clock - (audio.engineClock ?? clock)) / 1000, 0, 0.1);
+  audio.engineClock = clock;
+  driveEngineVoice(audio.engine, player, { on: racing, share: second ? 0.75 : 1, dt });
+  driveEngineVoice(audio.engine2, second, { on: racing && Boolean(second), share: 0.75, pitch: 1.12, dt });
+  // What the engine is doing, for the checks.
+  if (audio.engine.last) {
+    const e = audio.engine.last;
+    state.engineSound = { rpm: e.rpm, gear: e.gear, turbo: e.turbo, ers: e.ers, pops: audio.engine.pops, freq: e.rpm / 40 };
+  }
 
   if (audio.venue) {
     // The convolver only runs where the circuit has a tunnel or a bridge.
@@ -6744,7 +6949,8 @@ function update(now) {
     }
   }
 
-  updateEngineAudio(getPlayer(), splitActive() ? humanBySlot(1) : null);
+  // (A replay hears its own cars, from its camera: drawReplay.)
+  if (state.phase !== "replay") updateEngineAudio(getPlayer(), splitActive() ? humanBySlot(1) : null);
 
   updatePodium(dt);
   if (state.phase === "podium") {

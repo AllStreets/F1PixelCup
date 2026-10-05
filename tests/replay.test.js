@@ -625,3 +625,47 @@ test("a camera chosen with no car on screen yet watches the player", () => {
   const view = Replay.chooseCamera(Replay.viewChoice(), "onboard", null);
   assert.equal(Replay.viewShot(view, { mode: "trackside", focusId: "q" }, "p").focusId, "p");
 });
+
+// ---- What happened between two moments (the replay's sounds) ----
+
+function eventsRecording() {
+  const h = header(2);
+  const rec = Replay.createRecording(h);
+  const car = (extra = {}) => ({ x: 10, y: 20, d: 5, heading: 0, speed: 100, lat: 0, gap: 0, steer: 0, throttle: 1, lap: 0, place: 1, item: "none", ...extra });
+  const boxes = (taken) => Array.from({ length: 15 }, (_, i) => taken && i === 4);
+  for (let k = 0; k < 60; k += 1) {
+    rec.push({
+      cars: [car({ boosting: k >= 20 && k < 30, x: 10 + k }), car({ spinning: k >= 40, x: 500 })],
+      objects: k >= 10 ? [{ id: 7, type: "undercut", d: 50 + k, lat: 0, age: 0 }] : [],
+      safetyCar: null, boxes: boxes(k >= 25), flags: [], keys: {},
+    });
+  }
+  rec.addFlash({ x: 300, y: 40, d: 9, color: "#ff3b30", size: 12, at: h.t0 + 35 * rec.sampleMs, until: h.t0 + 45 * rec.sampleMs });
+  return rec;
+}
+
+test("the replay's events between two moments: a hit, an item fired, a box taken, a boost, a spin", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  const at = (a, b) => Replay.eventsBetween(rec, rec.header.t0 + a * ms, rec.header.t0 + b * ms).map((e) => e.type).sort();
+  assert.deepEqual(at(9, 10), ["item"]);
+  assert.deepEqual(at(19, 20), ["boost"]);
+  assert.deepEqual(at(24, 25), ["box"]);
+  assert.deepEqual(at(34, 35), ["impact"]);
+  assert.deepEqual(at(39, 40), ["spin"]);
+  assert.deepEqual(at(0, 9), []);
+  // Each is placed where it happened, for how loud it is from the camera.
+  const hit = Replay.eventsBetween(rec, rec.header.t0 + 34 * ms, rec.header.t0 + 35 * ms)[0];
+  assert.deepEqual([hit.x, hit.y], [300, 40]);
+  const boost = Replay.eventsBetween(rec, rec.header.t0 + 19 * ms, rec.header.t0 + 20 * ms)[0];
+  assert.equal(boost.car, 0);
+  assert.equal(boost.x, 30);
+});
+
+test("a seek (or going backwards, or a long jump) has no events: they are heard only as the race plays", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0 + 35 * ms, rec.header.t0 + 34 * ms), []);
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0, rec.header.t0 + 59 * ms), []);
+  assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0 + 20 * ms, rec.header.t0 + 20 * ms), []);
+});
