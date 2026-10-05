@@ -112,21 +112,26 @@
   const CAR_LENGTH = 26;
   const CAR_WIDTH = 16;
   const SHOT_EDGE = 8;
-  const LAT_HOMING = 90;
+  const LAT_HOMING = 120;
   const TRAIL_GAP = 28;
   const DROP_GAP = 18;
-  const SHOT_SPEEDS = { undercut: 1.35, stewardPenalty: 1.6, debris: 1.2 };
-  const FACTORS = { boost: 1.22, overtakeMode: 1.18, formationLap: 1.5, safetyCar: 0.55 };
-  const SPIN_MS = { undercut: 850, debris: 850, oilSlick: 820, stewardLeader: 1600, stewardSplash: 1000, contact: 700 };
+  const SHOT_SPEEDS = { undercut: 1.6, stewardPenalty: 1.6, debris: 1.45 };
+  // drsKick: the share of top speed DRS adds at once (the mushroom's burst).
+  const FACTORS = { boost: 1.22, drsKick: 0.2, overtakeMode: 1.2, formationLap: 1.5, safetyCar: 0.55 };
+  // How long each hit spins a car, and the share of its speed it keeps. The
+  // Steward Penalty (the blue shell) is the heaviest of all: the leader all but
+  // stops. The Oil Slick (the banana) is a short spin.
+  const SPIN_MS = { undercut: 1100, debris: 1000, oilSlick: 850, stewardLeader: 2600, stewardSplash: 1200, contact: 650 };
+  const SPIN_KEEP = { undercut: 0.45, debris: 0.5, oilSlick: 0.65, stewardLeader: 0.08, stewardSplash: 0.4, contact: 0.7 };
   const TIMINGS = {
-    rouletteMs: 1100, boxHiddenMs: 1000, armMs: 300, oilArmMs: 1000, oilLifeMs: 20000,
+    rouletteMs: 1100, boxHiddenMs: 1000, armMs: 300, oilArmMs: 1000, oilLifeMs: 30000,
     drsMs: 3000, drsStraightMs: 4500, overtakeModeMs: 8000, formationLapMs: 6000,
     // A Formation Lap ends only once the car is clear of every other car;
     // this long at most past its time, it ends wherever it is.
     formationGraceMs: 2000,
-    safetyCarMs: 5000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
+    safetyCarMs: 7000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
     // A Steward Penalty has no time limit: it ends on the leader, or when nobody is left racing.
-    lifeMs: { undercut: 12000, debris: 6000, stewardPenalty: Infinity },
+    lifeMs: { undercut: 12000, debris: 8000, stewardPenalty: Infinity },
   };
   const STRAIGHT_SPAN = 120;
   const STRAIGHT_TURN = 0.12;
@@ -306,7 +311,7 @@
 
   return {
     ITEM_ORDER, COLUMNS, ODDS, LIMITS, columnFor, isBlocked, rollItem, overallShares, rarityFor,
-    CAR_LENGTH, CAR_WIDTH, SHOT_EDGE, LAT_HOMING, TRAIL_GAP, DROP_GAP, SHOT_SPEEDS, FACTORS, SPIN_MS, TIMINGS,
+    CAR_LENGTH, CAR_WIDTH, SHOT_EDGE, LAT_HOMING, TRAIL_GAP, DROP_GAP, SHOT_SPEEDS, FACTORS, SPIN_MS, SPIN_KEEP, TIMINGS,
     makeRoute, wrapDelta, isStraight, advanceShot, shotHits, firstHit, stewardVictims, holdStationSpeed, nearestGaps,
     contactKind, formationClear,
   };

@@ -284,3 +284,27 @@ test("the fast items: Formation Lap and Overtake Mode outrun DRS and last longer
   // A broken box is back in a second, so the cars at the back get theirs too.
   assert.ok(T.boxHiddenMs <= 1000);
 });
+
+test("the Steward Penalty is the heaviest hit in the game; the Oil Slick is a short spin", () => {
+  const ms = P.SPIN_MS;
+  const keep = P.SPIN_KEEP;
+  Object.keys(ms).forEach((k) => assert.ok(keep[k] > 0 && keep[k] < 1, `${k} keeps part of its speed`));
+  // The leader it lands on all but stops, and spins longest of all.
+  Object.keys(ms).filter((k) => k !== "stewardLeader").forEach((k) => {
+    assert.ok(ms.stewardLeader > ms[k], `longer than ${k}`);
+    assert.ok(keep.stewardLeader < keep[k], `harder than ${k}`);
+  });
+  assert.ok(ms.stewardLeader >= 2 * ms.oilSlick && keep.stewardLeader <= 0.15);
+  // The banana: the shortest, lightest spin of the shots and slicks.
+  ["debris", "undercut", "stewardSplash"].forEach((k) => {
+    assert.ok(ms.oilSlick <= ms[k] && keep.oilSlick >= keep[k], k);
+  });
+});
+
+test("the shells hunt harder: an Undercut catches a car 300 ahead at full speed in under 3 s", () => {
+  const relative = (P.SHOT_SPEEDS.undercut - 1) * 238;
+  assert.ok(300 / relative < 3, `${300 / relative}`);
+  assert.ok(P.SHOT_SPEEDS.debris >= 1.4 && P.TIMINGS.lifeMs.debris >= 8000);
+  assert.ok(P.LAT_HOMING >= 120);
+  assert.ok(P.TIMINGS.oilLifeMs >= 30000);
+});

@@ -20,12 +20,14 @@
     };
   }
 
-  function race({ diff, trackId, seed, start = "back", driverId = "leclerc" }) {
+  function race({ diff, trackId, seed, start = "back", driverId = "leclerc", steer = true, laps = 0, solo = false }) {
     const realRandom = Math.random;
     const realControls = window.controlsFor;
     const realUse = window.useItem;
     const realSpin = window.spinRacer;
     Math.random = seeded(seed);
+    let lapsTrack = null;
+    let lapsWere = 0;
     try {
       const ci = CUPS.findIndex((cup) => !cup.season && cup.tracks.some((t) => t.id === trackId));
       const ti = CUPS[ci].tracks.findIndex((t) => t.id === trackId);
@@ -44,8 +46,14 @@
         state.qualifying = { raceIndex: ti, order: [me, ...state.cupEntries.map((e) => e.driver.id).filter((id) => id !== me)] };
       }
       startRace(ti);
+      // (A shorter race, for the quick checks; put back afterwards.)
+      lapsTrack = state.track;
+      lapsWere = lapsTrack.laps;
+      if (laps) lapsTrack.laps = laps;
       state.weather = "dry";
       state.headless = true;
+      // Alone on the circuit (for lap times): every other car parked as finished.
+      if (solo) state.racers.forEach((r) => { if (!r.isPlayer) { r.finished = true; r.x = -9999; r.y = -9999; } });
       state.phase = "race";
       state.preparing = null;
       const t0 = 100000;
@@ -108,8 +116,8 @@
         const brake = mustBrakeForCorners(player, skill);
         controls = {
           throttle: brake ? 0 : 1, brake: brake ? 1 : 0,
-          steer: Math.max(-1, Math.min(1, angleDiff * 1.7)),
-          drift: Math.abs(angleDiff) > 0.48 && player.speed > 80, item: false,
+          steer: steer ? Math.max(-1, Math.min(1, angleDiff * 1.7)) : 0,
+          drift: steer && Math.abs(angleDiff) > 0.48 && player.speed > 80, item: false,
         };
         // Items, as a sensible player uses them.
         const item = player.currentItem;
@@ -137,6 +145,7 @@
       // Stuck: a car less than 60 ahead in the player's lane (not while the
       // Safety Car holds everyone). An episode is a second or more stuck
       // behind the same car; it failed if that car is still ahead at the end.
+      let offroadTime = 0;
       let stuckTime = 0;
       let episode = null;
       const episodes = [];
@@ -159,6 +168,7 @@
           }
         }
         if (close) stuckTime += dt;
+        if (player.offroad) offroadTime += dt;
         if (close && (!episode || episode.car !== close)) {
           if (episode) episodes.push(episode);
           episode = { car: close, from: time, to: time };
@@ -188,9 +198,13 @@
           return { item: u.item, gain: later === undefined ? 0 : u.place - later };
         }),
         spins,
+        wallHits: player.wallHits || 0,
+        offroadFrac: +(offroadTime / time).toFixed(3),
+        bestLap: player.bestLapTime / 1000,
         gapToWinner: player.finished ? (player.finishTime - Math.min(...finished.map((r) => r.finishTime))) / 1000 : null,
       };
     } finally {
+      if (lapsTrack) lapsTrack.laps = lapsWere;
       Math.random = realRandom;
       window.controlsFor = realControls;
       window.useItem = realUse;

@@ -170,11 +170,20 @@ test("card copy states the fast items' real numbers (powerups.js)", () => {
   assert.match(copy.overtakeMode, new RegExp(`^${secs(T.overtakeModeMs)} seconds`, "i"));
   assert.match(copy.formationLap, new RegExp(`^${secs(T.formationLapMs)} seconds`, "i"));
   assert.match(copy.drs, new RegExp(`${secs(T.drsMs)}-second boost, or ${secs(T.drsStraightMs)} seconds`));
-  // The Formation Lap ghosts through the field: it no longer spins anyone.
-  assert.match(copy.formationLap, /through/);
-  assert.doesNotMatch(copy.formationLap, /spin/);
+  // The Formation Lap ploughs through the field like the Bullet Bill: the cars it touches spin aside.
+  assert.match(copy.formationLap, /through the field/);
+  assert.match(copy.formationLap, /aside/);
   // Overtake Mode knocks aside the cars it touches.
   assert.match(copy.overtakeMode, /aside/);
+  // DRS is a burst of speed at once, like the mushroom.
+  assert.match(copy.drs, /burst/);
+  // The Steward Penalty is the heaviest hit; the Oil Slick a short spin, and a trailed one catches a car behind.
+  assert.match(copy.stewardPenalty, /heaviest hit/);
+  assert.match(copy.oilSlick, /short spin/);
+  assert.match(copy.oilSlick, /runs into it/);
+  // The Safety Car: its real time out, and the rivals' power-ups gone.
+  assert.match(copy.safetyCar, new RegExp(`for ${secs(T.safetyCarMs)} seconds`));
+  assert.match(copy.safetyCar, /power-up/);
 });
 
 test("the CPU rubber band eases off most on Rookie and least on Legend, and is gentle", () => {
