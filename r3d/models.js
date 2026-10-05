@@ -7,10 +7,10 @@
 // - each venue's own models (its landmarks, its yachts, its type of stand)
 //   load when its circuit is prepared: Render3D.prepare() waits for them
 //   behind the loading panel, so everything that draws is in the scene when
-//   its shaders compile. Once a race is ready, the cup's next circuits'
-//   models are fetched one circuit at a time (preloadVenues), so the next
-//   loading panel is short; a slow connection fetches only what the cup
-//   shows.
+//   its shaders compile. When a race ends, the cup's next circuit's models
+//   are fetched behind the results (preloadVenues), so the next loading
+//   panel is short and no racing frame is spent unpacking them; a slow
+//   connection fetches only what the cup shows.
 // The models are compressed (tools/compress-models.mjs): meshoptimizer's
 // decoder, as three.js ships it, unpacks them. A model that fails to load
 // leaves its procedural stand-in in place.

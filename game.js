@@ -122,10 +122,6 @@ function prepareCircuit() {
   if (ready.ok && ready.value === false) return;
   state.preparing = null;
   state.preparedAt = performance.now();
-  // The race is ready: the cup's next circuits' trackside models are fetched
-  // now, one circuit at a time, so their loading panels are short.
-  const cup = CUPS[state.activeCupIndex];
-  if (cup && window.Render3D.preloadVenues) window.Render3D.preloadVenues(cup.tracks.slice(state.raceIndex + 1).map((t) => t.id));
   // The lights start from here.
   if (state.phase === "countdown") state.countdownStart = performance.now();
 }
@@ -3543,6 +3539,12 @@ function recordPlayerCup() {
 }
 
 function finalizeRace() {
+  // The race done: the cup's next circuit's trackside models are fetched now
+  // (behind the results, where their unpacking can't make a racing frame
+  // stutter), so its loading panel is short.
+  const nextCup = CUPS[state.activeCupIndex];
+  const nextTrack = nextCup && nextCup.tracks[state.raceIndex + 1];
+  if (nextTrack && window.Render3D && window.Render3D.preloadVenues) window.Render3D.preloadVenues([nextTrack.id]);
   const finishers = [...state.racers].sort((a, b) => a.finishPosition - b.finishPosition);
   finishers.forEach((racer, index) => {
     const entry = state.cupEntries.find((cupEntry) => cupEntry.driver.id === racer.driver.id);
