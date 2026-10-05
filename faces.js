@@ -37,8 +37,9 @@
   const HAIR_VOLUME = [0.6, 1.5];
   // A driver's brows: how thick against a plain brow; how arched (-1 flat
   // or falling, 1 high); how far the tail drops (0..1); how far toward the
-  // nose they start (0 close, 1 apart).
-  const BROW_SHAPE = { thickness: [0.5, 1.6], arch: [-1, 1], tail: [0, 1], gap: [0, 1] };
+  // nose they start (0 close, 1 apart); how densely the hairs grow (0.3
+  // sparse, the skin showing through, to 1 full).
+  const BROW_SHAPE = { thickness: [0.5, 1.6], arch: [-1, 1], tail: [0, 1], gap: [0, 1], density: [0.3, 1] };
   const FACIAL_HAIR = ["none", "stubble", "short_beard", "full_beard", "moustache"];
   const HEX = /^#[0-9a-f]{6}$/i;
 

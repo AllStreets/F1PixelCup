@@ -121,7 +121,8 @@ test("the field of view widens on narrow windows so the podium stays in frame", 
 
 test("every cup on the calendar, and the season, has a colour of its own", () => {
   const Data = require("../game-data.js");
-  const ids = [...Data.CUP_DEFS.map((c) => c.id), Data.SEASON.id];
+  // (And the random cup, the custom cup and the single race: choices.js.)
+  const ids = [...Data.CUP_DEFS.map((c) => c.id), Data.SEASON.id, "randomCup", "customCup", "singleRace"];
   const colours = ids.map((id) => Ceremony.cupColour(id));
   colours.forEach((c) => assert.match(c, /^#[0-9a-f]{6}$/));
   assert.equal(new Set(colours).size, ids.length, colours.join());

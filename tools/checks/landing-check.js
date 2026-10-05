@@ -2,7 +2,7 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, tracksideShots true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
+// yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, raceChoices, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; the race-day values
 // (raceDay, raceDayImages, raceDayAlts, raceDayGallery, replayCopyTrue, twoPlayerKeys, raceDayLayout1600,
@@ -86,6 +86,24 @@ async (page) => {
     return Boolean(card) && /24/.test(card.textContent) && /constructors/i.test(card.textContent) && /saved after every race/i.test(card.textContent)
       && card.querySelector("a.go-btn").getAttribute("href") === "./play.html?cup=season";
   });
+  // Or race your way: the random cup, the custom cup and the single race,
+  // each a link into the pit lane with it picked, the pit lane's real
+  // pictures, and the hero's chip to it.
+  await p.locator("#race-choices").scrollIntoViewIfNeeded().catch(() => {});
+  await p.waitForTimeout(800);
+  out.raceChoices = await p.evaluate(() => {
+    const card = document.querySelector("#circuits #race-choices");
+    if (!card) return "no card";
+    const links = [...card.querySelectorAll(".choices-ways a")].map((a) => a.getAttribute("href"));
+    const imgs = [...card.querySelectorAll(".choices-shots img")];
+    const text = card.textContent;
+    const ok = JSON.stringify(links) === JSON.stringify(["./play.html?race=random", "./play.html?race=custom", "./play.html?race=single"])
+      && imgs.length === 2 && imgs.every((i) => i.complete && i.naturalWidth > 0 && i.alt)
+      && text.includes(`all ${CIRCUITS.length}`) && /Reroll/.test(text) && /no cup bonus/.test(text)
+      && Boolean(document.querySelector('#hero a.chip[href="#race-choices"]'));
+    return ok || JSON.stringify({ links, imgs: imgs.map((i) => [i.complete, i.naturalWidth]) });
+  });
+  await p.evaluate(() => window.scrollTo(0, 0));
   out.teams = await p.locator("#grid .team-card").count();
   // The trackside world: six screenshots, every one loaded, each with its alt
   // text and caption, linked from the top bar.
