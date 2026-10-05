@@ -3147,7 +3147,10 @@ function updateRace(dt, now) {
     // (the player has finished, so in practice only the field moves).
     const playerSteps = index % (state.flagOutAt ? FLAG_FAST_FORWARD : 1) === 0;
     state.racers.forEach((racer) => {
-      if (racer.finished || (!playerSteps && racer.isPlayer)) return;
+      // A car home is parked: nothing to draw it between, or every frame
+      // would draw it somewhere between the line and the step before it.
+      if (racer.finished) { racer.drawFrom = null; return; }
+      if (!playerSteps && racer.isPlayer) return;
       updateRacer(racer, PHYSICS_DT, tick);
     });
     // Two players: one home while the other still races coasts off the line.
