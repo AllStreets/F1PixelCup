@@ -4,7 +4,7 @@
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
 // Writes to assets/shots/. Then resize with sips:
 //   sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg
-//   sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team,trackside}-*.jpg
+//   sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team,trackside,historic}-*.jpg
 //   sips -Z 960 assets/shots/items/*.jpg
 //   sips -Z 360 assets/shots/helmets/*.jpg
 // The race-day shots (assets/shots/race-day/) get an 800 px and a 400 px copy each,
@@ -15,8 +15,9 @@
 //   sips -Z 1200 -s formatOptions 80 pitlane.jpg picker.jpg
 //   sips -Z 800 -s formatOptions 78 <each other picture>.jpg
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
-// ["items"]; the default takes circuits, teams, items, helmets, trackside and
-// trackside2025 (the 2025 venues' landmarks). The race-day parts are
+// ["items"]; the default takes circuits, teams, items, helmets, trackside,
+// trackside2025 (the 2025 venues' landmarks) and historic (the historic
+// circuits' landmarks). The race-day parts are
 // "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
 // the pit lane's race choices and the circuit picker; "readme" takes the
 // README's pictures (docs/readme/).
@@ -27,7 +28,7 @@ async (page) => {
     const { windowId: ownWindow } = await own.send("Browser.getWindowForTarget");
     await own.send("Browser.setWindowBounds", { windowId: ownWindow, bounds: { windowState: "minimized" } });
   } catch (e) { /* not fatal */ }
-  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets", "trackside", "trackside2025"];
+  const parts = globalThis.CAPTURE_PARTS || ["circuits", "teams", "items", "helmets", "trackside", "trackside2025", "historic"];
   // Relative to the Playwright server, which runs from the repo root.
   const OUT = "assets/shots/";
   const context = await page.context().browser().newContext({ viewport: null });
@@ -238,6 +239,15 @@ async (page) => {
     { part: "trackside2025", name: "trackside-austin", circuit: "cota", aim: "cotaTower", back: 30, h: 15, ah: 90, fov: 60, side: 0 },
     { part: "trackside2025", name: "trackside-forosol", circuit: "mexico", aim: "foroSol", back: 25, h: 30, ah: 40, fov: 70, side: 0 },
     { part: "trackside2025", name: "trackside-miami", circuit: "miami", aim: "miamiStadium", back: 20, h: 18, ah: 45, fov: 70, side: 0 },
+    // The historic circuits (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+    { part: "historic", name: "historic-hockenheim", circuit: "hockenheim", aim: "motodrom", back: 40, h: 25, ah: 45, fov: 65, side: 160 },
+    { part: "historic", name: "historic-nurburgring", circuit: "nurburgring", aim: "nurburgCastle", back: 30, h: 15, ah: 110, fov: 28, side: 0 },
+    { part: "historic", name: "historic-estoril", circuit: "estoril", aim: "sintraHills", back: 30, h: 15, ah: 180, fov: 50, side: 0 },
+    { part: "historic", name: "historic-kyalami", circuit: "kyalami", aim: "joburgSkyline", back: 30, h: 15, ah: 200, fov: 45, side: 0 },
+    { part: "historic", name: "historic-sepang", circuit: "sepang", aim: "sepangGrandstand", back: 40, h: 20, ah: 40, fov: 65, side: 120 },
+    { part: "historic", name: "historic-istanbul", circuit: "istanbul", aim: "istanbulGrandstand", back: 40, h: 25, ah: 60, fov: 65, side: 160 },
+    { part: "historic", name: "historic-mugello", circuit: "mugello", aim: "tuscanHill", back: 30, h: 15, ah: 80, fov: 55, side: 140 },
+    { part: "historic", name: "historic-watkinsglen", circuit: "watkinsglen", aim: "fingerLakes", back: 30, h: 25, ah: 80, fov: 55, side: 0 },
   ];
   for (const t of TRACKSIDE.filter((x) => parts.includes(x.part || "trackside"))) {
     const c = circuits.find((x) => x.id === t.circuit);

@@ -85,7 +85,7 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td width="50%"><img src="docs/readme/pitlane.jpg" alt="The pit lane: race choices, Charles Leclerc's card and his Ferrari on a turntable" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>Landmarks.</b> Piastri past the Sphere on the Las Vegas Strip, with Antonelli and Sainz behind. Every 2025 venue has its own set piece, from the Sphere to Suzuka's Ferris wheel.</em></td>
+<td><em><b>Landmarks.</b> Piastri past the Sphere on the Las Vegas Strip, with Antonelli and Sainz behind. Every venue has its own set piece, from the Sphere to Suzuka's Ferris wheel and the Nürburg on its hill.</em></td>
 <td><em><b>The pit lane.</b> Pick the race, the difficulty, the grid and the weather; pick your driver; their car turns on the showroom floor.</em></td>
 </tr>
 <tr>
@@ -215,7 +215,7 @@ All 32, at one scale, five laps each. 🌙 marks the night races, under floodlig
 | 🕰️ | Mugello, Italy | 5.245 km | 15% | A Tuscan valley of cypresses and olive groves |
 | 🕰️ | Watkins Glen, United States | 5.430 km | 30% | The Finger Lakes' woods in autumn colours |
 
-Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. The landmarks are the 2025 venues'; the historic circuits have their stands, crowds and their own country's ground, trees and sky, but no landmark yet.
+Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. Every venue has its landmarks, built in Blender, the historic circuits too: Hockenheim's Motodrom, the Nürburg on its wooded hill, the Serra de Sintra above Estoril with the Pena Palace on top, Johannesburg's skyline from Kyalami, Sepang's double-fronted grandstand under its palm-leaf canopies, Istanbul Park's grandstand hung from its masts, a terraced Tuscan hill at Mugello and a Finger Lake between autumn woods at Watkins Glen.
 
 > [!NOTE]
 > **Where the pits are.** Where OpenStreetMap maps the real pit lane, the game's sits beside it, on its real side. Three don't: at Interlagos the real lane leaves the track through the Senna S and at Singapore its side bends too tightly for garages, so theirs are across the road, and Monaco's is placed by hand. Albert Park, Monza, Suzuka and Las Vegas have none mapped, so theirs come from the circuit's shape.

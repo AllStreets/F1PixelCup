@@ -87,9 +87,29 @@
         <p class="kicker">Historic cups</p>
         <h3 class="it-title">Circuits of the past</h3>
         <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid in two cups, H1 and H2. Each is the layout the outline data holds, and each card says which.</p>
-      </header>${historic}` : ""}
+      </header>${historic}
+      <div class="trackside-grid historic-sights" aria-label="The historic circuits' landmarks">${HISTORIC_SIGHTS.map(sight).join("")}</div>` : ""}
       ${choicesCard()}`;
   }
+
+  // What each historic circuit shows from the track, built in Blender
+  // (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md),
+  // pictured in the game (tools/capture-shots.js, part "historic").
+  const HISTORIC_SIGHTS = [
+    { id: "hockenheim", title: "Hockenheim's Motodrom", alt: "The Motodrom's three-tier stand under its long roof across the straight from the pits at Hockenheim", text: "The Motodrom's great stand across the straight from the pits: three tiers of terraces under a long roof." },
+    { id: "nurburgring", title: "The Nürburg", alt: "The ruined Nürburg castle on its wooded hill above the Eifel forest", text: "The ruined castle on its wooded hill, above the Eifel forest." },
+    { id: "estoril", title: "Estoril and Sintra", alt: "The forested Serra de Sintra above Estoril, the red and yellow Pena Palace on its summit", text: "The Serra de Sintra above the circuit, the Pena Palace on its summit." },
+    { id: "kyalami", title: "Johannesburg from Kyalami", alt: "Johannesburg's skyline with the Hillbrow Tower and the cylinder of Ponte City across the Highveld", text: "The Hillbrow Tower, Ponte City and the Carlton Centre across the Highveld." },
+    { id: "sepang", title: "Sepang's leaf canopies", alt: "Sepang's double-fronted grandstand under white canopies shaped like palm leaves", text: "The double-fronted grandstand under canopies shaped like the leaves of oil palms." },
+    { id: "istanbul", title: "Istanbul Park", alt: "Istanbul Park's main grandstand with its roof hung from tall white masts", text: "The main grandstand across from the pits, its roof hung from tall white masts." },
+    { id: "mugello", title: "Tuscany at Mugello", alt: "A Tuscan hill terraced with olive groves, a farmhouse and a line of cypresses on top", text: "A hill terraced with olive groves, a farmhouse and its cypresses on top." },
+    { id: "watkinsglen", title: "The Finger Lakes", alt: "A long lake running away between wooded hills in their autumn colours beside Watkins Glen", text: "A long lake running away between wooded hills in their autumn colours." },
+  ];
+  const sight = (s) => `
+        <figure class="trackside-card">
+          <img src="./assets/shots/historic-${esc(s.id)}.jpg" alt="${esc(s.alt)}" loading="lazy">
+          <figcaption><b>${esc(s.title)}</b> ${esc(s.text)}</figcaption>
+        </figure>`;
 
   // Your way (docs/superpowers/specs/2026-10-01-race-choices-design.md): a
   // random cup, a custom cup or a single race, each a link into the pit lane

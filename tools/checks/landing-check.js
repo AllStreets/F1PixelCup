@@ -2,7 +2,7 @@
 // tool browser_run_code_unsafe, filename: tools/checks/landing-check.js.
 // Power-ups expected: puCards 8, puOrder true, puCopyMatches true, puOddsRows 8,
 // puOddsCell true, tracksideShots true, navLink 1, puPhoneOneColumn true, puPhoneOddsAsList true, gridHowTo true,
-// yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, raceChoices, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
+// yourDrivers, latestByRace, v1Split, v1LeftAlone, circuitsByCup, seasonCard, historicSights, raceChoices, shotsSpanTheGrid, cardsShowNewIcons and heroFromData true;
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; the race-day values
 // (raceDay, raceDayImages, raceDayAlts, raceDayGallery, replayCopyTrue, twoPlayerKeys, raceDayLayout1600,
@@ -89,6 +89,17 @@ async (page) => {
     const card = document.querySelector("#circuits .season-card");
     return Boolean(card) && /24/.test(card.textContent) && /constructors/i.test(card.textContent) && /saved after every race/i.test(card.textContent)
       && card.querySelector("a.go-btn").getAttribute("href") === "./play.html?cup=season";
+  });
+  // The historic circuits' landmarks, after their cups: a picture from the
+  // game for each of the eight, in the cups' order, every one loaded, with
+  // its alt text and caption.
+  out.historicSights = await p.evaluate(async () => {
+    const imgs = [...document.querySelectorAll("#circuits .historic-sights .trackside-card img")];
+    imgs.forEach((i) => { i.loading = "eager"; });
+    await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; }))));
+    const ids = CUP_DEFS.filter((c) => c.historic).flatMap((c) => c.circuitIds);
+    const ok = ids.length === 8 && imgs.length === 8 && imgs.every((i, k) => i.src.endsWith(`/historic-${ids[k]}.jpg`) && i.naturalWidth > 0 && i.alt.length > 20 && i.closest("figure").querySelector("figcaption b"));
+    return ok || imgs.map((i) => `${i.src.split("/").pop()}:${i.naturalWidth}`).join(",");
   });
   // Or race your way: the random cup, the custom cup and the single race,
   // each a link into the pit lane with it picked, the pit lane's real
