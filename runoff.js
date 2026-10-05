@@ -149,18 +149,25 @@
     return { width, street, runoffBase, samples, heightAt, near, sampleAt };
   }
 
-  // Where a car meets the wall at lap distance d, on one side of the road
-  // (side >= 0: along +n), as an offset from the centreline: the barrier's
-  // face, or in the pit zone where the lane has cleared it, the pit wall's.
-  function wallOffset(prof, lane, d, side) {
+  // The walls a car can meet at lap distance d on one side of the road
+  // (side >= 0: along +n), as offsets from the centreline, for a car whose
+  // centre is `offset` out on that side: `outer`, the face it can't go past,
+  // and `inner`, the face it can't come back in past (or null). Usually the
+  // barrier past the run-off and nothing inside it. In the pit zone, where the
+  // lane has cleared the road, the pit wall stands between them: from the road
+  // it is the outer face; from the lane, the inner one, with the lane's own
+  // edge outside. (In the mouths, where the lane opens off the road, there is
+  // no pit wall.)
+  function wallLimits(prof, lane, d, side, offset = 0) {
     const p = prof.sampleAt(d);
-    let off = (side >= 0 ? p.outerR : p.outerL) + BARRIER_GAP;
-    if (lane && Math.sign(side || 1) === lane.side) {
-      const pitWall = lane.wallAt(d);
-      if (pitWall !== null) off = Math.min(off, Math.abs(pitWall));
+    const barrier = (side >= 0 ? p.outerR : p.outerL) + BARRIER_GAP;
+    if (lane && Math.sign(side || 1) === lane.side && lane.wallAt(d) !== null) {
+      // (Which side of the wall the car is: beyond its middle, the lane's.)
+      if (offset > (lane.wallIn + lane.wallOut) / 2) return { inner: lane.wallOut, outer: barrier };
+      return { inner: null, outer: Math.min(barrier, lane.wallIn) };
     }
-    return off;
+    return { inner: null, outer: barrier };
   }
 
-  return { SAMPLE_STEP, BRIDGE_HEIGHT, STREET, BARRIER_GAP, profile, wallOffset };
+  return { SAMPLE_STEP, BRIDGE_HEIGHT, STREET, BARRIER_GAP, profile, wallLimits };
 }));

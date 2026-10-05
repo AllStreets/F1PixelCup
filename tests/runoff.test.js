@@ -46,16 +46,24 @@ test("two stretches side by side share the room between them", () => {
   assert.ok(Math.abs(Math.max(p.outerL, p.outerR) - (49.5 + 38)) < 1e-6);
 });
 
-test("the wall a car meets is the barrier's face, or the pit wall where the lane has left the road", () => {
+test("the walls a car meets: the barrier past the run-off, and the pit wall from either side", () => {
   const track = trackFrom(circle(1200), { pit: { side: 1, entry: -400, exit: 400 } });
+  const lane = track.pitLane;
   const prof = Runoff.profile(track);
-  // Away from the pits: the barrier, just outside the run-off.
+  const limits = (d, side, offset) => Runoff.wallLimits(prof, lane, d, side, offset);
+  // Away from the pits: the barrier, just outside the run-off, nothing inside.
   const far = track.totalLength / 2;
-  assert.equal(Runoff.wallOffset(prof, track.pitLane, far, 1), prof.sampleAt(far).outerR + Runoff.BARRIER_GAP);
-  assert.equal(Runoff.wallOffset(prof, track.pitLane, far, -1), prof.sampleAt(far).outerL + Runoff.BARRIER_GAP);
-  // Beside the garages, on the pit side: the pit wall, not the garages.
-  assert.equal(Runoff.wallOffset(prof, track.pitLane, 0, 1), Math.abs(track.pitLane.wallAt(0)));
-  assert.ok(Runoff.wallOffset(prof, track.pitLane, 0, 1) < prof.sampleAt(0).outerR);
+  assert.deepEqual(limits(far, 1, 0), { inner: null, outer: prof.sampleAt(far).outerR + Runoff.BARRIER_GAP });
+  assert.deepEqual(limits(far, -1, 0), { inner: null, outer: prof.sampleAt(far).outerL + Runoff.BARRIER_GAP });
+  // Beside the garages, from the road: the pit wall's road face.
+  assert.deepEqual(limits(0, 1, 30), { inner: null, outer: lane.wallIn });
+  // From the lane: the pit wall's lane face inside, the lane's edge outside.
+  assert.deepEqual(limits(0, 1, lane.laneCentre), { inner: lane.wallOut, outer: prof.sampleAt(0).outerR + Runoff.BARRIER_GAP });
+  assert.ok(prof.sampleAt(0).outerR > lane.laneCentre);
   // The other side of the road there is the usual barrier.
-  assert.equal(Runoff.wallOffset(prof, track.pitLane, 0, -1), prof.sampleAt(0).outerL + Runoff.BARRIER_GAP);
+  assert.deepEqual(limits(0, -1, 30), { inner: null, outer: prof.sampleAt(0).outerL + Runoff.BARRIER_GAP });
+  // In the mouth there is no pit wall: the road opens into the lane.
+  const mouth = (((-400 + 20) % track.totalLength) + track.totalLength) % track.totalLength;
+  assert.equal(lane.wallAt(mouth), null);
+  assert.deepEqual(limits(mouth, 1, 40), { inner: null, outer: prof.sampleAt(mouth).outerR + Runoff.BARRIER_GAP });
 });

@@ -10,8 +10,8 @@
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PowerUps = api;
 }(typeof self !== "undefined" ? self : this, function () {
-  // Common to rare. Also the order a blocked roll moves along, and the order
-  // the site shows the cards in.
+  // Common to rare. Also the order a blocked roll moves back down, and the
+  // order the site shows the cards in.
   const ITEM_ORDER = ["drs", "oilSlick", "debris", "undercut", "overtakeMode", "formationLap", "stewardPenalty", "safetyCar"];
   const COLUMNS = ["lead", "front", "mid", "back", "tail"];
 
@@ -81,9 +81,10 @@
       if (r < 0) { pick = id; break; }
     }
     const ctx = { raceTime, lastSafetyCarAt, stewardInFlight };
-    const start = ITEM_ORDER.indexOf(pick);
-    for (let k = 0; k < ITEM_ORDER.length; k += 1) {
-      const id = ITEM_ORDER[(start + k) % ITEM_ORDER.length];
+    // Held back, it moves down to the next commoner item the column allows
+    // (never up to a rarer, stronger one).
+    for (let i = ITEM_ORDER.indexOf(pick); i >= 0; i -= 1) {
+      const id = ITEM_ORDER[i];
       if (odds[id] > 0 && !isBlocked(id, ctx)) return id;
     }
     return ITEM_ORDER[0];

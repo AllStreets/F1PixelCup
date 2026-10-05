@@ -157,18 +157,15 @@
     return currentId;
   }
 
-  // How far the nearest human is ahead (+) or behind (-) of this progress.
-  function nearestGap(humans, mine) {
-    let best = null;
-    (humans || []).forEach((p) => {
-      const gap = p - mine;
-      if (best === null || Math.abs(gap) < Math.abs(best)) best = gap;
-    });
-    return best === null ? 0 : best;
+  // How far ahead of the leading human (+) or behind them (-) this progress
+  // is, for the CPU rubber band (racecraft.js); null with no humans.
+  function aheadOfHumans(humans, mine) {
+    if (!humans || !humans.length) return null;
+    return mine - Math.max(...humans);
   }
 
   return {
     SAFE_WIDTH, SAFE_HEIGHT, SIDE_BY_SIDE_FROM, DIVIDER, WIDE_CAP, STICK_DEAD, TRIGGER_DEAD, KEYS,
-    layout, hudFit, viewFov, keyFor, readPad, merge, padsInOrder, assignPads, secondDriver, stepDriver, nearestGap,
+    layout, hudFit, viewFov, keyFor, readPad, merge, padsInOrder, assignPads, secondDriver, stepDriver, aheadOfHumans,
   };
 }));

@@ -146,7 +146,7 @@ async (page) => {
       t += PHYSICS_STEP_MS;
       updateRacer(pl, PHYSICS_DT, t);
       offroad = offroad || pl.offroad;
-      const wall = Runoff.wallOffset(prof, track.pitLane, pl.trackDistance, pl.lat);
+      const wall = Runoff.wallLimits(prof, track.pitLane, pl.trackDistance, pl.lat, Math.abs(pl.lat)).outer;
       worst = Math.max(worst, Math.abs(pl.lat) + PowerUps.CAR_WIDTH / 2 - wall);
     }
     input.throttle = false;

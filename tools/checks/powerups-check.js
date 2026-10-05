@@ -172,9 +172,12 @@ async (page) => {
     const now = raceNow();
     useItem(pl, now, { trail: true });
     const d = (pl.trackDistance - PowerUps.TRAIL_GAP + state.track.totalLength) % state.track.totalLength;
-    Object.assign(behind, { trackDistance: d, lat: pl.lat, spinUntil: 0, spinImmuneUntil: 0, protectedUntil: 0, formationUntil: 0 });
+    Object.assign(behind, { trackDistance: d, lat: pl.lat, spinUntil: 0, spinImmuneUntil: 0, protectedUntil: 0, formationUntil: 0, speed: pl.speed + 30 });
+    // Not before it is armed.
     updateHazards(now + 10);
-    return (behind.spinUntil > now && !pl.trailingOil && pl.currentItem === "none") || "not caught";
+    if (behind.spinUntil > now || !pl.trailingOil) return "caught before it was armed";
+    updateHazards(now + PowerUps.TIMINGS.oilArmMs + 10);
+    return (behind.spinUntil > now + PowerUps.TIMINGS.oilArmMs && !pl.trailingOil && pl.currentItem === "none") || "not caught";
   });
 
   // The Safety Car, like the lightning: every rival's power-up is gone; the

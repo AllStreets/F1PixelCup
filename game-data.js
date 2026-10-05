@@ -251,7 +251,7 @@ const POWER_UPS = [
     effect: "Eight seconds faster and untouchable: shots, oil and contact can't spin or slow you, and any car you touch spins and is knocked aside.",
     controls: "Space to deploy." },
   { id: "formationLap", name: "Formation Lap", counterpart: "Bullet Bill",
-    effect: "Six seconds of autopilot at huge speed along the racing line, untouchable, straight through the field: any car in the way spins and is knocked aside. It sets you down only where you are clear of other cars.",
+    effect: "Six seconds of autopilot at huge speed along the racing line, untouchable, straight through the field: any car in the way spins and is knocked aside. At the end it carries you on, for up to two seconds more, until you are clear of other cars.",
     controls: "Space to engage." },
   { id: "stewardPenalty", name: "Steward Penalty", counterpart: "Blue shell",
     effect: "Flies over the field to the race leader and blows them to a near stop and a long spin, the heaviest hit in the game. Anyone right beside them spins too.",

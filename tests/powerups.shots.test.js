@@ -302,7 +302,8 @@ test("the Steward Penalty is the heaviest hit in the game; the Oil Slick is a sh
 });
 
 test("the shells hunt harder: an Undercut catches a car 300 ahead at full speed in under 3 s", () => {
-  const relative = (P.SHOT_SPEEDS.undercut - 1) * 238;
+  const TOP_SPEED = 238; // the fastest car's (game.js derivedPhysics)
+  const relative = (P.SHOT_SPEEDS.undercut - 1) * TOP_SPEED;
   assert.ok(300 / relative < 3, `${300 / relative}`);
   assert.ok(P.SHOT_SPEEDS.debris >= 1.4 && P.TIMINGS.lifeMs.debris >= 8000);
   assert.ok(P.LAT_HOMING >= 120);

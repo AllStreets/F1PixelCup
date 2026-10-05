@@ -67,7 +67,8 @@ export class Occupancy {
 export function buildCourse(track) {
   // The samples, the run-off either side and the barrier lines are the
   // physics' own (runoff.js): the cars hit the barriers drawn here.
-  const { width, street, runoffBase, samples, heightAt, near, sampleAt } = Runoff.profile(track);
+  // (Worked out once per circuit; game.js getRunoff keeps it on the track too.)
+  const { width, street, runoffBase, samples, heightAt, near, sampleAt } = track.runoff || (track.runoff = Runoff.profile(track));
   const n = samples.length;
   const pitLane = track.pitLane || null;
 
@@ -419,9 +420,14 @@ export function buildCircuit(course, venue) {
         const off = side > 0 ? p.outerR - 4 : -p.outerL + 4;
         const x = p.x + p.nx * off;
         const z = p.y + p.ny * off;
-        // Keep piers off the lower carriageway.
+        // Keep piers off the lower road and its run-off, out past its
+        // barrier: the cars can drive all the way out to it.
         const lower = course.nearestSample(x, z);
-        if (lower && lower.h < 0.5 && Math.hypot(lower.x - x, lower.y - z) < width + 14) return;
+        if (lower && lower.h < 0.5) {
+          const across = (x - lower.x) * lower.nx + (z - lower.y) * lower.ny;
+          const barrier = (across >= 0 ? lower.outerR : lower.outerL) + Runoff.BARRIER_GAP;
+          if (Math.hypot(lower.x - x, lower.y - z) < barrier + 4) return;
+        }
         const pier = new THREE.Mesh(new THREE.BoxGeometry(5, p.h, 5), concrete);
         pier.position.set(x, p.h / 2, z);
         pier.castShadow = true;

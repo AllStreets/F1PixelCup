@@ -26,6 +26,7 @@
     const realUse = window.useItem;
     const realSpin = window.spinRacer;
     Math.random = seeded(seed);
+    const was = { headless: state.headless, difficulty: state.difficulty, cupDifficulty: state.cupDifficulty, selectedDriver: state.selectedDriver };
     let lapsTrack = null;
     let lapsWere = 0;
     try {
@@ -73,16 +74,18 @@
       window.controlsFor = (racer) => (racer === player ? controls : realControls(racer));
       // What the player's items gained, and what spun the player.
       const uses = [];
-      window.useItem = function (racer, t, opts) {
+      // (Every argument passed straight through: the game's own calls are unchanged.)
+      window.useItem = function (...args) {
+        const [racer, t, opts] = args;
         if (racer === player && racer.currentItem !== "none" && !(opts && opts.trail)) {
           uses.push({ item: racer.currentItem, at: t, place: placeOf(player) });
         }
-        return realUse(racer, t, opts);
+        return realUse(...args);
       };
       const spins = [];
-      window.spinRacer = function (racer, duration, t) {
-        const spun = realSpin(racer, duration, t);
-        if (spun && racer === player) spins.push(duration);
+      window.spinRacer = function (...args) {
+        const spun = realSpin(...args);
+        if (spun && args[0] === player) spins.push(args[1]);
         return spun;
       };
 
@@ -205,6 +208,8 @@
       };
     } finally {
       if (lapsTrack) lapsTrack.laps = lapsWere;
+      // The settings as they were (the race it ran stays loaded, as after any race).
+      Object.assign(state, was);
       Math.random = realRandom;
       window.controlsFor = realControls;
       window.useItem = realUse;

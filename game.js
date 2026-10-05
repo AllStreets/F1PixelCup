@@ -719,13 +719,14 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
   let brakeBoost = 0;
   let steerAdjust = 0;
 
-  // Two players qualify as ghosts to each other: neither holds the other up.
-  const ghosts = state.phase === "qualifying" && isHuman(racer);
   // A car on a Formation Lap is on rails: it ploughs through the field.
-  if (racer.formationUntil > now) return { throttle, brake, steerInput };
+  // Avoidance is the AI's substitute for a human's hands, so it stays
+  // AI-only: it steers round a car ahead, and lifts and brakes only when it
+  // is about to run into a slower one. A car close behind another isn't
+  // slowed by it (it gains, from the tow; updateRacer).
+  if (racer.formationUntil > now || racer.isPlayer) return { throttle, brake, steerInput };
   state.racers.forEach((other) => {
     if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
-    if (ghosts && isHuman(other)) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
@@ -736,11 +737,6 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
     const sideWeight = 1 - clamp(Math.abs(side) / 42, 0, 1);
     const pressure = forwardWeight * sideWeight;
     const steerAway = side >= 0 ? -1 : 1;
-    // Avoidance is the AI's substitute for a human's hands, so it stays
-    // AI-only: it steers round a car ahead, and lifts and brakes only when it
-    // is about to run into a slower one. A car close behind another isn't
-    // slowed by it (on a straight it gains, from the tow; updateRacer).
-    if (racer.isPlayer) return;
     steerAdjust += steerAway * pressure * 0.88;
     if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0) && !isRecovering(other, now)) {
       throttleScale = Math.min(throttleScale, 0.86 - pressure * 0.10);
@@ -821,6 +817,7 @@ function createRacer(driver, kart, isPlayer, slot) {
     wobble: 0,
     wobbleAt: 0,
     recoverUntil: 0,
+    recoverCapAt: 0,
     wallHits: 0,
     trailingOil: false,
     trailSince: 0,
@@ -1395,6 +1392,7 @@ function startQualifying(index) {
   const cup = getActiveCup();
   state.raceIndex = index;
   state.track = cup.tracks[index];
+  getRunoff(state.track);
   setRaceWeather(index);
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
@@ -1862,6 +1860,8 @@ function startRace(index) {
   state.phase = "countdown";
   if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
+  // The barriers, worked out now rather than on the race's first step.
+  getRunoff(state.track);
   setRaceWeather(index);
   // The world box is sized to each circuit.
   Object.assign(WORLD, state.track.world);
@@ -2309,6 +2309,7 @@ function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
   if (now < (racer.spinImmuneUntil || 0)) return false;
   racer.spinUntil = Math.max(racer.spinUntil, now + duration);
   racer.spinImmuneUntil = now + duration + 1400;
+  racer.recoverCapAt = racer.spinUntil + RECOVER_GRACE_MS;
   if (racer.isPlayer) {
     addScreenShake(10, 420, racer);
     sfx.spin();
@@ -2462,6 +2463,9 @@ const PLAYER_STEER_ASSIST = 0.08;
 const RUNOFF_DRAG = 0.985;
 const WALL_FRICTION = 0.45;
 const WALL_RECOVERY_MS = 900;
+const WALL_MAX_ANGLE = 0.35;
+const RECOVER_GRACE_MS = 1500;
+const WALL_WOBBLE_FROM = 6;
 const WALL_HARD_HIT = 30;
 function getRunoff(track) {
   if (!track.runoff) track.runoff = Runoff.profile(track);
@@ -2469,6 +2473,8 @@ function getRunoff(track) {
 }
 
 function applyTrackBarrier(racer, surface, now = raceNow()) {
+  // (Shortcuts are switched off; their surfaces have no run-off of their own.)
+  if (surface.isShortcut) return;
   const track = state.track;
   const fallbackDx = racer.x - surface.point.x;
   const fallbackDy = racer.y - surface.point.y;
@@ -2477,43 +2483,73 @@ function applyTrackBarrier(racer, surface, now = raceNow()) {
   const normalY = surface.normalY || fallbackDy / fallbackLength;
   // Which side of the road, and the lap distance there.
   const side = normalX * -surface.tangentY + normalY * surface.tangentX >= 0 ? 1 : -1;
-  const d = surface.isShortcut ? (racer.trackDistance || 0)
-    : (track.cumulativeStarts[surface.segmentIndex] || 0) + surface.t * (track.segments[surface.segmentIndex] || { length: 0 }).length;
-  const limit = Math.max(6, Runoff.wallOffset(getRunoff(track), track.pitLane, d, side) - PowerUps.CAR_WIDTH / 2);
-  if (surface.distance <= limit) return;
+  const segment = track.segments[surface.segmentIndex] || { length: 0 };
+  const d = (track.cumulativeStarts[surface.segmentIndex] || 0) + surface.t * segment.length;
+  const half = PowerUps.CAR_WIDTH / 2;
+  const walls = Runoff.wallLimits(getRunoff(track), track.pitLane, d, side, surface.distance);
+  const outer = Math.max(6, walls.outer - half);
+  const inner = walls.inner === null ? null : walls.inner + half;
+  // Into the outer wall the wall's normal points out (away from the road);
+  // into the pit wall from the lane it points back in.
+  let limit;
+  let wallX;
+  let wallY;
+  if (surface.distance > outer) {
+    limit = outer;
+    wallX = normalX;
+    wallY = normalY;
+  } else if (inner !== null && surface.distance < inner) {
+    limit = inner;
+    wallX = -normalX;
+    wallY = -normalY;
+  } else {
+    return;
+  }
   racer.x = surface.point.x + normalX * limit;
   racer.y = surface.point.y + normalY * limit;
-  // The velocity into the wall (along the outward normal) and along it.
+  // The velocity into the wall and along it.
   const vx = Math.cos(racer.heading) * racer.speed;
   const vy = Math.sin(racer.heading) * racer.speed;
-  const into = vx * normalX + vy * normalY;
+  const into = vx * wallX + vy * wallY;
   if (into <= 0) return;
-  const alongX = vx - into * normalX;
-  const alongY = vy - into * normalY;
+  const alongX = vx - into * wallX;
+  const alongY = vy - into * wallY;
   const along = Math.hypot(alongX, alongY);
   const keep = along > 0 ? Math.max(0, along - WALL_FRICTION * into) / along : 0;
-  const outX = alongX * keep - into * WALL_RESTITUTION * normalX;
-  const outY = alongY * keep - into * WALL_RESTITUTION * normalY;
+  const outX = alongX * keep - into * WALL_RESTITUTION * wallX;
+  const outY = alongY * keep - into * WALL_RESTITUTION * wallY;
   const out = Math.hypot(outX, outY);
-  // A glance off a wall leaves the car running along it, its nose turned
-  // a little away from it (more for a harder hit): still pointing up the road.
-  const forward = lapForwardAngle(surface);
-  const awaySign = Math.cos(forward) * -normalY - Math.sin(forward) * -normalX >= 0 ? 1 : -1;
-  const turn = awaySign * clamp(into / 200, 0.05, 0.25);
-  racer.heading = normalizeAngle(forward + turn);
-  racer.speed = Math.sign(racer.speed || 1) * out;
-  // Knocked away from the wall: a wobble, more for a harder hit.
-  racer.wobble = clamp(into / 120, 0.05, 0.6) * awaySign;
-  racer.wobbleAt = now;
+  // The car leaves the way it now moves: along the wall, angled away from it
+  // by the bounce (never more than WALL_MAX_ANGLE). Reversing, its nose
+  // points the other way from its motion; a car that has all but stopped
+  // is pointed round the lap.
+  const reversing = racer.speed < 0;
+  let moving;
+  if (out < 1) {
+    moving = lapForwardAngle(surface);
+  } else {
+    const alongAngle = along > 0 ? Math.atan2(alongY, alongX) : Math.atan2(outY, outX);
+    moving = alongAngle + clamp(normalizeAngle(Math.atan2(outY, outX) - alongAngle), -WALL_MAX_ANGLE, WALL_MAX_ANGLE);
+  }
+  racer.heading = normalizeAngle(reversing ? moving + Math.PI : moving);
+  racer.speed = reversing ? -out : out;
+  // Knocked away from the wall: a wobble, more for a harder hit. A scrape
+  // along the wall, or a touch while one is still dying out, starts none.
+  const wobbling = racer.wobble && (now - racer.wobbleAt) / 1000 < WOBBLE_SECONDS;
+  if (into > WALL_WOBBLE_FROM && !wobbling) {
+    const away = Math.cos(moving) * -wallY + Math.sin(moving) * wallX;
+    racer.wobble = clamp(into / 120, 0.05, 0.6) * (Math.sign(-away) || 1);
+    racer.wobbleAt = now;
+  }
   if (into >= WALL_HARD_HIT) {
     racer.recoverUntil = Math.max(racer.recoverUntil || 0, now + WALL_RECOVERY_MS);
+    racer.recoverCapAt = racer.recoverUntil + RECOVER_GRACE_MS;
     racer.wallHits = (racer.wallHits || 0) + 1;
-    wallSparks(racer, normalX, normalY, into);
+    wallSparks(racer, wallX, wallY, into);
     if (racer.isPlayer) {
       addScreenShake(clamp(into * 0.12, 3, 10), 260, racer);
       sfx.impact();
     }
-    emitFx("wallHit", racer);
   }
 }
 
@@ -2842,7 +2878,7 @@ function updateRacer(racer, dt, now) {
     // little (racecraft.js). Cars near a player, and behind, race at full pace.
     const people = humans();
     if (difficulty.rubberBand && people.length && !people.includes(racer)) {
-      const ahead = getRaceProgress(racer) - Math.max(...people.map(getRaceProgress));
+      const ahead = TwoPlayer.aheadOfHumans(people.map(getRaceProgress), getRaceProgress(racer));
       targetSpeed *= Racecraft.rubberBand(ahead, difficulty.rubberBand);
     }
   }
@@ -2946,8 +2982,10 @@ function updateRacer(racer, dt, now) {
   // that is part of its hands on the wheel; a player gets only a light
   // assist, so a car nobody steers runs wide in a corner, off the road and
   // into the wall.
-  const surfaceBlend = racer.isPlayer ? (racer.speed < -8 ? 0.04 : PLAYER_STEER_ASSIST) : 0.22;
-  alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
+  // (The Formation Lap's autopilot holds the road as a CPU driver does.)
+  const assisted = racer.isPlayer && !(racer.formationUntil > now);
+  const surfaceBlend = assisted ? (racer.speed < -8 ? 0.04 : PLAYER_STEER_ASSIST) : 0.22;
+  alignRacerToSurface(racer, barrierSurface, surfaceBlend);
   updateLapProgress(racer, now, dt);
   recordTimingPoint(racer, now);
   // Side offset from the centreline, for shots and oil (track coordinates).
@@ -2995,6 +3033,15 @@ function updateRacer(racer, dt, now) {
   if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS * 1.5 && now < racer.formationEndsBy
     && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
     racer.formationUntil = now + PHYSICS_STEP_MS * 2;
+  }
+
+  // Out of a spin (or off a wall) the car rejoins the fight only once it is
+  // clear of the cars it was let through, so it never lands on top of one;
+  // after RECOVER_GRACE_MS it rejoins wherever it is.
+  const recoveringTo = Math.max(racer.spinUntil || 0, racer.recoverUntil || 0);
+  if (recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
+    && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
+    racer.recoverUntil = now + PHYSICS_STEP_MS * 2;
   }
 
   const boosting = racer.boostUntil > now || racer.formationUntil > now;
@@ -3138,18 +3185,22 @@ function becomeDebris(shot, now) {
 function updateHazards(now) {
   const L = state.track.totalLength;
   const bodies = itemBodies();
-  // A trailed slick catches a car that runs up behind it, as a dropped one
-  // would, and is used up.
+  // A trailed slick catches a car that runs up into it from behind (once it
+  // has been out long enough to arm, as a dropped one), and is used up. A car
+  // in Overtake Mode or on a Formation Lap goes through it untouched, and
+  // the slick is gone all the same.
   trailBodies().forEach((trail) => {
-    const victim = bodies.find((b) => b.id !== trail.ownerId && PowerUps.shotHits(trail, b, L));
-    if (!victim) return;
     const owner = racerById(trail.ownerId);
+    if (now - owner.trailSince < PowerUps.TIMINGS.oilArmMs) return;
+    const victim = bodies.find((b) => b.id !== trail.ownerId && b.speed > owner.speed && PowerUps.shotHits(trail, b, L));
+    if (!victim) return;
     const spun = racerById(victim.id);
     owner.trailingOil = false;
     owner.currentItem = "none";
     owner.oilHoldStart = 0;
-    spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && !spun.underRoof ? Weather.WET.oilSpin : 1), now, PowerUps.SPIN_KEEP.oilSlick);
-    addFeed(`${spun.driver.code} ran into ${owner.driver.code}'s trailed oil.`);
+    const caught = spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && !spun.underRoof ? Weather.WET.oilSpin : 1), now, PowerUps.SPIN_KEEP.oilSlick);
+    addFeed(caught ? `${spun.driver.code} ran into ${owner.driver.code}'s trailed oil.`
+      : `${spun.driver.code} went straight through ${owner.driver.code}'s trailed oil.`);
   });
   state.hazards = state.hazards.filter((hazard) => {
     if (now > hazard.expiresAt) return false;
@@ -3276,14 +3327,21 @@ function handleRacerContacts(now) {
         [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(depth * 0.7, 2, 9), 220, r); });
         if (depth > 4) sfx.impact();
       }
-      if (protA && !protB && spinRacer(b, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact)) knockAside(b, a, tx, ty);
-      if (protB && !protA && spinRacer(a, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact)) knockAside(a, b, tx, ty);
+      // (Knocked aside even when it can't be spun again just yet.)
+      if (protA && !protB) {
+        spinRacer(b, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact);
+        knockAside(b, a, tx, ty);
+      }
+      if (protB && !protA) {
+        spinRacer(a, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact);
+        knockAside(a, b, tx, ty);
+      }
 
       [a, b].forEach((r) => {
         r.x = clamp(r.x, 24, WORLD.width - 24);
         r.y = clamp(r.y, 24, WORLD.height - 24);
         applyTrackBarrier(r, getActiveSurfaceInfo(r, state.track, now), now);
-        alignRacerToSurface(r, getActiveSurfaceInfo(r, state.track, now), 0.18, 0.86);
+        alignRacerToSurface(r, getActiveSurfaceInfo(r, state.track, now), 0.18);
       });
     }
   }
@@ -4913,7 +4971,9 @@ function buildDriverRoadSamples(track, player, cameraHeading) {
       return halfCanvas + s * (CAMERA.focal / f);
     };
 
-    const shoulder = sample.width + 13;
+    // The run-off out to the barriers, where the physics has them (runoff.js).
+    const edge = getRunoff(track).sampleAt(((routeDistance % track.totalLength) + track.totalLength) % track.totalLength);
+    const kerb = sample.width + 6;
     samples.push({
       y: center.y,
       scale: center.scale,
@@ -4922,8 +4982,10 @@ function buildDriverRoadSamples(track, player, cameraHeading) {
       centerX: center.x,
       leftRoadX: edgeX(-sample.width),
       rightRoadX: edgeX(sample.width),
-      leftShoulderX: edgeX(-shoulder),
-      rightShoulderX: edgeX(shoulder),
+      leftKerbX: edgeX(-kerb),
+      rightKerbX: edgeX(kerb),
+      leftShoulderX: edgeX(-(edge.outerL + Runoff.BARRIER_GAP)),
+      rightShoulderX: edgeX(edge.outerR + Runoff.BARRIER_GAP),
       laneHalf: Math.max(1, sample.width * 0.045 * center.scale),
     });
   }
@@ -4957,13 +5019,13 @@ function drawDriverRoad(samples, track) {
       roadColor,
     );
     drawQuad(
-      near.leftShoulderX, near.y, near.leftRoadX, near.y,
-      far.leftRoadX, far.y, far.leftShoulderX, far.y,
+      near.leftKerbX, near.y, near.leftRoadX, near.y,
+      far.leftRoadX, far.y, far.leftKerbX, far.y,
       curbColor,
     );
     drawQuad(
-      near.rightRoadX, near.y, near.rightShoulderX, near.y,
-      far.rightShoulderX, far.y, far.rightRoadX, far.y,
+      near.rightRoadX, near.y, near.rightKerbX, near.y,
+      far.rightKerbX, far.y, far.rightRoadX, far.y,
       curbColor,
     );
 
