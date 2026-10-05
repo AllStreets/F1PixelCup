@@ -240,6 +240,9 @@ def main():
         "anchors": anchors,
         "lake": [[round(v, 2) for v in metres(*p)] for p in max(lakes, key=len)],
         "buildings": buildings,
+        # The circuit's true outline in the same metres (where the resorts'
+        # signs stand by it).
+        "circuit": [[round(v, 2) for v in metres(c[1], c[0])] for c in coords],
     }
     json.dump(out, open(os.path.join(HERE, "strip.json"), "w"), separators=(",", ":"))
     by = {}

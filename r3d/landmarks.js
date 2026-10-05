@@ -864,7 +864,12 @@ export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit
         totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;
         ${fromVertex ? `// A stone hotel floodlit at night, warm on its frame and slabs (a
         // glass tower is not: its rooms carry it).
-        totalEmissiveRadiance += vColor.rgb * vec3(1.0, 0.86, 0.7) * 0.2 * stone * (1.0 - inset) * uNight * smoothstep(0.0, 30.0, vFacade.y + 6.0);` : ""}`);
+        totalEmissiveRadiance += vColor.rgb * vec3(1.0, 0.86, 0.7) * 0.2 * stone * (1.0 - inset) * uNight * smoothstep(0.0, 30.0, vFacade.y + 6.0);
+        // The casino floors and shopfronts at street level: bright, warm,
+        // each frontage its own tint.
+        float street = 1.0 - smoothstep(6.5, 8.0, vFacade.y);
+        vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.45, 0.7), facadeHash(vec2(floor(vFacade.x / 23.0), 2.2)));
+        totalEmissiveRadiance += shop * street * (0.55 + 0.45 * glassIn) * 0.9 * uNight;` : ""}`);
   };
   m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}-${fromVertex}`;
   return m;

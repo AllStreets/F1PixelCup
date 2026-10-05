@@ -195,6 +195,8 @@ def building(b, parent):
         m.cface([(x, y, top) for x, y in outline], "roof_flat")
     if b["minh"] > 0.5:
         m.cface([(x, y, z0) for x, y in reversed(outline)], "roof_flat")
+    if roof == "flat" and top - z0 > 60 and inside_poly((cx, cy), outline):
+        crown_details(m, b, outline, cx, cy, w, top)
     crown = CROWN.get(b["resort"])
     if crown and top - z0 > 55:
         c = (*crown, 1.0)
@@ -204,6 +206,50 @@ def building(b, parent):
             for k, z in enumerate(range(12, int(top) - 8, 14)):
                 band(m, outline, z, z + 0.9, (1.0, 0.3, 0.6, 1.0) if k % 2 else (1.0, 0.55, 0.2, 1.0))
     return m.finish(parent=parent, extras={"resort": b["resort"], "height": b["h"]})
+
+
+def inside_poly(pt, poly):
+    x, y = pt
+    hit = False
+    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
+        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+            hit = not hit
+    return hit
+
+
+def crown_details(m, b, outline, cx, cy, w, top):
+    """A tall tower's top: the plant room on its roof, and a resort's own
+    crown: New York-New York's towers stepping up to their spires (as the
+    skyline they copy), the Palazzo's lantern, Paris's mansard roof."""
+    s = max(4.0, min(w * 0.28, 16.0))
+    if b["resort"] == "nyny" and b["h"] > 110:
+        # Setbacks to a mast (an Empire State or a Chrysler of the skyline).
+        z = top
+        for k, f in enumerate((0.55, 0.38, 0.24)):
+            hs = w * f / 2
+            sq = [(cx - hs, cy - hs), (cx + hs, cy - hs), (cx + hs, cy + hs), (cx - hs, cy + hs)]
+            walls(m, sq, z, z + 7.0 - k, "facade_vegas", (0.7, 0.62, 0.52, 1.0))
+            m.cface([(x, y, z + 7.0 - k) for x, y in sq], "roof_flat")
+            z += 7.0 - k
+        m.lathe([(0.0, z), (w * 0.08, z), (0.4, z + 26.0), (0.0, z + 27.0)], (cx, cy), "white_steel", segs=8, smooth=False)
+        m.cface([(cx - 1.2, cy - 1.2, z + 4.0), (cx + 1.2, cy - 1.2, z + 4.0), (cx, cy, z + 9.0)], "neon", (1.0, 0.9, 0.7, 1.0))
+        return
+    if b["resort"] == "palazzo":
+        m.lathe([(0.0, top), (s, top), (s, top + 6.0), (s * 0.8, top + 8.0), (s * 0.45, top + 13.0), (0.0, top + 15.0)], (cx, cy), "roof_gold", segs=12)
+        return
+    if b["resort"] == "paris":
+        # A slate mansard round the top, in from its edges.
+        inset = [(cx + (x - cx) * 0.9, cy + (y - cy) * 0.9) for x, y in outline]
+        for i in range(len(outline)):
+            j = (i + 1) % len(outline)
+            m.cface([(outline[i][0], outline[i][1], top), (outline[j][0], outline[j][1], top), (inset[j][0], inset[j][1], top + 7.0), (inset[i][0], inset[i][1], top + 7.0)], "roof_flat")
+        m.cface([(x, y, top + 7.0) for x, y in inset], "roof_flat")
+        return
+    # The plant room.
+    sq = [(cx - s, cy - s * 0.6), (cx + s, cy - s * 0.6), (cx + s, cy + s * 0.6), (cx - s, cy + s * 0.6)]
+    if all(inside_poly(p, outline) for p in sq):
+        walls(m, sq, top, top + 6.0, "roof_flat", None)
+        m.cface([(x, y, top + 6.0) for x, y in sq], "roof_flat")
 
 
 # =============================================================================
@@ -644,11 +690,17 @@ def bellagio_lake(parent):
                 continue
             phase = (k / 119 + row * 0.13) % 1.0
             col = (phase, row / 3.0, 0.0, 1.0)
-            r = 0.9 if row % 2 == 0 else 0.6
-            for s in range(6):
-                t0 = 2 * math.pi * s / 6
-                t1 = 2 * math.pi * (s + 1) / 6
-                jets.cface([(x + math.cos(t0) * r, y + math.sin(t0) * r, 0.2), (x + math.cos(t1) * r, y + math.sin(t1) * r, 0.2), (x, y, 1.0)], "fountain", col)
+            # A plume: narrow at the nozzle, opening as it climbs, its crown
+            # rounded (the game stretches it to the jet's height).
+            r = 2.4 if row % 2 == 0 else 1.7
+            prof = [(0.25, 0.2), (0.45, 0.45), (0.8, 0.85), (0.55, 0.97), (0.0, 1.0)]
+            for (ra, za), (rb, zb) in zip(prof, prof[1:]):
+                for s in range(6):
+                    t0 = 2 * math.pi * s / 6
+                    t1 = 2 * math.pi * (s + 1) / 6
+                    q = [(x + math.cos(t0) * ra * r, y + math.sin(t0) * ra * r, za), (x + math.cos(t1) * ra * r, y + math.sin(t1) * ra * r, za),
+                         (x + math.cos(t1) * rb * r, y + math.sin(t1) * rb * r, zb), (x + math.cos(t0) * rb * r, y + math.sin(t0) * rb * r, zb)]
+                    jets.cface(q if rb > 0 else q[:3], "fountain", col)
             count += 1
     jets.finish(parent=parent, extras={"jets": count})
 
@@ -684,6 +736,36 @@ def led_walls(parent):
     m.finish(parent=parent)
 
 
+# The resorts whose sign (an LED pylon, no lettering) stands by the circuit.
+SIGNS = ["bellagio", "caesars", "paris", "flamingo", "linq", "harrahs", "horseshoe", "venetian", "palazzo", "mirage", "treasureisland", "planethollywood", "cosmopolitan", "wynn"]
+
+
+def signs(parent):
+    """Each resort's sign by the street: an LED pylon on a stone base, its
+    screens both ways (the game's moving colour; no lettering, no mark),
+    between the resort and the circuit's nearest point."""
+    circuit = DATA["circuit"]
+    for key in SIGNS:
+        pts = [p for b in DATA["buildings"] if b["resort"] == key for p in b["outline"]]
+        if not pts:
+            continue
+        best = min(((p, c) for p in pts for c in circuit[::2]), key=lambda pc: math.dist(pc[0], pc[1]))
+        p, c = best
+        d = math.dist(p, c) or 1.0
+        ux, uy = (p[0] - c[0]) / d, (p[1] - c[1]) / d
+        x, y = c[0] + ux * min(36.0, d * 0.6), c[1] + uy * min(36.0, d * 0.6)
+        vx, vy = -uy, ux
+        m = Mesh(f"sign_{key}")
+        corner = lambda a, b: (x + vx * a + ux * b, y + vy * a + uy * b)
+        base = [corner(-5, -2), corner(5, -2), corner(5, 2), corner(-5, 2)]
+        m.prism(base, 0.0, 6.0, "stone")
+        board = [corner(-4, -1.2), corner(4, -1.2), corner(4, 1.2), corner(-4, 1.2)]
+        m.prism(board, 6.0, 38.0, "video")
+        cap = [corner(-4.6, -1.6), corner(4.6, -1.6), corner(4.6, 1.6), corner(-4.6, 1.6)]
+        m.prism(cap, 38.0, 40.0, "white_steel")
+        m.finish(parent=parent)
+
+
 def build():
     clear()
     root = empty("vegas_strip")
@@ -698,8 +780,9 @@ def build():
     for fn in (eiffel, balloon, arc, campanile, doges, rialto, colosseum, high_roller, liberty, luxor, strat, bellagio_lake):
         sub = empty(fn.__name__, parent=lm)
         fn(sub)
-    # (Each wall its own landmark node.)
+    # (Each wall and sign its own landmark node.)
     led_walls(lm)
+    signs(lm)
     return root
 
 

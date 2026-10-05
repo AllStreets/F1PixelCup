@@ -97,7 +97,7 @@ function videoMaterial(clock) {
 // the show, green its row) raised and dropped in a show that runs along the
 // rows and, every half minute, sends them all up together.
 function fountainMaterial(clock, night) {
-  const m = new THREE.MeshBasicMaterial({ color: night ? 0xe8f2ff : 0xf2f6fa, transparent: true, opacity: 0.78, depthWrite: false, vertexColors: true });
+  const m = new THREE.MeshBasicMaterial({ color: night ? 0xe8f2ff : 0xf2f6fa, transparent: true, opacity: 0.62, depthWrite: false, vertexColors: true, toneMapped: !night });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uShowTime = clock;
     shader.vertexShader = shader.vertexShader
@@ -221,6 +221,7 @@ function mergeBuildings(parent) {
 // The landmarks named for the checks and the photographs: the hand-built
 // ones (their groups in the model) and each resort's tallest tower.
 const NAMED = ["eiffel", "balloon", "arc", "campanile", "doges", "rialto", "colosseum", "high_roller", "liberty", "luxor", "strat", "bellagio_lake", "led_planethollywood", "led_cosmopolitan", "led_resortsworld"];
+// (The resorts' signs are named too: sign_<resort>.)
 
 export function buildVegasStrip(course, venue, { dress, facadeMaterial }) {
   const template = tracksideModel("vegasStrip");
@@ -304,7 +305,7 @@ export function buildVegasStrip(course, venue, { dress, facadeMaterial }) {
     group.add(marker);
   };
   model.updateMatrixWorld(true);
-  NAMED.forEach((n) => {
+  [...NAMED, ...(lm ? lm.children.map((c) => c.name).filter((n) => n.startsWith("sign_")) : [])].forEach((n) => {
     const node = lm && lm.getObjectByName(n);
     if (!node) return;
     const box = new THREE.Box3().setFromObject(node);
