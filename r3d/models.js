@@ -56,6 +56,16 @@ export const FILES = {
   losailGrandstand: "./assets/landmarks/losail_grandstand.glb",
   lusailTowers: "./assets/landmarks/lusail_towers.glb",
   yasHotel: "./assets/landmarks/yas_hotel.glb",
+  // The historic circuits (tools/blender/build_landmarks_historic.py).
+  motodrom: "./assets/landmarks/motodrom.glb",
+  nurburgCastle: "./assets/landmarks/nurburg_castle.glb",
+  estorilGrandstand: "./assets/landmarks/estoril_grandstand.glb",
+  sintraHills: "./assets/landmarks/sintra_hills.glb",
+  joburgSkyline: "./assets/landmarks/joburg_skyline.glb",
+  sepangGrandstand: "./assets/landmarks/sepang_grandstand.glb",
+  istanbulGrandstand: "./assets/landmarks/istanbul_grandstand.glb",
+  tuscanHill: "./assets/landmarks/tuscan_hill.glb",
+  fingerLakes: "./assets/landmarks/finger_lakes.glb",
   grandstand: "./assets/landmarks/grandstand.glb",
   grandstandOpen: "./assets/landmarks/grandstand_open.glb",
   people: "./assets/people.glb",
@@ -91,6 +101,14 @@ export const VENUE_MODELS = {
   lasvegas: ["vegasSphere", "vegasStrip"],
   losail: ["losailGrandstand", "lusailTowers"],
   yasmarina: ["yasHotel", "yachts"],
+  hockenheim: ["motodrom"],
+  nurburgring: ["nurburgCastle"],
+  estoril: ["estorilGrandstand", "sintraHills"],
+  kyalami: ["joburgSkyline", "hillside"],
+  sepang: ["sepangGrandstand"],
+  istanbul: ["istanbulGrandstand", "hillside"],
+  mugello: ["tuscanHill", "hillside"],
+  watkinsglen: ["fingerLakes", "hillside"],
 };
 
 const templates = {};

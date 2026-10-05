@@ -895,7 +895,7 @@ export function buildDecor(course, venue) {
 
 // A stand moved along the lap from where the track data put it: on its own
 // side, as far from the barrier as it was, to the nearest place (either way,
-// up to 600 along the lap) where its whole footprint is clear of the circuit
+// up to 1200 along the lap) where its whole footprint is clear of the circuit
 // and of everything placed. Returns the moved piece, or null.
 export function slideStand(course, d, hl, hd) {
   const total = course.track.totalLength;
@@ -903,7 +903,7 @@ export function slideStand(course, d, hl, hd) {
   const off0 = (d.x - p0.x) * p0.nx + (d.y - p0.y) * p0.ny;
   const side = off0 >= 0 ? 1 : -1;
   const back = Math.abs(off0) - (side > 0 ? p0.outerR : p0.outerL);
-  for (let k = 1; k <= 15; k += 1) {
+  for (let k = 1; k <= 30; k += 1) {
     for (const sgn of [1, -1]) {
       const at = (((d.d + sgn * k * 40) % total) + total) % total;
       const q = course.sampleAt(at);

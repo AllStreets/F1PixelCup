@@ -1,7 +1,9 @@
 // Browser check: the trackside's final look, every venue
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 8).
 // Every venue's landmark built from its Blender model (the 2025 venues'
-// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md), the
+// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md, and the
+// historic ones': 2026-10-05-historic-landmarks-design.md), Barcelona's main
+// grandstand across the straight from the pits, the
 // yachts on the water at Monaco, Singapore and the 2025 harbours, nothing
 // over the track, nobody on the road,
 // and the frame time holding on every circuit on all three tiers. Run with
@@ -56,6 +58,9 @@ async (page) => {
     imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergGrandstand", "hillside"],
     hungaroring: ["hillside"], zandvoort: ["hugenholtz"], baku: ["bakuOldCity", "flameTowers"], cota: ["cotaTower", "hillside"],
     mexico: ["foroSol"], lasvegas: ["vegasSphere", "vegasStrip"], losail: ["losailGrandstand", "lusailTowers"], yasmarina: ["yasHotel"],
+    // The historic circuits (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+    hockenheim: ["motodrom"], nurburgring: ["nurburgCastle"], estoril: ["estorilGrandstand", "sintraHills"], kyalami: ["joburgSkyline", "hillside"],
+    sepang: ["sepangGrandstand"], istanbul: ["istanbulGrandstand", "hillside"], mugello: ["tuscanHill", "hillside"], watkinsglen: ["fingerLakes", "hillside"],
   };
   results.everyLandmarkFromItsModel = await step((WANT) => {
     const bad = [];
