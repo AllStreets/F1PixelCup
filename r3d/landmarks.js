@@ -48,7 +48,6 @@ export const VENUES = {
     // The casino claims its square first; the town fills in round it.
     extras: ["casino", "monacoCity", "yachts", "mountains"],
     // The harbour: yachts moored stern-to at the town's edge, more at anchor.
-    // The start straight's harbour front first, where the pit lane is not.
     // The harbour front: from the tunnel's exit by Tabac, the Swimming Pool
     // and Rascasse to the start straight (the pit lane is up the hill), the
     // quay 14 behind the barrier, yachts packed stern-to along it.
@@ -1423,8 +1422,8 @@ const EXTRAS = {
     const land = new THREE.MeshStandardMaterial({ map: photo("concrete_floor_02", 1, 1), color: color("#d6cfc2"), roughness: 0.95, side: THREE.DoubleSide });
     const front = harbourSide(course, venue);
     // The ground: out to the town's edge, or on the water side of the front
-    // to the quay's edge.
-    const reach = (p, side) => (front.side(p) === side ? front.quay + 2 : 190);
+    // to the quay's edge (r3d/yachts.js harbourSide).
+    const reach = front.reach || (() => 190);
     const plate = new THREE.Mesh(ribbon(course.samples, (p) => -(p.outerL + reach(p, -1)), (p) => p.outerR + reach(p, 1), 0.01, 80), land);
     plate.receiveShadow = true;
     plate.userData.ground = true;
@@ -1435,7 +1434,7 @@ const EXTRAS = {
       night: false, glass: "#5b7690",
       // (Nothing between the harbour front and its water; the claim of the
       // quay keeps the second row off it too.)
-      keepOff: (p, side) => front.side(p) === side,
+      keepOff: front.keepOff,
     });
   },
 

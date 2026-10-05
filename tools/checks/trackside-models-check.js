@@ -96,10 +96,14 @@ async (page) => {
     ["monaco", "singapore", "yasmarina", "baku", "jeddah"].forEach((id) => { out[id] = Render3D.auditYachts(TRACKS.find((t) => t.id === id)); });
     const m = out.monaco;
     const s = out.singapore;
-    // (Monaco's harbour front: 25 or more moored right behind the barrier,
+    // (Monaco's harbour front: 15 or more moored right behind the barrier,
     // the quay 14 behind it, as on race weekend.)
     const onWater = (y, least, clear) => y && y.anchored >= least && y.inBay && y.outsideBay === 0 && y.overlaps === 0 && y.leastClearance >= clear;
-    return (m && m.moored >= 20 && m.front >= 25 && m.anchored >= 8 && m.leastClearance >= 14 && m.overlaps === 0
+    // Monaco's front: 16 past the barrier (the quay and a little water), the
+    // rest 190 (past the town); none against the land, and nothing else
+    // standing on the front's water. The sea harbours: their own water.
+    return (m && m.moored >= 20 && m.front >= 15 && m.anchored >= 8 && m.leastFront >= 16 && (m.leastOther === null || m.leastOther >= 190)
+      && m.onLand === 0 && m.onWater === 0 && m.overlaps === 0
       && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40
       && onWater(out.yasmarina, 10, 100) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
   });

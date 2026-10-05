@@ -10,10 +10,10 @@
 // whose bay they anchor in (else open water beyond the quays; none if that
 // landmark has no bay), or "sea" (offshore, past the coast's shore); wind:
 // the heading (radians) their bows point to at anchor; front: { from, to,
-// quay }, the harbour front (signed lap distances from the line) where the
-// quay is `quay` behind the barrier on the water side (harbourSide), filled
-// first, packed stern-to with some bow-to as on race weekend. Every yacht
-// claims its water; tenders run among them.
+// side, quay }, the harbour front (signed lap distances from the line) where
+// the quay is `quay` behind the barrier on the water side (harbourSide),
+// filled first, packed stern-to with some bow-to as on race weekend. Every
+// yacht claims its water; tenders run among them.
 //
 // One material draws them: each vertex's role (hull, superstructure, ...)
 // takes the yacht's own colours; the vertex shader bobs, pitches and rolls
@@ -143,8 +143,8 @@ function instancedKind(name, capacity, material) {
   geometry.setAttribute("aSuper", new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3));
   geometry.setAttribute("aPhase", new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1));
   const mesh = new THREE.InstancedMesh(geometry, material, capacity);
-  // What blocks a camera's view: the hull and the superstructure (up to its
-  // radar arch), not a sailing yacht's mast and rigging.
+  // What blocks a camera's view: the hull and the superstructure (22 m up),
+  // not a sailing yacht's mast and rigging.
   geometry.computeBoundingBox();
   mesh.userData.sightBox = geometry.boundingBox.clone();
   mesh.userData.sightBox.max.y = Math.min(mesh.userData.sightBox.max.y, 22);
@@ -170,7 +170,35 @@ export function harbourSide(course, venue) {
       const r = ((p.d % total) + total * 1.5) % total - total / 2;
       return r >= front.from && r <= front.to && p.h <= 0.5;
     };
-    course.harbour = { side: (p) => (front && on(p) ? front.side : 0), quay: front ? front.quay : 0 };
+    const side = (p) => (front && on(p) ? front.side : 0);
+    const near = (p, span, test) => {
+      for (let a = -span; a <= span; a += 6) if (!test(course.sampleAt(p.d + a))) return false;
+      return true;
+    };
+    const quay = front ? front.quay : 0;
+    // How far the ground reaches past the barrier on a side: the quay's
+    // edge on the front's water side, unless something already stands there
+    // (a grandstand, a board: the quay widens to carry it) or the front ends
+    // within half a berth; elsewhere the town's 190.
+    const narrow = (p, s) => side(p) === s && !course.occupied.blocked(
+      p.x + p.nx * s * ((s > 0 ? p.outerR : p.outerL) + 40), p.y + p.ny * s * ((s > 0 ? p.outerR : p.outerL) + 40), 30,
+    );
+    const reachMemo = new Map();
+    const reach = (p, s) => {
+      const key = `${p.d}:${s}`;
+      if (!reachMemo.has(key)) reachMemo.set(key, narrow(p, s) && near(p, 20, (q) => side(q) === s) ? quay + 2 : 190);
+      return reachMemo.get(key);
+    };
+    course.harbour = {
+      side,
+      quay,
+      reach,
+      // A berth: the quay narrow all along its beam (never moored against
+      // land at the front's ends or by a stand).
+      berth: (p, s, beam) => near(p, beam / 2 + 8, (q) => reach(q, s) === quay + 2),
+      // No town block within half its width of the front's water.
+      keepOff: (p, s) => !near(p, 36, (q) => side(q) !== s),
+    };
   }
   return course.harbour;
 }
@@ -196,6 +224,8 @@ function moor(course, rand, quay, max, front) {
       const onFront = front.side(p) !== 0;
       if (onFront && front.side(p) !== side) continue;
       const q = onFront ? front.quay : quay;
+      const beam = size(KINDS[0]).W;
+      if (onFront && !front.berth(p, side, beam)) continue;
       const kind = KINDS[Math.floor(rand() * KINDS.length) % KINDS.length];
       const { L, W } = size(kind);
       const stern = (side > 0 ? p.outerR : p.outerL) + 2 + q + 3;
@@ -444,6 +474,8 @@ export function showYachtsFor(group, camera, tier, far = Infinity) {
   });
   Object.values(meshes).forEach(({ near, far: light }) => {
     [near, light].forEach((m) => {
+      // (Its bounds follow the instances it now draws, for ray tests.)
+      m.boundingSphere = null;
       m.instanceMatrix.needsUpdate = true;
       m.geometry.attributes.aHull.needsUpdate = true;
       m.geometry.attributes.aSuper.needsUpdate = true;
@@ -483,6 +515,6 @@ export function inspectYachts(group) {
     anchored: yachts.filter((y) => !y.moored).length,
     near,
     far,
-    yachts: yachts.map((y) => ({ kind: y.kind, x: Math.round(y.x), z: Math.round(y.z), heading: +y.heading.toFixed(3), length: Math.round(y.L), beam: Math.round(y.W), moored: y.moored })),
+    yachts: yachts.map((y) => ({ kind: y.kind, x: Math.round(y.x), z: Math.round(y.z), heading: +y.heading.toFixed(3), length: Math.round(y.L), beam: Math.round(y.W), moored: y.moored, front: Boolean(y.front) })),
   };
 }
