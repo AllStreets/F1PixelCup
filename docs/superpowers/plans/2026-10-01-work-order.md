@@ -187,19 +187,19 @@ Committed (user, 2026-10-01: "all the way through the two player option").
 
 ## 8. Stage R: the README
 
-- [ ] Study `~/Downloads/Chicago_open_world/README.md` for its level of detail and structure:
+- [x] Study `~/Downloads/Chicago_open_world/README.md` for its level of detail and structure:
   - a centred hero with badges;
   - a full-width hero shot with a caption;
   - "What this is";
   - a phase-by-phase story with images;
   - quickstart, controls, under the hood, data, roadmap.
-- [ ] Study three to five popular game READMEs on GitHub with many stars (for example SuperTuxKart, Mindustry, Veloren, OpenTTD) for what makes them inviting:
+- [x] Study three to five popular game READMEs on GitHub with many stars (for example SuperTuxKart, Mindustry, Veloren, OpenTTD) for what makes them inviting:
   - screenshot galleries in tables;
   - a quick feature grid;
   - a controls table;
   - a short "how to play";
   - credits.
-- [ ] Rewrite `README.md` at a half to a third of the Chicago length, built on our own screenshots:
+- [x] Rewrite `README.md` at a half to a third of the Chicago length, built on our own screenshots:
   - a hero shot;
   - a gallery of circuits, cars, rain, the podium and the drivers;
   - a feature grid;
@@ -209,7 +209,7 @@ Committed (user, 2026-10-01: "all the way through the two player option").
   - credits and licences (F1DB, OSM, Poly Haven, three.js).
 
   Vary the text styles (badges, tables, callouts, captions). **No em dashes anywhere.** Fun to read.
-- [ ] Capture a fresh set of README screenshots from the real game at real window sizes (`tools/capture-shots.js` gets a README part), sized for GitHub. A fresh reviewer for tone, accuracy (no claim the game can't back) and dashes. Merge and push.
+- [x] Capture a fresh set of README screenshots from the real game at real window sizes (`tools/capture-shots.js` gets a README part), sized for GitHub. A fresh reviewer for tone, accuracy (no claim the game can't back) and dashes. Merge and push.
 
 Stage R comes last because its screenshots should show the finished game. If a README pass is wanted sooner, a first version can follow Stage K, since the podium is the best image.
 
