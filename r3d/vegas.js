@@ -75,21 +75,34 @@ function videoMaterial(clock) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uVideoTime = clock;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vVideo;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVideo = vec2(uv.x, 1.0 - uv.y);");
+      .replace("#include <common>", "#include <common>\nvarying vec2 vVideo; varying vec2 vScreen;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVideo = vec2(uv.x, 1.0 - uv.y);\nvScreen = (modelMatrix * vec4(position, 1.0)).xz;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vVideo; uniform float uVideoTime;")
+      .replace("#include <common>", `#include <common>
+        varying vec2 vVideo; varying vec2 vScreen; uniform float uVideoTime;
+        float vHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        vec2 p = vVideo / 18.0;
-        float t = uVideoTime * 0.35;
-        float a = sin(p.x * 2.1 + t) + sin(p.y * 1.7 - t * 1.3) + sin((p.x + p.y) * 1.3 + t * 0.7);
-        vec3 c = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + a * 0.18 + t * 0.05));
+        // Each screen its own palette and its own kind of picture (by where
+        // it stands): flowing colour, bars that sweep up, or a chase of
+        // light; switching every few seconds as a resort's screen does.
+        vec2 cell = floor(vScreen / 80.0);
+        float id = vHash(cell);
+        float t = uVideoTime;
+        float scene = floor(t / 6.0 + id * 5.0);
+        float kind = floor(vHash(cell + scene) * 3.0);
+        vec2 p = vVideo / 14.0;
+        float a;
+        if (kind < 0.5) a = sin(p.x * 2.1 + t * 0.4) + sin(p.y * 1.7 - t * 0.5) + sin((p.x + p.y) * 1.3 + t * 0.3);
+        else if (kind < 1.5) a = 2.0 * fract(p.y * 0.6 - t * 0.35);
+        else a = 2.0 * step(0.5, fract((vVideo.x + vVideo.y) / 9.0 - t * 1.4));
+        vec3 base = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + id + a * 0.12 + vHash(cell + scene + 3.1) * 0.5));
+        vec3 c = mix(base * 0.35, base, smoothstep(0.2, 1.4, a));
         // The screen's pixels: a fine grid.
         vec2 px = fract(vVideo / 0.6);
         float pix = smoothstep(0.0, 0.15, px.x) * smoothstep(0.0, 0.15, px.y);
-        diffuseColor.rgb = c * mix(0.55, 1.0, pix) * 1.15;`);
+        diffuseColor.rgb = c * mix(0.55, 1.0, pix) * 1.1;`);
   };
-  m.customProgramCacheKey = () => "vegas-video-v1";
+  m.customProgramCacheKey = () => "vegas-video-v2";
   return m;
 }
 
