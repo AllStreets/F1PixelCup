@@ -1,7 +1,9 @@
 // Browser check: the trackside's final look, every venue
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 8).
-// Every venue's landmark built from its Blender model, the yachts on the
-// water at Monaco and Singapore, nothing over the track, nobody on the road,
+// Every venue's landmark built from its Blender model (the 2025 venues'
+// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md), the
+// yachts on the water at Monaco, Singapore and the 2025 harbours, nothing
+// over the track, nobody on the road,
 // and the frame time holding on every circuit on all three tiers. Run with
 // the Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/trackside-models-check.js, dev server on http://localhost:8765.
@@ -26,7 +28,23 @@ async (page) => {
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 60000 });
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
-  // Every venue's models in (they load in the background, a venue at a time).
+  // Only the raced venue's models are held: built for Albert Park, then for
+  // Shanghai, Melbourne's towers are let go and Shanghai's grandstand is in
+  // (before anything asks for every venue's models, which keeps them all).
+  results.onlyTheRacedVenueHeld = await step(async () => {
+    const loaded = () => Render3D.inspect().trackside.models.loaded;
+    const until = async (name) => { for (let i = 0; i < 400 && !loaded().includes(name); i += 1) await new Promise((r) => setTimeout(r, 50)); };
+    Render3D.auditScenery(TRACKS.find((t) => t.id === "albertpark"), { step: 80, lanes: 1 });
+    await until("melbourneSkyline");
+    const first = loaded().slice();
+    Render3D.auditScenery(TRACKS.find((t) => t.id === "shanghai"), { step: 80, lanes: 1 });
+    await until("shanghaiGrandstand");
+    const then = loaded();
+    return (first.includes("melbourneSkyline") && !then.includes("melbourneSkyline") && then.includes("shanghaiGrandstand") && then.includes("people"))
+      || JSON.stringify({ first, then });
+  });
+
+  // Every venue's models in (each loads with its circuit; the checks ask for them all).
   await step(() => (Render3D.loadAllModels ? Render3D.loadAllModels() : null));
 
   // Each venue's landmarks, from their models.
@@ -64,7 +82,7 @@ async (page) => {
     const onWater = (y, least, clear) => y && y.anchored >= least && y.inBay && y.outsideBay === 0 && y.overlaps === 0 && y.leastClearance >= clear;
     return (m && m.moored >= 20 && m.anchored >= 8 && m.leastClearance >= 190 && m.overlaps === 0
       && s && s.anchored >= 4 && s.inBay && s.outsideBay === 0 && s.overlaps === 0 && s.leastClearance >= 40
-      && onWater(out.yasmarina, 6, 40) && onWater(out.miami, 3, 40) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
+      && onWater(out.yasmarina, 10, 100) && onWater(out.miami, 6, 40) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
   });
 
   // Nothing over the track and nobody on the road, every circuit.

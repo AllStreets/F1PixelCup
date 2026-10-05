@@ -701,7 +701,7 @@ def build_barcelona_grandstand():
 
 def build_biosphere():
     """76 m across, cut at 62 m: a double-layer geodesic lattice (triangles
-    outside, the hexagons of its dual inside, tied together), on a ring
+    outside, the hexagons of its dual inside), on a ring
     plinth, the museum's floors inside it."""
     clear()
     root = empty("biosphere")
@@ -731,7 +731,11 @@ def build_biosphere():
         c = clip(a, b)
         if c:
             tube(lat, c[0], c[1], 0.34, "white_steel", 3)
-    # The inner hexagons: bars between neighbouring faces' centres, 2 m in.
+    # The inner hexagons: bars between neighbouring faces' centres, 2 m in
+    # (a coarser sphere's, so the model stays light to download).
+    ico.free()
+    ico = bmesh.new()
+    bmesh.ops.create_icosphere(ico, subdivisions=3, radius=1.0)
     mids = {f.index: centre + f.calc_center_median().normalized() * (R - 2.0) for f in ico.faces}
     for e in ico.edges:
         fs = e.link_faces
@@ -1135,11 +1139,11 @@ def build_sphere():
     s = Mesh("sphere")
     lo = math.asin((0.0 - SPHERE_CZ) / SPHERE_R)
     prof = []
-    for k in range(41):
-        a = lo + (math.pi / 2 - lo) * k / 40
+    for k in range(57):
+        a = lo + (math.pi / 2 - lo) * k / 56
         prof.append((SPHERE_R * math.cos(a), SPHERE_CZ + SPHERE_R * math.sin(a)))
     prof[-1] = (0.0, SPHERE_CZ + SPHERE_R)
-    s.lathe(prof, (0, 0), "screen", segs=80)
+    s.lathe(prof, (0, 0), "screen", segs=96)
     s.finish(parent=root, colour=planet)
     b = Mesh("base")
     r0 = prof[0][0]

@@ -255,9 +255,9 @@ function seaArea(course) {
   const px = -sea.uz;
   const pz = sea.ux;
   const half = Math.max(b.maxX - b.minX, b.maxZ - b.minZ) / 2 + 300;
-  const claims = course.seaClaims || [];
+  // (What stands at sea is read each time: placed before or after this.)
   const wetEnough = (x, z, margin) => x * sea.ux + z * sea.uz - margin > sea.shore + 60
-    && claims.every((c) => Math.hypot(x - c.x, z - c.z) > c.r + margin);
+    && (course.seaClaims || []).every((c) => Math.hypot(x - c.x, z - c.z) > c.r + margin);
   const o = { x: b.cx + sea.ux * (sea.shore + 80 - along) - px * half, z: b.cz + sea.uz * (sea.shore + 80 - along) - pz * half };
   return {
     sea: true,

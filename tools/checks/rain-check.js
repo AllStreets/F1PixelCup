@@ -232,7 +232,9 @@ async (page) => {
   })();
 
   // Nothing new stands over the track.
-  results.sceneryClear = await step(() => {
+  // (Every venue's models in first: each circuit audited with its landmarks.)
+  results.sceneryClear = await step(async () => {
+    await Render3D.loadAllModels();
     const bad = TRACKS.filter((t) => Render3D.auditScenery(t).length > 0).map((t) => t.id);
     return bad.length === 0 || bad.join();
   });

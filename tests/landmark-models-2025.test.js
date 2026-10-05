@@ -5,7 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const fs = require("node:fs");
-const { load, part, node, signedVolume } = require("./glb-read.js");
+const { load, part, node } = require("./glb-read.js");
 
 const DIR = path.join(__dirname, "..", "assets", "landmarks");
 const file = (n) => path.join(DIR, `${n}.glb`);
@@ -42,9 +42,7 @@ Object.entries(MODELS).forEach(([name, want]) => {
     assert.ok(Math.abs(all.lo[1]) < 0.05, `${name} starts ${all.lo[1].toFixed(2)} m from the ground`);
     assert.ok(all.hi[1] > want.top[0] && all.hi[1] < want.top[1], `${name}'s top is at ${all.hi[1].toFixed(1)} m`);
     assert.ok(all.tris > 300 && all.tris <= 40000, `${name}: ${all.tris} triangles`);
-    glb.doc.nodes.filter((n) => n.mesh !== undefined).forEach((n) => {
-      assert.ok(signedVolume(glb, n.name) > 0, `${name}: ${n.name} faces inward`);
-    });
+    // (That every mesh faces outward is landmark-models.test.js's, for every file.)
   });
 });
 
@@ -121,7 +119,15 @@ test("Baku: the Flame Towers tallest 182 m, the Maiden Tower 29.5 m behind the w
   const maiden = part(old, "maiden_tower");
   assert.ok(maiden.hi[1] > 28 && maiden.hi[1] < 32, `the Maiden Tower is ${maiden.hi[1].toFixed(1)} m`);
   assert.ok(walls.size[0] > 150, `${walls.size[0].toFixed(0)} m of wall`);
-  assert.ok(maiden.lo[2] > walls.lo[2], "the tower behind the walls");
+  // Wholly behind the walls (their back, towers included, is their highest z).
+  assert.ok(maiden.lo[2] > walls.hi[2], `the tower starts ${maiden.lo[2].toFixed(1)} m back, the walls end at ${walls.hi[2].toFixed(1)}`);
+});
+
+test("Hugenholtz: the six pieces of its arc the game places it by", () => {
+  const glb = load(file("hugenholtz"));
+  [0, 1, 2, 3, 4, 5].forEach((k) => ["terraces", "dune"].forEach((n) => assert.ok(node(glb, `${n}_${k}`), `no ${n}_${k}`)));
+  // The arc's ends reach forward (toward the track, -z) of its middle.
+  assert.ok(part(glb, "terraces_0").lo[2] < part(glb, "terraces_2").lo[2] - 5, "the bowl opens toward the track");
 });
 
 test("the Austin tower: the deck at about 70 m, its red veil", () => {

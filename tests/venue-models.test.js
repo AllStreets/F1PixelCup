@@ -9,7 +9,9 @@ const path = require("node:path");
 const fs = require("node:fs");
 
 const ROOT = path.join(__dirname, "..");
-// An object literal exported from a module, evaluated on its own.
+// An object literal exported from a module, evaluated on its own (the
+// literal runs from its "{" to the first line that is only "};", and may use
+// nothing but plain data and Math: a reference to anything else throws).
 function literal(file, name) {
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   const start = src.indexOf(`export const ${name} = {`);
@@ -60,10 +62,21 @@ test("the harbours: yachts where there is water for them, loaded with the venue"
   // The water is made before the yachts look for it.
   ["miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("infieldLake") < VENUES[id].extras.indexOf("yachts"), `${id}: the lake after the yachts`));
   ["baku", "jeddah", "yasmarina"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("coast") < VENUES[id].extras.indexOf("yachts"), `${id}: the sea after the yachts`));
+  // What stands at sea (the fountain) is placed before the yachts look for water.
+  ["baku", "jeddah", "yasmarina", "miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("siteLandmarks") < VENUES[id].extras.indexOf("yachts"), `${id}: the landmarks after the yachts`));
 });
 
-test("only the current venue's models load: no background load of every venue", () => {
-  const src = fs.readFileSync(path.join(ROOT, "r3d/models.js"), "utf8");
-  const body = src.slice(src.indexOf("export function loadTracksideModels"), src.indexOf("\n}\n", src.indexOf("export function loadTracksideModels")));
-  assert.ok(!/loadAllVenueModels\s*\(/.test(body), "the core's load starts every venue's models");
+test("only the current venue's models load: every venue's are loaded only for the checks", () => {
+  // The game's own code (everything but tools/ and tests/) never asks for
+  // every venue's models: only the definition and Render3D's hook for the
+  // checks name them.
+  const files = [...fs.readdirSync(ROOT).filter((f) => f.endsWith(".js")), ...fs.readdirSync(path.join(ROOT, "r3d")).map((f) => `r3d/${f}`)];
+  const calls = [];
+  files.forEach((f) => {
+    const src = fs.readFileSync(path.join(ROOT, f), "utf8");
+    for (const m of src.matchAll(/^.*\bloadAll(?:Venue)?Models\b.*$/gm)) if (!m[0].trim().startsWith("//")) calls.push(`${f}: ${m[0].trim()}`);
+  });
+  const allowed = [/^r3d\/models\.js: export function loadAllVenueModels\(/, /^render3d\.js: import /, /^render3d\.js: const api = .*loadAllModels: \(\) => loadAllVenueModels\(\)/];
+  const stray = calls.filter((c) => !allowed.some((a) => a.test(c)));
+  assert.deepEqual(stray, [], "something in the game loads every venue's models");
 });

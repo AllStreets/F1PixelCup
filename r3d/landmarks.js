@@ -114,7 +114,8 @@ export const VENUES = {
     stand: "open",
     extras: ["siteLandmarks", "infieldLake", "yachts"],
     landmarks: ["miamiStadium"],
-    // The "marina": yachts berthed on the painted water, as they are there.
+    // The "marina" in the infield: yachts berthed on its water (in life the
+    // water there is painted).
     harbour: { anchored: 8, anchorIn: "lake", wind: 1.2 },
   },
   imola: {
@@ -167,7 +168,7 @@ export const VENUES = {
     hills: { tint: "#859c5c", count: 18, height: [120, 260] },
     stand: "open",
     extras: ["siteLandmarks"],
-    // The bowl's slopes, across from the pits.
+    // The bowl's slopes, a little past half a lap.
     landmarks: ["hillside"],
     hillside: { share: 0.55 },
   },
@@ -865,8 +866,8 @@ function rectPoints(rect, scale, x, z, yaw, step) {
 // With `forecourt`, the ground between the barrier and the model's front is
 // claimed too, so nothing else is built in front of it.
 // With `faceTrack`, its back must be further from the circuit than its
-// front (no other stretch of track behind a stand). With `gapFirst`, nearest
-// the barrier wins: each gap is tried at every
+// front, across its whole width (no other stretch of track behind a stand).
+// With `gapFirst`, nearest the barrier wins: each gap is tried at every
 // anchor before the next gap; otherwise the nearest anchor wins. With `dry`,
 // nothing is claimed: it only says where the model would go.
 function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14, forecourt = false, gapFirst = false, dry = false, faceTrack = false }) {
@@ -889,10 +890,16 @@ function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 1
     // than the one in front of it.
     if (faceTrack) {
       const back = Math.max(...rects.map((r) => r.z1)) * scale;
-      const at = (lz) => [x + Math.sin(yaw) * lz, z + Math.cos(yaw) * lz];
-      const [fx, fz] = at(front);
-      const [bx, bz] = at(back);
-      if (course.clearance(bx, bz, 600) < course.clearance(fx, fz, 600) + (back - front) * 0.5) continue;
+      const x0 = Math.min(...rects.map((r) => r.x0)) * scale;
+      const x1 = Math.max(...rects.map((r) => r.x1)) * scale;
+      // A point of the model's ground (lx across, lz front to back) in the world.
+      const at = (lx, lz) => [x + lx * Math.cos(yaw) + lz * Math.sin(yaw), z - lx * Math.sin(yaw) + lz * Math.cos(yaw)];
+      const faces = [x0, (x0 + x1) / 2, x1].every((lx) => {
+        const [fx, fz] = at(lx, front);
+        const [bx, bz] = at(lx, back);
+        return course.clearance(bx, bz, 600) >= course.clearance(fx, fz, 600) + (back - front) * 0.5;
+      });
+      if (!faces) continue;
     }
     // (A dry run only looks.)
     if (!dry) pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
@@ -1080,23 +1087,24 @@ function cornerAnchors(course, board, share = 0.3, spread = 25) {
 // Where each model stands: anchors along the lap and the gaps to try.
 const SITES = {
   melbourneSkyline: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [800, 1100, 1400, 1800], step: 40 }),
-  shanghaiGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220, 280, 360], step: 20, gapFirst: true , faceTrack: true}),
-  miamiStadium: (c) => ({ anchors: anchorsAround(c, 0.5, 70, insideFirst(c)), gaps: [20, 40, 70, 110, 160, 230, 320], step: 30 , faceTrack: true}),
-  hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true , faceTrack: true}),
-  barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true , faceTrack: true}),
+  shanghaiGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220, 280, 360], step: 20, gapFirst: true, faceTrack: true }),
+  // (A bowl watches inward, not toward the track: no faceTrack.)
+  miamiStadium: (c) => ({ anchors: anchorsAround(c, 0.5, 70, insideFirst(c)), gaps: [20, 40, 70, 110, 160, 230, 320], step: 20 }),
+  hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
+  barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
   biosphere: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [120, 200, 320, 480], step: 24 }),
   spielbergBull: (c) => ({ anchors: oppositePits(c), gaps: [20, 35, 55, 80, 120], step: 10, gapFirst: true }),
   // Its arc's pieces claimed one by one, so the hairpin sits in its curve.
-  hugenholtz: (c) => ({ anchors: cornerAnchors(c, "HUGENHOLTZBOCHT", 0.2, 50), parts: [0, 1, 2, 3, 4, 5].flatMap((k) => [`terraces_${k}`, `dune_${k}`]), gaps: [6, 12, 20, 32, 50, 80, 120, 170, 230, 300], step: 12, gapFirst: true , faceTrack: true}),
+  hugenholtz: (c) => ({ anchors: cornerAnchors(c, "HUGENHOLTZBOCHT", 0.2, 50), parts: [0, 1, 2, 3, 4, 5].flatMap((k) => [`terraces_${k}`, `dune_${k}`]), gaps: [6, 12, 20, 32, 50, 80, 120, 170, 230, 300], step: 12, gapFirst: true, faceTrack: true }),
   flameTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.15), gaps: [450, 650, 900, 1200], step: 30 }),
-  bakuOldCity: (c) => ({ anchors: anchorsAround(c, 0.33, 80, insideFirst(c)), parts: ["walls", "maiden_tower"], gaps: [6, 10, 16, 24, 36, 55, 80], step: 12, gapFirst: true , faceTrack: true}),
+  bakuOldCity: (c) => ({ anchors: anchorsAround(c, 0.33, 80, insideFirst(c)), parts: ["walls", "maiden_tower"], gaps: [6, 10, 16, 24, 36, 55, 80], step: 12, gapFirst: true, faceTrack: true }),
   cotaTower: (c) => ({ anchors: anchorsAround(c, 0.8, 60, insideFirst(c)), gaps: [30, 60, 100, 160, 240], step: 16 }),
-  foroSol: (c) => ({ anchors: anchorsAround(c, 0.88, 30, outsideFirst), gaps: [6, 12, 20, 32, 50, 80, 120], step: 14, gapFirst: true , faceTrack: true}),
+  foroSol: (c) => ({ anchors: anchorsAround(c, 0.88, 30, outsideFirst), gaps: [6, 12, 20, 32, 50, 80, 120], step: 14, gapFirst: true, faceTrack: true }),
   // Close by the track, its ground in front kept clear (the Strip's blocks
   // fill in round it, not in front of it).
   vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30 }),
-  losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true , faceTrack: true}),
+  losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
 };
 
@@ -1113,7 +1121,10 @@ function fountainAtSea(course, group, venue) {
   let pz = sea.ux;
   if (pz < 0) { px = -px; pz = -pz; }
   const out = sea.shore + 700 - along;
-  const lateral = (b.maxZ - b.minZ) * 0.3;
+  // A third of the way along the coast from the middle, by the circuit's
+  // own length that way.
+  const reach = course.samples.map((q) => q.x * px + q.y * pz);
+  const lateral = (Math.max(...reach) - Math.min(...reach)) * 0.3;
   const x = b.cx + sea.ux * out + px * lateral;
   const z = b.cz + sea.uz * out + pz * lateral;
   const p = course.samples.reduce((a, q) => (Math.hypot(q.x - x, q.y - z) < Math.hypot(a.x - x, a.y - z) ? q : a));
@@ -1130,9 +1141,10 @@ function fountainAtSea(course, group, venue) {
 }
 
 // The Yas hotel: one half beside the track, the other across it at the same
-// place (the bridge between them, over the track, is left out).
-// A place along the lap where both fit (each looked at before either is
-// claimed).
+// place (the bridge between them, over the track, is left out): the first
+// place along the lap where both fit, each looked at before either is
+// claimed. Where nowhere has room for both (Yas's infield is narrow at the
+// city's scale), one half alone.
 function yasHotelHalves(course, group, venue) {
   const template = tracksideModel("yasHotel");
   if (!template) return null;
@@ -1141,8 +1153,11 @@ function yasHotelHalves(course, group, venue) {
   const rects = [{ x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z }];
   const gaps = [6, 12, 20, 32, 50, 75];
   const step = 14;
-  // Near the marina's end of the lap first, then anywhere round it.
-  for (const a of [...anchorsAround(course, 0.8, 60, () => [1, -1]), ...anchorsAround(course, 0.8, 280, () => [1, -1])]) {
+  // Near the end of the lap first (where it is in life), then anywhere round it.
+  const seen = new Set();
+  const anchors = [...anchorsAround(course, 0.8, 60, () => [1, -1]), ...anchorsAround(course, 0.8, 280, () => [1, -1])]
+    .filter((a) => !seen.has(`${a.d}:${a.side}`) && seen.add(`${a.d}:${a.side}`));
+  for (const a of anchors) {
     const one = placeModel(course, { rects, scale: LANDMARK_SCALE, gaps, anchors: [a], step, gapFirst: true, dry: true });
     if (!one) continue;
     // Across the track, as near opposite as there is room.
@@ -1151,23 +1166,21 @@ function yasHotelHalves(course, group, venue) {
     if (!other) continue;
     const opts = { name: "yasHotel", model: "yasHotel", step, gapFirst: true };
     const first = modelLandmark(course, group, venue, { ...opts, anchors: [a], gaps: [one.gap] });
+    // (Looked at before the first claimed its ground: if the two would
+    // touch, the first stands alone.)
     modelLandmark(course, group, venue, { ...opts, anchors: [{ d: other.d, side: -a.side }], gaps: [other.gap] });
     return first;
   }
-  // No room for both (Yas's infield is narrow at the city's scale): the one
-  // half, the marina side's.
   return modelLandmark(course, group, venue, { name: "yasHotel", model: "yasHotel", step, gaps, gapFirst: true, anchors: anchorsAround(course, 0.8, 60, () => [1, -1]) });
 }
 
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
-  (venue.landmarks || []).forEach((name) => {
-    if (name === "jeddahFountain") return fountainAtSea(course, group, venue);
-    if (name === "yasHotel") return yasHotelHalves(course, group, venue);
-    const site = SITES[name];
-    if (!site) return null;
-    return modelLandmark(course, group, venue, { name, model: name, ...site(course, venue) });
-  });
+  for (const name of venue.landmarks || []) {
+    if (name === "jeddahFountain") fountainAtSea(course, group, venue);
+    else if (name === "yasHotel") yasHotelHalves(course, group, venue);
+    else if (SITES[name]) modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1176,9 +1189,7 @@ function siteLandmarks(course, group, venue) {
 
 const EXTRAS = {
   // The 2025 venues' landmarks, from their models.
-  siteLandmarks(course, group, venue) {
-    siteLandmarks(course, group, venue);
-  },
+  siteLandmarks,
 
   // Spa: the old pit building at the foot of Eau Rouge.
   spaPits(course, group, venue) {

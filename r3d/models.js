@@ -99,6 +99,7 @@ function load(name, files) {
   loading[name] = new Promise((resolve) => {
     let done = false;
     let lastProgress = performance.now();
+    let lastTick = lastProgress;
     const settle = (ok, scene, why) => {
       if (done) return;
       done = true;
@@ -117,7 +118,12 @@ function load(name, files) {
       if (window.Render3DBoot) window.Render3DBoot.progressAt = lastProgress;
     };
     const watch = setInterval(() => {
-      if (performance.now() - lastProgress > STALL_MS) settle(false, null, "the download stalled");
+      // While the page itself was busy (a circuit being built), the download
+      // could report nothing: that time doesn't count against it.
+      const now = performance.now();
+      if (now - lastTick > 2500) lastProgress += now - lastTick - 1000;
+      lastTick = now;
+      if (now - lastProgress > STALL_MS) settle(false, null, "the download stalled");
     }, 1000);
     loader.load(files[name], (gltf) => settle(true, gltf.scene), progress, (error) => settle(false, null, error));
   });
@@ -134,9 +140,11 @@ export function loadTracksideModels(done, files = FILES) {
 }
 
 // Every venue's models, a venue at a time; resolves when all have settled
-// (for the checks, which visit every circuit).
+// (for the checks, which visit every circuit). From then on none is released.
 let everything = null;
+let keepAll = false;
 export function loadAllVenueModels(files = FILES) {
+  keepAll = true;
   if (!everything) {
     everything = Object.values(VENUE_MODELS).reduce(
       (chain, names) => chain.then(() => Promise.all(names.map((n) => load(n, files)))),
@@ -151,6 +159,25 @@ export function venueModelsSettled(venueId, files = FILES) {
   const names = VENUE_MODELS[venueId] || [];
   names.forEach((n) => load(n, files));
   return names.every((n) => n in templates || failed.includes(n));
+}
+
+// Release every venue's models but this one's (and the core's): their
+// geometry leaves the GPU, and they load again if their venue comes round.
+// Called as a new circuit's world is built, the last one's already gone, so
+// a season holds one venue's landmarks at a time. (Not once every venue's
+// were asked for: the checks visit every circuit in turn.)
+export function releaseOtherVenues(venueId) {
+  if (keepAll) return [];
+  const keep = new Set([...CORE_MODELS, ...(VENUE_MODELS[venueId] || [])]);
+  const released = [];
+  Object.keys(templates).forEach((name) => {
+    if (keep.has(name)) return;
+    templates[name].traverse((n) => { if (n.geometry) n.geometry.dispose(); });
+    delete templates[name];
+    delete loading[name];
+    released.push(name);
+  });
+  return released;
 }
 
 // A loaded model's scene, or null (not loaded, or failed).
