@@ -3974,13 +3974,11 @@ function exitReplay() {
 }
 
 // The camera and car on screen: the director's shot, or the viewer's choice.
+// The camera and car on screen (replay.js: only the director picks cars, and
+// only until the viewer has chosen one, or a camera).
 function replayShot() {
   const r = state.replay;
-  if (r.camera === "director") {
-    const shot = Replay.shotAt(r.shots, r.time);
-    return { mode: shot.mode, focusId: shot.focusId, director: true };
-  }
-  return { mode: r.camera, focusId: r.focusId || r.rec.header.playerId, director: false };
+  return Replay.viewShot(r, Replay.shotAt(r.shots, r.time), r.rec.header.playerId);
 }
 
 function replayTogglePlay() {
@@ -4014,20 +4012,19 @@ function replayStepSpeed(dir) {
 function replaySetCamera(mode) {
   const r = state.replay;
   if (!r || !REPLAY_CAMERAS.includes(mode)) return;
-  // Taking the director off keeps the car it was on.
-  if (r.camera === "director" && mode !== "director") r.focusId = replayShot().focusId;
-  r.camera = mode;
+  // A camera keeps the car on screen; Director pressed while on hands the
+  // choice of cars back to it.
+  Object.assign(r, Replay.chooseCamera(r, mode, replayShot().focusId));
 }
 
 function replayFocusStep(dir) {
   const r = state.replay;
   if (!r) return;
   const shot = replayShot();
-  // Choosing a car takes the director off, on the camera it had.
-  if (r.camera === "director") r.camera = shot.mode;
   const frame = r.rec.sampleAt(r.rec.indexAt(r.rec.header.t0 + r.time));
   const cars = frame.cars.map((c, i) => ({ id: r.rec.header.cars[i].id, place: c.place }));
-  r.focusId = Replay.neighbour(cars, shot.focusId, dir);
+  // The viewer's car from now on, through every camera (the director's too).
+  Object.assign(r, Replay.chooseCar(r, Replay.neighbour(cars, shot.focusId, dir)));
 }
 
 function updateReplayClock(dt) {
@@ -4152,6 +4149,8 @@ function replayGraphics(frame, shot, focus) {
     mode: shot.mode,
     shown: drawn,
     director: shot.director,
+    // The director picking the cars (no car chosen by the viewer).
+    autoCar: shot.director && !shot.carChosen,
     track: h.trackName || state.track.name,
     lap,
     tower,

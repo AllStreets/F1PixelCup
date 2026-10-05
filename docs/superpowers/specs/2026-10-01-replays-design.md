@@ -120,7 +120,12 @@ The existing TV helicopter, which in the race trails the leader. In the helicopt
 - cameras rotate trackside, trackside, onboard, trackside, helicopter, so trackside is the staple and onboard and helicopter punctuate it, as on TV;
 - a battle shot stays on the same pair while it lasts (only the camera cuts).
 
-**Manual:** choosing a camera, or another car, takes the director off; choosing Director puts it back.
+**The viewer's car** (user, 2026-10-05: switching views must never switch the driver away). Only the director picks cars, and only until the viewer has chosen.
+- Choosing a camera keeps the car that is on screen, and every camera after it stays on that car.
+- Choosing a car (↑ ↓, ‹ ›) makes it the viewer's car.
+- Under Director with a car chosen, the director still cuts between cameras, but on the viewer's car.
+- Pressing Director while it is on gives it the choice of cars back. The car label shows AUTO while the director is picking them.
+- `Replay.chooseCamera`, `Replay.chooseCar` and `Replay.viewShot` hold these rules and are tested in Node. `replay-check` switches through every camera (buttons, the C key, the director's cuts and seeks) and fails if the car on screen ever changes.
 
 ## Broadcast graphics (HTML over the canvas, `screens.js`, `play.css`)
 

@@ -587,3 +587,41 @@ test("with no battle at the front the director alternates between two players", 
   const late = shots.filter((s) => s.start > 601 * rec.sampleMs);
   assert.ok(late.length > 0 && late.every((s) => s.focusId === "car1"), JSON.stringify(late.map((s) => s.focusId)));
 });
+
+// ---- The viewer's choices: cameras and cars ----
+
+test("switching cameras never changes the car the viewer is watching", () => {
+  // The director has car "b" on screen when the viewer takes a camera.
+  let view = Replay.viewChoice();
+  view = Replay.chooseCamera(view, "trackside", "b");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "z" }, "p").focusId, "b");
+  for (const mode of ["onboard", "helicopter", "director", "trackside", "director", "onboard", "helicopter"]) {
+    view = Replay.chooseCamera(view, mode, "x");
+    // Whatever the director would cut to, and whichever car it would pick.
+    for (const shot of [{ mode: "trackside", focusId: "q" }, { mode: "helicopter", focusId: "r" }]) {
+      assert.equal(Replay.viewShot(view, shot, "p").focusId, "b", `${mode}`);
+    }
+  }
+});
+
+test("under the director with no car chosen, the director picks the cars; a chosen car stays", () => {
+  let view = Replay.viewChoice();
+  assert.deepEqual(Replay.viewShot(view, { mode: "helicopter", focusId: "q" }, "p"), { mode: "helicopter", focusId: "q", director: true, carChosen: false });
+  // Picking a car keeps the director cutting cameras, on that car.
+  view = Replay.chooseCar(view, "c");
+  assert.deepEqual(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p"), { mode: "onboard", focusId: "c", director: true, carChosen: true });
+  // A camera chosen: that camera, still on that car.
+  view = Replay.chooseCamera(view, "trackside", "q");
+  assert.deepEqual(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p"), { mode: "trackside", focusId: "c", director: false, carChosen: true });
+  // Director again: cuts cameras on the same car.
+  view = Replay.chooseCamera(view, "director", "q");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p").focusId, "c");
+  // Director pressed while it is on: the car choice goes back to the director.
+  view = Replay.chooseCamera(view, "director", "c");
+  assert.equal(Replay.viewShot(view, { mode: "onboard", focusId: "q" }, "p").focusId, "q");
+});
+
+test("a camera chosen with no car on screen yet watches the player", () => {
+  const view = Replay.chooseCamera(Replay.viewChoice(), "onboard", null);
+  assert.equal(Replay.viewShot(view, { mode: "trackside", focusId: "q" }, "p").focusId, "p");
+});

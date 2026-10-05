@@ -785,7 +785,12 @@
       // Under the director, the camera it has cut to is marked live.
       b.classList.toggle("is-live", info.director && b.dataset.value === info.mode);
     });
-    put("focus", $("bc-focus"), esc(f.code));
+    // The car in view; "auto" while the director picks the cars (choosing a
+    // car, or a camera, keeps it; Director pressed again hands it back).
+    put("focus", $("bc-focus"), `${esc(f.code)}${info.autoCar ? "<small> AUTO</small>" : ""}`);
+    const dir = buttons.camera.find((b) => b.dataset.value === "director");
+    const tip = info.camera === "director" && !info.autoCar ? "Director: let it pick the cars again" : "Director";
+    if (dir && dir.title !== tip) dir.title = tip;
     if (!seeking) $("bc-seek").value = String(info.duration ? Math.round((info.time / info.duration) * 1000) : 0);
     if (put("time", $("bc-time"), `${clock(info.time)} / ${clock(info.duration)}`)) {
       $("bc-seek").setAttribute("aria-valuetext", `${clock(info.time)} of ${clock(info.duration)}`);

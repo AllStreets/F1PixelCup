@@ -649,6 +649,35 @@
     return shots[lo];
   }
 
+  // ---- The viewer's choices ----
+  // camera: "director" or a camera; focusId: the car the viewer chose (null:
+  // none yet, the director picks). Only the director picks cars, and only
+  // while the viewer has not: once a car is chosen, or a camera (which keeps
+  // the car on screen then), it stays through every camera, the director's
+  // cuts included. Pressing Director while it is on gives it the cars back.
+  function viewChoice() {
+    return { camera: "director", focusId: null };
+  }
+
+  function chooseCamera(view, mode, onScreenId) {
+    if (mode === "director") {
+      return view.camera === "director" ? { camera: "director", focusId: null } : { camera: "director", focusId: view.focusId };
+    }
+    return { camera: mode, focusId: view.focusId || onScreenId || null };
+  }
+
+  function chooseCar(view, id) {
+    return { camera: view.camera, focusId: id };
+  }
+
+  // What is on screen: the director's shot (its camera; its car unless the
+  // viewer chose one), or the viewer's camera on the viewer's car.
+  function viewShot(view, directorShot, playerId) {
+    const carChosen = Boolean(view.focusId);
+    if (view.camera === "director") return { mode: directorShot.mode, focusId: view.focusId || directorShot.focusId, director: true, carChosen };
+    return { mode: view.camera, focusId: view.focusId || playerId, director: false, carChosen };
+  }
+
   // The next (dir 1) or previous (-1) car in the running order, round the ends.
   function neighbour(cars, id, dir) {
     const order = [...cars].sort((a, b) => a.place - b.place);
@@ -658,6 +687,6 @@
 
   return {
     SAMPLE_EVERY, CHUNK, JUMP, OBJECT_TYPES, FLAGS, KEYS, BITS, TV_CAM, DIRECTOR,
-    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour,
+    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour, viewChoice, chooseCamera, chooseCar, viewShot,
   };
 }));
