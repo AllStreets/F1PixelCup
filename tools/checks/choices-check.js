@@ -147,6 +147,13 @@ async (page) => {
   // (The historic circuits are in the picker too: the Nürburgring is found.)
   await fill("#circuit-search", "nurburgring");
   results.pickerFindsHistoric = await step(() => JSON.stringify([...document.querySelectorAll("#circuit-cards [data-pick]")].map((el) => el.dataset.pick)) === JSON.stringify(["nurburgring"]) || document.getElementById("circuit-cards").textContent.slice(0, 120));
+  // And by the places a race goes by (choices.js search: "places"): Melbourne
+  // finds Albert Park, Cascais finds Estoril.
+  await fill("#circuit-search", "melbourne");
+  const melbourne = await step(() => [...document.querySelectorAll("#circuit-cards [data-pick]")].map((el) => el.dataset.pick));
+  await fill("#circuit-search", "cascais");
+  const cascais = await step(() => [...document.querySelectorAll("#circuit-cards [data-pick]")].map((el) => el.dataset.pick));
+  results.pickerFindsPlaces = (JSON.stringify(melbourne) === JSON.stringify(["albertpark"]) && JSON.stringify(cascais) === JSON.stringify(["estoril"])) || JSON.stringify({ melbourne, cascais });
   await fill("#circuit-search", "brands hatch");
   results.pickerSaysNoMatch = await step(() => /No circuit matches/.test(document.getElementById("circuit-cards").textContent) || document.getElementById("circuit-cards").textContent.slice(0, 120));
   await fill("#circuit-search", "");

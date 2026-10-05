@@ -193,6 +193,9 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   const edge = W - Pit.EDGE_IN;
   // Not yet in the lane: the road's edge on the pit side, wherever it is.
   assert.deepEqual(Pit.wayIn(lane, 3000, false, 0), { lat: edge, inLane: false, park: false });
+  // Where the road is narrower (Shanghai's snail), the edge of the road there:
+  // the road's own half-width at that point, given by game.js.
+  assert.deepEqual(Pit.wayIn(lane, 3000, false, 0, W / 2), { lat: W / 2 - Pit.EDGE_IN, inLane: false, park: false });
   // Inside the zone but it never took the entry (it was called out past it):
   // it stays on the road and goes round again.
   assert.deepEqual(Pit.wayIn(lane, 0, false, edge), { lat: edge, inLane: false, park: false });

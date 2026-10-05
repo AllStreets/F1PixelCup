@@ -166,7 +166,7 @@ async (page) => {
 
   // The last race: run to the flag, the save is cleared, the championship is
   // recorded in the career exactly once, and the podium names both champions.
-  results.lastRaceCrowns = await step(() => {
+  const lastSetup = await step(() => {
     const ctx = { trackIds: SEASON.circuitIds, field: DRIVERS.map((d) => d.id), teamOf: Object.fromEntries(DRIVERS.map((d) => [d.id, d.teamId])) };
     let season = Season.start({ runId: "check-final", driverId: "leclerc", difficulty: "pro", gridMode: "back", weatherMode: "dry", ...ctx });
     for (let i = 0; i < 23; i += 1) season = Season.addRace(season, { order: [...ctx.field], fastest: null });
@@ -179,8 +179,14 @@ async (page) => {
     let now = 100000; state.raceStart = now; state.lastTick = now;
     state.racers.forEach((r) => { r.lapStartAt = now; });
     for (let t = 0; t < 900 && state.phase === "race"; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
-    const cleared = localStorage.getItem(Season.STORAGE_KEY) === null;
+    window.__seasonCleared = localStorage.getItem(Season.STORAGE_KEY) === null;
     Game.nextRace();
+    return true;
+  });
+  // (The ceremony may still be readying its drivers: Show podium waits for it.)
+  if (lastSetup === true) await p.waitForFunction(() => state.phase === "podium", null, { timeout: 30000 }).catch(() => {});
+  results.lastRaceCrowns = lastSetup !== true ? lastSetup : await step(() => {
+    const cleared = window.__seasonCleared;
     const podium = state.phase === "podium";
     const kicker = document.getElementById("podium-kicker").textContent;
     const title = document.getElementById("podium-title").textContent;

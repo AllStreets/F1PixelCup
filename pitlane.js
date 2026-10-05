@@ -128,12 +128,14 @@
   // working lane over the last 80 before its bay, where it parks. `entered`
   // is whether it has already turned in; `lat` is where it is across the road.
   // It turns in only from the road's edge (it can't swerve across): one
-  // inside the zone that never took the entry goes round again.
+  // inside the zone that never took the entry goes round again. `half` is
+  // the road's half-width where it is (narrower in places: Shanghai's snail);
+  // the pit zone itself is always the full width.
   // Returns { lat, inLane, park }.
   const TURN_IN = 20;
   const EASE = 80;
-  function wayIn(lane, d, entered, lat) {
-    const W = lane.halfWidth;
+  function wayIn(lane, d, entered, lat, half = lane.halfWidth) {
+    const W = lane.inZone(d) ? lane.halfWidth : half;
     const side = lane.side;
     const r = lane.rel(d);
     // On the edge itself, not still closing on it (a jump onto the lane's line).

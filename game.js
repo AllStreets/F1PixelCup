@@ -885,7 +885,7 @@ function getPitLaneState() {
         // The circuits to choose from, in calendar order, with their cup.
         pool: TRACKS.map((t) => {
           const home = CUP_DEFS.find((c) => c.circuitIds.includes(t.id));
-          return { id: t.id, name: t.name, short: t.short || t.name, country: t.country, theme: t.theme, cup: home ? home.name : "" };
+          return { id: t.id, name: t.name, short: t.short || t.name, places: t.places || "", country: t.country, theme: t.theme, cup: home ? home.name : "" };
         }),
       };
     })(),
@@ -2368,7 +2368,7 @@ function updateSafetyCar(dt, now) {
       sc.speed *= Math.pow(0.4, dt);
       if (now >= sc.leaveUntil) state.safetyCar = null;
     } else {
-      const way = Pit.wayIn(lane, sc.d, sc.inLane, sc.lat);
+      const way = Pit.wayIn(lane, sc.d, sc.inLane, sc.lat, route.halfWidthAt(sc.d));
       sc.inLane = way.inLane;
       if (way.park) {
         // Parked where pitlane.js parks it, in front of its own bay.

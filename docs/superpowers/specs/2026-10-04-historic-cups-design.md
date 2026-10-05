@@ -32,6 +32,7 @@ Each circuit's `era` field says this in a line, shown on the site's cards and in
 - The pit lane offers the two cups after the calendar cups, before the season.
 - The random cup, the custom cup and the single race (Stage P, `choices.js`) draw and pick from every circuit, the eight historic ones included; each has a `short` name and the `places` it goes by for the picker's search.
 - **Period looks, only where honest:** the ground, trees, hills, sky and grade of each place (the Eifel's forest, Estoril's pines above the Atlantic coast, the Highveld's dry grass at Kyalami, Sepang's palms and tropical rain, Istanbul's dry hills, Tuscany's cypresses at Mugello, the Finger Lakes' woods at Watkins Glen). The cars, the stands and the graphics stay the game's own: the cups race the 2025 grid on these circuits; they are not period recreations.
+- **Stands with their crowds** as every venue has them (Stage J's models): covered at Hockenheim's Motodrom, the Nürburgring, Kyalami, Sepang and Istanbul; open at Estoril, Mugello's hillsides and Watkins Glen.
 - **Weather odds** as the calendar's: Sepang the wettest of them (tropical afternoon storms), the Nürburgring next.
 - **Landmarks:** each venue lists its hook for Stage J (`landmarks` in its venue settings), drawing nothing yet: Hockenheim's Motodrom stadium, the Nürburg castle, Estoril's coast, Kyalami's Highveld, Sepang's leaf-roof grandstand, Istanbul's tower grandstand, Mugello's Tuscan villa, Watkins Glen's Boot.
 
