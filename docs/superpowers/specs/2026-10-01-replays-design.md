@@ -124,7 +124,7 @@ The existing TV helicopter, which in the race trails the leader. In the helicopt
 - Choosing a camera keeps the car that is on screen, and every camera after it stays on that car.
 - Choosing a car (↑ ↓, ‹ ›) makes it the viewer's car.
 - Under Director with a car chosen, the director still cuts between cameras, but on the viewer's car.
-- Pressing Director while it is on gives it the choice of cars back. The car label shows AUTO while the director is picking them.
+- The Auto button (or A) gives the director the choice of cars back, as does pressing Director while it is on. Auto is lit while the director is picking them.
 - `Replay.chooseCamera`, `Replay.chooseCar` and `Replay.viewShot` hold these rules and are tested in Node. `replay-check` switches through every camera (buttons, the C key, the director's cuts and seeks) and fails if the car on screen ever changes.
 
 ## Broadcast graphics (HTML over the canvas, `screens.js`, `play.css`)
@@ -134,7 +134,7 @@ The existing TV helicopter, which in the race trails the leader. In the helicopt
 - **Lower third**, bottom left: position, number, driver's name, team, in the team's colour. It names whichever car the camera is on.
 - **Lap counter:** LAP n/N (the leader's lap), FINAL LAP, or FINISH.
 - **Input trace** on the onboard view: throttle and brake bars, a steering bar, and four seconds of throttle and brake trace, from the car's recorded controls. On the player's car the trace is drawn from the player's own keys.
-- **Controls**, bottom: play/pause, speed (0.25x to 4x), a seek bar over the whole race with the time, camera (Director, Trackside, Onboard, Helicopter), previous/next car, and Exit. Keyboard: Space play/pause, ← → seek 5 s, ↑ ↓ previous/next car, − + speed, C camera, Esc or X exit. Everything is reachable by mouse and by Tab.
+- **Controls**, bottom: play/pause, speed (0.25x to 4x), a seek bar over the whole race with the time, camera (Director, Trackside, Onboard, Helicopter), previous/next car, Auto (the director picks the cars), and Exit. Keyboard: Space play/pause, ← → seek 5 s, ↑ ↓ previous/next car, A auto, − + speed, C camera, Esc or X exit. Everything is reachable by mouse and by Tab.
 
 The canvas HUD (speed panel, minimap, item badge) is not drawn during the replay: the broadcast graphics replace it.
 

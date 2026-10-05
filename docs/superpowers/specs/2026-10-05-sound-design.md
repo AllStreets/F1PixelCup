@@ -42,20 +42,21 @@ The replay is heard from its camera.
   - Onboard it is close and level.
   - From a trackside camera or the helicopter it fades with distance (`distanceGain`).
   - Its note shifts as it comes and goes: the Doppler shift, from how fast it is getting nearer the camera or farther away (the speed of sound is 2,042 units/s).
-- **The car passing nearest the camera** (within 600 units) is heard through the second engine voice, with its own distance and Doppler shift.
+- **The car passing nearest the camera** (within 600 units) is heard through the second engine voice, with its own distance and Doppler shift. It is kept unless another is clearly nearer (by 15%), so two cars side by side do not chirp.
 - **Tyres sliding:** the car in view or the passing car drifting, or off the road at speed.
 - **The venue:**
   - The crowd, the reverb, the floodlights' hum and the rain, at the car in view.
   - The helicopter's rotor loud from the helicopter view.
 - **One-off sounds, as the race plays** (`Replay.eventsBetween`):
-  - **What they are:** hits and bounces (the recorded flashes), items fired, item boxes taken, boosts and spins starting.
-  - **How loud:** each is as loud as it is far from the camera.
+  - **What they are:** hits and bounces (the recorded flashes), knocks between cars (recorded once per knock), items fired, item boxes taken, boosts and spins starting, and the player's chequered flag. The lap chimes and the kerbs are not in a replay.
+  - **How loud:** each is as loud as it is far from the camera (height included), and the nearest goes first.
   - **On a seek:** none (going back, or a jump of more than half a second).
 - **Speed and pause** (`replayMix`):
   - 1x is heard as it was.
   - 0.5x and 2x are pitched gently (the speed to the power 0.35), not a tape's full shift.
   - 0.25x and 4x play only the venue, at half level.
-  - Paused, there is silence.
+  - Paused, or in a tab out of sight (it pauses), there is silence.
+  - **Coming back:** after a pause or 4x, the engines are primed again at each car's speed, so there is no swoop from idle.
 - **Two players:** the second voice is player 2's in the race, and the passing car's in a replay.
 
 ## Checks

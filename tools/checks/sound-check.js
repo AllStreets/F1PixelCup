@@ -73,12 +73,25 @@ async (page) => {
     const r = state.replay;
     const frames = (n) => new Promise((res) => { let i = 0; const f = () => (++i >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); });
     const out = {};
-    // Onboard at 1x: the car in view's engine, close and level.
+    // Onboard at 1x: the car in view's engine, at speed, in a high gear.
     Game.replay.setCamera("onboard");
     r.focusId = state.playerId;
     Game.replay.seek(r.rec.duration * 0.4);
     await frames(20);
     out.onboard = { ...state.replaySound.engine, mix: state.replaySound.mix };
+    // Paused for a second, then played; and four times, then real time:
+    // the engine comes back where it was, not from idle in first gear.
+    const resume = async (stop, go) => {
+      const before = { ...state.replaySound.engine };
+      stop();
+      await frames(60);
+      go();
+      await frames(2);
+      const after = { ...state.replaySound.engine };
+      return { before: [Math.round(before.rpm), before.gear], after: [Math.round(after.rpm), after.gear] };
+    };
+    out.afterPause = await resume(() => Game.replay.togglePlay(), () => Game.replay.togglePlay());
+    out.after4x = await resume(() => Game.replay.setSpeed(4), () => Game.replay.setSpeed(1));
     // Trackside over a whole stretch of play: the note rises as the car
     // comes and falls as it goes (Doppler), louder near, quieter far.
     Game.replay.setCamera("trackside");
@@ -120,12 +133,18 @@ async (page) => {
       while (performance.now() - t1 < 1800) await frames(1);
       Game.replay.togglePlay();
       out.heard = state.replaySound.events - before;
+      // Playing, seek over the race and back (past every event): no sound.
+      Game.replay.togglePlay();
       const seeked = state.replaySound.events;
-      Game.replay.seek(r.rec.duration * 0.9);
-      await frames(3);
-      Game.replay.seek(r.rec.duration * 0.1);
-      await frames(3);
+      Game.replay.seek(r.rec.duration * 0.95);
+      await frames(1);
+      const forward = state.replaySound.events - seeked;
+      Game.replay.seek(r.rec.duration * 0.05);
+      await frames(1);
       out.heardOnSeek = state.replaySound.events - seeked;
+      out.seekForward = forward;
+      out.playingAtSeek = state.replaySound.mix.events;
+      Game.replay.togglePlay();
     }
     out.ms = ms;
     Game.replay.exit();
@@ -133,12 +152,14 @@ async (page) => {
   });
   info.replay = replay;
   const ok = replay && typeof replay === "object";
-  results.replayOnboardEngine = (ok && replay.onboard.gain === 1 && replay.onboard.pitch === 1 && replay.onboard.rpm > 4500) || `onboard: ${JSON.stringify(replay && replay.onboard)} (${typeof replay === "string" ? replay : ""})`;
+  results.replayOnboardEngine = (ok && replay.onboard.rpm > 8000 && replay.onboard.gear >= 4) || `onboard: ${JSON.stringify(replay && replay.onboard)} (${typeof replay === "string" ? replay : ""})`;
+  const same = (x) => x && Math.abs(x.after[0] - x.before[0]) < 1500 && Math.abs(x.after[1] - x.before[1]) <= 1;
+  results.replayEngineResumesWhereItWas = (ok && same(replay.afterPause) && same(replay.after4x)) || `resume: ${JSON.stringify(replay && { pause: replay.afterPause, x4: replay.after4x })}`;
   results.replayTracksideDoppler = (ok && replay.trackside.up > 1.02 && replay.trackside.down < 0.98 && replay.trackside.loud > replay.trackside.quiet * 2) || `trackside: ${JSON.stringify(replay && replay.trackside)}`;
   results.replaySpeedsAndPause = (ok && replay.double.pitch > 1 && replay.double.engine > 0
     && replay.quadruple.engine === 0 && replay.quadruple.ambience > 0
     && replay.paused.engine === 0 && replay.paused.ambience === 0) || `speeds: ${JSON.stringify(replay && { double: replay.double, quadruple: replay.quadruple, paused: replay.paused })}`;
-  results.replayEventsHeard = (ok && replay.firstEventAt && replay.heard > 0 && replay.heardOnSeek === 0) || `events: ${JSON.stringify(replay && { first: replay.firstEventAt, heard: replay.heard, heardOnSeek: replay.heardOnSeek })}`;
+  results.replayEventsHeard = (ok && replay.firstEventAt && replay.heard > 0 && replay.heardOnSeek === 0 && replay.playingAtSeek === true) || `events: ${JSON.stringify(replay && { first: replay.firstEventAt, heard: replay.heard, heardOnSeek: replay.heardOnSeek, playing: replay.playingAtSeek })}`;
 
   await step((s) => {
     if (s.grid === null) localStorage.removeItem("f1pixelcup.grid"); else localStorage.setItem("f1pixelcup.grid", s.grid);

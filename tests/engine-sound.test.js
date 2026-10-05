@@ -62,7 +62,8 @@ test("braking into a corner downshifts, with a blip and a pop or two on each", (
   const downs = late.filter((s) => s.shift === "down");
   assert.ok(downs.length >= 3, `${downs.length} downshifts`);
   assert.ok(downs.every((s) => s.blip > 0));
-  assert.ok(late.flatMap((s) => s.pops).length >= downs.length);
+  // Each downshift off the throttle brings its own pops (not the lift's).
+  downs.forEach((s) => assert.ok(s.pops.length >= 1 && s.pops.every((p) => p.delay < 0.25), JSON.stringify(s.pops)));
 });
 
 test("the hybrid recharges under braking and deploys again", () => {

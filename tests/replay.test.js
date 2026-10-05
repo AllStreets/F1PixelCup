@@ -669,3 +669,18 @@ test("a seek (or going backwards, or a long jump) has no events: they are heard 
   assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0, rec.header.t0 + 59 * ms), []);
   assert.deepEqual(Replay.eventsBetween(rec, rec.header.t0 + 20 * ms, rec.header.t0 + 20 * ms), []);
 });
+
+test("contacts between cars are kept (once per knock) and heard; so is the player's chequered flag", () => {
+  const rec = eventsRecording();
+  const ms = rec.sampleMs;
+  const t0 = rec.header.t0;
+  // A knock, felt over several steps: kept once.
+  for (let i = 0; i < 6; i += 1) rec.addContact({ x: 200 + i, y: 50, at: t0 + 15 * ms + i * 5 });
+  // Another, elsewhere at the same time: kept too.
+  rec.addContact({ x: 900, y: 50, at: t0 + 15 * ms + 3 });
+  assert.equal(rec.contacts.length, 2);
+  const at = (a, b) => Replay.eventsBetween(rec, t0 + a * ms, t0 + b * ms).map((e) => e.type).sort();
+  assert.deepEqual(at(14, 16), ["contact", "contact"]);
+  rec.chequerAt = t0 + 50 * ms;
+  assert.deepEqual(at(49, 50), ["finish"]);
+});

@@ -281,15 +281,22 @@ async (page) => {
     // Back to the director, with the car choice its own.
     click("director");
     if (r.focusId) click("director");
-    Game.replay.seek(r.rec.duration * 0.5);
+    // A moment when the director is on a car other than the player's (the
+    // player's is where a lost choice would fall back to).
+    let start = 0.5;
+    for (let f = 0.5; f < 0.95; f += 0.01) {
+      if (Replay.shotAt(r.shots, r.rec.duration * f).focusId !== r.rec.header.playerId) { start = f; break; }
+    }
+    Game.replay.seek(r.rec.duration * start);
     await frame();
     const watched = shown();
+    if (watched === r.rec.header.playerId) return "the director is on the player's car throughout: nothing to tell";
     const seen = [];
     const sequence = ["trackside", "onboard", "helicopter", "director", "onboard", "C", "C", "C", "C", "director", "trackside"];
     for (let i = 0; i < sequence.length; i += 1) {
       if (sequence[i] === "C") key("c"); else click(sequence[i]);
       // Through the director's cuts, every six seconds of race.
-      Game.replay.seek(r.rec.duration * (0.5 + i * 0.03));
+      Game.replay.seek(r.rec.duration * Math.min(0.99, start + i * 0.03));
       await frame();
       seen.push([sequence[i], r.camera, shown()]);
     }
@@ -298,9 +305,11 @@ async (page) => {
     // car it has at this moment, whichever that is).
     click("director");
     const keptUnderDirector = r.focusId === watched;
-    click("director");
+    // Auto (the button) gives the director the cars back.
+    document.querySelector("#replay-screen [data-replay=auto]").click();
     await frame();
-    const handedBack = r.focusId === null && shown() === Replay.shotAt(r.shots, r.time).focusId;
+    const handedBack = r.focusId === null && r.camera === "director" && shown() === Replay.shotAt(r.shots, r.time).focusId
+      && document.querySelector("#replay-screen [data-replay=auto]").getAttribute("aria-pressed") === "true";
     return (watched && kept && keptUnderDirector && handedBack) || JSON.stringify({ watched, seen, keptUnderDirector, handedBack, focusId: r.focusId });
   });
 

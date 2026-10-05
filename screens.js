@@ -122,6 +122,7 @@
             <button class="bc-btn" data-replay="prev" type="button" aria-label="Previous car">‹</button>
             <span id="bc-focus"></span>
             <button class="bc-btn" data-replay="next" type="button" aria-label="Next car">›</button>
+            <button class="bc-btn bc-auto" data-replay="auto" type="button" aria-pressed="false" title="Let the director pick the cars (A)">Auto</button>
           </div>
           <button class="bc-btn bc-exit" data-replay="exit" type="button">Exit</button>
         </div>
@@ -705,6 +706,7 @@
     else if (what === "camera") R.setCamera(value);
     else if (what === "prev") R.focusStep(-1);
     else if (what === "next") R.focusStep(1);
+    else if (what === "auto") R.autoCars();
     else if (what === "exit") R.exit();
   }
 
@@ -785,12 +787,11 @@
       // Under the director, the camera it has cut to is marked live.
       b.classList.toggle("is-live", info.director && b.dataset.value === info.mode);
     });
-    // The car in view; "auto" while the director picks the cars (choosing a
-    // car, or a camera, keeps it; Director pressed again hands it back).
-    put("focus", $("bc-focus"), `${esc(f.code)}${info.autoCar ? "<small> AUTO</small>" : ""}`);
-    const dir = buttons.camera.find((b) => b.dataset.value === "director");
-    const tip = info.camera === "director" && !info.autoCar ? "Director: let it pick the cars again" : "Director";
-    if (dir && dir.title !== tip) dir.title = tip;
+    // The car in view; Auto lit while the director picks the cars (choosing
+    // a car, or a camera, keeps the car; Auto, or A, hands the cars back).
+    put("focus", $("bc-focus"), esc(f.code));
+    const auto = $("replay-screen").querySelector("[data-replay=auto]");
+    if (auto && auto.getAttribute("aria-pressed") !== String(Boolean(info.autoCar))) auto.setAttribute("aria-pressed", String(Boolean(info.autoCar)));
     if (!seeking) $("bc-seek").value = String(info.duration ? Math.round((info.time / info.duration) * 1000) : 0);
     if (put("time", $("bc-time"), `${clock(info.time)} / ${clock(info.duration)}`)) {
       $("bc-seek").setAttribute("aria-valuetext", `${clock(info.time)} of ${clock(info.duration)}`);

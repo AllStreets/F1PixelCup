@@ -1382,11 +1382,19 @@ function simulateQualifyingLapSeeded(entry, track, seed) {
   return sim.result;
 }
 
+// Engines fresh for a session (a replay may have had other cars' in them).
+function freshEngines() {
+  if (!audio.engine || !window.EngineSound) return;
+  [[audio.engine, 11], [audio.engine2, 29]].forEach(([voice, seed]) => { voice.model = EngineSound.createModel(seed); voice.carId = null; });
+  audio.engineClock = undefined;
+}
+
 function startQualifying(index) {
   const cup = getActiveCup();
   state.raceIndex = index;
   state.track = cup.tracks[index];
   setRaceWeather(index);
+  freshEngines();
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
     shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
@@ -1870,10 +1878,7 @@ function startRace(index) {
   // A new race, a new recording (the last one's replay is gone).
   state.recording = null;
   state.replay = null;
-  // And engines fresh from the grid (a replay may have had other cars' in them).
-  if (audio.engine && window.EngineSound) {
-    [[audio.engine, 11], [audio.engine2, 29]].forEach(([voice, seed]) => { voice.model = EngineSound.createModel(seed); voice.carId = null; });
-  }
+  freshEngines();
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
   state.camRoll = 0;
@@ -3089,6 +3094,8 @@ function handleRacerContacts(now) {
           [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(overlap * 0.7, 2, 9), 220, r); });
           if (overlap > 4) sfx.impact();
         }
+        // The replay hears every knock, whoever's (it only notes it).
+        if (overlap > 4 && state.recording) state.recording.addContact({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, at: now });
         if (isProtected(a, now)) spinRacer(b, PowerUps.SPIN_MS.contact, now);
         if (isProtected(b, now)) spinRacer(a, PowerUps.SPIN_MS.contact, now);
 
@@ -3962,7 +3969,7 @@ function openReplay() {
   if (!state.replay || state.replay.rec !== rec) {
     state.replay = { rec, shots: Replay.directorShots(rec), ghosts: new Map() };
   }
-  Object.assign(state.replay, { time: 0, playing: true, speed: 1, camera: "director", focusId: null, pendingDt: 0, cut: true });
+  Object.assign(state.replay, Replay.viewChoice(), { time: 0, playing: true, speed: 1, pendingDt: 0, cut: true, heardAt: undefined, heardMix: 0, passingId: null });
   state.phase = "replay";
   state.particles = [];
   if (worldView() === "3d" && window.Render3D && Render3D.prepareReplay) render3dSafely(() => Render3D.prepareReplay(state.track));
@@ -4019,6 +4026,12 @@ function replaySetCamera(mode) {
   // A camera keeps the car on screen; Director pressed while on hands the
   // choice of cars back to it.
   Object.assign(r, Replay.chooseCamera(r, mode, replayShot().focusId));
+}
+
+// The director picks the cars again (and cuts the cameras).
+function replayAutoCars() {
+  const r = state.replay;
+  if (r) Object.assign(r, Replay.viewChoice());
 }
 
 function replayFocusStep(dir) {
@@ -4229,51 +4242,74 @@ function drawReplay() {
 // At half and double speed it is pitched gently, at a quarter and four
 // times only the venue is heard, and paused, nothing.
 const REPLAY_PASSING_RANGE = 600;
+// The passing car is changed only for one nearer by this share (no chirping
+// between two cars side by side).
+const REPLAY_PASSING_MARGIN = 0.85;
 function updateReplayAudio(ghosts, focus) {
   const r = state.replay;
   const rec = r.rec;
   const mix = EngineSound.replayMix(r.speed, r.playing);
+  const t = audio.ready ? audio.ctx.currentTime : 0;
   // The race time heard since the last frame (none across a cut or a seek).
   const back = r.heardAt === undefined || r.cut || r.time < r.heardAt;
-  const raceDt = back ? 0 : (r.time - r.heardAt) / 1000;
+  // Sound coming back (play after pause, back to 1x from 4x): the engines
+  // are primed again at the speed each car is going, as for a cut.
+  const resumed = mix.engine > 0 && !(r.heardMix > 0);
+  r.heardMix = mix.engine;
+  const fresh = back || resumed;
+  const raceDt = fresh ? 0 : (r.time - r.heardAt) / 1000;
   const from = back ? r.time : r.heardAt;
   r.heardAt = r.time;
+  const silence = () => {
+    if (!audio.ready || !audio.engine) return;
+    [audio.engine, audio.engine2].forEach((voice) => driveEngineVoice(voice, null, { on: false }));
+    if (audio.screech) audio.screech.gain.gain.setTargetAtTime(0, t, 0.07);
+  };
+  if (!focus) {
+    silence();
+    return;
+  }
   const cam = window.Render3D && Render3D.viewCamera ? Render3D.viewCamera() : null;
   const onboard = !cam || cam.shot === "onboard";
-  // Where a car is from the camera, and how fast it is going away from it.
+  // Where the listener is: onboard, the car in view; else the camera (its
+  // height over the ground standing for its height over the cars).
+  const listener = onboard ? { x: focus.x, z: focus.y, above: 0, key: `onboard:${focus.id}` } : { ...cam, above: cam.above || 0 };
+  const distanceTo = (x, y) => Math.hypot(x - listener.x, y - listener.z, listener.above);
+  // How loud and at what pitch a car is heard: the Doppler shift from how
+  // fast it went away since the frame before (only if heard then, from here).
   const hear = (car) => {
     if (onboard && car === focus) return { gain: 1, pitch: 1, dist: 0 };
-    // (The camera's height over the ground under it stands for its height
-    // over the car: near enough for how loud it is.)
-    const dist = Math.hypot(car.x - cam.x, car.y - cam.z, cam.above || 0);
-    const was = car.heard && car.heard.cam === cam.key ? car.heard.dist : dist;
-    const away = raceDt > 0 ? (dist - was) / raceDt : 0;
-    car.heard = { cam: cam.key, dist };
+    const dist = distanceTo(car.x, car.y);
+    const h = car.heard;
+    const away = raceDt > 0 && h && h.key === listener.key && h.at === from ? (dist - h.dist) / raceDt : 0;
+    car.heard = { key: listener.key, dist, at: r.time };
     return { gain: Math.min(1, EngineSound.distanceGain(dist) * 1.6), pitch: EngineSound.doppler(away), dist };
   };
-  const heardFocus = focus ? hear(focus) : { gain: 0, pitch: 1 };
-  // The car passing nearest the camera, if near enough to hear.
+  const heardFocus = hear(focus);
+  // The car passing nearest the listener, if near enough to hear; kept
+  // unless another is clearly nearer.
   let passing = null;
-  if (cam && mix.engine > 0) {
+  if (mix.engine > 0) {
     let best = REPLAY_PASSING_RANGE;
+    const kept = ghosts.find((g) => g.id === r.passingId && g !== focus && !g.finished);
+    if (kept) {
+      const d = distanceTo(kept.x, kept.y);
+      if (d < REPLAY_PASSING_RANGE) { passing = kept; best = d * REPLAY_PASSING_MARGIN; }
+    }
     ghosts.forEach((g) => {
-      if (g === focus || g.finished) return;
-      const d = onboard ? Math.hypot(g.x - focus.x, g.y - focus.y) : Math.hypot(g.x - cam.x, g.y - cam.z);
+      if (g === focus || g.finished || g === kept) return;
+      const d = distanceTo(g.x, g.y);
       if (d < best) { best = d; passing = g; }
     });
   }
-  const heardPassing = passing ? (onboard ? (() => {
-    const dist = Math.hypot(passing.x - focus.x, passing.y - focus.y);
-    const was = passing.heard && passing.heard.cam === "onboard" ? passing.heard.dist : dist;
-    passing.heard = { cam: "onboard", dist };
-    return { gain: EngineSound.distanceGain(dist), pitch: EngineSound.doppler(raceDt > 0 ? (dist - was) / raceDt : 0) };
-  })() : hear(passing)) : null;
-  // A new car to hear: its engine primed at the speed it is going.
+  r.passingId = passing ? passing.id : null;
+  const heardPassing = passing ? hear(passing) : null;
+  // A car newly heard (or sound coming back): its engine primed at its speed.
   const voiceFor = (voice, car) => {
     const id = car ? car.id : null;
-    if (voice.carId !== id || back) {
+    if (voice.carId !== id || fresh) {
       voice.carId = id;
-      voice.model = EngineSound.createModel(id ? id.length * 131 + 7 : 1);
+      voice.model = EngineSound.createModel(id ? hashSeed(id) : 1);
       if (car) voice.model.prime({ ratio: Math.abs(car.speed) / Math.max(1, car.physics.maxSpeed), throttle: car.throttleIn || 0 });
     }
   };
@@ -4284,11 +4320,10 @@ function updateReplayAudio(ghosts, focus) {
     driveEngineVoice(audio.engine2, passing, { on: mix.engine > 0 && Boolean(passing), share: mix.engine * 0.8 * (heardPassing ? heardPassing.gain : 0), pitch: mix.pitch * (heardPassing ? heardPassing.pitch : 1), dt: raceDt });
     const slides = (g) => g && !g.finished && (g.drifting || (g.offroad && Math.abs(g.speed) > 60));
     const screech = mix.engine > 0 ? Math.max(slides(focus) ? heardFocus.gain : 0, slides(passing) ? heardPassing.gain : 0) : 0;
-    const t = audio.ctx.currentTime;
     if (audio.screech) audio.screech.gain.gain.setTargetAtTime(0.13 * screech, t, 0.07);
-    if (audio.venue && focus) {
+    if (audio.venue) {
       const venue = venueSound(focus, true);
-      if (cam && cam.shot === "helicopter") venue.helicopter = 1;
+      if (!onboard && cam.shot === "helicopter") venue.helicopter = 1;
       const a = mix.ambience;
       audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9 * (mix.engine > 0 ? 1 : 0), t, 0.08);
       audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07 * a, t, 0.25);
@@ -4298,28 +4333,30 @@ function updateReplayAudio(ghosts, focus) {
       audio.venue.hiss.gain.setTargetAtTime(venue.hiss * 0.06 * a, t, 0.1);
     }
   }
-  // What happened since the last frame, each as loud as it is far.
+  // What happened since the last frame, each as loud as it is far, nearest
+  // first (so a near one is not lost to a far one's rate limit).
   const events = mix.events && !back ? Replay.eventsBetween(rec, rec.header.t0 + from, rec.header.t0 + r.time) : [];
   const route = getItemRoute(state.track);
-  const listener = onboard ? { x: focus.x, z: focus.y } : cam;
-  events.forEach((e) => {
+  const placed = events.map((e) => {
     let at = e;
     if (e.type === "item") at = route.toWorld(e.d, e.lat);
     else if (e.type === "box") at = state.track.itemBoxes[e.box] || e;
-    const dist = listener && at.x !== undefined ? Math.hypot(at.x - listener.x, at.y - listener.z) : 0;
+    return { e, dist: at.x !== undefined ? distanceTo(at.x, at.y) : 0 };
+  }).sort((a, b) => a.dist - b.dist);
+  const sounds = { impact: sfx.impact, contact: sfx.impact, item: sfx.itemUse, box: sfx.itemGet, boost: sfx.boost, spin: sfx.spin, finish: sfx.finish };
+  placed.forEach(({ e, dist }) => {
     audio.sfxScale = Math.min(1, EngineSound.distanceGain(dist) * 1.6);
-    if (e.type === "impact") sfx.impact();
-    else if (e.type === "item") sfx.itemUse();
-    else if (e.type === "box") sfx.itemGet();
-    else if (e.type === "boost") sfx.boost();
-    else if (e.type === "spin") sfx.spin();
-    audio.sfxScale = 1;
+    try {
+      if (sounds[e.type]) sounds[e.type]();
+    } finally {
+      audio.sfxScale = 1;
+    }
   });
   // What the replay sounds like now (for the checks).
   const last = audio.engine && audio.engine.last;
   state.replaySound = {
     mix,
-    engine: { carId: focus ? focus.id : null, gain: mix.engine > 0 ? mix.engine * heardFocus.gain : 0, pitch: mix.pitch * heardFocus.pitch, rpm: last ? last.rpm : 0 },
+    engine: { carId: focus.id, gain: mix.engine > 0 ? mix.engine * heardFocus.gain : 0, pitch: mix.pitch * heardFocus.pitch, rpm: last ? last.rpm : 0, gear: last ? last.gear : 0 },
     passing: passing ? { carId: passing.id, gain: mix.engine * 0.8 * heardPassing.gain, pitch: mix.pitch * heardPassing.pitch } : null,
     events: (state.replaySound ? state.replaySound.events : 0) + events.length,
     heard: events.map((e) => e.type),
@@ -4347,6 +4384,7 @@ function handleReplayKey(event) {
   else if (key === "=" || key === "+") replayStepSpeed(1);
   else if (lower === "c") replaySetCamera(REPLAY_CAMERAS[(REPLAY_CAMERAS.indexOf(state.replay.camera) + 1) % REPLAY_CAMERAS.length]);
   else if (lower === "x") exitReplay();
+  else if (lower === "a") replayAutoCars();
   else handled = false;
   if (handled) event.preventDefault();
 }
@@ -5763,7 +5801,15 @@ function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 
   const maxSpeed = Math.max(1, car && car.physics ? car.physics.maxSpeed : 1);
   const ratio = car ? clamp(Math.abs(car.speed) / maxSpeed, 0, 1.25) : 0;
   const alive = Boolean(on && car && !car.finished);
-  const input = { dt: clamp(dt, 0, 0.1), ratio: alive ? ratio : 0, throttle: alive ? car.throttleIn || 0 : 0, brake: alive ? car.brakeIn || 0 : 0 };
+  // Silent, the engine is not stepped: it carries on from where it was heard
+  // (or is primed again by whoever brings it back).
+  if (!alive) {
+    voice.gain.gain.setTargetAtTime(0, t, 0.06);
+    voice.turboGain.gain.setTargetAtTime(0, t, 0.15);
+    voice.ersGain.gain.setTargetAtTime(0, t, 0.2);
+    return;
+  }
+  const input = { dt: clamp(dt, 0, 0.1), ratio, throttle: car.throttleIn || 0, brake: car.brakeIn || 0 };
   const s = voice.model ? voice.model.step(input) : { rpm: EngineSound.IDLE_RPM, load: 0, turbo: 0, ers: 0, shift: null, pops: [], whoosh: false };
   voice.last = s;
   // The note: half the firing rate (rpm / 40), the firing rate, the half order.
@@ -5774,11 +5820,14 @@ function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 
   voice.filter.frequency.setTargetAtTime(700 + s.load * 3800 + (s.rpm / EngineSound.LIMIT_RPM) * 600, t, 0.04);
   voice.lfoGain.gain.setTargetAtTime(4 + 6 * s.load, t, 0.1);
   // An upshift: the ignition cut, a few hundredths; a downshift: the blip.
+  // (Each a few milliseconds' glide, never a step: a step would click.)
   if (s.shift === "up") {
-    voice.cut.gain.setValueAtTime(0.25, t);
+    voice.cut.gain.cancelScheduledValues(t);
+    voice.cut.gain.setTargetAtTime(0.25, t, 0.004);
     voice.cut.gain.setTargetAtTime(1, t + 0.035, 0.02);
   } else if (s.shift === "down") {
-    voice.cut.gain.setValueAtTime(1.35, t);
+    voice.cut.gain.cancelScheduledValues(t);
+    voice.cut.gain.setTargetAtTime(1.35, t, 0.004);
     voice.cut.gain.setTargetAtTime(1, t + 0.03, 0.05);
   }
   const level = alive ? (0.055 + ratio * 0.1 + s.load * 0.02) * share : 0;
@@ -7162,6 +7211,11 @@ function bindEvents() {
   // it: pause instead, so nothing runs out while nobody is watching.
   document.addEventListener("visibilitychange", () => {
     if (document.hidden && ["race", "countdown", "qualifying", "qualifyingSim"].includes(state.phase) && !state.paused) togglePause();
+    // A replay out of sight pauses too (its sound would carry on, frozen).
+    if (document.hidden && state.phase === "replay" && state.replay && state.replay.playing) {
+      replayTogglePlay();
+      updateReplayAudio(state.replay.ghosts.size ? [...state.replay.ghosts.values()] : [], null);
+    }
   });
 }
 
@@ -7212,6 +7266,7 @@ window.Game = {
     setSpeed: replaySetSpeed,
     setCamera: replaySetCamera,
     focusStep: replayFocusStep,
+    autoCars: replayAutoCars,
     SPEEDS: REPLAY_SPEEDS,
     CAMERAS: REPLAY_CAMERAS,
   },

@@ -239,6 +239,17 @@
         ch.hasMid[j] = 1;
       },
 
+      // A knock between two cars (where, when), kept once: the same knock
+      // felt over the next few steps, near the same place, is not another.
+      contacts: [],
+      addContact(c) {
+        // (Only the last few can be that recent: looked at from the end.)
+        for (let i = rec.contacts.length - 1; i >= 0 && c.at - rec.contacts[i].at < CONTACT_MS; i -= 1) {
+          if (Math.hypot(c.x - rec.contacts[i].x, c.y - rec.contacts[i].y) < CONTACT_NEAR) return;
+        }
+        rec.contacts.push({ x: c.x, y: c.y, at: c.at });
+      },
+
       addFlash(f) {
         rec.flashes.push({ x: f.x, y: f.y, d: f.d, color: f.color, size: f.size, at: f.at, until: f.until });
       },
@@ -382,15 +393,20 @@
 
   // ---- What happened between two moments (the replay's sounds) ----
   // Between race times a and b, as the replay plays forward: hits and
-  // bounces (the recorded flashes, at x, y), items fired (a shot or slick
+  // bounces (the recorded flashes, at x, y), knocks between cars (the
+  // recorded contacts), the player's chequered flag, items fired (a shot or slick
   // appearing on the road, at d, lat), item boxes taken (by index), and
   // boosts and spins starting (by car, at its x, y). None for a seek: going
   // back, standing still, or a jump of more than EVENT_SPAN.
   const EVENT_SPAN = 500;
+  const CONTACT_MS = 130;
+  const CONTACT_NEAR = 40;
   function eventsBetween(rec, a, b) {
     if (!(b > a) || b - a > EVENT_SPAN || rec.count < 2) return [];
     const events = [];
     rec.flashes.forEach((f) => { if (f.at > a && f.at <= b) events.push({ type: "impact", x: f.x, y: f.y, size: f.size }); });
+    rec.contacts.forEach((c) => { if (c.at > a && c.at <= b) events.push({ type: "contact", x: c.x, y: c.y }); });
+    if (rec.chequerAt > a && rec.chequerAt <= b) events.push({ type: "finish" });
     const k0 = rec.indexAt(a);
     const k1 = rec.indexAt(b);
     let prev = rec.sampleAt(k0);
