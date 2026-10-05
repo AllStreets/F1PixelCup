@@ -28,7 +28,7 @@ Each era as the layout raced: the cars, stands and graphics stay the game's own 
 | Istanbul Park | `istanbul_grandstand.glb` | The main grandstand opposite the pits: about 260 m of seats under a roof hung from tall white masts by stays. The venue's `mainStand` |
 | Istanbul Park | `hillside.glb` (shared) | The natural bank on the outside of Turn 8 (no board: a share of the lap, by its four-apex left-hander) |
 | Mugello | `tuscan_hill.glb` | A Tuscan hillside: a rounded hill terraced with olive groves (low dry-stone walls along its wavering contours, grass banks between with rows of olives), a stone farmhouse (casa colonica) with its terracotta roofs and dovecote tower, a line of cypresses up the track to it |
-| Mugello | `hillside.glb` (shared) | The grass terraces fans fill at Arrabbiata |
+| Mugello | `hillside.glb` (shared) | The grass terraces fans fill at Arrabbiata, standing back from the fence far enough for the marshals' posts in front (`hillside.minGap`) |
 | Watkins Glen | `finger_lakes.glb` | The Finger Lakes' landscape to the north-east: a long narrow lake in its valley running away from the track between wooded ridges, the woods in autumn colour, vineyards on the lower slopes. The circuit stands on its hill above Seneca Lake; the game's track is level with the ground, so a lake far off would be a line: the lake's near end comes close to the barrier and the water runs away into the distance |
 | Watkins Glen | `hillside.glb` (shared) | The bank at the Esses |
 
