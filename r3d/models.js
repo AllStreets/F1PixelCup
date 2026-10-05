@@ -67,7 +67,7 @@ export const VENUE_MODELS = {
   albertpark: ["melbourneSkyline"],
   shanghai: ["shanghaiGrandstand"],
   jeddah: ["jeddahFountain", "yachts"],
-  miami: ["miamiStadium", "yachts"],
+  miami: ["miamiStadium"],
   imola: ["hillside"],
   barcelona: ["barcelonaGrandstand"],
   montreal: ["biosphere"],

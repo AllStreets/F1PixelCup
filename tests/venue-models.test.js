@@ -48,22 +48,20 @@ test("every venue has its stand type", () => {
 });
 
 test("the harbours: yachts where there is water for them, loaded with the venue", () => {
-  ["yasmarina", "miami", "baku", "jeddah"].forEach((id) => {
+  ["yasmarina", "baku", "jeddah"].forEach((id) => {
     const v = VENUES[id];
     assert.ok(v.harbour && v.harbour.anchored > 0, `${id} has no harbour`);
     assert.ok(v.extras.includes("yachts"), `${id} doesn't place its yachts`);
     assert.ok(VENUE_MODELS[id].includes("yachts"), `${id} doesn't load the yachts`);
   });
-  // Miami's harbour sits on the infield's painted water, the rest off the coast.
-  assert.equal(VENUES.miami.harbour.anchorIn, "lake");
+  // At anchor off the coast.
   assert.equal(VENUES.baku.harbour.anchorIn, "sea");
   assert.equal(VENUES.jeddah.harbour.anchorIn, "sea");
   assert.equal(VENUES.yasmarina.harbour.anchorIn, "sea");
   // The water is made before the yachts look for it.
-  ["miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("infieldLake") < VENUES[id].extras.indexOf("yachts"), `${id}: the lake after the yachts`));
   ["baku", "jeddah", "yasmarina"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("coast") < VENUES[id].extras.indexOf("yachts"), `${id}: the sea after the yachts`));
   // What stands at sea (the fountain) is placed before the yachts look for water.
-  ["baku", "jeddah", "yasmarina", "miami"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("siteLandmarks") < VENUES[id].extras.indexOf("yachts"), `${id}: the landmarks after the yachts`));
+  ["baku", "jeddah", "yasmarina"].forEach((id) => assert.ok(VENUES[id].extras.indexOf("siteLandmarks") < VENUES[id].extras.indexOf("yachts"), `${id}: the landmarks after the yachts`));
 });
 
 test("only the current venue's models load: every venue's are loaded only for the checks", () => {

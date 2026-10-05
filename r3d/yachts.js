@@ -8,8 +8,8 @@
 // stern-to there, side by side, along the longest stretches of open water);
 // moored and anchored: how many at most; anchorIn: the name of a landmark
 // whose bay they anchor in (else open water beyond the quays; none if that
-// landmark has no bay), or "sea" (offshore, past the coast's shore) or
-// "lake" (berthed in the infield's water, a marina); wind: the heading
+// landmark has no bay), or "sea" (offshore, past the coast's shore); wind:
+// the heading
 // (radians) their bows point to at anchor. Every yacht claims its water;
 // tenders run among them.
 //
@@ -267,21 +267,6 @@ function seaArea(course) {
   };
 }
 
-// The infield's water (r3d/landmarks.js infieldLake: overlapping discs), as
-// an area: every point of a hull inside one disc or another.
-function lakeArea(course) {
-  const discs = course.lakes || [];
-  if (!discs.length) return null;
-  const lo = { x: Math.min(...discs.map((d) => d.x - d.r)), z: Math.min(...discs.map((d) => d.z - d.r)) };
-  const hi = { x: Math.max(...discs.map((d) => d.x + d.r)), z: Math.max(...discs.map((d) => d.z + d.r)) };
-  const inside = (x, z, margin) => discs.some((d) => Math.hypot(x - d.x, z - d.z) < d.r - margin);
-  return {
-    o: lo, u: { x: hi.x - lo.x, z: 0 }, v: { x: 0, z: hi.z - lo.z },
-    contains: inside,
-    holds: (h) => hullPoints(h).every((p) => inside(p.x, p.z, 8)),
-  };
-}
-
 // A landmark's bay (its corners in the world) as an area to anchor in.
 function bayArea(group, name) {
   let lm = null;
@@ -319,7 +304,7 @@ export function buildYachts(course, group, venue, rand) {
   out.name = "yachts";
   const quay = harbour.quay ?? 190;
   const moored = moor(course, rand, quay, harbour.moored || 0);
-  const area = harbour.anchorIn === "sea" ? seaArea(course) : harbour.anchorIn === "lake" ? lakeArea(course) : harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
+  const area = harbour.anchorIn === "sea" ? seaArea(course) : harbour.anchorIn ? bayArea(group, harbour.anchorIn) : null;
   // A bay to anchor in that isn't there (its landmark fell back): none.
   const anchored = harbour.anchorIn && !area ? [] : anchor(course, rand, {
     count: harbour.anchored || 0, area, quay, wind: harbour.wind ?? 0.6, others: moored,

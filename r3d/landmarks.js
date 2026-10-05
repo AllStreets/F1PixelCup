@@ -106,17 +106,14 @@ export const VENUES = {
     harbour: { anchored: 12, anchorIn: "sea", wind: 0.4 },
   },
   miami: {
-    // Round the stadium on Miami Gardens' flat lawns: palms, sun, and water
-    // in the infield (the real marina is a painted set by turns 6 to 8).
+    // Round the stadium on Miami Gardens' flat lawns: palms and sun. The
+    // stadium fills the infield (the painted "marina" by turns 6 to 8 has no
+    // room beside it, so there is none).
     ground: "grass", groundTint: "#93bf62", standColor: "#00a3ad", runoffTint: "#aaa69c",
     trees: [{ kind: "palm", count: 360, tint: "#4f8a3c", near: 90 }, { kind: "broadleaf", count: 160, tint: "#3f7a3a", near: 260, seed: 6 }],
-    lake: { tint: "#38c2cc", count: 5 },
     stand: "open",
-    extras: ["siteLandmarks", "infieldLake", "yachts"],
+    extras: ["siteLandmarks"],
     landmarks: ["miamiStadium"],
-    // The "marina" in the infield: yachts berthed on its water (in life the
-    // water there is painted).
-    harbour: { anchored: 8, anchorIn: "lake", wind: 1.2 },
   },
   imola: {
     // Parkland under the Apennine foothills, trees to the barriers.
@@ -1088,8 +1085,6 @@ function cornerAnchors(course, board, share = 0.3, spread = 25) {
 const SITES = {
   melbourneSkyline: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [800, 1100, 1400, 1800], step: 40 }),
   shanghaiGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220, 280, 360], step: 20, gapFirst: true, faceTrack: true }),
-  // (A bowl watches inward, not toward the track: no faceTrack.)
-  miamiStadium: (c) => ({ anchors: anchorsAround(c, 0.5, 70, insideFirst(c)), gaps: [20, 40, 70, 110, 160, 230, 320], step: 20 }),
   hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
   barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
   biosphere: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [120, 200, 320, 480], step: 24 }),
@@ -1174,11 +1169,84 @@ function yasHotelHalves(course, group, venue) {
   return modelLandmark(course, group, venue, { name: "yasHotel", model: "yasHotel", step, gaps, gapFirst: true, anchors: anchorsAround(course, 0.8, 60, () => [1, -1]) });
 }
 
+// Is (x, z) inside the circuit's loop?
+function insideLoop(course, x, z) {
+  const ring = course.samples;
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
+    const a = ring[i];
+    const b = ring[j];
+    if ((a.y > z) !== (b.y > z) && x < ((b.x - a.x) * (z - a.y)) / (b.y - a.y) + a.x) hit = !hit;
+  }
+  return hit;
+}
+
+// Miami's stadium: inside the loop, as in life (the circuit runs round it
+// through its car parks), as far from the road as the infield allows, turned
+// to fit. At the city's scale the infield has no room for a bowl this size,
+// so it is drawn smaller, down to the circuit map's own scale (1.3 units a
+// metre: its true size against the track), before it would stand outside.
+function stadiumInside(course, group, venue) {
+  const template = tracksideModel("miamiStadium");
+  if (!template) return null;
+  template.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(template);
+  const rect = { x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z };
+  const b = course.bounds;
+  const margin = 14;
+  const step = 20;
+  // Its ground is an oval (the bowl, the masts on it): the points of its
+  // rectangle within the oval through the rectangle's sides' middles, a
+  // little out past the masts' feet.
+  const cx = (rect.x0 + rect.x1) / 2;
+  const cz = (rect.z0 + rect.z1) / 2;
+  const ax = (rect.x1 - rect.x0) / 2;
+  const az = (rect.z1 - rect.z0) / 2;
+  const ground = (scale, x, z, yaw) => rectPoints(rect, scale, x, z, yaw, step).filter(([px, pz]) => {
+    const dx = px - x;
+    const dz = pz - z;
+    const lx = (dx * Math.cos(yaw) - dz * Math.sin(yaw)) / scale - cx;
+    const lz = (dx * Math.sin(yaw) + dz * Math.cos(yaw)) / scale - cz;
+    return (lx / ax) ** 2 + (lz / az) ** 2 <= 1.12;
+  });
+  for (const scale of [LANDMARK_SCALE, 2.0, 1.7, 1.5, 1.3]) {
+    let best = null;
+    for (let x = b.minX; x <= b.maxX; x += 30) {
+      for (let z = b.minZ; z <= b.maxZ; z += 30) {
+        if (!insideLoop(course, x, z)) continue;
+        const room = course.clearance(x, z, 900);
+        if (best && room <= best.room) continue;
+        for (let k = 0; k < 8; k += 1) {
+          const yaw = (k / 8) * Math.PI;
+          const pts = ground(scale, x, z, yaw);
+          if (pts.some(([px, pz]) => course.clearance(px, pz) < margin || course.occupied.blocked(px, pz, step * 0.5) || !insideLoop(course, px, pz))) continue;
+          best = { x, z, yaw, room };
+          break;
+        }
+      }
+    }
+    if (!best) continue;
+    ground(scale, best.x, best.z, best.yaw).forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
+    const p = course.samples.reduce((a, q) => (Math.hypot(q.x - best.x, q.y - best.z) < Math.hypot(a.x - best.x, a.y - best.z) ? q : a));
+    const made = template.clone(true);
+    dressLandmark(made, venue);
+    made.scale.setScalar(scale);
+    made.position.set(best.x, 0, best.z);
+    made.rotation.y = best.yaw;
+    made.name = "landmark:miamiStadium";
+    made.userData.landmark = { name: "miamiStadium", fromModel: true, inside: true, scale, yaw: best.yaw, trackAt: { x: Math.round(p.x), z: Math.round(p.y), d: Math.round(p.d) } };
+    group.add(made);
+    return made;
+  }
+  return null;
+}
+
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
   for (const name of venue.landmarks || []) {
     if (name === "jeddahFountain") fountainAtSea(course, group, venue);
     else if (name === "yasHotel") yasHotelHalves(course, group, venue);
+    else if (name === "miamiStadium") stadiumInside(course, group, venue);
     else if (SITES[name]) modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
   }
 }
