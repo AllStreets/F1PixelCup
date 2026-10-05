@@ -223,7 +223,7 @@ async (page) => {
     { part: "trackside2025", name: "trackside-biosphere", circuit: "montreal", aim: "biosphere", back: 30, h: 15, ah: 70, fov: 55, side: 0 },
     { part: "trackside2025", name: "trackside-austin", circuit: "cota", aim: "cotaTower", back: 30, h: 15, ah: 90, fov: 60, side: 0 },
     { part: "trackside2025", name: "trackside-forosol", circuit: "mexico", aim: "foroSol", back: 25, h: 30, ah: 40, fov: 70, side: 0 },
-    { part: "trackside2025", name: "trackside-miami", circuit: "miami", aim: "miamiStadium", back: 30, h: 20, ah: 60, fov: 65, side: 0 },
+    { part: "trackside2025", name: "trackside-miami", circuit: "miami", aim: "miamiStadium", back: 20, h: 18, ah: 45, fov: 70, side: 0 },
   ];
   for (const t of TRACKSIDE.filter((x) => parts.includes(x.part || "trackside"))) {
     const c = circuits.find((x) => x.id === t.circuit);
