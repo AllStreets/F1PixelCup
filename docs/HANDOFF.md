@@ -116,3 +116,9 @@ In the results, **play, landing, career and race-sim always list plain values** 
 - **Wet grip is per speed:** `Weather.dryLimitAt(physics, speed)`. At speed 0 there is no limit, so guard divisions. That was the NaN bug.
 - **Checks must be able to fail.** Prove every new one against the old code. Reviewers have caught tautological checks more than once.
 - **Bash permission hiccups:** the auto-mode safety check sometimes returns no verdict. Retry once. If it persists, work in files (Write/Edit) and come back to the shell.
+
+## Resume note (2026-10-05, usage limit)
+
+- Local `main` (6869187, NOT pushed) merges `stage-l-calendar`: real pit sides, Shanghai's snail, the historic cups. npm test 399/399; full browser run green except one real regression: trackside-models `everyLandmarkFromItsModel` reports Barcelona's `barcelonaGrandstand` not built. Its anchors are `oppositePits(c)` (r3d/landmarks.js ~1225), and Barcelona's pit lane moved to its real side in this merge, so the grandstand finds no room. Fix (re-anchor it to the real main straight's grandstand side, clear of the new pit lane), re-run trackside-models, then push main.
+- Stage R (README) is running on branch `stage-r-readme` (worktree F1_Pixel_Cup-R). If it stopped, resume it from its brief in the work order, item 8.
+- After R: stop before Supabase.
