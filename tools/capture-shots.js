@@ -5,7 +5,8 @@
 // Then resize with sips (see README). Writes to assets/shots/.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets and trackside. The race-day
-// parts are "replay", "podium" and "split" (assets/shots/race-day/).
+// parts are "replay", "podium" and "split" (assets/shots/race-day/); "choices"
+// takes the pit lane's race choices and the circuit picker.
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -451,6 +452,34 @@ async (page) => {
     }, DAY);
     await p.waitForTimeout(1500);
     await dayShot("split-pitlane");
+  }
+
+  // ---- Choosing races (the site's "Your way" card): the pit lane with a
+  // random cup drawn, and the circuit picker with a custom cup being chosen, both
+  // at 1600x900 as the game draws them. sips makes the web size (README).
+  if (parts.includes("choices")) {
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate(() => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === SHOT_DRIVERS.hero));
+      Game.selectPlayers(1);
+      Game.selectRaceMode("random");
+    });
+    await p.waitForTimeout(1500);
+    await p.screenshot({ path: `${OUT}choices-pitlane.jpg`, type: "jpeg", quality: 90, scale: "css" });
+    written.push("choices-pitlane");
+    await p.evaluate(() => {
+      Game.selectRaceMode("custom");
+      Game.clearCustomCircuits();
+      // Three of four chosen: the running order, and a slot still to fill.
+      ["monaco", "spa", "suzuka"].forEach(Game.toggleCustomCircuit);
+      Screens.showCircuitPicker();
+      document.activeElement.blur();
+    });
+    await p.waitForTimeout(800);
+    await p.screenshot({ path: `${OUT}choices-picker.jpg`, type: "jpeg", quality: 90, scale: "css" });
+    written.push("choices-picker");
+    await p.evaluate(() => Screens.closeOverlay());
   }
   await p.evaluate(() => Screens.setShowroomArea(null));
   await context.close();
