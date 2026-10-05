@@ -107,3 +107,11 @@ domain; the repository's LICENSE.md, section C, and LICENSE.ASSETS.md). Only
 these data files are used, read by this project's own code
 (tools/blender/makehuman/); none of MakeHuman's program code (AGPL) is.
 Attribution is not required; it is given here with thanks.
+
+------------------------------------------------------------------------------
+F1DB (https://github.com/f1db/f1db) by Marcel Overdijk, release v2026.15.1,
+licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Used by the website only (assets/data/grid-2025.js, built by
+tools/site/build_grid_data.js, read by drivers.html and teams.html), adapted:
+2025 figures and careers to the end of 2025 counted from its race results,
+names matched to the game's teams. The game itself does not use it.

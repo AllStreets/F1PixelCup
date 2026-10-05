@@ -27,6 +27,8 @@ test("third-party notices carry each upstream licence and are linked from the RE
   // Each MIT licence in full: the circuits, three.js, meshoptimizer's decoder.
   assert.equal((text.match(/Permission is hereby granted, free of charge/g) || []).length, 3);
   assert.match(text, /Poly Haven[\s\S]*CC0/);
+  // The website's race data (drivers.html, teams.html) is F1DB's, CC BY 4.0.
+  assert.match(text, /F1DB[\s\S]*Marcel Overdijk[\s\S]*CC BY 4\.0/);
   const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
   assert.match(readme, /\[THIRD-PARTY-NOTICES\]\(THIRD-PARTY-NOTICES\)/);
 });

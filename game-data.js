@@ -159,9 +159,9 @@ const DIFFICULTIES = [
   {
     // The only setting where rivals are quicker than you rather than just
     // better drivers: a 5% pace edge, a near-perfect line and corners taken
-    // nearest the limit (racecraft.js). Measured by simulated laps
-    // (tools/checks/grid-check.js): 5-7% quicker than Pro, and Pro 10-12%
-    // quicker than Rookie.
+    // nearest the limit (racecraft.js). Measured by simulated laps in
+    // tools/checks/grid-check.js, which requires Legend at least 2% quicker
+    // than Pro and Pro at least 5% quicker than Rookie.
     id: "legend", name: "Legend",
     aiPace: 1.05, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, catchUp: 0,
     lookBase: 76, lookSpeed: 0.52,

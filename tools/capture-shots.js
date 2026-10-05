@@ -2,12 +2,24 @@
 // the race-day shots, where the HUD is the point).
 // Run with the Playwright MCP tool browser_run_code_unsafe,
 // filename: tools/capture-shots.js, dev server on http://localhost:8765.
-// Then resize with sips (see README). Writes to assets/shots/.
+// Writes to assets/shots/. Then resize with sips:
+//   sips -Z 1920 -s formatOptions 78 assets/shots/hero.jpg
+//   sips -Z 900 -s formatOptions 76 assets/shots/{circuit,team,trackside}-*.jpg
+//   sips -Z 960 assets/shots/items/*.jpg
+//   sips -Z 360 assets/shots/helmets/*.jpg
+// The race-day shots (assets/shots/race-day/) get an 800 px and a 400 px copy each,
+//   sips -Z 800 -s formatOptions 74 <shot>.jpg --out <shot>-800.jpg
+//   sips -Z 400 -s formatOptions 72 <shot>.jpg --out <shot>-400.jpg
+// then sips -Z 1600 -s formatOptions 76 <shot>.jpg. The README's (docs/readme/):
+//   sips -s formatOptions 80 hero.jpg
+//   sips -Z 1200 -s formatOptions 80 pitlane.jpg picker.jpg
+//   sips -Z 800 -s formatOptions 78 <each other picture>.jpg
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside and
 // trackside2025 (the 2025 venues' landmarks). The race-day parts are
 // "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
-// the pit lane's race choices and the circuit picker.
+// the pit lane's race choices and the circuit picker; "readme" takes the
+// README's pictures (docs/readme/).
 async (page) => {
   // Keep the test tool's own empty tab (about:blank) out of the way.
   try {
@@ -322,7 +334,7 @@ async (page) => {
   // ---- Race day: replays, the podium, two players (the site's #race-day). ----
   // Full 1600x900 pictures with the game's own HUD where it is the point (the
   // replay's broadcast graphics, both split views), written to
-  // assets/shots/race-day/; sips makes the web sizes (see README).
+  // assets/shots/race-day/; sips makes the web sizes (see the header).
   const RD = `${OUT}race-day/`;
   const DAY = SHOTS.raceDay;
   const sizeTo = async (width, height) => {
@@ -330,9 +342,9 @@ async (page) => {
     await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
     await p.waitForTimeout(600);
   };
-  const dayShot = async (name, clip) => {
-    await p.screenshot({ path: `${RD}${name}.jpg`, type: "jpeg", quality: 92, scale: "css", ...(clip ? { clip } : {}) });
-    written.push(`race-day/${name}`);
+  const dayShot = async (name, dir = RD) => {
+    await p.screenshot({ path: `${dir}${name}.jpg`, type: "jpeg", quality: 92, scale: "css" });
+    written.push(`${dir === RD ? "race-day" : "readme"}/${name}`);
   };
   const freshGame = async () => {
     await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
@@ -348,7 +360,9 @@ async (page) => {
   // grid, Hamilton fifth, among the front-runners so the cameras find a
   // pack), then opened from the results screen's own button. Each camera is
   // shot playing at 1x, a moment after a seek.
-  if (parts.includes("replay")) {
+  // Each race-day part takes the folder it writes to and which of its
+  // pictures to take (the README takes some of them too).
+  const shootReplays = async (dir, names) => {
     await sizeTo(1600, 900);
     await freshGame();
     await p.evaluate(async ({ DAY, ci, ti }) => {
@@ -380,7 +394,7 @@ async (page) => {
       ["replay-helicopter", "helicopter", DAY.replay, 3000],
       ["replay-director", "director", null, 8000],
     ];
-    for (const [name, camera, driverId, t] of REPLAY_SHOTS) {
+    for (const [name, camera, driverId, t] of REPLAY_SHOTS.filter(([n]) => !names || names.includes(n))) {
       await p.evaluate(({ camera, driverId, t }) => {
         Game.replay.setCamera(camera);
         if (driverId) state.replay.focusId = state.racers.find((r) => r.driver.id === driverId).id;
@@ -388,15 +402,16 @@ async (page) => {
         if (!state.replay.playing) Game.replay.togglePlay();
       }, { camera, driverId, t });
       await p.waitForTimeout(1200);
-      await dayShot(name);
+      await dayShot(name, dir);
     }
-  }
+  };
+  if (parts.includes("replay")) await shootReplays(RD);
 
   // The podium: a cup whose four races finish in a set order, scored by the
   // game's own finalizeRace (DAY.podium first, second and third), then the
   // ceremony. The page's own title and button are hidden; the name plates
   // (HTML, placed under each driver) stay. Shot at the timeline's beats (ceremony.js).
-  if (parts.includes("podium")) {
+  const shootPodium = async (dir, names) => {
     await sizeTo(1600, 900);
     await freshGame();
     await p.evaluate((top) => {
@@ -422,23 +437,25 @@ async (page) => {
     }, DAY.podium);
     await p.waitForFunction(() => Render3D.podium && Render3D.podium.inspect().drawing, null, { timeout: 60000 });
     await p.addStyleTag({ content: "#podium-screen .podium-head, #podium-screen .podium-foot { visibility: hidden !important; }" });
-    for (const [name, t] of [["podium-arms", 4.8], ["podium-trophy", 7.2], ["podium-spray", 13], ["podium-orbit", 27]]) {
+    const BEATS = [["podium-arms", 4.8], ["podium-trophy", 7.2], ["podium-spray", 13], ["podium-orbit", 27]];
+    for (const [name, t] of BEATS.filter(([n]) => !names || names.includes(n))) {
       await p.waitForFunction((tt) => Render3D.podium.inspect().t >= tt, t, { timeout: 60000 });
-      await dayShot(name);
+      await dayShot(name, dir);
     }
-  }
+  };
+  if (parts.includes("podium")) await shootPodium(RD);
 
   // Two players: P1 and P2 (DAY.players) from the back on autopilot, both
   // views and both HUDs; at Spa in the dry, at Monaco in the rain, and on a
   // window over 2.1 times as wide as it is tall (1600x700), where the views sit
   // side by side. Plus the pit lane's Players choice.
-  if (parts.includes("split")) {
+  const shootSplit = async (dir, names, pitLane) => {
     const SPLIT_SHOTS = [
       ["split-spa", "spa", "dry", 1600, 900, 10],
       ["split-monaco-wet", "monaco", "wet", 1600, 900, 8],
       ["split-side-by-side", "spa", "dry", 1600, 700, 14],
     ];
-    for (const [name, circuit, weather, w, h, seconds] of SPLIT_SHOTS) {
+    for (const [name, circuit, weather, w, h, seconds] of SPLIT_SHOTS.filter(([n]) => !names || names.includes(n))) {
       await sizeTo(w, h);
       await freshGame();
       await p.evaluate(({ DAY, ci, ti, weather }) => {
@@ -456,8 +473,9 @@ async (page) => {
       await sizeTo(w, h);
       await p.evaluate(() => humans().forEach((racer) => { racer.isPlayer = false; }));
       await p.waitForTimeout(seconds * 1000);
-      await dayShot(name);
+      await dayShot(name, dir);
     }
+    if (!pitLane) return;
     // The pit lane, two players picked: the whole screen, at 1600x900.
     await sizeTo(1600, 900);
     await freshGame();
@@ -468,12 +486,13 @@ async (page) => {
       renderGarage();
     }, DAY);
     await p.waitForTimeout(1500);
-    await dayShot("split-pitlane");
-  }
+    await dayShot("split-pitlane", dir);
+  };
+  if (parts.includes("split")) await shootSplit(RD, null, true);
 
   // ---- Choosing races (the site's "Your way" card): the pit lane with a
   // random cup drawn, and the circuit picker with a custom cup being chosen, both
-  // at 1600x900 as the game draws them. sips makes the web size (README).
+  // at 1600x900 as the game draws them. sips makes the web size (see the header).
   if (parts.includes("choices")) {
     await sizeTo(1600, 900);
     await freshGame();
@@ -497,6 +516,150 @@ async (page) => {
     await p.screenshot({ path: `${OUT}choices-picker.jpg`, type: "jpeg", quality: 90, scale: "css" });
     written.push("choices-picker");
     await p.evaluate(() => Screens.closeOverlay());
+  }
+  // ---- The README (docs/readme/): a fresh set of pictures for the GitHub
+  // page, every one a 1600x900 window as the game draws it. Posed shots work
+  // like the power-up photos: a few seconds into a real race the game is
+  // paused, named cars are placed along the road (lap distance and offset
+  // from the centreline, so they sit on it as racing cars do) and a hand-placed
+  // camera frames them. Chase shots are the game's own camera on autopilot.
+  // The race-day pictures (replays, the podium, two players) are the parts
+  // above, written here too. sips makes the GitHub sizes (see the header).
+  if (parts.includes("readme")) {
+    const RM = "docs/readme/";
+    // Set globalThis.README_ONLY to a list of names to retake only those:
+    // hero, harbour, cars, night, sphere, rain, replay (both replay
+    // pictures), podium (both), split, pitlane (with the picker).
+    const want = (name) => !globalThis.README_ONLY || globalThis.README_ONLY.includes(name);
+    // Who and where: Leclerc leads the hero with Hamilton beside him, and
+    // the rest of the gallery spreads across the grid. The README's captions
+    // name these drivers by hand: change both together.
+    const POSED = [
+      { name: "hero", circuit: "monaco", anchor: "yachts", shift: 100,
+        cars: [["leclerc", 0, -6], ["hamilton", -16, 9], ["norris", -44, -3], ["piastri", -60, 7], ["verstappen", -86, 0], ["russell", -104, -7]],
+        cam: { from: [38, -30, 13], at: [-25, 8, 8], fov: 42 } },
+      { name: "harbour", circuit: "monaco", anchor: "yachts", shift: 100,
+        cars: [["verstappen", 0, -5], ["alonso", -26, 7], ["gasly", -52, -3], ["albon", -78, 5]],
+        cam: { from: [-120, -70, 70], at: [40, 40, 0], fov: 55 } },
+      { name: "cars", circuit: "suzuka", anchor: "start", shift: 260,
+        cars: [["norris", 0, -6], ["piastri", -16, 9], ["verstappen", -44, -3], ["antonelli", -60, 7], ["russell", -86, 0]],
+        cam: { from: [40, -30, 14], at: [-20, 0, 2], fov: 40 } },
+      { name: "night", circuit: "singapore", anchor: "lm:marinaBaySands",
+        cars: [["russell", 0, -5], ["alonso", -30, 6], ["gasly", -55, -4]],
+        cam: { from: [-70, 0, 14], at: [60, 0, 22], fov: 55 } },
+      { name: "sphere", circuit: "lasvegas", anchor: "lm:vegasSphere", shift: 120,
+        cars: [["piastri", 0, -5], ["antonelli", -30, 6], ["sainz", -55, -4]],
+        cam: { from: [60, -25, 10], at: [-60, 40, 45], fov: 65 } },
+    ];
+    const CHASE = [
+      { name: "rain", circuit: "spa", weather: "wet", driver: "hamilton", seconds: 14 },
+    ];
+    const startAt = async (circuit, driverId, weather) => {
+      await freshGame();
+      await p.evaluate(({ driverId, weather, ci, ti }) => {
+        Game.selectDriver(DRIVERS.findIndex((d) => d.id === driverId));
+        Game.selectPlayers(1); Game.selectCup(ci); Game.selectGridMode("back"); Game.selectWeatherMode(weather || "dry");
+        Game.startCup();
+        if (ti > 0) { state.raceIndex = ti; startRace(ti); }
+      }, { driverId, weather, ...(await spotOf(circuit)) });
+      await p.waitForFunction(() => state.phase === "race", null, { timeout: 90000 });
+      // Starting a cup goes full screen; the window goes back to its size.
+      await p.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {});
+      await sizeTo(1600, 900);
+      await p.evaluate(() => { getPlayer().isPlayer = false; });
+    };
+    const rmShot = async (name) => {
+      await p.screenshot({ path: `${RM}${name}.jpg`, type: "jpeg", quality: 92, scale: "css" });
+      written.push(`readme/${name}`);
+    };
+    for (const s of POSED.filter((x) => want(x.name))) {
+      await sizeTo(1600, 900);
+      await startAt(s.circuit, s.cars[0][0], s.weather);
+      await p.waitForTimeout(5000);
+      await hideOverlays();
+      await p.evaluate((s) => {
+        state.paused = true;
+        state.pausedAt = performance.now();
+        const L = state.track.totalLength;
+        const route = getItemRoute(state.track);
+        const ts = Render3D.inspect().trackside;
+        const nearestD = (x, z) => {
+          let best = 0;
+          for (let d = 0, bd = Infinity; d < L; d += 4) {
+            const q = route.toWorld(d, 0);
+            const e = Math.hypot(q.x - x, q.y - z);
+            if (e < bd) { bd = e; best = d; }
+          }
+          return best;
+        };
+        let d0 = 0;
+        if (s.anchor === "yachts") {
+          const moored = ts.yachts.yachts.filter((v) => v.moored);
+          const y = moored[Math.min(12, moored.length - 1)];
+          d0 = nearestD(y.x, y.z);
+        } else if (s.anchor.startsWith("lm:")) {
+          const lm = ts.landmarks.find((x) => x.name === s.anchor.slice(3));
+          d0 = nearestD(lm.x, lm.z);
+        }
+        d0 += s.shift || 0;
+        const at = (gap) => (((d0 + gap) % L) + L) % L;
+        const put = (r, gap, lat) => {
+          const q = route.toWorld(at(gap), lat);
+          Object.assign(r, { x: q.x, y: q.y, heading: q.heading, angle: q.heading, trackDistance: at(gap), lat, speed: 0, spinUntil: 0 });
+        };
+        const named = s.cars.map((c) => c[0]);
+        s.cars.forEach(([id, gap, lat]) => put(state.racers.find((r) => r.driver.id === id), gap, lat));
+        // The rest of the field queues behind, out of the way of the picture.
+        state.racers.filter((r) => !named.includes(r.driver.id)).forEach((r, i) => put(r, -130 - i * 26, i % 2 ? 12 : -12));
+        state.shots = []; state.hazards = []; state.particles = []; state.fxFlashes = [];
+        const spot = ([gap, lat, h]) => { const q = route.toWorld(at(gap), lat); return { x: q.x, y: q.y, d: at(gap), h }; };
+        Render3D.setPhotoCamera({ from: spot(s.cam.from), at: spot(s.cam.at), fov: s.cam.fov });
+      }, s);
+      try {
+        await p.waitForTimeout(800);
+        await rmShot(s.name);
+      } finally {
+        await p.evaluate(() => { Render3D.setPhotoCamera(null); state.paused = false; });
+      }
+    }
+    for (const s of CHASE.filter((x) => want(x.name))) {
+      await sizeTo(1600, 900);
+      await startAt(s.circuit, s.driver, s.weather);
+      await p.waitForTimeout(s.seconds * 1000);
+      await hideOverlays();
+      await p.waitForTimeout(150);
+      await rmShot(s.name);
+    }
+    if (want("replay")) await shootReplays(RM, ["replay-onboard", "replay-helicopter"]);
+    if (want("podium")) await shootPodium(RM, ["podium-trophy", "podium-spray"]);
+    if (want("split")) await shootSplit(RM, ["split-spa"], false);
+    // The pit lane with the hero's driver picked, and the circuit picker
+    // choosing a custom cup.
+    if (want("pitlane")) {
+      // A fresh browser store first: the pit lane shows the career, which
+      // the capture's own races would otherwise have scored.
+      await sizeTo(1600, 900);
+      await p.evaluate(() => localStorage.clear());
+      await freshGame();
+      await p.evaluate(() => {
+        Game.selectDriver(DRIVERS.findIndex((d) => d.id === SHOT_DRIVERS.hero));
+        Game.selectPlayers(1);
+        Game.selectRaceMode("cup");
+        Game.selectCup(0);
+      });
+      await p.waitForTimeout(1500);
+      await rmShot("pitlane");
+      await p.evaluate(() => {
+        Game.selectRaceMode("custom");
+        Game.clearCustomCircuits();
+        ["monaco", "spa", "suzuka"].forEach(Game.toggleCustomCircuit);
+        Screens.showCircuitPicker();
+        document.activeElement.blur();
+      });
+      await p.waitForTimeout(800);
+      await rmShot("picker");
+      await p.evaluate(() => Screens.closeOverlay());
+    }
   }
   await p.evaluate(() => Screens.setShowroomArea(null));
   await context.close();

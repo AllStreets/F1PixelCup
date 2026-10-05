@@ -22,7 +22,7 @@ Leclerc first, Hamilton second in every showcase picture (`SHOT_DRIVERS.raceDay`
 
 All taken from the real game by `tools/capture-shots.js`, parts `replay`, `podium`, `split` (and `items` and `helmets` retaken, since they still showed car v1). The HUD is shown where it is the point. The podium pictures keep the name plates (HTML placed under each driver) and hide the page's own title and button.
 
-Web sizes per picture (`sips`, see README): 1600 px (quality 76), 800 px (74) and 400 px (72). The large picture's `srcset` offers 800 and 1600 (`sizes` the gallery's real slot), a thumbnail's 400 and 800. Every image has `width`, `height`, `loading="lazy"` and `decoding="async"`. A missing picture falls back to a styled panel (`guardImages`), and a thumbnail still shows its picture afterwards.
+Web sizes per picture (`sips`, see the header of tools/capture-shots.js): 1600 px (quality 76), 800 px (74) and 400 px (72). The large picture's `srcset` offers 800 and 1600 (`sizes` the gallery's real slot), a thumbnail's 400 and 800. Every image has `width`, `height`, `loading="lazy"` and `decoding="async"`. A missing picture falls back to a styled panel (`guardImages`), and a thumbnail still shows its picture afterwards.
 
 ## Rules
 
