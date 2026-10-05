@@ -49,20 +49,20 @@ Accounts and Supabase are last of all, and not part of this order.
 
 ## 0. Now: the driver figure, for the user's eyes **[REVIEW]**
 
-- [ ] Show the user the driver renders already built in Stage I: `docs/review/2026-10-01/driver_*.png`, all five poses.
+- [x] Show the user the driver renders already built in Stage I: `docs/review/2026-10-01/driver_*.png`, all five poses.
   - Those renders show the raw model: a red default suit and a plain white helmet.
   - In the game, the suit takes the team colours and the helmet takes the driver's painted design.
-- [ ] Render the figure dressed for real before asking: Leclerc in Ferrari colours with his helmet, and Hamilton likewise, via a small three.js preview page or the podium prototype.
+- [x] Render the figure dressed for real before asking: Leclerc in Ferrari colours with his helmet, and Hamilton likewise, via a small three.js preview page or the podium prototype.
 - [x] Driver v2 (branch `driver-v2`): the mannequin rebuilt as one smooth skinned body with a suit painted by region, gloved hands and real boots; `r3d/driver.js` dresses it per driver; studio at `tools/preview/driver.html`. Review page published 2026-10-01.
-- [ ] **Faces (user, 2026-10-01):** "realistic faces that look at least slightly like the driver they are supposed to look like ... they will not be wearing helmets on the podium." A realistic head (CC0 MakeHuman base and morph targets, or sculpted to that standard), eyes, brows, hair and facial hair styles, and a `look` per driver in `game-data.js` (skin, hair, beard, eyes, face shape) so each of the 20 resembles the real driver, Leclerc and Hamilton best of all. No photos of the drivers in the game; public photos as reference only. `buildDriver(driver, team, { headwear: "none" | "helmet" })`; the podium is bareheaded. Branch `driver-faces`. Review with the driver figure.
-- [ ] **Faces review notes (user, 2026-10-02):** slim the neck-to-torso junction (too wide, awkward); more specific features per driver from public photos (reference only), own brows, faces further apart; less plasticky skin; trim Hamilton's beard; braids that read as raised plaits, not flat black hair. Re-review before merge.
-- [ ] Apply the user's notes to `tools/blender/build_driver.py`. For example: face or no face, helmet on or a team cap, proportions, suit detail, more sculpted limbs. Rebuild `assets/driver.glb` and keep the Node tests green.
+- [x] **Faces (user, 2026-10-01):** "realistic faces that look at least slightly like the driver they are supposed to look like ... they will not be wearing helmets on the podium." A realistic head (CC0 MakeHuman base and morph targets, or sculpted to that standard), eyes, brows, hair and facial hair styles, and a `look` per driver in `game-data.js` (skin, hair, beard, eyes, face shape) so each of the 20 resembles the real driver, Leclerc and Hamilton best of all. No photos of the drivers in the game; public photos as reference only. `buildDriver(driver, team, { headwear: "none" | "helmet" })`; the podium is bareheaded. Branch `driver-faces`. Review with the driver figure.
+- [x] **Faces review notes (user, 2026-10-02):** slim the neck-to-torso junction (too wide, awkward); more specific features per driver from public photos (reference only), own brows, faces further apart; less plasticky skin; trim Hamilton's beard; braids that read as raised plaits, not flat black hair. Re-review before merge.
+- [x] Apply the user's notes to `tools/blender/build_driver.py`. For example: face or no face, helmet on or a team cap, proportions, suit detail, more sculpted limbs. Rebuild `assets/driver.glb` and keep the Node tests green.
 
 ## 1. Stage J: trackside monuments, buildings, stands and people (Blender) **[REVIEW]**
 
 Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
 
-- [ ] **Spec** `docs/superpowers/specs/<date>-trackside-blender-design.md`:
+- [x] **Spec** `docs/superpowers/specs/<date>-trackside-blender-design.md`:
   - **Landmarks, hand built in Blender, one per venue where it has one:**
     - the Monaco casino and the Hôtel de Paris front;
     - Marina Bay Sands and the Singapore Flyer;
@@ -81,10 +81,10 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
     - TV camera crews on platforms;
     - photographers at the corners.
   - **Life:** the crowd stands and waves as the player passes, and pit crews react when a car passes the garages.
-- [ ] `tools/blender/build_landmarks.py` writes `assets/landmarks/*.glb`, and `tools/blender/build_people.py` writes the crowd, crew and photographer figures.
-- [ ] `r3d/landmarks.js` loads the models in place of the procedural stand-ins, and `r3d/trackside.js` places the people.
-- [ ] **[REVIEW] first look,** before building all of it: two landmarks (the Monaco casino and Marina Bay Sands), one grandstand and the crowd and crew figures, in game screenshots. Wait for the user's yes, then build the rest.
-- [ ] **Checks:**
+- [x] `tools/blender/build_landmarks.py` writes `assets/landmarks/*.glb`, and `tools/blender/build_people.py` writes the crowd, crew and photographer figures.
+- [x] `r3d/landmarks.js` loads the models in place of the procedural stand-ins, and `r3d/trackside.js` places the people.
+- [x] **[REVIEW] first look,** before building all of it: two landmarks (the Monaco casino and Marina Bay Sands), one grandstand and the crowd and crew figures, in game screenshots. Wait for the user's yes, then build the rest.
+- [x] **Checks:**
   - `auditScenery` is 0 on every circuit (nothing over the track);
   - every landmark loads;
   - the people stay off the road;
@@ -95,7 +95,7 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
   - [x] Monaco: remove the buildings between the harbour and the track so the yachts back right up to the fence, as in photos of the real race.
   - [x] Calm Marina Bay Sands' windows; Spa's pits and the São Paulo towers to the Wing's level; the Singapore Flyer visible from the track; faster first load.
   - [x] The 16 new venues' landmarks, stands and yachts (branch landmarks-2025).
-- [ ] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
+- [x] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
 
 ## 2. Stage K: the 3D podium ceremony **[REVIEW]**
 
