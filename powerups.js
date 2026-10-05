@@ -18,14 +18,14 @@
   // The back of the field rolls the fast items (DRS, Overtake Mode, the
   // Formation Lap) most: they are what gets a car past the others.
   const table = {
-    drs: [10, 15, 22, 26, 29],
+    drs: [10, 15, 24, 30, 33],
     oilSlick: [55, 40, 25, 5, 0],
     debris: [35, 33, 15, 8, 4],
     undercut: [0, 12, 20, 16, 12],
     overtakeMode: [0, 0, 12, 20, 24],
     formationLap: [0, 0, 2, 10, 16],
-    stewardPenalty: [0, 0, 4, 8, 8],
-    safetyCar: [0, 0, 0, 7, 7],
+    stewardPenalty: [0, 0, 2, 6, 6],
+    safetyCar: [0, 0, 0, 5, 5],
   };
   const ODDS = Object.fromEntries(COLUMNS.map((col, c) => [col, Object.fromEntries(ITEM_ORDER.map((id) => [id, table[id][c]]))]));
 

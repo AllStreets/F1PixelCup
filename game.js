@@ -2992,9 +2992,9 @@ function updateRacer(racer, dt, now) {
   // A Formation Lap ends only where the car is clear of every other car, so
   // it is never dropped on top of one (powerups.js formationClear); after its
   // grace it ends wherever it is.
-  if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS && now < racer.formationEndsBy
+  if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS * 1.5 && now < racer.formationEndsBy
     && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
-    racer.formationUntil += PHYSICS_STEP_MS;
+    racer.formationUntil = now + PHYSICS_STEP_MS * 2;
   }
 
   const boosting = racer.boostUntil > now || racer.formationUntil > now;

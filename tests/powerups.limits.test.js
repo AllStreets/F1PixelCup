@@ -24,7 +24,7 @@ test("strong items are held back for the first 15 seconds", () => {
 });
 
 test("a blocked roll moves to the next allowed item in that column, wrapping to the top", () => {
-  // safetyCar is last in the order, so a blocked one wraps to DRS (29% in tail).
+  // safetyCar is last in the order, so a blocked one wraps to DRS (33% in tail).
   assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "safetyCar") }), "drs");
   // formationLap blocked early -> stewardPenalty blocked early -> safetyCar blocked -> drs.
   assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "formationLap") }), "drs");

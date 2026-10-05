@@ -70,7 +70,7 @@ Each change must look physically honest and stay fun:
 - **Fair contacts:** side by side, nobody is thrown back. The car that runs into the back of another still loses speed. A car in Overtake Mode loses nothing in a touch.
 - **Formation Lap:**
   - longer and faster;
-  - a ghost: it passes through cars without contact or slowing;
+  - a Bullet Bill: on rails through the field, never slowed; any car it touches spins and is knocked aside (the first round made it a ghost; the user asked for the knock-aside);
   - it ends only once the car is clear of every other car, so it is never dropped on top of one.
 - **Overtake Mode:**
   - faster and longer;
@@ -83,6 +83,26 @@ Each change must look physically honest and stay fun:
 
 The power-up copy in `game-data.js` (`POWER_UPS`) is read by the site's cards and the HUD. It changes with any effect that changes, and says exactly what the game does.
 
+## Second round (the user's notes, 2026-10-05)
+
+The user liked the harder CPUs, and asked for more:
+
+1. **Steering matters, a little.** A car that isn't steered should run wide in a corner, off the road and into the barriers, while a player who steers still has an easy drive.
+   - The cause: every step the player's car was turned 22 % of the way back along the road, a strong autopilot. And the physics wall stood at the road's edge, so a car could never leave the road. The barriers drawn past the run-off were never reached.
+   - The fix: the barriers are one shared rule, `runoff.js`, drawn by the renderer and hit by the physics in the same place. The player's assist is 8 % a step, aimed always forwards round the lap. On the run-off a car has more drag and its off-road top speed.
+2. **Barrier hits look and feel real.** The part of the velocity into the wall bounces back at 35 %, and the wall's friction scrubs some of the rest. The car is left running along the wall, nose turned a little away from it, into a decaying wobble. A hard hit throws sparks and a puff of dust, shakes the camera and plays the impact sound. It is never through the wall (the car is set back to the line), and never stuck (it keeps rolling up the road; the old watchdog stays).
+3. **Cars behind slip past while you recover.** A car that is spinning (from any hit, the Steward Penalty included), or shaken off a wall, takes no part in contacts for that moment, and CPU cars don't lift behind it.
+4. **The Steward Penalty is the heaviest hit:** a 2.6 s spin keeping 8 % of the speed, with a blast of smoke and sparks. The Oil Slick is a short spin of 0.85 s keeping 65 %. Every hit now has its own speed loss (`SPIN_KEEP`).
+5. **Every item stronger, true to its Mario Kart counterpart:**
+   - **DRS (Mushroom):** a burst of 20 % of top speed at once.
+   - **Oil Slick (Banana):** lasts 30 s, and a trailed slick also spins the first car that runs into it.
+   - **Debris (Green shell):** faster (1.45x) and lives 8 s.
+   - **Undercut (Red shell):** faster (1.6x) and homes in harder.
+   - **Overtake Mode (Star):** 1.2x.
+   - **Formation Lap (Bullet Bill):** knocks cars aside.
+   - **Safety Car (Lightning):** seven seconds, and every rival loses the power-up it holds. Its routing is untouched.
+   - Steward Penalties and Safety Cars come out of the boxes less often. The heavier hits made the leader's life too hard: from pole on Pro the player won only about a quarter of races.
+
 ## Result
 
-Filled in once the tuning is done, as a before-and-after table.
+See the tables below.
