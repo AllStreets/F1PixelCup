@@ -151,7 +151,7 @@ of 2025, in calendar order, and the cup each is raced in:
 | 23 | Lusail International Circuit | Qatar | 5.380 km | Finale Cup |
 | 24 | Yas Marina Circuit | United Arab Emirates | 5.281 km | Finale Cup |
 
-Then two historic cups of famous circuits no longer on the calendar, raced by the 2025 grid. Each is the layout the outline data holds, named honestly:
+Then two historic cups of famous circuits no longer on the calendar, raced by the 2025 grid. They are in the random cup, the custom cup and the single race's pool too. Each is the layout the outline data holds, named honestly:
 
 | Circuit | Country | Lap | Cup | The layout |
 |---|---|---|---|---|

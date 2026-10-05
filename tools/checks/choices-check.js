@@ -144,7 +144,10 @@ async (page) => {
   await pick("", "monza");
   results.pickerSearches = (JSON.stringify(monacoCards) === JSON.stringify(["monaco"]) && JSON.stringify(japanCards) === JSON.stringify(["suzuka"])
     && JSON.stringify(accentCards) === JSON.stringify(["interlagos"])) || JSON.stringify({ monacoCards, japanCards, accentCards });
+  // (The historic circuits are in the picker too: the Nürburgring is found.)
   await fill("#circuit-search", "nurburgring");
+  results.pickerFindsHistoric = await step(() => JSON.stringify([...document.querySelectorAll("#circuit-cards [data-pick]")].map((el) => el.dataset.pick)) === JSON.stringify(["nurburgring"]) || document.getElementById("circuit-cards").textContent.slice(0, 120));
+  await fill("#circuit-search", "brands hatch");
   results.pickerSaysNoMatch = await step(() => /No circuit matches/.test(document.getElementById("circuit-cards").textContent) || document.getElementById("circuit-cards").textContent.slice(0, 120));
   await fill("#circuit-search", "");
   // A fifth can't be added; the order is edited: Monza one place earlier.
