@@ -511,7 +511,7 @@ def build_miami_stadium():
     235 m) of seats stepping up from the field, its upper tiers along the
     sides (the rim at 38 m), the ends low (10 m), so from outside the far
     tiers and the canopy's underside show over them; the outer wall ribbed,
-    its concourses dark bands open in it; the canopy ring over the upper
+    its concourses dark bands round it; the canopy ring over the upper
     seats at 45 m; four masts at the corners rising to 90 m, their cables
     fanning down over the canopy."""
     clear()
@@ -525,15 +525,19 @@ def build_miami_stadium():
         """The rim's height round the bowl: 38 m along the sides, 10 at the ends."""
         return 10.0 + 28.0 * abs(math.sin(t)) ** 1.5
 
-    def ring(f, z):
+    def ring(f, z, rake=True):
         """A ring at fraction f from the field's edge (0) to the rim (1), at
-        height z where the rim is highest (lower toward the ends)."""
-        a = a0 + (A - a0) * f
-        bb = b0 + (B - b0) * f
+        height z where the rim is highest. Toward the ends the seating keeps
+        its rake and stops lower and nearer the field (f and z both scale
+        with the rim), a concourse deck from there out to the wall."""
         out = []
         for k in range(n):
             t = 2 * math.pi * k / n
-            zz = z if z <= 2.0 else 2.0 + (z - 2.0) * (rim(t) - 2.0) / 36.0
+            s = (rim(t) - 2.0) / 36.0 if rake else 1.0
+            ff = f * s if rake else f
+            a = a0 + (A - a0) * ff
+            bb = b0 + (B - b0) * ff
+            zz = z if z <= 2.0 else 2.0 + (z - 2.0) * s
             out.append((math.cos(t) * a, math.sin(t) * bb, zz))
         return out
 
@@ -545,18 +549,18 @@ def build_miami_stadium():
         z = 2.0 + 36.0 * (k + 1) / steps
         rows.append(ring(f0, z))
         rows.append(ring(f1, z))
-    rows.append(ring(1.0, 0.0))
+    # The concourse deck at the rim's height out to the wall, and the wall.
+    rows.append([(x, y, z) for (x, y, _), (_, _, z) in zip(ring(1.0, 0.0, rake=False), rows[-1])])
+    rows.append(ring(1.0, 0.0, rake=False))
     # Faces between the rows, outward (the field side faces in).
     for r, (r0, r1) in enumerate(zip(rows, rows[1:])):
         # Treads (seats) and risers (the fans in front of them) in turn.
-        role = ("seat" if r % 2 == 0 else "crowd") if 2 <= r < len(rows) - 2 else "concrete"
-        if r == len(rows) - 2:
-            role = "concrete"
+        role = ("seat" if r % 2 == 0 else "crowd") if 2 <= r < len(rows) - 3 else "concrete"
         for k in range(n):
             j = (k + 1) % n
             b.face((r0[k], r0[j], r1[j], r1[k]), role)
-    # The ribs round the outer wall, and the concourses: dark bands open in
-    # it at a third and two thirds of its height.
+    # The ribs round the outer wall, and the concourses: dark bands round it
+    # at a third and two thirds of its height.
     for k in range(0, n, 2):
         t = 2 * math.pi * k / n
         x, y = math.cos(t) * (A + 0.8), math.sin(t) * (B + 0.8)
@@ -827,7 +831,11 @@ def build_spielberg_grandstand():
     def h(x, y):
         t = (back - 2.0 - y) / 70.0
         ends = smooth((L + 40 - abs(x)) / 40)
-        return (17.5 * (1 - t) + 28.0 * math.sin(math.pi * t) * 0.8) * ends * (1 - smooth((t - 0.75) / 0.25))
+        # Behind the stand it meets the back wall's top; beside it, it comes
+        # down to the ground at its front (no edge left in the air).
+        beside = smooth((abs(x) - L) / 6.0)
+        front = 1.0 - beside * (1.0 - smooth(t / 0.25))
+        return (17.5 * (1 - t) + 28.0 * math.sin(math.pi * t) * 0.8) * ends * front * (1 - smooth((t - 0.75) / 0.25))
 
     grid = [[(x, y, h(x, y)) for y in ys] for x in xs]
     for i in range(len(xs) - 1):

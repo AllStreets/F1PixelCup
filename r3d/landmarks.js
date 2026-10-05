@@ -724,7 +724,8 @@ export { LANDMARK_SCALE };
 // the wall, v up): glass between the floor slabs and mullions, and at night
 // a share of the rooms lit, warm and a few cool.
 // floors: how much a room's light follows its floor's (1: whole floors
-// together, an office; lower: a hotel, its rooms each their own).
+// together; lower: each room its own). room: a room's width and a floor's
+// height (metres); glow: how bright a lit room is.
 function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.62 } = {}) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
   m.onBeforeCompile = (shader) => {
@@ -743,7 +744,7 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         varying vec2 vFacade; uniform vec3 uGlass; uniform vec3 uSlab; uniform float uNight; uniform float uLit; uniform float uFloors; uniform vec2 uRoom; uniform float uGlow;
         float facadeHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        // Rooms 4 m wide, floors 3.2 m: the glass in an inset, its frame
+        // Rooms uRoom.x wide, floors uRoom.y (4 by 3.2 m by default): the glass in an inset, its frame
         // and the floor slab round it (the technique of the user's Chicago
         // city, not its assets).
         vec2 cell = vFacade / uRoom;
@@ -778,17 +779,18 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
 }
 
 // The Sphere's LED skin (Las Vegas): its image drawn per pixel from the
-// direction out of its centre, so it is crisp at any distance: a planet (an
-// abstract image of its own, no mark), its oceans and lands under swirling
-// cloud, turning slowly (sphereTime, advanced by the landmarks' animate).
-// Unlit: the screen is its own light.
-const sphereTime = { value: 0 };
+// direction out of its centre, so its edges stay sharp close to and its
+// detail fades to its mean far off (no blur, no banding, no shimmer): a
+// planet (an abstract image of its own, no mark), its oceans and lands under
+// swirling cloud, turning slowly (its own time uniform, userData.time,
+// advanced by the landmarks' animate). Unlit: the screen is its own light.
 // Its centre in the model's metres (glTF: y up): build_landmarks_2025.py.
 const SPHERE_CENTRE_Y = 33.5;
 function sphereScreen() {
   const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  m.userData.time = { value: 0 };
   m.onBeforeCompile = (shader) => {
-    shader.uniforms.uSphereTime = sphereTime;
+    shader.uniforms.uSphereTime = m.userData.time;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vSphereDir;")
       .replace("#include <begin_vertex>", `#include <begin_vertex>\nvSphereDir = normalize(position - vec3(0.0, ${SPHERE_CENTRE_Y.toFixed(1)}, 0.0));`);
@@ -801,9 +803,10 @@ function sphereScreen() {
           return mix(mix(mix(sHash(i), sHash(i + vec3(1, 0, 0)), f.x), mix(sHash(i + vec3(0, 1, 0)), sHash(i + vec3(1, 1, 0)), f.x), f.y),
                      mix(mix(sHash(i + vec3(0, 0, 1)), sHash(i + vec3(1, 0, 1)), f.x), mix(sHash(i + vec3(0, 1, 1)), sHash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
         }
-        float sFbm(vec3 p) { float a = 0.5; float s = 0.0; for (int k = 0; k < 5; k++) { s += a * sNoise(p); p *= 2.03; a *= 0.5; } return s; }`)
+        // Octaves finer than a pixel fade to their mean (no shimmer far away).
+        float sFbm(vec3 p) { float a = 0.5; float s = 0.0; for (int k = 0; k < 5; k++) { float w = 1.0 - smoothstep(0.25, 0.5, fwidth(p.x) + fwidth(p.y)); s += a * mix(0.5, sNoise(p), w); p *= 2.03; a *= 0.5; } return s; }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        // The globe turns about its axis (tilted toward the viewer).
+        // The globe turns about its vertical axis.
         vec3 d = normalize(vSphereDir);
         float spin = uSphereTime * 0.03;
         float cs = cos(spin); float sn = sin(spin);
@@ -825,7 +828,7 @@ function sphereScreen() {
         col += vec3(0.1, 0.25, 0.6) * pow(1.0 - abs(d.z), 3.0) * 0.35;
         diffuseColor.rgb = col;`);
   };
-  m.customProgramCacheKey = () => "sphere-screen-v1";
+  m.customProgramCacheKey = () => "sphere-screen-v2";
   return m;
 }
 
@@ -844,7 +847,7 @@ function dressLandmark(model, venue) {
     // and warm rather than a checkerboard of offices.
     else if (src.name === "facade_hotel") out = facadeMaterial(night, night ? { glass: "#141a24", slab: "#1d2026", lit: 0.3, floors: 0.55, room: [2.4, 3.2], glow: 0.3 } : { room: [2.4, 3.2] });
     else if (src.name === "facade_bronze") out = facadeMaterial(night, night ? { glass: "#2a1e14", slab: "#4b3a2a", lit: 0.75, floors: 0.35 } : { glass: "#5a4128", slab: "#8a6a48" });
-    // The Sphere's LED skin: its image in its vertex colours, lit by itself.
+    // The Sphere's LED skin: its planet drawn per pixel (sphereScreen).
     else if (src.name === "screen") out = sphereScreen();
     // The landmark stands' rows of fans: the painted crowd, a row to a step
     // (the UVs are in metres: 12 m of crowd across the texture, a row 1.2 m).
@@ -1302,15 +1305,16 @@ function stadiumInside(course, group, venue) {
 
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
-  // (The Sphere's image turns: returned to be animated.)
-  const turning = venue.landmarks && venue.landmarks.includes("vegasSphere") ? { userData: { animate: (dt) => { sphereTime.value += dt; } } } : null;
   for (const name of venue.landmarks || []) {
     if (name === "jeddahFountain") fountainAtSea(course, group, venue);
     else if (name === "yasHotel") yasHotelHalves(course, group, venue);
     else if (name === "miamiStadium") stadiumInside(course, group, venue);
     else if (SITES[name]) modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
   }
-  return turning;
+  // The Sphere's image turns: returned to be animated (only if it was built).
+  const screens = [];
+  group.traverse((o) => { if (o.material && o.material.userData && o.material.userData.time) screens.push(o.material.userData.time); });
+  return screens.length ? { userData: { animate: (dt) => screens.forEach((t) => { t.value += dt; }) } } : null;
 }
 
 // ---------------------------------------------------------------------------

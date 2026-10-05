@@ -94,12 +94,18 @@ test("the Biosphère: a 76 m lattice sphere cut at 62 m", () => {
 });
 
 test("Spielberg: a neutral grandstand set into its bank (no sculpture, no mark)", () => {
-  assert.ok(!require("node:fs").existsSync(file("spielberg_bull")), "the bull (a brand's emblem) is gone");
+  assert.ok(!fs.existsSync(file("spielberg_bull")), "the bull (a brand's emblem) is gone");
   const glb = load(file("spielberg_grandstand"));
   const stand = part(glb, "stand");
   assert.ok(stand.size[0] > 120 && stand.size[0] < 220, `the stand is ${stand.size[0].toFixed(0)} m long`);
   ["crowd", "seat"].forEach((m) => assert.ok(stand.materials.includes(m), `no ${m}`));
   assert.ok(part(glb, "bank").materials.includes("grass"), "the hillside behind it");
+  // The bank meets the back wall behind the stand and the ground beside it:
+  // no front edge hangs in the air past the stand's ends.
+  const half = stand.size[0] / 2;
+  const front = Math.min(...triangles(glb, "bank").flat().map((v) => v[2]));
+  const hanging = triangles(glb, "bank").flat().filter((v) => v[2] < front + 0.5 && Math.abs(v[0]) > half + 1 && v[1] > 0.5);
+  assert.equal(hanging.length, 0, `${hanging.length} points of the bank's front edge in the air beside the stand`);
 });
 
 test("Miami: an open bowl, its ends lower than its sides (the far tiers seen over them)", () => {
@@ -108,14 +114,17 @@ test("Miami: an open bowl, its ends lower than its sides (the far tiers seen ove
   const top = (f) => Math.max(...pts.filter(f).map((v) => v[1]));
   const ends = top((v) => Math.abs(v[0]) > 120);
   const sides = top((v) => Math.abs(v[2]) > 100);
-  assert.ok(sides > 34 && ends < sides - 12, `the rim is ${ends.toFixed(0)} m at the ends, ${sides.toFixed(0)} m at the sides`);
-  // Its concourses open in the outer wall (dark bands), not a smooth drum.
-  assert.ok(part(glb, "bowl").materials.includes("gear"), "the concourse openings");
+  const farEnds = top((v) => Math.abs(v[0]) > 138);
+  assert.ok(sides > 34 && ends < sides - 12 && farEnds < 15, `the rim is ${farEnds.toFixed(0)} m at the very ends, ${ends.toFixed(0)} near them, ${sides.toFixed(0)} m at the sides`);
+  // Its concourses as dark bands round the outer wall, not a smooth drum.
+  assert.ok(part(glb, "bowl").materials.includes("gear"), "the concourse bands");
 });
 
 test("Yas Marina: the hotel's rooms are a hotel's (finer than an office's)", () => {
   const glb = load(file("yas_hotel"));
   assert.ok(part(glb, "block").materials.includes("facade_hotel"));
+  // The gridshell's diamonds fine (40 by 16 cells; it was 24 by 10).
+  assert.ok(part(glb, "gridshell").tris > 9000, `${part(glb, "gridshell").tris} triangles in the gridshell`);
 });
 
 test("the Las Vegas Sphere: 157 m wide, 112 m tall, an LED skin", () => {
