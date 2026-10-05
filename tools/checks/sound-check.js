@@ -133,12 +133,12 @@ async (page) => {
   });
   info.replay = replay;
   const ok = replay && typeof replay === "object";
-  results.replayOnboardEngine = (ok && replay.onboard.gain === 1 && replay.onboard.pitch === 1 && replay.onboard.rpm > 4500) || JSON.stringify(replay && replay.onboard);
-  results.replayTracksideDoppler = (ok && replay.trackside.up > 1.02 && replay.trackside.down < 0.98 && replay.trackside.loud > replay.trackside.quiet * 2) || JSON.stringify(replay && replay.trackside);
+  results.replayOnboardEngine = (ok && replay.onboard.gain === 1 && replay.onboard.pitch === 1 && replay.onboard.rpm > 4500) || `onboard: ${JSON.stringify(replay && replay.onboard)} (${typeof replay === "string" ? replay : ""})`;
+  results.replayTracksideDoppler = (ok && replay.trackside.up > 1.02 && replay.trackside.down < 0.98 && replay.trackside.loud > replay.trackside.quiet * 2) || `trackside: ${JSON.stringify(replay && replay.trackside)}`;
   results.replaySpeedsAndPause = (ok && replay.double.pitch > 1 && replay.double.engine > 0
     && replay.quadruple.engine === 0 && replay.quadruple.ambience > 0
-    && replay.paused.engine === 0 && replay.paused.ambience === 0) || JSON.stringify(replay && { double: replay.double, quadruple: replay.quadruple, paused: replay.paused });
-  results.replayEventsHeard = (ok && replay.firstEventAt && replay.heard > 0 && replay.heardOnSeek === 0) || JSON.stringify(replay && { first: replay.firstEventAt, heard: replay.heard, heardOnSeek: replay.heardOnSeek });
+    && replay.paused.engine === 0 && replay.paused.ambience === 0) || `speeds: ${JSON.stringify(replay && { double: replay.double, quadruple: replay.quadruple, paused: replay.paused })}`;
+  results.replayEventsHeard = (ok && replay.firstEventAt && replay.heard > 0 && replay.heardOnSeek === 0) || `events: ${JSON.stringify(replay && { first: replay.firstEventAt, heard: replay.heard, heardOnSeek: replay.heardOnSeek })}`;
 
   await step((s) => {
     if (s.grid === null) localStorage.removeItem("f1pixelcup.grid"); else localStorage.setItem("f1pixelcup.grid", s.grid);
