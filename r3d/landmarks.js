@@ -794,7 +794,7 @@ function sphereScreen() {
       .replace("#include <common>", "#include <common>\nvarying vec3 vSphereDir;")
       // (A sphere's normal is its direction out of its centre: true of the
       // compressed model too, whose positions are quantized.)
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSphereDir = normalize(objectNormal);");
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSphereDir = normalize(normal);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
         varying vec3 vSphereDir; uniform float uSphereTime;
@@ -829,7 +829,7 @@ function sphereScreen() {
         col += vec3(0.1, 0.25, 0.6) * pow(1.0 - abs(d.z), 3.0) * 0.35;
         diffuseColor.rgb = col;`);
   };
-  m.customProgramCacheKey = () => "sphere-screen-v3";
+  m.customProgramCacheKey = () => "sphere-screen-v4";
   return m;
 }
 

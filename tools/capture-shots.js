@@ -220,7 +220,7 @@ async (page) => {
     { name: "trackside-crews", circuit: "monaco", aim: "crew" },
     { name: "trackside-wing", circuit: "silverstone", aim: "silverstoneWing", back: 60, h: 30, ah: 30, fov: 60, side: 40 },
     // The 2025 venues (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
-    { part: "trackside2025", name: "trackside-sphere", circuit: "lasvegas", aim: "vegasSphere", back: 200, h: 150, ah: 140, fov: 55, side: 0 },
+    { part: "trackside2025", name: "trackside-sphere", circuit: "lasvegas", aim: "vegasSphere", back: 20, h: 18, ah: 150, fov: 70, side: 0 },
     { part: "trackside2025", name: "trackside-flames", circuit: "baku", aim: "flameTowers", back: 30, h: 15, ah: 200, fov: 55, side: 0 },
     { part: "trackside2025", name: "trackside-biosphere", circuit: "montreal", aim: "biosphere", back: 30, h: 15, ah: 70, fov: 55, side: 0 },
     { part: "trackside2025", name: "trackside-austin", circuit: "cota", aim: "cotaTower", back: 30, h: 15, ah: 90, fov: 60, side: 0 },
