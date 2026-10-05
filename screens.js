@@ -390,7 +390,7 @@
       : race.mode === "single" && !circuits.length ? `<li class="is-todo">No circuit chosen yet</li>` : "";
     $("cup-circuits").innerHTML = cur.season
       ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0].name)} to ${esc(circuits[circuits.length - 1].name)}</li>`
-      : circuits.map((c) => `<li data-circuit="${esc(c.id)}">${esc(c.name)}</li>`).join("") + todo;
+      : circuits.map((c) => `<li data-circuit="${esc(c.id)}">${esc(c.name)}${c.era ? ` <small>${esc(c.era)}</small>` : ""}</li>`).join("") + todo;
     $("cup-circuits").classList.toggle("is-numbered", race.mode === "random" || race.mode === "custom");
     // One player or two (split screen); player 2's driver and both key sets.
     // The season is one player's championship: no second player there.

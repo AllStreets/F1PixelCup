@@ -42,6 +42,10 @@
   // Ten teams and the Safety Car, 30 apart.
   const BAY = 30;
   const BAYS = 11;
+  // A narrow pit lane (the track data's `narrow`), where the full one has no
+  // room on the real side: a narrower fast lane and working lane, and
+  // shallower garages. tools/tracks/build_tracks.py has the same numbers.
+  const NARROW = { centre: 23, half: 12, work: 47, garage: 71 };
 
   const smooth = (t) => t * t * (3 - 2 * t);
 
@@ -49,6 +53,13 @@
     if (!pit || !(total > 0)) return null;
     const { side, entry, exit } = pit;
     const W = halfWidth;
+    // This lane's own measures: the full complex, or a narrow one, and its
+    // mouths (shorter where the track data says so).
+    const MOUTH_ = pit.mouth || MOUTH;
+    const LANE_CENTRE_ = pit.narrow ? NARROW.centre : LANE_CENTRE;
+    const LANE_HALF_ = pit.narrow ? NARROW.half : LANE_HALF;
+    const WORK_OUT_ = pit.narrow ? NARROW.work : WORK_OUT;
+    const GARAGE_OUT_ = pit.garageOut || (pit.narrow ? NARROW.garage : GARAGE_OUT);
     // Signed distance from the line, in (-total/2, total/2].
     // (A distance already in that range comes back exactly: the lane's own
     // entry and exit are in it, never a rounding error outside.)
@@ -66,24 +77,24 @@
     const blend = (d) => {
       const r = rel(d);
       if (r < entry || r > exit) return 0;
-      return smooth(Math.min(1, (r - entry) / MOUTH, (exit - r) / MOUTH));
+      return smooth(Math.min(1, (r - entry) / MOUTH_, (exit - r) / MOUTH_));
     };
-    const flatFrom = entry + MOUTH;
-    const flatTo = exit - MOUTH;
+    const flatFrom = entry + MOUTH_;
+    const flatTo = exit - MOUTH_;
     const edge = W - EDGE_IN;
-    const centre = W + LANE_CENTRE;
+    const centre = W + LANE_CENTRE_;
     // The lane centre's offset from the centreline (signed), or null.
     const latAt = (d) => (inZone(d) ? side * (edge + (centre - edge) * blend(d)) : null);
     // The pit wall's inner face, only where the lane has cleared it.
     const wallAt = (d) => {
       const lat = latAt(d);
-      return lat !== null && Math.abs(lat) - LANE_HALF >= W + WALL_OUT ? side * (W + WALL_IN) : null;
+      return lat !== null && Math.abs(lat) - LANE_HALF_ >= W + WALL_OUT ? side * (W + WALL_IN) : null;
     };
     // How far out the circuit reaches on the pit side (unsigned), or null.
     const outerAt = (d) => {
       const lat = latAt(d);
       if (lat === null) return null;
-      return Math.abs(lat) + LANE_HALF + (WORK_OUT - LANE_CENTRE - LANE_HALF) * blend(d);
+      return Math.abs(lat) + LANE_HALF_ + (WORK_OUT_ - LANE_CENTRE_ - LANE_HALF_) * blend(d);
     };
     // The garages: where the track data put them, else one run across the
     // middle of the flat part. The Safety Car's bay is the last, nearest the exit.
@@ -98,9 +109,17 @@
     return {
       side, entry, exit, length: exit - entry, flatFrom, flatTo, halfWidth: W,
       rel, inZone, blend, latAt, wallAt, outerAt, atGarage,
-      garages: { inner: W + WORK_OUT, front: W + WORK_OUT + GARAGE_FRONT, outer: W + (pit.garageOut || GARAGE_OUT), bays },
-      laneHalf: LANE_HALF,
-      workOut: W + WORK_OUT,
+      garages: { inner: W + WORK_OUT_, front: W + WORK_OUT_ + GARAGE_FRONT, outer: W + GARAGE_OUT_, bays },
+      laneHalf: LANE_HALF_,
+      laneCentre: W + LANE_CENTRE_,
+      workOut: W + WORK_OUT_,
+      mouth: MOUTH_,
+      wallIn: W + WALL_IN,
+      wallOut: W + WALL_OUT,
+      // How far it keeps from any other stretch's road edge: a wall there (a
+      // street circuit's, or the track data's `wall`) needs less.
+      clear: pit.wall ? CLEAR_STREET : CLEAR,
+      narrow: Boolean(pit.narrow),
     };
   }
 
@@ -109,12 +128,14 @@
   // working lane over the last 80 before its bay, where it parks. `entered`
   // is whether it has already turned in; `lat` is where it is across the road.
   // It turns in only from the road's edge (it can't swerve across): one
-  // inside the zone that never took the entry goes round again.
+  // inside the zone that never took the entry goes round again. `half` is
+  // the road's half-width where it is (narrower in places: Shanghai's snail);
+  // the pit zone itself is always the full width.
   // Returns { lat, inLane, park }.
   const TURN_IN = 20;
   const EASE = 80;
-  function wayIn(lane, d, entered, lat) {
-    const W = lane.halfWidth;
+  function wayIn(lane, d, entered, lat, half = lane.halfWidth) {
+    const W = lane.inZone(d) ? lane.halfWidth : half;
     const side = lane.side;
     const r = lane.rel(d);
     // On the edge itself, not still closing on it (a jump onto the lane's line).
@@ -131,9 +152,9 @@
   // Where the Safety Car parks: across the working lane, in front of its bay
   // (the last, nearest the exit).
   function parkAt(lane) {
-    const W = lane.halfWidth;
     const bay = lane.garages.bays[lane.garages.bays.length - 1];
-    return { d: bay.d, rel: bay.rel, lat: lane.side * (W + (LANE_CENTRE + LANE_HALF + WORK_OUT) / 2) };
+    // (In the middle of the working lane, as this lane's own measures have it.)
+    return { d: bay.d, rel: bay.rel, lat: lane.side * ((lane.laneCentre + lane.laneHalf + lane.workOut) / 2) };
   }
 
   // Its way out, called again (game.js): from its bay, easing out of the
@@ -154,5 +175,5 @@
     return { lat, onRoad: Math.abs(lat - edge) < 1e-6 };
   }
 
-  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, GARAGE_OUT_SHALLOW, GARAGE_FRONT, CLEAR, CLEAR_STREET, EDGE_IN, MOUTH, BAY, BAYS, lane, wayIn, wayOut, parkAt };
+  return { WALL_IN, WALL_OUT, LANE_CENTRE, LANE_HALF, WORK_OUT, GARAGE_OUT, GARAGE_OUT_SHALLOW, GARAGE_FRONT, CLEAR, CLEAR_STREET, EDGE_IN, MOUTH, BAY, BAYS, NARROW, lane, wayIn, wayOut, parkAt };
 }));

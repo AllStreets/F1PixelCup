@@ -406,14 +406,20 @@ async (page) => {
       let t = performance.now();
       let entered = null;
       let prevLat = sc.lat;
+      let prevLane = null;
       const tag = `${state.track.id} (${how})`;
       for (let i = 0; i < 60 * 150 && !sc.parked; i += 1) {
         t += 16.7;
         updateSafetyCar(1 / 60, t);
         const off = Math.abs(sc.lat);
         const r = lane.rel(sc.d);
-        if (Math.abs(sc.lat - prevLat) > 1) { bad.push(`${tag}: jumped ${Math.abs(sc.lat - prevLat).toFixed(1)} sideways at ${Math.round(r)}`); break; }
+        // Never sideways faster than the lane itself turns out (a short
+        // mouth turns out quicker), and never more than a unit a step on the road.
+        const laneNow = sc.inLane ? lane.latAt(sc.d) : null;
+        const along = laneNow !== null && prevLane !== null ? Math.abs(laneNow - prevLane) : 0;
+        if (Math.abs(sc.lat - prevLat) > 1 + along) { bad.push(`${tag}: jumped ${Math.abs(sc.lat - prevLat).toFixed(1)} sideways at ${Math.round(r)}`); break; }
         prevLat = sc.lat;
+        prevLane = laneNow;
         if (off > W - 5 && !lane.inZone(sc.d)) { bad.push(`${tag}: off the road at ${Math.round(sc.d)}`); break; }
         if (lane.inZone(sc.d) && sc.inLane) {
           if (entered === null) entered = r;

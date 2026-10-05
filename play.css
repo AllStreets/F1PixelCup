@@ -40,6 +40,7 @@ html, body { height: 100%; overflow: hidden; }
 .choice-label { color: var(--muted); font: 700 0.7rem/1 var(--font); letter-spacing: 0.16em; text-transform: uppercase; margin-right: 4px; }
 .cup-circuits { margin: 2px 0 0; padding: 0; list-style: none; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 4px 12px; color: var(--muted); font: 600 0.8rem/1.3 var(--font); }
 .cup-circuits li + li::before { content: "›"; margin-right: 12px; color: var(--red); }
+.cup-circuits small { display: block; color: #d8c48a; font-weight: 600; font-size: 0.72rem; }
 /* Random and custom cups: the circuits numbered in race order. */
 .cup-circuits.is-numbered { counter-reset: race; }
 .cup-circuits.is-numbered li + li::before { content: none; }

@@ -551,7 +551,12 @@ function buildSegments(points, width, closed = true) {
       dx,
       dy,
       length,
-      width,
+      // Where the track data narrows the road (a point's `w`, its share of
+      // the usual width: Shanghai's snail): its width at each end, and in
+      // between as the renderer paints it (widthAt).
+      width: width * ((point.w ?? 1) + (next.w ?? 1)) / 2,
+      widthA: width * (point.w ?? 1),
+      widthB: width * (next.w ?? 1),
     };
   });
 }
@@ -591,6 +596,12 @@ function segmentSearchOrder(point, segments) {
     indices.push(((hint + k) % n + n) % n);
   }
   return indices;
+}
+
+// A segment's half-width at t along it (it narrows where the track data
+// says so; a shortcut's segments have one width).
+function widthAt(segment, t) {
+  return segment.widthA === undefined ? segment.width : segment.widthA + (segment.widthB - segment.widthA) * t;
 }
 
 function findClosestSurfaceOnSegments(point, segments, defaultWidth, isShortcut) {
@@ -633,14 +644,14 @@ function findClosestSurfaceIn(point, segments, defaultWidth, isShortcut, indices
         t: hit.t,
         segmentIndex,
         point: { x: hit.x, y: hit.y },
-        onRoad: hit.distance <= segment.width,
+        onRoad: hit.distance <= widthAt(segment, hit.t),
         isShortcut,
         normalX: (point.x - hit.x) / normalLength,
         normalY: (point.y - hit.y) / normalLength,
         tangentX: segment.dx / tangentLength,
         tangentY: segment.dy / tangentLength,
-        segmentWidth: segment.width,
-        barrierWidth: segment.width + (isShortcut ? 5 : 6),
+        segmentWidth: widthAt(segment, hit.t),
+        barrierWidth: widthAt(segment, hit.t) + (isShortcut ? 5 : 6),
       };
     }
   };
@@ -853,7 +864,8 @@ function getPitLaneState() {
     driver: { id: driver.id, name: driver.name, number: driver.number, title: driver.title },
     team: { name: team.name, car: team.car, body: team.body, trim: team.trim },
     stats: { speed: stats.speed, handling: stats.handling, acceleration: stats.acceleration, traction: stats.traction },
-    cups: CUPS.map((cup, index) => ({ index, name: cup.name, season: cup.season, circuits: cup.tracks.map((track) => track.name) })),
+    // (A historic circuit's era: the layout it is, named honestly.)
+    cups: CUPS.map((cup, index) => ({ index, name: cup.name, season: cup.season, circuits: cup.tracks.map((track) => track.name), eras: cup.tracks.map((track) => track.era || "") })),
     selectedCup: state.selectedCup,
     // How to race, and what the pit lane is about to start.
     race: (() => {
@@ -863,7 +875,7 @@ function getPitLaneState() {
         mode: state.raceMode,
         modes: RACE_MODES,
         calendarCup: state.calendarCup,
-        current: { id: cup.id, name: cup.name, kind: cup.kind || (cup.season ? "season" : "cup"), season: Boolean(cup.season), single: Boolean(cup.single), circuits: cup.tracks.map((t) => ({ id: t.id, name: t.name })) },
+        current: { id: cup.id, name: cup.name, kind: cup.kind || (cup.season ? "season" : "cup"), season: Boolean(cup.season), single: Boolean(cup.single), circuits: cup.tracks.map((t) => ({ id: t.id, name: t.name, era: t.era || "" })) },
         custom: [...state.customIds],
         cupSize: Choices.CUP_SIZE,
         single: { ...state.single },
@@ -873,7 +885,7 @@ function getPitLaneState() {
         // The circuits to choose from, in calendar order, with their cup.
         pool: TRACKS.map((t) => {
           const home = CUP_DEFS.find((c) => c.circuitIds.includes(t.id));
-          return { id: t.id, name: t.name, short: t.short || t.name, country: t.country, theme: t.theme, cup: home ? home.name : "" };
+          return { id: t.id, name: t.name, short: t.short || t.name, places: t.places || "", country: t.country, theme: t.theme, cup: home ? home.name : "" };
         }),
       };
     })(),
@@ -2356,7 +2368,7 @@ function updateSafetyCar(dt, now) {
       sc.speed *= Math.pow(0.4, dt);
       if (now >= sc.leaveUntil) state.safetyCar = null;
     } else {
-      const way = Pit.wayIn(lane, sc.d, sc.inLane, sc.lat);
+      const way = Pit.wayIn(lane, sc.d, sc.inLane, sc.lat, route.halfWidthAt(sc.d));
       sc.inLane = way.inLane;
       if (way.park) {
         // Parked where pitlane.js parks it, in front of its own bay.
@@ -2404,7 +2416,7 @@ function updateSafetyCar(dt, now) {
   // It has a body on the road: it slows behind a car in its lane rather than
   // driving through it. In the pit lane there is nobody to hold it up.
   const me = { id: "safetyCar", d: sc.d, lat: sc.lat };
-  const onRoad = Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < state.track.roadWidth;
+  const onRoad = Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < getItemRoute(state.track).halfWidthAt(sc.d);
   sc.pace = onRoad ? Math.min(sc.speed, PowerUps.holdStationSpeed(me, itemBodies(), state.track.totalLength)) : sc.speed;
   sc.d = wrapLap(sc.d + sc.pace * dt);
 }
@@ -2593,8 +2605,10 @@ function updateRacer(racer, dt, now) {
     const aim = sampleRouteSurfaceAtDistance(
       getMainRoute(state.track), (racer.trackDistance || 0) + lookahead,
     );
-    const aimX = aim.point.x + aim.normalX * racer.aiOffset;
-    const aimY = aim.point.y + aim.normalY * racer.aiOffset;
+    // Off the line by its own margin, in proportion where the road narrows.
+    const offset = racer.aiOffset * (aim.width / state.track.roadWidth);
+    const aimX = aim.point.x + aim.normalX * offset;
+    const aimY = aim.point.y + aim.normalY * offset;
     targetAngle = Math.atan2(aimY - racer.y, aimX - racer.x);
   }
   const surface = getActiveSurfaceInfo(racer, state.track, now);
@@ -2743,7 +2757,7 @@ function updateRacer(racer, dt, now) {
   // included -- that car is free to go round it, not through it.
   // Once the Safety Car is off the road (well into the pit lane, or parked)
   // it holds nobody up; just after the entry it is still on the road.
-  const scOnRoad = sc && !sc.parked && Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < state.track.roadWidth;
+  const scOnRoad = sc && !sc.parked && Math.abs(sc.lat) - PowerUps.CAR_WIDTH / 2 < getItemRoute(state.track).halfWidthAt(sc.d);
   if (scOnRoad) {
     const me = { id: racer.id, d: racer.trackDistance || 0, lat: racer.lat };
     const scBody = { id: "safetyCar", d: sc.d, lat: sc.lat, speed: sc.pace ?? sc.speed };
@@ -4483,7 +4497,7 @@ function sampleRouteSurfaceAtDistance(route, rawDistance) {
         tangentY,
         normalX: -tangentY,
         normalY: tangentX,
-        width: segment.width,
+        width: widthAt(segment, t),
       };
     }
   }
@@ -5913,9 +5927,39 @@ function drawMiniMap(track, player, frame) {
     ctx.setLineDash([]);
   };
 
-  ribbon(track.points, (track.roadWidth + 20) * 2, "rgba(117, 213, 255, 0.22)");
-  ribbon(track.points, (track.roadWidth + 8) * 2, "rgba(255, 240, 201, 0.5)");
-  ribbon(track.points, track.roadWidth * 2, "#4d4d5e");
+  // Where the road narrows (Shanghai's snail), the map's road does too: the
+  // narrowed stretches drawn segment by segment at their own width, over the
+  // rest drawn whole.
+  const narrowed = track.points.some((q) => q.w !== undefined);
+  const band = (pad, color) => {
+    if (!narrowed) {
+      ribbon(track.points, (track.roadWidth + pad) * 2, color);
+      return;
+    }
+    // Runs of segments of one width (to a twentieth), each one path, so the
+    // see-through bands don't darken where strokes would overlap.
+    const pts = track.points;
+    const share = (i) => Math.round((((pts[i].w ?? 1) + (pts[(i + 1) % pts.length].w ?? 1)) / 2) * 20) / 20;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = color;
+    let i = 0;
+    while (i < pts.length) {
+      const w = share(i);
+      ctx.beginPath();
+      ctx.moveTo(pts[i].x, pts[i].y);
+      while (i < pts.length && share(i) === w) {
+        const b = pts[(i + 1) % pts.length];
+        ctx.lineTo(b.x, b.y);
+        i += 1;
+      }
+      ctx.lineWidth = (track.roadWidth * w + pad) * 2;
+      ctx.stroke();
+    }
+  };
+  band(20, "rgba(117, 213, 255, 0.22)");
+  band(8, "rgba(255, 240, 201, 0.5)");
+  band(0, "#4d4d5e");
   ribbon(track.points, Math.max(2 / scale, track.roadWidth * 0.09), "rgba(255, 240, 201, 0.42)", [track.roadWidth * 0.6, track.roadWidth * 0.5]);
   ctx.restore();
 

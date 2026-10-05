@@ -103,7 +103,7 @@ test("a custom cup: exactly four known circuits, no repeats", () => {
   assert.equal(Choices.validateCustom([], POOL).reason, "count");
   assert.equal(Choices.validateCustom(["monaco", "spa", "monza", "suzuka", "bahrain"], POOL).reason, "count");
   assert.equal(Choices.validateCustom(["monaco", "spa", "monza", "monaco"], POOL).reason, "repeat");
-  assert.equal(Choices.validateCustom(["monaco", "spa", "monza", "nurburgring"], POOL).reason, "unknown");
+  assert.equal(Choices.validateCustom(["monaco", "spa", "monza", "brands"], POOL).reason, "unknown");
   assert.equal(Choices.validateCustom("monaco", POOL).reason, "count");
   assert.equal(Choices.validateCustom(null, POOL).reason, "count");
   // Any order is allowed: the order given is the order raced.
@@ -154,11 +154,12 @@ test("search: name, short name, places, country, theme and id, any case, accents
   assert.deepEqual(find("SPA"), ["spa", "barcelona"]);
   assert.deepEqual(find("francorchamps"), ["spa"]);
   assert.deepEqual(find("japan"), ["suzuka"]);
-  assert.ok(find("italy").includes("monza") && find("italy").includes("imola") && find("italy").length === 2);
+  // (The historic circuits are in the pool too: Mugello is in Italy, Watkins Glen in the USA.)
+  assert.deepEqual(find("italy").sort(), ["imola", "monza", "mugello"]);
   assert.deepEqual(find("jose"), ["interlagos"]);
   assert.deepEqual(find("José"), ["interlagos"]);
   assert.deepEqual(find("rodriguez"), ["mexico"]);
-  assert.ok(find("united states").length === 3);
+  assert.ok(find("united states").length === 4);
   assert.deepEqual(find("cota"), ["cota"]);
   // The name the place goes by, too.
   assert.deepEqual(find("austin"), ["cota"]);
@@ -169,11 +170,15 @@ test("search: name, short name, places, country, theme and id, any case, accents
   assert.deepEqual(find("melbourne"), ["albertpark"]);
   // Whole words or their starts, never the middle of a word: USA is not
   // Lusail, UK is not Suzuka.
-  assert.deepEqual(find("usa").sort(), ["cota", "lasvegas", "miami"]);
+  assert.deepEqual(find("usa").sort(), ["cota", "lasvegas", "miami", "watkinsglen"]);
   assert.deepEqual(find("uk"), ["silverstone"]);
   assert.deepEqual(find("rodr"), ["mexico"]);
   assert.ok(find("night").includes("singapore"));
-  assert.deepEqual(find("nurburgring"), []);
+  assert.deepEqual(find("brands hatch"), []);
+  // The historic circuits are found too, accents or none.
+  assert.deepEqual(find("nurburgring"), ["nurburgring"]);
+  assert.deepEqual(find("Nürburgring"), ["nurburgring"]);
+  assert.deepEqual(find("glen"), ["watkinsglen"]);
   // Every word must match somewhere.
   assert.deepEqual(find("street monaco"), ["monaco"]);
 });

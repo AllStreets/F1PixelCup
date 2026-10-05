@@ -52,6 +52,15 @@ CIRCUITS = {
     "lasvegas": ("us-2023", False),
     "losail": ("qa-2004", False),
     "yasmarina": ("ae-2009", False),
+    # The historic circuits.
+    "hockenheim": ("de-1932", False),
+    "nurburgring": ("de-1927", False),
+    "estoril": ("pt-1972", False),
+    "kyalami": ("za-1961", False),
+    "sepang": ("my-1999", False),
+    "istanbul": ("tr-2005", False),
+    "mugello": ("it-1914", False),
+    "watkinsglen": ("us-1956", False),
     "monza": ("it-1922", False),
     "spa": ("be-1925", False),
     "silverstone": ("gb-1948", False),
@@ -71,6 +80,41 @@ def project(coords, ref=None):
     k = math.pi / 180 * 6371000
     # Game y grows downwards, so north is up on the mini map.
     return [((c[0] - lon0) * math.cos(math.radians(lat0)) * k, -(c[1] - lat0) * k) for c in coords]
+
+
+# Where the road narrows to take a corner as tight as the real one: the
+# stretch (as fractions of the real outline from its first vertex) and the
+# road's width there, as a share of the usual. Shanghai's snail, turns 1 and 2:
+# its loops are about 60 m apart and its radius about 35 m, which a road of the
+# usual width (relative to the cars) can't follow without opening it out.
+NARROW = {
+    "shanghai": [(0.045, 0.135, 0.5)],
+}
+NARROW_RAMP = 120   # the road narrows and widens again over this much
+
+# Where the real pit lane runs between two stretches that the wider road
+# brings too close for it: this much more room between them along the real
+# pit lane's stretch, so the pit lane goes on its real side (the Hungaroring's
+# lies between the main straight and turns 2 to 3).
+PIT_ROOM = {"hungaroring": 50, "hockenheim": 50, "estoril": 50}
+
+
+def narrow_scale(fine, zones):
+    """The road's width share at each point of the true outline (1 elsewhere),
+    easing in and out over NARROW_RAMP."""
+    run, total = arc_lengths(fine)
+    out = []
+    for d in run:
+        sc = 1.0
+        for f0, f1, share in zones:
+            a, b = f0 * total, f1 * total
+            if a - NARROW_RAMP <= d <= b + NARROW_RAMP:
+                into = min(d - (a - NARROW_RAMP), (b + NARROW_RAMP) - d) / NARROW_RAMP
+                t = max(0.0, min(1.0, into))
+                t = t * t * (3 - 2 * t)
+                sc = min(sc, 1 - (1 - share) * t)
+        out.append(sc)
+    return out
 
 
 # Real features from OpenStreetMap (tools/tracks/fetch_osm.py): each circuit's
@@ -131,7 +175,7 @@ def resample(pts, step):
     ring = pts + [pts[0]]
     acc = [0.0]
     for a, b in zip(ring, ring[1:]):
-        acc.append(acc[-1] + math.dist(a, b))
+        acc.append(acc[-1] + math.dist(a[:2], b[:2]))
     total = acc[-1]
     n = max(8, round(total / step))
     out, j = [], 0
@@ -142,7 +186,8 @@ def resample(pts, step):
         seg = acc[j + 1] - acc[j] or 1
         t = (s - acc[j]) / seg
         a, b = ring[j], ring[j + 1]
-        out.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
+        # (Anything carried after x and y, a road width, is interpolated too.)
+        out.append(tuple(a[c] + (b[c] - a[c]) * t for c in range(len(a))))
     return out
 
 
@@ -188,10 +233,15 @@ def arc_gap(i, j, n):
     return min(d, n - d)
 
 
-def relax(pts, crossings, step, report):
-    """Open out tight corners and push apart stretches that would overlap."""
+def relax(pts, crossings, step, report, widths=None, extra=None):
+    """Open out tight corners and push apart stretches that would overlap.
+    `widths`: the road's width share at each point (narrow_scale), or None;
+    `extra`: more room wanted round each point (PIT_ROOM), or None.
+    Where the road is narrower, stretches may come closer (their two
+    half-widths, and run-off in proportion) and corners be tighter. Returns
+    the points, each (x, y, width share)."""
     import numpy as np
-    P = np.array(pts, dtype=float)
+    P = np.array([(x, y, w, e) for (x, y), w, e in zip(pts, widths or [1.0] * len(pts), extra or [0.0] * len(pts))], dtype=float)
     falloff = 6
     kern = np.exp(-(np.arange(-falloff, falloff + 1) ** 2) / (2 * (falloff / 2) ** 2))
     kern /= kern.sum()
@@ -217,33 +267,47 @@ def relax(pts, crossings, step, report):
     allowed = masks(n, cross)
     it = 0
     for it in range(1500):
-        d = P[None, :, :] - P[:, None, :]          # d[i, j] = P[j] - P[i]
+        S = P[:, 2]
+        # How close two points may come: their half-widths, and the room
+        # between (run-off) in proportion to the narrower.
+        d = P[None, :, :2] - P[:, None, :2]          # d[i, j] = P[j] - P[i]
+        sep = HALF_WIDTH * (S[:, None] + S[None, :]) + (SEPARATION - 2 * HALF_WIDTH) * np.minimum(S[:, None], S[None, :])
+        E = P[:, 3]
+        if E.any():
+            # The extra room is on one side only (its sign: along n of the
+            # point, the pit lane's side): from the stretch over there.
+            t = np.roll(P[:, :2], -1, axis=0) - np.roll(P[:, :2], 1, axis=0)
+            nrm = np.stack([-t[:, 1], t[:, 0]], axis=1)
+            facing = (d * nrm[:, None, :]).sum(axis=2) * np.sign(E)[:, None] > 0
+            room = np.where(facing, np.abs(E)[:, None], 0.0)
+            sep = sep + np.maximum(room, room.T)
         dist = np.hypot(d[..., 0], d[..., 1]) + 1e-9
-        viol = allowed & (dist < SEPARATION)
-        push = np.where(viol, (SEPARATION - dist) * 0.25, 0.0)
+        viol = allowed & (dist < sep)
+        push = np.where(viol, (sep - dist) * 0.25, 0.0)
         u = d / dist[..., None]
         # Each point is pushed away from every too-close point.
         raw = -(push[..., None] * u).sum(axis=1)
         # Spread the push along the track so the stretch moves, not a vertex.
-        disp = np.zeros_like(P)
+        disp = np.zeros((len(P), 2))
         for off, w in zip(range(-falloff, falloff + 1), kern):
             disp += np.roll(raw, off, axis=0) * w
-        # Minimum radius.
-        a = np.roll(P, k, axis=0)
-        c = np.roll(P, -k, axis=0)
-        ab = np.hypot(*(P - a).T)
-        bc = np.hypot(*(c - P).T)
+        # Minimum radius (in proportion to the road's width there).
+        a = np.roll(P[:, :2], k, axis=0)
+        c = np.roll(P[:, :2], -k, axis=0)
+        Q = P[:, :2]
+        ab = np.hypot(*(Q - a).T)
+        bc = np.hypot(*(c - Q).T)
         ac = np.hypot(*(c - a).T)
-        area2 = np.abs((P[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (P[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]))
+        area2 = np.abs((Q[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (Q[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]))
         rad = ab * bc * ac / (2 * area2 + 1e-9)
-        tight = rad < MIN_RADIUS
+        tight = rad < MIN_RADIUS * S
         mid = (a + c) / 2
-        disp[tight] += (mid[tight] - P[tight]) * 0.3
+        disp[tight] += (mid[tight] - Q[tight]) * 0.3
         # Small steps, so the relaxation settles instead of oscillating.
         mag = np.hypot(*disp.T)
         cap = 3.0
         disp *= np.minimum(1.0, cap / (mag + 1e-9))[:, None]
-        P = P + disp
+        P[:, :2] = P[:, :2] + disp
         moved = np.hypot(*disp.T).max()
         assert len(P) < 5000, "relaxation diverged"
         if it % 5 == 4:
@@ -365,7 +429,7 @@ class Lap:
         return min(g, self.total - g)
 
 
-def pit_room(lap, side, r, reach, clear=PIT_CLEAR, spare=30):
+def pit_room(lap, side, r, reach, clear=PIT_CLEAR, spare=30, own_min=None):
     """Whether the pit complex, from the pit wall out to `reach` beyond the
     centreline, fits at lap distance r on this side: clear of every other
     stretch of the lap, and not on the inside of a bend it would fold round."""
@@ -386,32 +450,60 @@ def pit_room(lap, side, r, reach, clear=PIT_CLEAR, spare=30):
     ds, xy = lap.dense
     gap = np.abs((ds - r) % lap.total)
     other = np.minimum(gap, lap.total - gap) > 300
-    for off in (HALF_WIDTH + PIT_WALL_IN, (HALF_WIDTH + PIT_WALL_IN + reach) / 2, reach):
+    for off in (HALF_WIDTH + PIT_WALL_IN, (HALF_WIDTH + PIT_WALL_IN + reach) / 2, reach) + ((own_min,) if own_min is not None else ()):
         px, py = x + nx * side * off, y + ny * side * off
         dist = np.hypot(xy[other, 0] - px, xy[other, 1] - py)
         if dist.size and dist.min() - HALF_WIDTH < clear:
             return False
+        # Its own stretch close by (a bend beside the garages) never nearer
+        # than their front (`own_min`, from the centreline).
+        if own_min is not None and off >= own_min:
+            # (At a garage's corners too, half a bay either way along.)
+            mine = np.minimum(gap, lap.total - gap) <= 150
+            for u in (-PIT_BAY / 2, 0, PIT_BAY / 2):
+                dist = np.hypot(xy[mine, 0] - (px + tx * u), xy[mine, 1] - (py + ty * u))
+                if dist.min() < own_min - 1:
+                    return False
     return True
 
 
 PIT_STEP = 10
 
 
+# Ways to fit the pit lane on its real side where the full complex has no
+# room, each a real circuit's compromise: a wall instead of run-off on the
+# other stretch beside it (as street circuits have), shorter mouths, and a
+# narrower lane with shallower garages. Only ever on the real side, and only
+# when the plainer ones don't fit.
+# (No circuit takes the narrow lane today: every real side fits walled.
+# It stays for a circuit that needs it, with its own garage-corner rule.)
+PIT_MOUTH_SHORT = 110
+PIT_LINE_SHORT = 60
+PIT_NARROW = {"centre": 23, "half": 12, "work": 47, "garage": 71}
+PIT_VARIANTS = [
+    {"name": "full", "garage": PIT_GARAGE_OUT, "mouth": PIT_MOUTH, "work": PIT_WORK_OUT, "wall": False, "narrow": False},
+    {"name": "shallow", "garage": PIT_GARAGE_OUT_SHALLOW, "mouth": PIT_MOUTH, "work": PIT_WORK_OUT, "wall": False, "narrow": False},
+    {"name": "walled", "garage": PIT_GARAGE_OUT_SHALLOW, "mouth": PIT_MOUTH_SHORT, "work": PIT_WORK_OUT, "wall": True, "narrow": False},
+    {"name": "narrow", "garage": PIT_NARROW["garage"], "mouth": PIT_MOUTH_SHORT, "work": PIT_NARROW["work"], "wall": True, "narrow": True},
+]
+
+
 def place_pit_lane(pts, bridges, report, real=None, street=False, stretch=None):
     """The pit lane: along the stretch either side of the line, on whichever
     side has room. Every point of the lane must have room for the lane and
-    working lane (W + PIT_WORK_OUT), and its bays for the garages as well
-    (W + PIT_GARAGE_OUT, or the shallow depth where full ones fit nowhere);
+    working lane (W + its work lane), and its bays for the garages as well;
     nowhere near a bridge. With the real pit lane (`real`: its side and
-    stretch, from OpenStreetMap) the real side comes first. Then full-depth
-    garages, the bays in one run, overlap with the real lane, spanning the
-    line, length, and centring (see the scoring below).
+    stretch, from OpenStreetMap) the real side comes first, with the plainest
+    complex that fits there (PIT_VARIANTS: full garages, then shallow, then a
+    wall beside it and short mouths, then a narrow lane); the other side only
+    if none fits. Then the bays in one run, overlap with the real lane,
+    spanning the line, length, and centring (see the scoring below).
 
-    Returns { side, entry, exit, bays, garageOut? }: signed distances from the
-    line, the eleven bays' distances, and the garages' depth if shallow.
+    Returns { side, entry, exit, bays, garageOut?, mouth?, wall?, narrow? }:
+    signed distances from the line, the eleven bays' distances, and what
+    differs from the full complex.
     """
     lap = Lap(pts)
-    need = 2 * PIT_MOUTH + PIT_BAY * PIT_BAYS
     real_side, real_lo, real_hi = None, None, None
     if real:
         real_side, real_lo, real_hi = real["side"], real["lo"], real["hi"]
@@ -422,17 +514,22 @@ def place_pit_lane(pts, bridges, report, real=None, street=False, stretch=None):
     rs = list(range(lo, hi + 1, PIT_STEP))
     bridge_d = [lap.cum[k] for b in bridges for k in (b["under"], b["over"])]
     near_bridge = [any(lap.gap(bd, r) < 7 * WAYPOINT_STEP + PIT_MOUTH for bd in bridge_d) for r in rs]
-    def search(garage_out):
+    def search(variant, sides):
         best = None
         maps = []
-        for side in ((stretch["side"],) if stretch else (1, -1)):
-            clear = PIT_CLEAR_STREET if street else PIT_CLEAR
+        mouth = variant["mouth"]
+        need = 2 * mouth + PIT_BAY * PIT_BAYS
+        for side in ((stretch["side"],) if stretch else sides):
+            clear = PIT_CLEAR_STREET if street or variant["wall"] else PIT_CLEAR
             # The lane's tarmac can take a tighter bend than the garages'
             # boxes (which would crowd each other at the back).
-            lane_ok = [pit_room(lap, side, r, HALF_WIDTH + PIT_WORK_OUT, clear, spare=10) and not nb for r, nb in zip(rs, near_bridge)]
-            garage_ok = [ok and pit_room(lap, side, r, HALF_WIDTH + garage_out, clear) for r, ok in zip(rs, lane_ok)]
+            lane_ok = [pit_room(lap, side, r, HALF_WIDTH + variant["work"], clear, spare=10) and not nb for r, nb in zip(rs, near_bridge)]
+            # (A narrow lane's garages, nearer the road, also keep their own
+            # stretch close by at bay: on a bend their corners come closer.)
+            front = HALF_WIDTH + variant["work"]
+            garage_ok = [ok and pit_room(lap, side, r, HALF_WIDTH + variant["garage"], clear, own_min=front if variant["narrow"] else None) for r, ok in zip(rs, lane_ok)]
             # G: room for the garages, l: for the lane only, .: neither; | the line.
-            maps.append(f"{side:+d} " + "".join("|" if r == 0 else ("G" if g else "l" if l else ".") for r, l, g in zip(rs, lane_ok, garage_ok)))
+            maps.append(f"{variant['name']} {side:+d} " + "".join("|" if r == 0 else ("G" if g else "l" if l else ".") for r, l, g in zip(rs, lane_ok, garage_ok)))
             for i, entry in enumerate(rs):
                 if not lane_ok[i]:
                     continue
@@ -443,14 +540,15 @@ def place_pit_lane(pts, bridges, report, real=None, street=False, stretch=None):
                     if exit_ - entry < need or exit_ - entry > 1100:
                         continue
                     # A pit lane runs past the line, its garages facing the
-                    # grid: where the real side can't reach the line
-                    # (Shanghai's snail crowds it), the other side does.
-                    if not stretch and not entry < 0 <= exit_:
+                    # grid (on the real side, a compromise may stop just
+                    # short of it, where the real one rejoins at the line);
+                    # a lane placed elsewhere (PIT_STRETCH) only keeps to its stretch.
+                    if not stretch and not entry < 0 <= exit_ + (PIT_LINE_SHORT if variant["wall"] else 0):
                         continue
                     # The garages: eleven bays along the flat part, on slots
                     # with room, nearest its middle (one run where it can be,
                     # split round a tight spot where it can't).
-                    flat_from, flat_to = entry + PIT_MOUTH, exit_ - PIT_MOUTH
+                    flat_from, flat_to = entry + mouth, exit_ - mouth
                     slots = [flat_from + PIT_BAY * (k + 0.5) for k in range(int((flat_to - flat_from) // PIT_BAY))]
                     room = [c for c in slots if all(garage_ok[j] for j, r in enumerate(rs) if c - PIT_BAY / 2 - PIT_STEP <= r <= c + PIT_BAY / 2 + PIT_STEP)]
                     if len(room) < PIT_BAYS:
@@ -459,24 +557,35 @@ def place_pit_lane(pts, bridges, report, real=None, street=False, stretch=None):
                     bays = sorted(sorted(room, key=lambda c: abs(c - middle))[:PIT_BAYS])
                     overlap = max(0, min(exit_, real_hi) - max(entry, real_lo)) if real else 0
                     together = bays[-1] - bays[0] < PIT_BAY * PIT_BAYS
-                    score = (side == real_side, garage_out == PIT_GARAGE_OUT, together, overlap, entry < -PIT_MOUTH and exit_ > PIT_MOUTH, exit_ - entry, -abs(entry + exit_))
+                    score = (side == real_side, -PIT_VARIANTS.index(variant), together, overlap, entry < -mouth and exit_ > mouth, exit_ - entry, -abs(entry + exit_))
                     if best is None or score > best[0]:
                         best = (score, {"side": side, "entry": entry, "exit": exit_, "bays": [round(c, 1) for c in bays]})
 
         return best, maps
 
-    # The real side comes first, with full garages if they fit there and
-    # shallow ones if not; the other side only if the real one has no room.
-    found = [(r, m, depth) for (r, m), depth in ((search(PIT_GARAGE_OUT), PIT_GARAGE_OUT), (search(PIT_GARAGE_OUT_SHALLOW), PIT_GARAGE_OUT_SHALLOW))]
-    candidates = [(r, depth) for r, _, depth in found if r]
-    assert candidates, "no room for a pit lane from %d to %d:\n%s" % (lo, hi, "\n".join(found[-1][1]))
-    best, depth = max(candidates, key=lambda c: c[0][0])
+    # The plain complexes on either side; the compromises only on the real
+    # side, and only where it has no room for a plain one.
+    found = [(search(v, (1, -1)), v) for v in PIT_VARIANTS[:2]]
+    if real and not stretch and not any(r and r[1]["side"] == real_side for (r, _), _v in found):
+        found += [(search(v, (real_side,)), v) for v in PIT_VARIANTS[2:]]
+    candidates = [(r, v) for (r, _), v in found if r]
+    assert candidates, "no room for a pit lane from %d to %d:\n%s" % (lo, hi, "\n".join(m for (_, ms), _v in found for m in ms))
+    best, variant = max(candidates, key=lambda c: c[0][0])
     pit = best[1]
-    if depth != PIT_GARAGE_OUT:
-        pit["garageOut"] = depth
+    if real and pit["side"] != real_side:
+        # Why not the real side, for the report.
+        report["real_side_room"] = [m for (_, ms), _v in found for m in ms if f" {real_side:+d} " in m]
+    if variant["garage"] != PIT_GARAGE_OUT:
+        pit["garageOut"] = variant["garage"]
+    if variant["mouth"] != PIT_MOUTH:
+        pit["mouth"] = variant["mouth"]
+    if variant["wall"] and not street:
+        pit["wall"] = True
+    if variant["narrow"]:
+        pit["narrow"] = True
     if stretch:
         pit["stretch"] = {"lo": stretch["lo"], "hi": stretch["hi"]}
-    report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']}" + (" (shallow garages)" if depth != PIT_GARAGE_OUT else "")
+    report["pit"] = f"side {pit['side']}, {pit['entry']}..{pit['exit']} ({variant['name']})"
     return pit
 
 
@@ -578,7 +687,7 @@ def place_scenery(pts, report, pit=None):
 START_ZONE_BEFORE = 640
 
 
-def place_item_boxes(pts, bridges=(), pit=None):
+def place_item_boxes(pts, bridges=(), pit=None, widths=None):
     """Rows of three across the road on the straightest stretches, between a
     launch run after the line and the start zone before it, and never at a
     crossover (under or on the bridge)."""
@@ -611,9 +720,10 @@ def place_item_boxes(pts, bridges=(), pit=None):
         best = min(candidates, key=lambda i: sum(abs(curv[(i + d) % n]) for d in range(-2, 3)))
         tx, ty = tangent(pts, best)
         nx, ny = -ty, tx
+        half = HALF_WIDTH * (widths[best] if widths else 1)
         for lane in (-0.5, 0, 0.5):
-            boxes.append({"x": round(pts[best][0] + nx * lane * HALF_WIDTH, 1),
-                          "y": round(pts[best][1] + ny * lane * HALF_WIDTH, 1)})
+            boxes.append({"x": round(pts[best][0] + nx * lane * half, 1),
+                          "y": round(pts[best][1] + ny * lane * half, 1)})
     return boxes
 
 
@@ -656,7 +766,15 @@ def main():
         report = {"real_m": round(real_len)}
         crossings = find_crossings(fine, fine_step)
         report["crossings"] = len(crossings)
-        relaxed = relax(fine, crossings, fine_step, report)
+        # More room along the real pit lane's stretch, where it is wanted.
+        extra = None
+        if game_id in PIT_ROOM and real_pit:
+            a, b, pit_side = true_span(fine, real_pit, osm_pit["metres"] * SCALE)
+            span = {(a + k) % len(fine) for k in range((b - a) % len(fine) + 1)}
+            extra = [PIT_ROOM[game_id] * pit_side if k in span else 0.0 for k in range(len(fine))]
+        relaxed4 = relax(fine, crossings, fine_step, report, narrow_scale(fine, NARROW.get(game_id, [])), extra)
+        relaxed3 = [(x, y, w) for x, y, w, _ in relaxed4]
+        relaxed = [(x, y) for x, y, _ in relaxed3]
         # Keep the start/finish line where the source puts it: the first
         # vertex. Find the relaxed point nearest to it and start there. Where
         # the source's first vertex is not the real line (Monaco's is at the
@@ -699,7 +817,11 @@ def main():
         # Lap distance from the line, along the relaxed lap, of a true point.
         lap_distance = lambda j: (relaxed_run[on_relaxed(j)] - relaxed_run[s0]) % relaxed_total
         relaxed = relaxed[s0:] + relaxed[:s0]
-        pts = resample(relaxed, WAYPOINT_STEP)
+        relaxed3 = relaxed3[s0:] + relaxed3[:s0]
+        pts3 = resample(relaxed3, WAYPOINT_STEP)
+        pts = [(x, y) for x, y, _ in pts3]
+        # The road's width share at each point (1 but where it narrows).
+        widths = [round(w, 2) for _, _, w in pts3]
         min_x = min(p[0] for p in pts)
         min_y = min(p[1] for p in pts)
         pts = [(x - min_x + MARGIN, y - min_y + MARGIN) for x, y in pts]
@@ -770,11 +892,21 @@ def main():
             tunnel = {"from": round(to_lap(tunnel_span[0]), 1), "to": round(to_lap(tunnel_span[1]), 1)}
             report["tunnel"] = f"{tunnel['from']}..{tunnel['to']}"
         decor = place_scenery(pts, report, pit)
-        boxes = place_item_boxes(pts, bridges, pit)
+        # The narrowed road keeps clear of the pit lane and the grid (the
+        # pit complex and the start are built for the usual width).
+        narrowed = [i for i, w in enumerate(widths) if w < 0.995]
+        if narrowed:
+            lap = Lap(pts)
+            for i in narrowed:
+                rel = signed(lap.cum[i])
+                assert not pit["entry"] - 60 <= rel <= pit["exit"] + 60, f"{game_id}: the road narrows in the pit lane's zone at {rel:.0f} ({pit})"
+                assert not -START_ZONE_BEFORE <= rel <= 120, f"{game_id}: the road narrows on the grid at {rel:.0f}"
+            report["narrow"] = f"{round(lap.cum[narrowed[0]])}..{round(lap.cum[narrowed[-1]])} down to {min(widths)}"
+        boxes = place_item_boxes(pts, bridges, pit, widths)
         out[game_id] = {
             "source": src_id,
             "world": {"width": round(world_w), "height": round(world_h)},
-            "points": [{"x": round(x, 1), "y": round(y, 1)} for x, y in pts],
+            "points": [({"x": round(x, 1), "y": round(y, 1), "w": w} if w < 0.995 else {"x": round(x, 1), "y": round(y, 1)}) for (x, y), w in zip(pts, widths)],
             "bridges": bridges,
             "decor": decor,
             "itemBoxes": boxes,

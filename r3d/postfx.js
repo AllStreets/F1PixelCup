@@ -47,6 +47,14 @@ const GRADES = {
   lasvegas: { gain: [1.04, 0.98, 1.04], lift: [0.008, 0.004, 0.02], contrast: 1.1, saturation: 1.2, night: true },
   losail: { gain: [1.05, 1.0, 0.93], lift: [0.006, 0.006, 0.014], contrast: 1.07, saturation: 1.08, night: true },
   yasmarina: { gain: [1.03, 0.99, 1.0], lift: [0.004, 0.008, 0.022], contrast: 1.08, saturation: 1.14, night: true },
+  hockenheim: { gain: [1.0, 1.01, 0.98], lift: [0, 0.003, 0.004], contrast: 1.05, saturation: 1.04 },
+  nurburgring: { gain: [0.97, 1.0, 1.03], lift: [0.006, 0.008, 0.012], contrast: 1.03, saturation: 0.92 },
+  estoril: { gain: [1.04, 1.01, 0.95], lift: [0.004, 0.003, 0], contrast: 1.05, saturation: 1.06 },
+  kyalami: { gain: [1.05, 1.01, 0.93], lift: [0.006, 0.004, 0], contrast: 1.06, saturation: 1.02 },
+  sepang: { gain: [1.0, 1.02, 0.99], lift: [0.008, 0.01, 0.01], contrast: 1.03, saturation: 1.12 },
+  istanbul: { gain: [1.05, 1.0, 0.94], lift: [0.006, 0.004, 0.002], contrast: 1.05, saturation: 1.0 },
+  mugello: { gain: [1.03, 1.01, 0.96], lift: [0.002, 0.002, 0], contrast: 1.05, saturation: 1.1 },
+  watkinsglen: { gain: [1.05, 1.0, 0.92], lift: [0.004, 0.002, 0], contrast: 1.06, saturation: 1.12 },
   // The podium ceremony (r3d/podium.js): a warm TV grade, its lights bloom.
   podium: { gain: [1.04, 1.0, 0.96], lift: [0.004, 0.004, 0.012], contrast: 1.07, saturation: 1.06, night: true },
 };

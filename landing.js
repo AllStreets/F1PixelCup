@@ -26,37 +26,45 @@
   }
 
   // The calendar as the game races it: the six cups in order, four rounds
-  // each, then the season that runs all 24.
+  // each, then the season that runs all 24; then the historic cups, each
+  // circuit naming its layout's era.
   function renderCircuits() {
-    const round = (id) => CIRCUITS.findIndex((c) => c.id === id) + 1;
+    const calendar = CIRCUITS.filter((c) => !c.historic);
+    const round = (id) => calendar.findIndex((c) => c.id === id) + 1;
     const card = (c) => {
       const map = TrackMap.path((TRACK_SHAPES[c.id] || {}).points || [], { width: 96, height: 72, padding: 6 });
       const start = map.start ? `<circle class="start" cx="${map.start.x}" cy="${map.start.y}" r="4"></circle>` : "";
       return `
         <article class="circuit-card" data-circuit="${esc(c.id)}">
-          <div class="circuit-shot"><img src="./assets/shots/circuit-${esc(c.id)}.jpg" alt="${esc(shotCar(SHOT_DRIVERS.circuits[c.id]))} at ${esc(c.name)}" loading="lazy"><span class="circuit-round">R${num(round(c.id))}</span></div>
+          <div class="circuit-shot"><img src="./assets/shots/circuit-${esc(c.id)}.jpg" alt="${esc(shotCar(SHOT_DRIVERS.circuits[c.id]))} at ${esc(c.name)}" loading="lazy">${c.historic ? "" : `<span class="circuit-round">R${num(round(c.id))}</span>`}</div>
           <div class="circuit-body">
             <div>
               <h4>${esc(c.name)}</h4>
               <div class="circuit-meta">${esc(c.country)} · ${(c.lengthM / 1000).toFixed(3)} km · ${num(c.laps)} laps</div>
+              ${c.historic ? `<div class="circuit-era">${esc(c.era)}</div>` : ""}
             </div>
             <svg class="circuit-map" viewBox="${map.viewBox}" role="img" aria-label="Map of ${esc(c.name)}"><path class="track" d="${map.d}"></path>${start}</svg>
           </div>
         </article>`;
     };
-    const cups = CUP_DEFS.map((cup, i) => {
+    const group = (cup, i) => {
       const circuits = cup.circuitIds.map((id) => CIRCUITS.find((c) => c.id === id)).filter(Boolean);
       const first = round(cup.circuitIds[0]);
+      const sub = cup.historic
+        ? `Historic cup · ${esc(circuits.map((c) => c.country).join(", "))}`
+        : `Rounds ${num(first)} to ${num(round(cup.circuitIds[cup.circuitIds.length - 1]))} · ${esc(circuits.map((c) => c.country).join(", "))}`;
       return `
-        <section class="cup-group" aria-label="${esc(cup.name)}">
+        <section class="cup-group${cup.historic ? " is-historic" : ""}" aria-label="${esc(cup.name)}">
           <header class="cup-head">
-            <span class="cup-number">${num(i + 1)}</span>
+            <span class="cup-number"${cup.historic ? ` title="Historic cup ${num(i + 1)}"` : ""}>${cup.historic ? "H" : ""}${num(i + 1)}</span>
             <h3 class="cup-name it-title">${esc(cup.name)}</h3>
-            <span class="cup-rounds">Rounds ${num(first)} to ${num(round(cup.circuitIds[cup.circuitIds.length - 1]))} · ${esc(circuits.map((c) => c.country).join(", "))}</span>
+            <span class="cup-rounds">${sub}</span>
           </header>
           <div class="cup-circuits-grid">${circuits.map(card).join("")}</div>
         </section>`;
-    }).join("");
+    };
+    const cups = CUP_DEFS.filter((cup) => !cup.historic).map(group).join("");
+    const historic = CUP_DEFS.filter((cup) => cup.historic).map(group).join("");
     // The circuits the game lights with floodlights all the way round (venue.js).
     const lit = window.Venue ? Venue.FLOODLIT.filter((id) => CIRCUITS.some((c) => c.id === id)).length : 0;
     $("circuit-list").innerHTML = `${cups}
@@ -68,12 +76,18 @@
           <p>All ${num(SEASON.circuitIds.length)} rounds in calendar order, for the drivers' and the constructors' titles. Points as the cups score them, ties split on countback, and the season is saved after every race: quit at round 9 and it is waiting at round 9.</p>
           <ul class="season-facts">
             <li><b>${num(SEASON.circuitIds.length)}</b><span>rounds</span></li>
-            <li><b>${num(CUP_DEFS.length)}</b><span>cups of four</span></li>
+            <li><b>${num(CUP_DEFS.filter((c) => !c.historic).length)}</b><span>cups of four</span></li>
             ${lit ? `<li><b>${num(lit)}</b><span>under floodlights</span></li>` : ""}
           </ul>
           <a class="go-btn" href="./play.html?cup=season"><span>Start the season ›</span></a>
         </div>
       </aside>
+      ${historic ? `
+      <header class="historic-head">
+        <p class="kicker">Historic cups</p>
+        <h3 class="it-title">Circuits of the past</h3>
+        <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid in two cups, H1 and H2. Each is the layout the outline data holds, and each card says which.</p>
+      </header>${historic}` : ""}
       ${choicesCard()}`;
   }
 

@@ -94,7 +94,10 @@ export function buildCourse(track) {
     while (seg < segs.length - 1 && starts[seg] + segs[seg].length < d) seg += 1;
     const s = segs[seg];
     const t = s.length ? (d - starts[seg]) / s.length : 0;
-    samples.push({ i, x: s.a.x + s.dx * t, y: s.a.y + s.dy * t, d, h: heightAt(d) });
+    // The road's half-width here: narrower where the track data says so
+    // (a point's `w`: Shanghai's snail).
+    const wid = width * ((s.a.w ?? 1) * (1 - t) + (s.b.w ?? 1) * t);
+    samples.push({ i, x: s.a.x + s.dx * t, y: s.a.y + s.dy * t, d, h: heightAt(d), wid });
   }
   const n = samples.length;
   const k = 3;
@@ -132,12 +135,20 @@ export function buildCourse(track) {
   };
 
   // Room either side before another stretch of the circuit (half the gap, so
-  // two neighbours share it).
+  // two neighbours share it). Beside a pit complex, all the room up to it: its
+  // garages may stand nearer another stretch than that stretch's usual
+  // run-off, where the track data puts a wall there (pitlane.js `clear`).
   const minArc = Math.ceil(260 / SAMPLE_STEP);
+  const lane = track.pitLane || null;
+  const pitReach = samples.map((q) => {
+    if (!lane || !lane.inZone(q.d)) return null;
+    return lane.atGarage(q.d) ? lane.garages.outer : lane.outerAt(q.d);
+  });
+  const reachMax = Math.max(0, ...pitReach.filter((r) => r !== null));
   samples.forEach((p) => {
     let left = Infinity;
     let right = Infinity;
-    near(p.x, p.y, runoffBase * 2 + 20, (q) => {
+    near(p.x, p.y, Math.max(runoffBase * 2 + 20, reachMax + runoffBase + 10), (q) => {
       let gap = Math.abs(q.i - p.i);
       gap = Math.min(gap, n - gap);
       if (gap < minArc || Math.abs(q.h - p.h) > 10) return;
@@ -145,12 +156,17 @@ export function buildCourse(track) {
       const dy = q.y - p.y;
       const dist = Math.hypot(dx, dy);
       const side = dx * p.nx + dy * p.ny;
-      if (side >= 0) right = Math.min(right, dist / 2);
-      else left = Math.min(left, dist / 2);
+      // On q's pit side: up to its pit complex; otherwise half the gap.
+      const reach = pitReach[q.i];
+      const room = reach !== null && -(dx * q.nx + dy * q.ny) * lane.side > 0 ? dist - reach : dist / 2;
+      if (side >= 0) right = Math.min(right, room);
+      else left = Math.min(left, room);
     });
     // Offsets are measured along the normal: +n is "right", -n is "left".
-    p.outerR = Math.max(width + 10, Math.min(runoffBase, right - 3));
-    p.outerL = Math.max(width + 10, Math.min(runoffBase, left - 3));
+    // (Where the road narrows, its run-off is in proportion.)
+    const share = p.wid / width;
+    p.outerR = Math.max(p.wid + 10 * share, Math.min(p.wid + (runoffBase - width) * share, right - 3));
+    p.outerL = Math.max(p.wid + 10 * share, Math.min(p.wid + (runoffBase - width) * share, left - 3));
   });
 
   // The pit complex is part of the circuit: through its zone the pit side
@@ -441,26 +457,29 @@ export function buildCircuit(course, venue) {
   if (!course.street) {
     const gravelMat = wettable(new THREE.MeshStandardMaterial({ map: photo("gravel_road", 1, 1), color: color(venue.gravelTint || "#d8cbb0"), roughness: 1, side: THREE.DoubleSide }), WET_GRAVEL);
     // curve > 0 turns towards +n, so the outside is -n (left).
-    const outsideLeft = (p, i) => kerbOn[i] && p.curve > 0.0015 && p.outerL > width + 24;
-    const outsideRight = (p, i) => kerbOn[i] && p.curve < -0.0015 && p.outerR > width + 24;
-    mesh(ribbon(samples, (p) => -(width + 11), L, 0.07, 50, outsideLeft), gravelMat);
-    mesh(ribbon(samples, c(width + 11), R, 0.07, 50, outsideRight), gravelMat);
+    const outsideLeft = (p, i) => kerbOn[i] && p.curve > 0.0015 && p.outerL > p.wid + 24;
+    const outsideRight = (p, i) => kerbOn[i] && p.curve < -0.0015 && p.outerR > p.wid + 24;
+    mesh(ribbon(samples, (p) => -(p.wid + 11), L, 0.07, 50, outsideLeft), gravelMat);
+    mesh(ribbon(samples, (p) => p.wid + 11, R, 0.07, 50, outsideRight), gravelMat);
   }
 
   // Tarmac.
   const road = wettable(new THREE.MeshStandardMaterial({ map: photo("asphalt_track", 2, 1), color: color(bg.road, "#484850").lerp(new THREE.Color(0xffffff), 0.45), roughness: 0.85, side: THREE.DoubleSide }), WET_ROAD);
   road.userData.surface = "road";
-  mesh(ribbon(samples, c(-width), c(width), 0.14, 60), road);
+  // (Each sample's own half-width: the road narrows where the track does.)
+  const edgeL = (p) => -p.wid;
+  const edgeR = (p) => p.wid;
+  mesh(ribbon(samples, edgeL, edgeR, 0.14, 60), road);
 
   // Edge lines.
   const lineMat = wettable(new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide }), WET_PAINT);
-  mesh(ribbon(samples, c(-width), c(-width + 2.2), 0.18, 50), lineMat);
-  mesh(ribbon(samples, c(width - 2.2), c(width), 0.18, 50), lineMat);
+  mesh(ribbon(samples, edgeL, (p) => -p.wid + 2.2, 0.18, 50), lineMat);
+  mesh(ribbon(samples, (p) => p.wid - 2.2, edgeR, 0.18, 50), lineMat);
 
   // Kerbs.
   const kerbMat = kerbMaterial(bg.curbA, bg.curbB);
-  mesh(ribbon(samples, c(width), c(width + 9), 0.22, 16, (_, i) => kerbOn[i]), kerbMat, { receive: false });
-  mesh(ribbon(samples, c(-width - 9), c(-width), 0.22, 16, (_, i) => kerbOn[i]), kerbMat, { receive: false });
+  mesh(ribbon(samples, edgeR, (p) => p.wid + 9, 0.22, 16, (_, i) => kerbOn[i]), kerbMat, { receive: false });
+  mesh(ribbon(samples, (p) => -p.wid - 9, edgeL, 0.22, 16, (_, i) => kerbOn[i]), kerbMat, { receive: false });
 
   // Barriers covered in adverts, plus a catch fence in town.
   const advertTex = makeAdvertTexture([bg.curbA || "#dc0000", "#f4f4f4", bg.accent || "#ffe08a", "#1b1b24"], ["F1", "PIXEL", "CUP", "2025"]);
@@ -596,7 +615,7 @@ function buildPitLane(course, lane, occluders) {
   const paint = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.6, side: THREE.DoubleSide });
   const edge = (p) => Math.max(width - 2.2, Math.abs(lane.latAt(p.d)) - lane.laneHalf);
   add(ribbon(samples, (p) => side * edge(p), (p) => side * (edge(p) + 1.6), 0.18, 50, inZone), paint);
-  const fast = width + Pit.LANE_CENTRE + Pit.LANE_HALF;
+  const fast = lane.laneCentre + lane.laneHalf;
   const flat = (p) => {
     const r = lane.rel(p.d);
     return r >= lane.flatFrom && r <= lane.flatTo;
@@ -613,7 +632,7 @@ function buildPitLane(course, lane, occluders) {
     cx.fillText("PIT", w / 2, h / 2 + 6);
   }, { repeat: false });
   pitTex.userData.print = true;
-  const word = course.sampleAt(((lane.entry + Pit.MOUTH + 40) % course.track.totalLength + course.track.totalLength) % course.track.totalLength);
+  const word = course.sampleAt(((lane.entry + lane.mouth + 40) % course.track.totalLength + course.track.totalLength) % course.track.totalLength);
   const wordAt = Math.abs(lane.latAt(word.d));
   const letters = add(new THREE.PlaneGeometry(26, 13), new THREE.MeshStandardMaterial({ map: pitTex, transparent: true, roughness: 0.6 }));
   letters.rotation.set(-Math.PI / 2, 0, -Math.atan2(word.ty, word.tx) - Math.PI / 2);

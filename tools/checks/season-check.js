@@ -26,13 +26,16 @@ async (page) => {
   await step(() => { localStorage.removeItem(Season.STORAGE_KEY); localStorage.removeItem("f1pixelcup.cup"); });
   await open();
 
-  // The season is a choice beside the cups; it races all 24 in calendar order.
+  // The season is a choice after the cups; it races all 24 of the calendar in order.
   results.seasonOnOffer = await step(() => {
     const cups = Game.getPitLaneState().cups;
     const season = cups.find((c) => c.season);
     const shown = (() => { Game.selectCup(cups.indexOf(season)); return document.getElementById("cup-circuits").textContent; })();
     Game.selectCup(0);
-    const ok = cups.length === 7 && season && season.name === "2025 Season" && season.circuits.length === 24
+    // The six calendar cups, the two historic cups, then the season (the
+    // calendar only: no historic circuit in it).
+    const ok = cups.length === CUP_DEFS.length + 1 && cups[cups.length - 1] === season && season && season.name === "2025 Season" && season.circuits.length === 24
+      && !CIRCUITS.filter((c) => c.historic).some((c) => season.circuits.includes(c.name))
       && shown === `24 rounds: ${CIRCUITS[0].name} to ${CIRCUITS[23].name}`
       && season.circuits[0] === CIRCUITS[0].name && season.circuits[23] === CIRCUITS[23].name;
     return ok || JSON.stringify(cups.map((c) => [c.name, c.circuits.length]));
@@ -113,6 +116,17 @@ async (page) => {
     return ok || JSON.stringify({ asking, phase: state.phase, race: state.raceIndex, run: state.cupRunId === before.run });
   }, before);
 
+  // A historic cup's circuits name their layouts in the pit lane.
+  results.historicErasShown = await step(() => {
+    const cups = Game.getPitLaneState().cups;
+    const i = CUPS.findIndex((c) => c.id === "legendsCup");
+    Game.selectCup(i);
+    const text = document.getElementById("cup-circuits").textContent;
+    Game.selectCup(0);
+    const ok = CUPS[i].tracks.every((t) => text.includes(t.name) && t.era && text.includes(t.era)) && cups[i].eras.every(Boolean);
+    return ok || text.slice(0, 300);
+  });
+
   // The season is one player's: with two players picked, choosing it shows
   // one player (the second greyed out) and starts with one.
   results.seasonIsOnePlayer = await step(() => {
@@ -152,7 +166,7 @@ async (page) => {
 
   // The last race: run to the flag, the save is cleared, the championship is
   // recorded in the career exactly once, and the podium names both champions.
-  results.lastRaceCrowns = await step(() => {
+  const lastSetup = await step(() => {
     const ctx = { trackIds: SEASON.circuitIds, field: DRIVERS.map((d) => d.id), teamOf: Object.fromEntries(DRIVERS.map((d) => [d.id, d.teamId])) };
     let season = Season.start({ runId: "check-final", driverId: "leclerc", difficulty: "pro", gridMode: "back", weatherMode: "dry", ...ctx });
     for (let i = 0; i < 23; i += 1) season = Season.addRace(season, { order: [...ctx.field], fastest: null });
@@ -165,8 +179,14 @@ async (page) => {
     let now = 100000; state.raceStart = now; state.lastTick = now;
     state.racers.forEach((r) => { r.lapStartAt = now; });
     for (let t = 0; t < 900 && state.phase === "race"; t += 1 / 60) { now += 1000 / 60; updateRace(1 / 60, now); }
-    const cleared = localStorage.getItem(Season.STORAGE_KEY) === null;
+    window.__seasonCleared = localStorage.getItem(Season.STORAGE_KEY) === null;
     Game.nextRace();
+    return true;
+  });
+  // (The ceremony may still be readying its drivers: Show podium waits for it.)
+  if (lastSetup === true) await p.waitForFunction(() => state.phase === "podium", null, { timeout: 30000 }).catch(() => {});
+  results.lastRaceCrowns = lastSetup !== true ? lastSetup : await step(() => {
+    const cleared = window.__seasonCleared;
     const podium = state.phase === "podium";
     const kicker = document.getElementById("podium-kicker").textContent;
     const title = document.getElementById("podium-title").textContent;

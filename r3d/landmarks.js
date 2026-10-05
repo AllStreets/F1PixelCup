@@ -238,6 +238,77 @@ export const VENUES = {
     landmarks: ["yasHotel"],
     harbour: { anchored: 14, anchorIn: "sea", wind: 0.3 },
   },
+  // The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md):
+  // each place as it is, the cars and stands the game's own.
+  hockenheim: {
+    // The Rhine plain's pine forest, the stadium section by the line.
+    ground: "grass", groundTint: "#6f9a52", standColor: "#1e1e1e", stand: "covered",
+    trees: [{ kind: "conifer", count: 1500, tint: "#2c5232" }, { kind: "broadleaf", count: 300, tint: "#3f6e36", near: 120, seed: 3 }],
+    hills: { tint: "#5a7a4c", count: 8, height: [50, 110], flat: true },
+    extras: [],
+    landmarks: ["motodrom"],
+  },
+  nurburgring: {
+    // High in the Eifel: dark forest on rolling hills, often grey.
+    ground: "grass", groundTint: "#6a9450", standColor: "#2a5aa8", stand: "covered",
+    trees: [{ kind: "conifer", count: 1700, tint: "#244a2c" }, { kind: "broadleaf", count: 260, tint: "#3a6634", near: 110, seed: 5 }],
+    hills: { tint: "#4a6e44", count: 20, height: [260, 520] },
+    fogNear: 800, fogFar: 3600,
+    extras: [],
+    landmarks: ["nurburgCastle"],
+  },
+  estoril: {
+    // Pines on the hills behind Cascais, the Atlantic to the south.
+    ground: "grass", groundTint: "#9aa45c", standColor: "#c8102e", stand: "open", runoffTint: "#c4b49a", gravelTint: "#dccaa2",
+    trees: [{ kind: "conifer", count: 800, tint: "#4a6a3a" }, { kind: "broadleaf", count: 200, tint: "#6a7c46", near: 120, seed: 2 }],
+    hills: { tint: "#8a9658", count: 14, height: [140, 300] },
+    coast: { bearing: Math.PI / 2, tint: "#2f6f96", sand: "#d8c8a0" },
+    extras: ["coast"],
+    landmarks: ["estorilCoast"],
+  },
+  kyalami: {
+    // The Highveld north of Johannesburg: dry grass, acacias, a big sky.
+    ground: "grass", groundTint: "#b0a462", standColor: "#007a4d", stand: "covered", runoffTint: "#c8b690", gravelTint: "#d8c290",
+    trees: [{ kind: "broadleaf", count: 380, tint: "#6a7a3a" }],
+    hills: { tint: "#a49a62", count: 12, height: [70, 160], flat: true },
+    // Johannesburg and Sandton to the south.
+    skyline: { arc: [Math.PI * 0.35, Math.PI * 0.65], count: 40, height: [60, 200] },
+    extras: ["skylineArc"],
+    landmarks: ["highveld"],
+  },
+  sepang: {
+    // Oil-palm country outside Kuala Lumpur: palms everywhere, rain often.
+    ground: "grass", groundTint: "#5f9e44", standColor: "#0b3d91", stand: "covered",
+    trees: [{ kind: "palm", count: 900, tint: "#3f7a34" }, { kind: "broadleaf", count: 300, tint: "#2f6a30", near: 140, seed: 6 }],
+    hills: { tint: "#4a8040", count: 10, height: [100, 220] },
+    fogNear: 900, fogFar: 3800,
+    extras: [],
+    landmarks: ["leafGrandstand"],
+  },
+  istanbul: {
+    // Dry hills on the Asian side, scrub and few trees.
+    ground: "grass", groundTint: "#b2aa6a", standColor: "#e30a17", stand: "covered", runoffTint: "#c6b896", gravelTint: "#d8c69c",
+    trees: [{ kind: "broadleaf", count: 260, tint: "#6a7a44", near: 200 }],
+    hills: { tint: "#a8986a", count: 16, height: [120, 260] },
+    extras: [],
+    landmarks: ["towerGrandstand"],
+  },
+  mugello: {
+    // A Tuscan valley: cypresses, olive groves and green hills all round.
+    ground: "grass", groundTint: "#80a858", standColor: "#d40000", stand: "open",
+    trees: [{ kind: "conifer", count: 600, tint: "#2c4e30" }, { kind: "broadleaf", count: 600, tint: "#6a8a50", seed: 4 }],
+    hills: { tint: "#668a50", count: 22, height: [260, 560] },
+    extras: [],
+    landmarks: ["tuscanVilla"],
+  },
+  watkinsglen: {
+    // The Finger Lakes' hills in the autumn: maples turning, the glen's woods.
+    ground: "grass", groundTint: "#7c9a52", standColor: "#1d3f8a", stand: "open",
+    trees: [{ kind: "broadleaf", count: 900, tint: "#b8642c" }, { kind: "broadleaf", count: 600, tint: "#c8952c", seed: 2 }, { kind: "conifer", count: 300, tint: "#2c4e30", seed: 8 }],
+    hills: { tint: "#7a7a48", count: 16, height: [180, 360] },
+    extras: [],
+    landmarks: ["theBoot"],
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -400,7 +471,12 @@ function cornerBoards(course, group, venue) {
     // where those are all taken.
     [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 44, 1])));
     [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 0.6])));
+    // And further along the corner (a long one, crowded by stands: Mugello's Bucine).
+    [1, -1].forEach((which) => [-120, 120, -160, 160].forEach((shift) => tries.push([which, shift, 14, 0.6])));
+    // (Shifted far along, still within the corner itself: never beside the next one.)
+    const within = (d) => ((d - c.from) % total + total) % total <= ((c.to - c.from) % total + total) % total;
     for (const [which, shift, back, size] of tries) {
+      if (Math.abs(shift) > 80 && !within(((c.d + shift) % total + total) % total)) continue;
       const p = course.sampleAt(((c.d + shift) % total + total) % total);
       const bend = course.sampleAt(c.d);
       const side = (bend.curve > 0 ? -1 : 1) * which;

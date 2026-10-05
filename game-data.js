@@ -199,6 +199,17 @@ const CIRCUITS = [
   { id: "lasvegas", short: "Las Vegas", places: "USA Nevada", name: "Las Vegas Strip Circuit", country: "United States", theme: "Saturday night down the Strip", lengthM: 6201, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0c0a24", grass: "#2a2836", accent: "#ff5ad0", road: "#3a3846", shoulder: "#58545e", horizonA: "#140f30", horizonB: "#2a1f50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffd2f0" } },
   { id: "losail", short: "Lusail", places: "Doha", name: "Lusail International Circuit", country: "Qatar", theme: "Floodlit curves in the desert", lengthM: 5380, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0a0e22", grass: "#3a3226", accent: "#ffd9a0", road: "#3a3846", shoulder: "#5e564a", horizonA: "#100c1e", horizonB: "#2a2234", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcf90" } },
   { id: "yasmarina", short: "Yas Marina", places: "Abu Dhabi", name: "Yas Marina Circuit", country: "United Arab Emirates", theme: "Night race at the marina", lengthM: 5281, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0d1230", grass: "#2a3040", accent: "#7fd0ff", road: "#3a3848", shoulder: "#565262", horizonA: "#101438", horizonB: "#2a2f60", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffb070" } },
+  // The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md):
+  // famous circuits no longer on the calendar, each as the outline data has it
+  // (`era` names that layout and its Formula 1 years honestly).
+  { id: "hockenheim", short: "Hockenheim", historic: true, era: "The short Grand Prix circuit, raced in F1 from 2002, last in 2019", name: "Hockenheimring", country: "Germany", theme: "Into the Motodrom stadium", lengthM: 4574, laps: 5, roadWidth: 33, rainChance: 0.25, bg: { sky: "#8ab9e0", grass: "#4f8a42", accent: "#ffe2a0", road: "#48484f", shoulder: "#c0b8a4", horizonA: "#2a4a2c", horizonB: "#4f7a48", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c8" } },
+  { id: "nurburgring", short: "Nürburgring", places: "Nurburgring Nuerburgring Eifel", historic: true, era: "The Grand Prix circuit with the 2002 Mercedes Arena, raced in F1 2002 to 2020", name: "Nürburgring GP-Strecke", country: "Germany", theme: "In the Eifel forest", lengthM: 5148, laps: 5, roadWidth: 33, rainChance: 0.4, bg: { sky: "#93b4cf", grass: "#4a7f3f", accent: "#e8e8d8", road: "#46464e", shoulder: "#b8b2a4", horizonA: "#23402a", horizonB: "#46704a", curbA: "#dc0000", curbB: "#ffffff", sun: "#f0f2e8" } },
+  { id: "estoril", short: "Estoril", places: "Cascais Lisbon", historic: true, era: "Today's circuit; F1 raced its earlier layouts here 1984 to 1996", name: "Autódromo do Estoril", country: "Portugal", theme: "Pine hills above the Atlantic", lengthM: 4182, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#7fbbe8", grass: "#8a9a52", accent: "#ffe0a0", road: "#4a4850", shoulder: "#c8b998", horizonA: "#4a5a34", horizonB: "#7a8a52", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c0" } },
+  { id: "kyalami", short: "Kyalami", places: "Johannesburg Midrand", historic: true, era: "Today's circuit; F1 raced older Kyalami layouts 1967 to 1985 and 1992 to 1993", name: "Kyalami", country: "South Africa", theme: "High on the Highveld", lengthM: 4529, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#79b6ea", grass: "#a49c5c", accent: "#ffd890", road: "#4a4850", shoulder: "#cbb994", horizonA: "#6a6a40", horizonB: "#9a9658", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff2c8" } },
+  { id: "sepang", short: "Sepang", places: "Kuala Lumpur", historic: true, era: "The F1 circuit, raced 1999 to 2017", name: "Sepang International Circuit", country: "Malaysia", theme: "Tropical heat and afternoon storms", lengthM: 5543, laps: 5, roadWidth: 33, rainChance: 0.45, bg: { sky: "#8fbadb", grass: "#4f9a3c", accent: "#ffe4a0", road: "#48484f", shoulder: "#bdb39a", horizonA: "#2a5a2a", horizonB: "#4a8a44", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0d0" } },
+  { id: "istanbul", short: "Istanbul", places: "Turkey", historic: true, era: "The F1 circuit, raced 2005 to 2011 and 2020 to 2021", name: "Istanbul Park", country: "Türkiye", theme: "Turn 8 and the dry hills", lengthM: 5338, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#86b9e4", grass: "#a8a462", accent: "#ffdca0", road: "#4a4850", shoulder: "#c8b896", horizonA: "#7a704a", horizonB: "#a49a64", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c4" } },
+  { id: "mugello", short: "Mugello", places: "Tuscany Scarperia", historic: true, era: "The circuit as raced in F1 in 2020", name: "Mugello", country: "Italy", theme: "Tuscan hills and cypresses", lengthM: 5245, laps: 5, roadWidth: 33, rainChance: 0.15, bg: { sky: "#86bde8", grass: "#6a9a48", accent: "#ffe4a8", road: "#48484f", shoulder: "#c4b8a0", horizonA: "#3a5a34", horizonB: "#6a8a52", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff2c8" } },
+  { id: "watkinsglen", short: "Watkins Glen", places: "USA New York", historic: true, era: "The long circuit with the Boot, close to its F1 layout of 1975 to 1980", name: "Watkins Glen", country: "United States", theme: "The Glen in the autumn woods", lengthM: 5430, laps: 5, roadWidth: 33, rainChance: 0.3, bg: { sky: "#8cb6dc", grass: "#5f8a44", accent: "#ffd49a", road: "#48484f", shoulder: "#bdb4a0", horizonA: "#4a4a2c", horizonB: "#7a6a3a", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffe8c0" } },
 ];
 
 // The 2025 calendar as six 4-race cups, in order. (The Trophy and
@@ -210,10 +221,13 @@ const CUP_DEFS = [
   { id: "classicsCup", name: "Classics Cup", icon: "Classics Cup", circuitIds: ["spa", "hungaroring", "zandvoort", "monza"] },
   { id: "autumnCup", name: "Autumn Cup", icon: "Autumn Cup", circuitIds: ["baku", "singapore", "cota", "mexico"] },
   { id: "finaleCup", name: "Finale Cup", icon: "Finale Cup", circuitIds: ["interlagos", "lasvegas", "losail", "yasmarina"] },
+  // The historic cups, after the calendar.
+  { id: "legendsCup", historic: true, name: "Legends Cup", icon: "Legends Cup", circuitIds: ["hockenheim", "nurburgring", "estoril", "kyalami"] },
+  { id: "goldenEraCup", historic: true, name: "Golden Era Cup", icon: "Golden Era Cup", circuitIds: ["sepang", "istanbul", "mugello", "watkinsglen"] },
 ];
 
 // The whole calendar as one championship (season.js).
-const SEASON = { id: "season", name: "2025 Season", icon: "2025 Season", circuitIds: CIRCUITS.map((c) => c.id) };
+const SEASON = { id: "season", name: "2025 Season", icon: "2025 Season", circuitIds: CIRCUITS.filter((c) => !c.historic).map((c) => c.id) };
 
 // The eight power-ups, common to rare (the same order as PowerUps.ITEM_ORDER).
 // Each is an F1 idea with a Mario Kart counterpart. The site's cards and the
@@ -258,7 +272,9 @@ const SHOT_DRIVERS = {
     albertpark: "leclerc", shanghai: "hamilton", jeddah: "alonso", miami: "antonelli", imola: "lawson",
     barcelona: "sainz", montreal: "stroll", redbullring: "hadjar", hungaroring: "piastri", zandvoort: "bearman",
     baku: "albon", cota: "ocon", mexico: "bortoleto", lasvegas: "doohan", losail: "norris", yasmarina: "russell",
-    monza: "leclerc", spa: "hamilton", silverstone: "norris", suzuka: "tsunoda",
+    hockenheim: "hulkenberg", nurburgring: "verstappen", estoril: "gasly", kyalami: "lawson",
+    sepang: "piastri", istanbul: "hamilton", mugello: "leclerc", watkinsglen: "hadjar",
+    monza: "bearman", spa: "ocon", silverstone: "norris", suzuka: "tsunoda",
     monaco: "verstappen", singapore: "russell", bahrain: "gasly", interlagos: "hulkenberg",
   },
   // Race day: the replay follows Leclerc (the onboard rides with Hamilton,

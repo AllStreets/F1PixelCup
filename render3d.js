@@ -402,7 +402,7 @@ function auditAdverts(track) {
       const x = (a.x + b.x) / 2;
       const z = (a.z + b.z) / 2;
       const road = course.nearestSample(x, z);
-      if (road && Math.hypot(road.x - x, road.y - z) < course.width && Math.abs(a.y - road.h) < 10) onRoad.push(Math.round(road.d));
+      if (road && Math.hypot(road.x - x, road.y - z) < (road.wid ?? course.width) && Math.abs(a.y - road.h) < 10) onRoad.push(Math.round(road.d));
     }
     let loops = 0;
     const crosses = ([ax, az, bx, bz], [cx, cz, dx, dz]) => {
@@ -431,8 +431,11 @@ function auditPits(track) {
   const v = new THREE.Vector3();
   // The closest any vertex of an object comes to a road's centreline.
   // How close an object's vertices come to the road: to its own stretch
-  // (the pit zone and 300 either side) and to any other stretch of the lap.
-  const own = (p) => lane && Math.abs(lane.rel(p.d) - Math.max(lane.entry, Math.min(lane.exit, lane.rel(p.d)))) <= 300;
+  // (the pit zone itself) and to any other stretch of the lap (the road
+  // either side of the zone included: a bend just past the pit lane, as at
+  // the Hungaroring's first corner, is held to the other stretches'
+  // clearance, the stricter rule of the two).
+  const own = (p) => lane && lane.inZone(p.d);
   const closest = (obj) => {
     const best = { own: Infinity, other: Infinity, otherAt: null };
     obj.traverse((m) => {
@@ -483,9 +486,9 @@ function auditPits(track) {
     // From their own road: behind the working lane. From any other: past
     // its run-off and barrier (pitlane.js CLEAR), less a unit for rounding.
     garagesFromOwnRoad: g ? Math.round(g.own) : 0,
-    garagesOwnNeed: Math.round(course.width + Pit.WORK_OUT),
+    garagesOwnNeed: Math.round(lane ? lane.workOut : course.width + Pit.WORK_OUT),
     garagesFromOtherRoads: g ? Math.round(g.other) : 0,
-    garagesOtherNeed: Math.round(course.width + (course.street ? Pit.CLEAR_STREET : Pit.CLEAR) - 1),
+    garagesOtherNeed: Math.round(course.width + (course.street ? Pit.CLEAR_STREET : lane ? lane.clear : Pit.CLEAR) - 1),
     stands: stands.length ? pitGroup.getObjectByName("pitStands").geometry.attributes.position.count / (3 * 24) : 0,
     // One opposite each team's garage, but none where the gantry stands on the wall.
     standsExpected: lane ? lane.garages.bays.filter((b) => !b.safetyCar && Math.abs(b.rel) > 11).length : 0,
@@ -1221,7 +1224,7 @@ function surfaceUnder(world, player) {
   const { course } = world;
   const p = course.sampleAt(player.trackDistance || 0);
   const lateral = Math.abs((player.x - p.x) * p.nx + (player.y - p.y) * p.ny);
-  const w = course.width;
+  const w = p.wid ?? course.width;
   const onKerb = course.kerbOn[p.i] && lateral > w - 5 && lateral < w + 12;
   const offTrack = !onKerb && lateral > w + 6;
   return { onKerb, offTrack };
@@ -1479,7 +1482,7 @@ function pointOnLap(course, d) {
   const b = course.samples[(Math.floor(f) + 1) % n];
   const t = f - Math.floor(f);
   const mix = (u, v) => u + (v - u) * t;
-  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny) };
+  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny), wid: mix(a.wid ?? course.width, b.wid ?? course.width) };
 }
 
 // The TV cameras of a circuit, placed once, when a replay there first opens
@@ -1514,11 +1517,14 @@ function tvCameras(world) {
   const edges = [-W, -W / 3, W / 3, W];
   const cover = window.Replay.assignTvCoverageLanes(cams, L, (k, d, lane) => {
     const cam = cams[k];
-    const sides = [edges[lane] + 2, edges[lane + 1] - 2];
     let seen = 0;
     let rays = 0;
     [-half, 0, half].forEach((along) => {
       const p = pointOnLap(course, d + along);
+      // The lane's sides across the road as wide as it is here (it narrows
+      // in Shanghai's snail).
+      const share = p.wid / W;
+      const sides = [edges[lane] * share + 2, edges[lane + 1] * share - 2];
       const far = Math.hypot(cam.x - p.x, cam.z - p.y) > TV_SIGHT_RANGE;
       sides.forEach((side) => {
         rays += 1;

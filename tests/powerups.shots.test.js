@@ -232,3 +232,15 @@ test("behind the safety car the hold is single file: a car alongside can't slip 
 test("a steward penalty never times out before it reaches the leader", () => {
   assert.equal(P.TIMINGS.lifeMs.stewardPenalty, Infinity);
 });
+
+test("the road's half-width follows the track data where the road narrows", () => {
+  const P = require("../powerups.js");
+  const pts = [{ x: 0, y: 0 }, { x: 100, y: 0, w: 0.5 }, { x: 200, y: 0, w: 0.5 }, { x: 200, y: 100 }];
+  const route = P.makeRoute(pts, 50);
+  assert.equal(route.halfWidthAt(0), 50);
+  assert.equal(route.halfWidthAt(50), 37.5);
+  assert.equal(route.halfWidthAt(150), 25);
+  // A track with no narrowing: the same everywhere.
+  const plain = P.makeRoute([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], 50);
+  assert.equal(plain.halfWidthAt(70), 50);
+});

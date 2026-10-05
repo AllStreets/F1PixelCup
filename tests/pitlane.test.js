@@ -39,6 +39,10 @@ function lapOf(points) {
 }
 
 test("every circuit has a pit lane long enough for ten garages and the Safety Car's", () => {
+  // (A walled lane on the real side may stop just short of the line, as
+  // Shanghai's rejoins at it: build_tracks.py PIT_LINE_SHORT.)
+  const short = Number((fs.readFileSync(path.join(root, "tools", "tracks", "build_tracks.py"), "utf8").match(/^PIT_LINE_SHORT = (\d+)/m) || [])[1]);
+  assert.ok(Number.isFinite(short), "PIT_LINE_SHORT is read from build_tracks.py");
   Object.entries(SHAPES).forEach(([id, shape]) => {
     const pit = shape.pit;
     assert.ok(pit, `${id}: no pit lane`);
@@ -50,7 +54,7 @@ test("every circuit has a pit lane long enough for ten garages and the Safety Ca
       assert.ok(pit.entry >= pit.stretch.lo && pit.exit <= pit.stretch.hi && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit} outside its stretch`);
     } else {
       assert.ok(pit.entry >= -900 && pit.exit <= 900 && pit.exit - pit.entry <= 1100, `${id}: ${pit.entry}..${pit.exit}`);
-      assert.ok(pit.entry < 0 && pit.exit >= 0, `${id}: the lane should reach the line`);
+      assert.ok(pit.entry < 0 && pit.exit >= (pit.wall ? -short : 0), `${id}: the lane should reach the line`);
     }
     const { total } = lapOf(shape.points);
     const lane = Pit.lane(pit, total, W);
@@ -75,6 +79,28 @@ test("the constants agree with tools/tracks/build_tracks.py", () => {
   ["WALL_IN", "WALL_OUT", "LANE_CENTRE", "LANE_HALF", "WORK_OUT", "GARAGE_OUT", "GARAGE_OUT_SHALLOW", "GARAGE_FRONT", "EDGE_IN", "MOUTH", "BAY", "BAYS", "CLEAR", "CLEAR_STREET"].forEach((k) => {
     assert.equal(read(k), Pit[k], `PIT_${k}`);
   });
+  // The narrow lane's measures too.
+  const narrow = JSON.parse((py.match(/^PIT_NARROW = (\{[^}]*\})/m) || [])[1].replace(/'/g, '"'));
+  assert.deepEqual(narrow, Pit.NARROW);
+});
+
+test("a narrow lane with short mouths: its own measures, the Safety Car parked in its working lane", () => {
+  const full = Pit.lane({ side: 1, entry: -600, exit: 400 }, 6000, W);
+  const lane = Pit.lane({ side: 1, entry: -600, exit: 400, narrow: true, mouth: 110, wall: true }, 6000, W);
+  assert.equal(lane.mouth, 110);
+  assert.equal(lane.flatFrom, -490);
+  assert.equal(lane.laneHalf, Pit.NARROW.half);
+  assert.equal(lane.outerAt(0), W + Pit.NARROW.work);
+  assert.equal(lane.garages.outer, W + Pit.NARROW.garage);
+  assert.equal(lane.clear, Pit.CLEAR_STREET);
+  assert.equal(full.clear, Pit.CLEAR);
+  assert.ok(lane.outerAt(0) < full.outerAt(0));
+  // Still clear of the pit wall where it runs beside it.
+  assert.ok(Math.abs(lane.latAt(0)) - lane.laneHalf >= W + Pit.WALL_OUT);
+  const bay = lane.garages.bays[Pit.BAYS - 1];
+  const parked = Pit.wayIn(lane, bay.d + 1, true);
+  assert.equal(parked.lat, (W + Pit.NARROW.centre + Pit.NARROW.half + W + Pit.NARROW.work) / 2);
+  assert.ok(parked.lat > lane.laneCentre && parked.lat < lane.workOut);
 });
 
 test("latAt: from the road's edge, out to the lane, flat, and back", () => {
@@ -123,7 +149,7 @@ test("every pit complex is clear of every other stretch of the lap, run-off and 
   Object.entries(SHAPES).forEach(([id, shape]) => {
     const { total, at } = lapOf(shape.points);
     const lane = Pit.lane(shape.pit, total, W);
-    const need = STREET.has(id) ? Pit.CLEAR_STREET : Pit.CLEAR;
+    const need = STREET.has(id) || shape.pit.wall ? Pit.CLEAR_STREET : Pit.CLEAR;
     const others = [];
     for (let d = 0; d < total; d += 5) others.push({ d, ...at(d) });
     for (let r = lane.entry; r <= lane.exit; r += 10) {
@@ -167,6 +193,9 @@ test("the Safety Car's way in: the road's edge on the pit side, then the lane, t
   const edge = W - Pit.EDGE_IN;
   // Not yet in the lane: the road's edge on the pit side, wherever it is.
   assert.deepEqual(Pit.wayIn(lane, 3000, false, 0), { lat: edge, inLane: false, park: false });
+  // Where the road is narrower (Shanghai's snail), the edge of the road there:
+  // the road's own half-width at that point, given by game.js.
+  assert.deepEqual(Pit.wayIn(lane, 3000, false, 0, W / 2), { lat: W / 2 - Pit.EDGE_IN, inLane: false, park: false });
   // Inside the zone but it never took the entry (it was called out past it):
   // it stays on the road and goes round again.
   assert.deepEqual(Pit.wayIn(lane, 0, false, edge), { lat: edge, inLane: false, park: false });

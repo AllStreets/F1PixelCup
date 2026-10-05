@@ -1,6 +1,6 @@
 # F1 Pixel Cup
 
-An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** on all 24 circuits of its calendar: six four-race cups in calendar order, or the whole season.
+An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the HUD, no build step. Race as any of the 20 drivers from the **2025 F1 season** on all 24 circuits of its calendar: six four-race cups in calendar order, or the whole season, plus two historic cups of eight legendary circuits.
 
 ---
 
@@ -9,6 +9,7 @@ An F1 racing game in the browser: Three.js for the world, HTML5 Canvas for the H
 - **Full 2025 F1 roster** — all 20 drivers across 10 constructor teams (Red Bull, Ferrari, McLaren, Mercedes, Aston Martin, Alpine, Williams, Haas, Racing Bulls, Kick Sauber)
 - **All 24 circuits of 2025**, in calendar order, traced from the real layouts, with their pit lanes placed from OpenStreetMap (see *The circuits* below). Suzuka keeps its figure-of-eight crossover, on a bridge
 - **Three difficulties** — Rookie, Pro and Legend. On Pro and Legend the rivals run exactly your physics; what changes is how well they drive: how far down the road they look, how late they brake, how tightly they hold the line and how often they make a mistake. Rookie is the only setting that hands the AI a speed handicap
+- **Two historic cups**: the Legends Cup (Hockenheimring, Nürburgring, Estoril, Kyalami) and the Golden Era Cup (Sepang, Istanbul Park, Mugello, Watkins Glen), each circuit's layout and era named honestly
 - **Six calendar cups and a season**: the Opening, Spring, Summer, Classics, Autumn and Finale Cups, four races each in the order of the 2025 calendar, or the **2025 Season**, all 24 races for the drivers' and constructors' titles, saved after every race and resumed from the pit lane
 - **Weather that fits the place**: on Changeable, each race rains as often as it really does there, from Spa's one in two to almost never in the desert
 - **Five-lap races** — and the full 20-car field is classified having actually completed the distance, not force-retired at the flag
@@ -150,11 +151,27 @@ of 2025, in calendar order, and the cup each is raced in:
 | 23 | Lusail International Circuit | Qatar | 5.380 km | Finale Cup |
 | 24 | Yas Marina Circuit | United Arab Emirates | 5.281 km | Finale Cup |
 
+Then two historic cups of famous circuits no longer on the calendar, raced by the 2025 grid. They are in the random cup, the custom cup and the single race's pool too. Each is the layout the outline data holds, named honestly:
+
+| Circuit | Country | Lap | Cup | The layout |
+|---|---|---|---|---|
+| Hockenheimring | Germany | 4.574 km | Legends Cup | The short Grand Prix circuit, raced in F1 from 2002, last in 2019 |
+| Nürburgring GP-Strecke | Germany | 5.148 km | Legends Cup | The Grand Prix circuit with the 2002 Mercedes Arena, raced in F1 2002 to 2020 |
+| Autódromo do Estoril | Portugal | 4.182 km | Legends Cup | Today's circuit; F1 raced its earlier layouts here 1984 to 1996 |
+| Kyalami | South Africa | 4.529 km | Legends Cup | Today's circuit; F1 raced older Kyalami layouts 1967 to 1985 and 1992 to 1993 |
+| Sepang International Circuit | Malaysia | 5.543 km | Golden Era Cup | The F1 circuit, raced 1999 to 2017 |
+| Istanbul Park | Türkiye | 5.338 km | Golden Era Cup | The F1 circuit, raced 2005 to 2011 and 2020 to 2021 |
+| Mugello | Italy | 5.245 km | Golden Era Cup | The circuit as raced in F1 in 2020 |
+| Watkins Glen | United States | 5.430 km | Golden Era Cup | The long circuit with the Boot, close to its F1 layout of 1975 to 1980 |
+
 Each one has its pit lane and garages beside the real pit lane's stretch, as
-near as room allows, where OpenStreetMap maps it, and on its real side where
-the widened road leaves room (at Shanghai, Barcelona, Monaco, Singapore, the
-Hungaroring, Zandvoort and Interlagos it doesn't, and the lane is across the
-road). Albert Park's pit building goes up each year, and Monza, Suzuka and Las
+near as room allows, where OpenStreetMap maps it, and on its real side: where
+the widened road leaves no room for the full complex there, a wall instead of
+run-off on the stretch beside it and shorter mouths make it, as at Shanghai,
+Barcelona, the Hungaroring, Zandvoort, Hockenheim, Estoril and Sepang. At
+Interlagos (the real lane leaves the track's side through the Senna S) and
+Singapore (its real side bends too tightly for garages) it is across the road,
+and Monaco's is placed by the trackside work. Albert Park's pit building goes up each year, and Monza, Suzuka and Las
 Vegas have none mapped, so theirs come from the circuit's shape. Lap lengths
 are the outline data's. Each circuit has its signature corners named on boards
 where OpenStreetMap names them (and never where the name is a sponsor's), its
@@ -168,6 +185,10 @@ the night races, and the sea, lakes and skylines it is known for.
   are opened out, and stretches that would overlap once widened (Monaco's harbour
   front, parts of Singapore and Interlagos) are nudged apart. The largest shift
   from the real line is about 50 m, at Baku, and 47 m at Monaco; Monza's is 12 m.
+- Shanghai's snail (turns 1 and 2) is as tight as the real one: the road
+  narrows there, to half its usual width, so its loops can come as close as the
+  real ones do. The physics, the CPU drivers' lines and the scenery all follow
+  the narrower road.
 - Suzuka really crosses itself, so the later pass climbs over the earlier one on
   a bridge. The physics never confuses the two: each car only looks for road
   near where it already is, so it can neither snap across the crossover nor cut

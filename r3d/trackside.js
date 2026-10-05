@@ -281,9 +281,18 @@ export function buildStarter(course) {
   const tries = [];
   [20, 50, 80, 110, 140].forEach((back) => tries.push([back, 12]));
   [20, 60, 100, 140, 180, 220].forEach((back) => tries.push([back, 34]));
-  for (const [back, out] of tries) {
+  // Where the side away from the pits has no room before the line (Sepang:
+  // its back straight runs close beside), on the pit side past the back of
+  // the garages, and then just past the line on either side.
+  if (lane) [20, 50, 80, 110, 140].forEach((back) => tries.push([back, 10, -side]));
+  [-20, -50, -80, -110, -140, -180, -220].forEach((back) => [side, -side].forEach((across) => tries.push([back, 12, across])));
+  for (const [back, out, across = side] of tries) {
     const p = course.sampleAt(total - back);
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + out);
+    // On the pit side, past the whole pit complex where it is (its garages
+    // where they stand); elsewhere past the barrier.
+    const pitSide = lane && across === lane.side && lane.inZone(p.d);
+    const base = pitSide ? (lane.atGarage(p.d, 16) ? lane.garages.outer : lane.outerAt(p.d)) : (across > 0 ? p.outerR : p.outerL);
+    const off = across * (base + out);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
     if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;
