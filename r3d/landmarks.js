@@ -10,6 +10,7 @@ import { color, seeded, hashString, canvasTexture, buildingMaterial, photo, make
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
 import { tracksideModel, LANDMARK_SCALE } from "./models.js";
 import { buildYachts, harbourSide } from "./yachts.js";
+import { buildVegasStrip } from "./vegas.js";
 
 // ---------------------------------------------------------------------------
 // Venue settings
@@ -207,13 +208,15 @@ export const VENUES = {
     landmarks: ["foroSol"],
   },
   lasvegas: {
-    // Saturday night on the Strip: the resorts lit up along the west side,
-    // the city's towers all round.
+    // Saturday night on the Strip: every tall building round the circuit
+    // where it really stands, the Strip's landmarks lit (r3d/vegas.js). The
+    // desert night is clear: the far towers stand out to the horizon.
     ground: "city", night: true, standColor: "#7a3cff", stand: "covered", runoffTint: "#8c8896",
     trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
-    skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] },
-    extras: ["siteLandmarks", "vegasStrip", "skylineArc", "floodlights"],
-    landmarks: ["vegasSphere", "vegasStrip"],
+    city: "vegasStrip",
+    fogNear: 1800, fogFar: 7000,
+    extras: ["floodlights"],
+    landmarks: [],
   },
   losail: {
     // Under the lights in the desert north of Doha, Lusail's towers to the south.
@@ -791,8 +794,11 @@ export { LANDMARK_SCALE };
 // floors: how much a room's light follows its floor's (1: whole floors
 // together; lower: each room its own). room: a room's width and a floor's
 // height (metres); glow: how bright a lit room is.
-function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.55 } = {}) {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
+// fromVertex: the slab's colour from the model's vertex colours (rgb), its
+// alpha how much of a glass tower it is (1 stone, lower glass): many
+// buildings, one material (Las Vegas's Strip).
+export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.55, fromVertex = false } = {}) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35, vertexColors: fromVertex });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uGlass = { value: color(glass) };
     shader.uniforms.uSlab = { value: color(slab) };
@@ -825,7 +831,14 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         float farAway = smoothstep(0.22, 0.55, fw);
         float glassShare = 0.78;
         float inset = mix(glassIn, glassShare, farAway);
-        diffuseColor.rgb = mix(uSlab, uGlass, inset);
+        ${fromVertex ? `vec3 slabC = vColor.rgb * (1.0 - 0.45 * uNight);
+        #ifdef USE_COLOR_ALPHA
+          float stone = vColor.a;
+        #else
+          float stone = 1.0;
+        #endif
+        vec3 glassC = mix(uGlass, vColor.rgb * 0.5, 0.15 + 0.5 * (1.0 - stone));
+        diffuseColor.rgb = mix(slabC, glassC, inset);` : "diffuseColor.rgb = mix(uSlab, uGlass, inset);"}
         // The walls darken toward the ground (the light reaches less of them).
         diffuseColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 14.0, vFacade.y));
         // Whole floors light together (a hotel's evening), a room here and
@@ -850,7 +863,7 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
         // The unlit rooms keep a faint glow from the corridors.
         totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}`;
+  m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}-${fromVertex}`;
   return m;
 }
 
@@ -908,15 +921,16 @@ function sphereScreen() {
   return m;
 }
 
-// A landmark's own materials, lit for the venue by their role.
-function dressLandmark(model, venue) {
+// A landmark's own materials, lit for the venue by their role. `extra`: a
+// function of a material giving its own for roles of its own (or null).
+export function dressLandmark(model, venue, extra = null) {
   const made = new Map();
   const night = Boolean(venue.night);
   const dressed = (src) => {
     if (made.has(src.name)) return made.get(src.name);
-    let out;
+    let out = extra ? extra(src) : null;
     // At night the glass reads dark and the rooms carry the tower.
-    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#22303f", slab: "#3a4049", lit: 0.5, floors: 0.45 } : {});
+    if (out) { /* its own */ } else if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#22303f", slab: "#3a4049", lit: 0.5, floors: 0.45 } : {});
     // Blue glass (Eureka, the Rialto, the Flame Towers) and bronze (the Strip).
     else if (src.name === "facade_blue") out = facadeMaterial(night, night ? { glass: "#16243a", slab: "#3f4b5c", lit: 0.7, floors: 0.4 } : { glass: "#2c4c74", slab: "#b9c3cf" });
     // A hotel's rooms (Yas): narrower bays, fewer lit, whole floors calm
@@ -1777,10 +1791,18 @@ const EXTRAS = {
 
 // ---------------------------------------------------------------------------
 
-export function buildLandmarks(course, venue) {
+// A venue's city, built before anything else claims its ground (the track
+// data's grandstands fill in round it): Las Vegas's Strip. Or null.
+export function buildCity(course, venue) {
+  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark, facadeMaterial });
+  return null;
+}
+
+export function buildLandmarks(course, venue, city = null) {
   const group = new THREE.Group();
+  if (city) group.add(city);
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
-  const animated = [];
+  const animated = city && city.userData.animate ? [city] : [];
   garages(course, group, venue);
   cornerBoards(course, group, venue);
   (venue.extras || []).forEach((name) => {

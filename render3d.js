@@ -23,7 +23,7 @@ import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TU
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
-import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
+import { VENUES, buildLandmarks, buildCity, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
@@ -894,11 +894,13 @@ function buildWorld(track) {
   group.add(buildGround(course, venue, bg));
   const circuit = buildCircuit(course, venue);
   group.add(circuit);
-  // Decor from the track data first (it was laid out with the circuit), then
-  // landmarks and trees fill round it. Everything claims its footprint.
+  // A venue's city first (Las Vegas's Strip, where it really stands), then
+  // the decor from the track data (laid out with the circuit), then the
+  // landmarks and trees fill round them. Everything claims its footprint.
+  const city = buildCity(course, venue);
   const decor = buildDecor(course, venue);
   group.add(decor);
-  const landmarks = buildLandmarks(course, venue);
+  const landmarks = buildLandmarks(course, venue, city);
   group.add(landmarks);
   const yachts = landmarks.getObjectByName("yachts");
   // Trackside life: the marshal posts (after everything else has claimed its
