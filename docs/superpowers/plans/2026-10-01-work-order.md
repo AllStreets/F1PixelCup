@@ -150,12 +150,12 @@ All 24 circuits of 2025. The eight we have are Monza, Spa, Silverstone, Suzuka, 
 
 ## 4. Stage L2: historical circuits
 
-- [ ] **Spec, proposing two 4-race cups of famous circuits no longer on the calendar,** all in the geojson. The proposal is shown to the user; it is a content choice, so a short **[REVIEW]** of the list only.
+- [x] **Spec, proposing two 4-race cups of famous circuits no longer on the calendar,** all in the geojson. The proposal is shown to the user; it is a content choice, so a short **[REVIEW]** of the list only.
   - A "Legends" cup: Hockenheimring, Nürburgring, Estoril, Kyalami.
   - A "Golden Era" cup: Sepang, Istanbul Park, Mugello, Watkins Glen.
   - Alternates: Indianapolis, Magny-Cours, Portimão, Paul Ricard, Buenos Aires, Jacarepaguá.
   - Each is the layout in the data, named honestly; the spec says which era's layout it is.
-- [ ] Built to the same care standard as Stage L, with each venue's period look where it is honest to show it.
+- [x] Built to the same care standard as Stage L, with each venue's period look where it is honest to show it.
 
 ## 5. Stage P: choosing races
 
