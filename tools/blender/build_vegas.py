@@ -313,7 +313,8 @@ def balloon(parent):
                 pts = [r0[k], r1[j], r1[k]]
             elif prof[i + 1][0] < 1e-3:
                 pts = [r0[k], r0[j], r1[k]]
-            m.cface(pts, "balloon" if (k // 2 + i) % 3 else "roof_gold")
+            # Its gores: blue, every fourth gold.
+            m.cface(pts, "roof_gold" if k % 4 == 0 else "balloon")
     # The neon: a ring at the widest and meridians.
     gold = (1.0, 0.8, 0.35, 1.0)
     for i in range(1, len(prof) - 1):
@@ -546,7 +547,7 @@ def luxor(parent):
     ang = math.atan2(far[1] - cy, far[0] - cx)
     half = 183.0 / 2 * math.sqrt(2)
     corners = [(cx + math.cos(ang + k * math.pi / 2) * half, cy + math.sin(ang + k * math.pi / 2) * half) for k in range(4)]
-    m = VMesh("luxor")
+    m = VMesh("luxor_pyramid")
     H = 107.0
     for k in range(4):
         p, q = corners[k], corners[(k + 1) % 4]

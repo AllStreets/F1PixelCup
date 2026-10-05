@@ -831,7 +831,7 @@ export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit
         float farAway = smoothstep(0.22, 0.55, fw);
         float glassShare = 0.78;
         float inset = mix(glassIn, glassShare, farAway);
-        ${fromVertex ? `vec3 slabC = vColor.rgb * (1.0 - 0.45 * uNight);
+        ${fromVertex ? `vec3 slabC = vColor.rgb * (1.0 - 0.58 * uNight);
         #ifdef USE_COLOR_ALPHA
           float stone = vColor.a;
         #else
@@ -861,7 +861,10 @@ export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
         // The unlit rooms keep a faint glow from the corridors.
-        totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;`);
+        totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;
+        ${fromVertex ? `// A stone hotel floodlit at night, warm on its frame and slabs (a
+        // glass tower is not: its rooms carry it).
+        totalEmissiveRadiance += vColor.rgb * vec3(1.0, 0.86, 0.7) * 0.2 * stone * (1.0 - inset) * uNight * smoothstep(0.0, 30.0, vFacade.y + 6.0);` : ""}`);
   };
   m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}-${fromVertex}`;
   return m;

@@ -37,6 +37,11 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
   NEW.forEach((id) => {
     const v = VENUES[id];
     assert.ok(v, `${id} has no venue`);
+    // A city of its own (Las Vegas's Strip, r3d/vegas.js) or landmarks by site.
+    if (v.city) {
+      assert.ok((VENUE_MODELS[id] || []).includes(v.city), `${id}'s city ${v.city} is not among its models`);
+      return;
+    }
     assert.ok(Array.isArray(v.landmarks) && v.landmarks.length >= 1, `${id} lists no landmark`);
     v.landmarks.forEach((n) => assert.ok((VENUE_MODELS[id] || []).includes(n), `${id}'s ${n} is not among its models`));
     assert.ok(v.extras.includes("siteLandmarks"), `${id} doesn't build its landmarks`);

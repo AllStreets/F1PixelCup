@@ -30,7 +30,6 @@ const MODELS = {
   cota_tower: { parts: ["core", "deck", "veil"], top: [74, 80] },
   foro_sol: { parts: ["stands", "lights"], top: [30, 60] },
   vegas_sphere: { parts: ["sphere", "base"], top: [108, 116] },
-  vegas_strip: { parts: ["curved_slab", "y_tower", "needle"], top: [340, 360] },
   losail_grandstand: { parts: ["stand", "canopy", "pylons"], top: [18, 45] },
   lusail_towers: { parts: ["crescent_1", "crescent_2"], top: [185, 215] },
   yas_hotel: { parts: ["block", "gridshell"], top: [50, 70] },
