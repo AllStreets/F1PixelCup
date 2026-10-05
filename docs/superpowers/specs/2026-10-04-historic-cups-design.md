@@ -15,16 +15,16 @@ The outlines come from `tools/tracks/f1-circuits.geojson` (bacinger/f1-circuits,
 
 | Game id | Name in the game | The layout | Its Formula 1 years |
 |---|---|---|---|
-| `hockenheim` | Hockenheimring | The short Grand Prix circuit of 2002 on (4.574 km), not the old forest loop | 2002 to 2019 |
-| `nurburgring` | Nürburgring GP-Strecke | The modern Grand Prix circuit of 1984 (5.148 km), not the Nordschleife | 1984 to 2020 |
-| `estoril` | Autódromo do Estoril | The circuit as last raced in F1 (4.349 km, with the 1994 chicane) | 1984 to 1996 |
-| `kyalami` | Kyalami | Today's circuit (4.529 km), rebuilt after F1 left; its 1990s F1 layout was close to it but not the same | (F1 1967 to 1993 on older layouts) |
+| `hockenheim` | Hockenheimring | The short Grand Prix circuit of 2002 on (4.574 km), not the old forest loop | from 2002, last in 2019 |
+| `nurburgring` | Nürburgring GP-Strecke | The Grand Prix circuit with the 2002 Mercedes Arena (5.148 km), not the Nordschleife nor the 1984 circuit | 2002 to 2020 |
+| `estoril` | Autódromo do Estoril | Today's circuit (about 4.18 km); F1 raced its earlier layouts | (1984 to 1996 on earlier layouts) |
+| `kyalami` | Kyalami | Today's circuit (4.529 km), rebuilt after F1 left | (1967 to 1985 and 1992 to 1993 on older layouts) |
 | `sepang` | Sepang International Circuit | The F1 circuit (5.543 km) | 1999 to 2017 |
 | `istanbul` | Istanbul Park | The F1 circuit (5.338 km), with its four-apex turn 8 | 2005 to 2011, 2020 to 2021 |
 | `mugello` | Mugello | The circuit (5.245 km) | 2020 |
-| `watkinsglen` | Watkins Glen | The long circuit with the Boot (5.430 km) | 1975 to 1980 |
+| `watkinsglen` | Watkins Glen | The long circuit with the Boot (5.430 km), close to its F1 layout | 1975 to 1980 |
 
-Each circuit's `era` field carries the last column's wording, shown on the site's cards and in the pit lane's circuit line.
+Each circuit's `era` field says this in a line, shown on the site's cards and in the pit lane's circuit line; a test pins each one and checks the stated length against the outline's own (within 2 %).
 
 ## In the game
 

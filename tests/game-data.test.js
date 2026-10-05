@@ -73,8 +73,39 @@ const HISTORIC_CUPS = [["legendsCup", "Legends Cup"], ["goldenEraCup", "Golden E
 test("all 24 circuits of 2025, in the order of the calendar, then the eight historic ones", () => {
   assert.deepEqual(Data.CIRCUITS.map((c) => c.id), [...CALENDAR_2025, ...HISTORIC]);
   Data.CIRCUITS.forEach((c) => assert.equal(Boolean(c.historic), HISTORIC.includes(c.id), c.id));
-  // Each historic circuit names its layout's era honestly (shown on its card).
-  Data.CIRCUITS.filter((c) => c.historic).forEach((c) => assert.match(c.era, /\d{4}/, c.id));
+  // Each historic circuit names its layout's era honestly (shown on its card
+  // and in the pit lane), checked against what the outline is: its length
+  // measured within 2 % of the stated one.
+  const ERAS = {
+    hockenheim: "The short Grand Prix circuit, raced in F1 from 2002, last in 2019",
+    nurburgring: "The Grand Prix circuit with the 2002 Mercedes Arena, raced in F1 2002 to 2020",
+    estoril: "Today's circuit; F1 raced its earlier layouts here 1984 to 1996",
+    kyalami: "Today's circuit; F1 raced older Kyalami layouts 1967 to 1985 and 1992 to 1993",
+    sepang: "The F1 circuit, raced 1999 to 2017",
+    istanbul: "The F1 circuit, raced 2005 to 2011 and 2020 to 2021",
+    mugello: "The circuit as raced in F1 in 2020",
+    watkinsglen: "The long circuit with the Boot, close to its F1 layout of 1975 to 1980",
+  };
+  // The source outline's own length (before the game widens its road).
+  const geo = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "tools", "tracks", "f1-circuits.geojson"), "utf8"));
+  const src = Object.fromEntries((fs.readFileSync(path.join(__dirname, "..", "tools", "tracks", "build_tracks.py"), "utf8").match(/^CIRCUITS = \{[\s\S]*?^\}/m)[0]
+    .match(/"(\w+)": \("([a-z]{2}-\d{4})"/g) || []).map((m) => m.match(/"(\w+)": \("([^"]+)"/).slice(1)));
+  const outline = (id) => {
+    const coords = geo.features.find((f) => f.properties.id === src[id]).geometry.coordinates;
+    let metres = 0;
+    for (let i = 1; i < coords.length; i += 1) {
+      const [lon1, lat1] = coords[i - 1];
+      const [lon2, lat2] = coords[i];
+      const k = Math.PI / 180;
+      metres += 6371000 * Math.hypot((lat2 - lat1) * k, (lon2 - lon1) * k * Math.cos(((lat1 + lat2) / 2) * k));
+    }
+    return metres;
+  };
+  Data.CIRCUITS.filter((c) => c.historic).forEach((c) => {
+    assert.equal(c.era, ERAS[c.id], c.id);
+    const metres = outline(c.id);
+    assert.ok(Math.abs(metres - c.lengthM) / c.lengthM < 0.02, `${c.id}: the outline is ${Math.round(metres)} m against ${c.lengthM}`);
+  });
 });
 
 test("the six calendar cups, then the two historic cups; the season races the 2025 calendar only", () => {

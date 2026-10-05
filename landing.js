@@ -56,7 +56,7 @@
       return `
         <section class="cup-group${cup.historic ? " is-historic" : ""}" aria-label="${esc(cup.name)}">
           <header class="cup-head">
-            <span class="cup-number">${cup.historic ? "H" : ""}${num(i + 1)}</span>
+            <span class="cup-number"${cup.historic ? ` title="Historic cup ${num(i + 1)}"` : ""}>${cup.historic ? "H" : ""}${num(i + 1)}</span>
             <h3 class="cup-name it-title">${esc(cup.name)}</h3>
             <span class="cup-rounds">${sub}</span>
           </header>
@@ -85,8 +85,8 @@
       ${historic ? `
       <header class="historic-head">
         <p class="kicker">Historic cups</p>
-        <h3 class="it-title">Legends of the circuits gone</h3>
-        <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid. Each is the layout the outline data holds, and each card says which.</p>
+        <h3 class="it-title">Circuits of the past</h3>
+        <p class="muted">Eight famous circuits no longer on the calendar, raced by the 2025 grid in two cups, H1 and H2. Each is the layout the outline data holds, and each card says which.</p>
       </header>${historic}` : ""}`;
   }
 

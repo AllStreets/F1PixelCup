@@ -242,7 +242,8 @@ export const VENUES = {
     ground: "grass", groundTint: "#b0a462", standColor: "#007a4d", runoffTint: "#c8b690", gravelTint: "#d8c290",
     trees: [{ kind: "broadleaf", count: 380, tint: "#6a7a3a" }],
     hills: { tint: "#a49a62", count: 12, height: [70, 160], flat: true },
-    skyline: { arc: [Math.PI * 1.35, Math.PI * 1.65], count: 40, height: [60, 200] },
+    // Johannesburg and Sandton to the south.
+    skyline: { arc: [Math.PI * 0.35, Math.PI * 0.65], count: 40, height: [60, 200] },
     extras: ["skylineArc"],
     landmarks: ["highveld"],
   },
@@ -429,7 +430,10 @@ function cornerBoards(course, group, venue) {
     [1, -1].forEach((which) => [0, -40, 40, -80, 80].forEach((shift) => tries.push([which, shift, 14, 0.6])));
     // And further along the corner (a long one, crowded by stands: Mugello's Bucine).
     [1, -1].forEach((which) => [-120, 120, -160, 160].forEach((shift) => tries.push([which, shift, 14, 0.6])));
+    // (Shifted far along, still within the corner itself: never beside the next one.)
+    const within = (d) => ((d - c.from) % total + total) % total <= ((c.to - c.from) % total + total) % total;
     for (const [which, shift, back, size] of tries) {
+      if (Math.abs(shift) > 80 && !within(((c.d + shift) % total + total) % total)) continue;
       const p = course.sampleAt(((c.d + shift) % total + total) % total);
       const bend = course.sampleAt(c.d);
       const side = (bend.curve > 0 ? -1 : 1) * which;

@@ -116,6 +116,17 @@ async (page) => {
     return ok || JSON.stringify({ asking, phase: state.phase, race: state.raceIndex, run: state.cupRunId === before.run });
   }, before);
 
+  // A historic cup's circuits name their layouts in the pit lane.
+  results.historicErasShown = await step(() => {
+    const cups = Game.getPitLaneState().cups;
+    const i = CUPS.findIndex((c) => c.id === "legendsCup");
+    Game.selectCup(i);
+    const text = document.getElementById("cup-circuits").textContent;
+    Game.selectCup(0);
+    const ok = CUPS[i].tracks.every((t) => text.includes(t.name) && t.era && text.includes(t.era)) && cups[i].eras.every(Boolean);
+    return ok || text.slice(0, 300);
+  });
+
   // The season is one player's: with two players picked, choosing it shows
   // one player (the second greyed out) and starts with one.
   results.seasonIsOnePlayer = await step(() => {

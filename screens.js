@@ -318,7 +318,7 @@
     const circuits = s.cups[s.selectedCup].circuits;
     $("cup-circuits").innerHTML = s.cups[s.selectedCup].season
       ? `<li>${num(circuits.length)} rounds: ${esc(circuits[0])} to ${esc(circuits[circuits.length - 1])}</li>`
-      : circuits.map((name) => `<li>${esc(name)}</li>`).join("");
+      : circuits.map((name, i) => `<li>${esc(name)}${s.cups[s.selectedCup].eras[i] ? ` <small>${esc(s.cups[s.selectedCup].eras[i])}</small>` : ""}</li>`).join("");
     // One player or two (split screen); player 2's driver and both key sets.
     // The season is one player's championship: no second player there.
     const seasonPicked = s.cups[s.selectedCup].season;

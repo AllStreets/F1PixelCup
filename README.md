@@ -155,23 +155,23 @@ Then two historic cups of famous circuits no longer on the calendar, raced by th
 
 | Circuit | Country | Lap | Cup | The layout |
 |---|---|---|---|---|
-| Hockenheimring | Germany | 4.574 km | Legends Cup | The short Grand Prix circuit, raced in F1 2002 to 2019 |
-| Nürburgring GP-Strecke | Germany | 5.148 km | Legends Cup | The Grand Prix circuit of 1984, raced in F1 1984 to 2020 |
-| Autódromo do Estoril | Portugal | 4.349 km | Legends Cup | The circuit as last raced in F1, 1994 to 1996 (raced 1984 to 1996) |
-| Kyalami | South Africa | 4.529 km | Legends Cup | Today's circuit; F1 raced older Kyalami layouts 1967 to 1993 |
+| Hockenheimring | Germany | 4.574 km | Legends Cup | The short Grand Prix circuit, raced in F1 from 2002, last in 2019 |
+| Nürburgring GP-Strecke | Germany | 5.148 km | Legends Cup | The Grand Prix circuit with the 2002 Mercedes Arena, raced in F1 2002 to 2020 |
+| Autódromo do Estoril | Portugal | 4.182 km | Legends Cup | Today's circuit; F1 raced its earlier layouts here 1984 to 1996 |
+| Kyalami | South Africa | 4.529 km | Legends Cup | Today's circuit; F1 raced older Kyalami layouts 1967 to 1985 and 1992 to 1993 |
 | Sepang International Circuit | Malaysia | 5.543 km | Golden Era Cup | The F1 circuit, raced 1999 to 2017 |
 | Istanbul Park | Türkiye | 5.338 km | Golden Era Cup | The F1 circuit, raced 2005 to 2011 and 2020 to 2021 |
 | Mugello | Italy | 5.245 km | Golden Era Cup | The circuit as raced in F1 in 2020 |
-| Watkins Glen | United States | 5.430 km | Golden Era Cup | The long circuit with the Boot, as raced in F1 1975 to 1980 |
+| Watkins Glen | United States | 5.430 km | Golden Era Cup | The long circuit with the Boot, close to its F1 layout of 1975 to 1980 |
 
 Each one has its pit lane and garages beside the real pit lane's stretch, as
 near as room allows, where OpenStreetMap maps it, and on its real side: where
-the widened road leaves no room for the full complex there, a real circuit's
-compromises make it (a wall instead of run-off on the stretch beside it, short
-mouths, a narrower lane), as at Shanghai, Barcelona, the Hungaroring and
-Zandvoort. At Interlagos (the real lane leaves the track's side through the
-Senna S) and Singapore (its real side bends too tightly for garages) it is
-across the road. Albert Park's pit building goes up each year, and Monza, Suzuka and Las
+the widened road leaves no room for the full complex there, a wall instead of
+run-off on the stretch beside it and shorter mouths make it, as at Shanghai,
+Barcelona, the Hungaroring, Zandvoort, Hockenheim, Estoril and Sepang. At
+Interlagos (the real lane leaves the track's side through the Senna S) and
+Singapore (its real side bends too tightly for garages) it is across the road,
+and Monaco's is placed by the trackside work. Albert Park's pit building goes up each year, and Monza, Suzuka and Las
 Vegas have none mapped, so theirs come from the circuit's shape. Lap lengths
 are the outline data's. Each circuit has its signature corners named on boards
 where OpenStreetMap names them (and never where the name is a sponsor's), its

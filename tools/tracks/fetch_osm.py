@@ -97,8 +97,9 @@ CORNERS = {
         (1311566937, "SCHEIVLAK", ""),
         (1311879069, "ARIE LUYENDYKBOCHT", ""),
     ],
-    # (No corner named for a sponsor: Hockenheim's Mobil 1 and Sachs, the
-    # Nürburgring's Ford, NGK and Goodyear corners, Sepang's resort names.)
+    # (No corner named for a sponsor: Hockenheim's Mobil 1, Sachs and Ravenol,
+    # the Nürburgring's Ford, NGK and Goodyear, Sepang's Genting, Berjaya
+    # Tioman and Sunway Lagoon.)
     "hockenheim": [(117570506, "PARABOLIKA", ""), (117568832, "SÜDKURVE", "")],
     "nurburgring": [(820330153, "SCHUMACHER-S", "")],
     "estoril": [(363138869, "PARABÓLICA", "AYRTON SENNA"), (638617010, "ORELHA", "")],

@@ -416,8 +416,8 @@ function auditPits(track) {
   // How close an object's vertices come to the road: to its own stretch
   // (the pit zone itself) and to any other stretch of the lap (the road
   // either side of the zone included: a bend just past the pit lane, as at
-  // the Hungaroring's first corner, is held to the same clearance as any
-  // other stretch, as tools/tracks/build_tracks.py holds it).
+  // the Hungaroring's first corner, is held to the other stretches'
+  // clearance, the stricter rule of the two).
   const own = (p) => lane && lane.inZone(p.d);
   const closest = (obj) => {
     const best = { own: Infinity, other: Infinity, otherAt: null };
@@ -1367,7 +1367,7 @@ function pointOnLap(course, d) {
   const b = course.samples[(Math.floor(f) + 1) % n];
   const t = f - Math.floor(f);
   const mix = (u, v) => u + (v - u) * t;
-  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny) };
+  return { x: mix(a.x, b.x), y: mix(a.y, b.y), h: mix(a.h, b.h), nx: mix(a.nx, b.nx), ny: mix(a.ny, b.ny), wid: mix(a.wid ?? course.width, b.wid ?? course.width) };
 }
 
 // The TV cameras of a circuit, placed once, when a replay there first opens
@@ -1402,11 +1402,14 @@ function tvCameras(world) {
   const edges = [-W, -W / 3, W / 3, W];
   const cover = window.Replay.assignTvCoverageLanes(cams, L, (k, d, lane) => {
     const cam = cams[k];
-    const sides = [edges[lane] + 2, edges[lane + 1] - 2];
     let seen = 0;
     let rays = 0;
     [-half, 0, half].forEach((along) => {
       const p = pointOnLap(course, d + along);
+      // The lane's sides across the road as wide as it is here (it narrows
+      // in Shanghai's snail).
+      const share = p.wid / W;
+      const sides = [edges[lane] * share + 2, edges[lane + 1] * share - 2];
       const far = Math.hypot(cam.x - p.x, cam.z - p.y) > TV_SIGHT_RANGE;
       sides.forEach((side) => {
         rays += 1;

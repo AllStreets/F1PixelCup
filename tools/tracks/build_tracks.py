@@ -467,6 +467,8 @@ PIT_STEP = 10
 # other stretch beside it (as street circuits have), shorter mouths, and a
 # narrower lane with shallower garages. Only ever on the real side, and only
 # when the plainer ones don't fit.
+# (No circuit takes the narrow lane today: every real side fits walled.
+# It stays for a circuit that needs it, with its own garage-corner rule.)
 PIT_MOUTH_SHORT = 110
 PIT_LINE_SHORT = 60
 PIT_NARROW = {"centre": 23, "half": 12, "work": 47, "garage": 71}
