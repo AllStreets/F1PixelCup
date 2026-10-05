@@ -273,7 +273,7 @@ The item you get depends on how far you are behind the leader, not your place, w
 | **Overtake Mode** | Star | Five seconds faster and untouchable; cars you touch spin. |
 | **Steward Penalty** | Blue shell | Flies over the field to the leader: a long spin for them and anyone beside them. |
 | **Formation Lap** | Bullet Bill | Four seconds of autopilot at huge speed along the racing line. |
-| **Safety Car** | Lightning | Out ahead of the leader for five seconds; every rival is slowed to its pace. You aren't. |
+| **Safety Car** | Lightning | Joins through the nearest of each circuit's service gates (or the pit exit), races up to the leader and leads for five seconds; every rival is slowed to its pace. You aren't. |
 
 Shots, oil and the safety car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
 
