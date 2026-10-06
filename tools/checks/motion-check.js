@@ -68,6 +68,36 @@ async (page) => {
   results.speedOnQualifyingLap = quali.speedPanel > 60 || JSON.stringify(quali);
   results.noStreaksOver3D = (quali.speedLines === 0 && race.speedLines === 0) || JSON.stringify({ quali: quali.speedLines, race: race.speedLines });
 
+  // Home, waiting on the line for the rest of the field: the car stays still
+  // (it is parked, so every frame draws it in the same place). One lap on
+  // autopilot to the flag, then the game's own loop runs, frame by frame.
+  await step(() => { Game.backToPitLane(); Game.selectGridMode("back"); Game.startCup(); });
+  await p.waitForFunction(() => state.phase === "race" && !state.preparing, null, { timeout: 60000 });
+  const parked = await step(async () => {
+    state.track.laps = 1;
+    const player = getPlayer();
+    // (The field slowed, so the player is home with cars still racing.)
+    state.racers.forEach((r) => { if (r !== player) r.physics = { ...r.physics, maxSpeed: r.physics.maxSpeed * 0.5 }; });
+    player.isPlayer = false;
+    let now = state.lastTick || performance.now();
+    for (let n = 0; !player.finished && n < 60 * 300; n += 1) { now += 1000 / 60; updateRace(1 / 60, now); }
+    player.isPlayer = true;
+    if (!player.finished || state.phase !== "race") return { finished: player.finished, phase: state.phase };
+    const drawn = [];
+    const real = window.drawDriverView;
+    window.drawDriverView = (track) => {
+      if (state.phase === "race") drawn.push([player.x, player.y, player.heading]);
+      return real(track);
+    };
+    for (let i = 0; i < 40 && state.phase === "race"; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    window.drawDriverView = real;
+    let worst = 0;
+    for (let i = 1; i < drawn.length; i += 1) worst = Math.max(worst, Math.hypot(drawn[i][0] - drawn[i - 1][0], drawn[i][1] - drawn[i - 1][1]));
+    return { frames: drawn.length, worst: +worst.toFixed(4) };
+  });
+  await step(() => Game.backToPitLane());
+  results.stillOnTheLineAfterTheFlag = (parked && parked.frames >= 10 && parked.worst < 0.001) || JSON.stringify(parked);
+
   await step((s) => {
     if (s.grid === null) localStorage.removeItem("f1pixelcup.grid"); else localStorage.setItem("f1pixelcup.grid", s.grid);
     state.gridMode = s.grid || "back";
