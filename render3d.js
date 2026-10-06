@@ -643,7 +643,7 @@ function inspect() {
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
   // The trackside models and people (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
   const landmarks = [];
-  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
+  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ x: Math.round(o.position.x), z: Math.round(o.position.z), ...o.userData.landmark }); });
   const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };

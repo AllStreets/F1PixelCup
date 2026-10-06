@@ -428,7 +428,7 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | What | From | Licence |
 |---|---|---|
 | Circuit outlines | [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) | MIT |
-| Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
+| Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names, the Las Vegas Strip's buildings | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
 | The website's race data (the drivers' and teams' pages) | [F1DB](https://github.com/f1db/f1db) by Marcel Overdijk | CC BY 4.0 |
 | Ground textures | [Poly Haven](https://polyhaven.com) | CC0 |
 | The drivers' heads (base mesh and shape targets, data only) | [MakeHuman](https://github.com/makehumancommunity/makehuman) | CC0 |

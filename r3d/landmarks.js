@@ -217,6 +217,9 @@ export const VENUES = {
     fogNear: 1800, fogFar: 7000,
     extras: ["floodlights"],
     landmarks: [],
+    // If the Strip's model can't load: the Sphere by its site and towers on
+    // the horizon, as before it.
+    cityFallback: { extras: ["siteLandmarks", "skylineArc"], landmarks: ["vegasSphere"], skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] } },
   },
   losail: {
     // Under the lights in the desert north of Doha, Lusail's towers to the south.
@@ -1253,13 +1256,10 @@ const SITES = {
   bakuOldCity: (c) => ({ anchors: anchorsAround(c, 0.33, 80, insideFirst(c)), parts: ["walls", "maiden_tower"], gaps: [6, 10, 16, 24, 36, 55, 80], step: 12, gapFirst: true, faceTrack: true }),
   cotaTower: (c) => ({ anchors: anchorsAround(c, 0.8, 60, insideFirst(c)), gaps: [30, 60, 100, 160, 240], step: 16 }),
   foroSol: (c) => ({ anchors: anchorsAround(c, 0.88, 30, outsideFirst), gaps: [6, 12, 20, 32, 50, 80, 120], step: 14, gapFirst: true, faceTrack: true }),
-  // Close by the track, its ground in front kept clear (the Strip's blocks
-  // fill in round it, not in front of it).
-  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
-  // The Strip's towers with their ground in front kept clear, so the city's
-  // blocks fill in round them, not across the view of them from the track.
-  vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30, forecourt: true }),
   losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
+  // (Las Vegas's Sphere where the Strip's model is missing: r3d/vegas.js
+  // places it where it stands otherwise.)
+  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
 };
 
@@ -1732,16 +1732,6 @@ const EXTRAS = {
     });
   },
 
-  // The Strip: tall resorts, lit, close along the circuit.
-  vegasStrip(course, group, venue, rand) {
-    streetBlocks(course, group, rand, {
-      // One row: the Strip's own towers (the landmarks) stand behind them.
-      rows: 1, height: [50, 160], depth: [40, 80], width: [40, 80], maxCount: 240, spacing: 12, setback: 14,
-      palette: ["#d8c79a", "#c9a46a", "#e6dccb", "#9fb3c8", "#c48a9a", "#b9a2d6", "#f0e0b0"],
-      night: true, glass: "#2a2440", lit: 0.7,
-    });
-  },
-
   // A lake filling the circuit's infield (Albert Park): overlapping discs,
   // the largest that fit first, each clear of the barriers, so the water
   // takes the infield's shape.
@@ -1806,9 +1796,13 @@ export function buildCity(course, venue) {
   return null;
 }
 
-export function buildLandmarks(course, venue, city = null) {
+export function buildLandmarks(course, venue0, city = null) {
   const group = new THREE.Group();
   if (city) group.add(city);
+  // A city that couldn't be built: its venue's fallback instead.
+  const venue = venue0.city && !city && venue0.cityFallback
+    ? { ...venue0, ...venue0.cityFallback, extras: [...venue0.cityFallback.extras, ...venue0.extras] }
+    : venue0;
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
   const animated = city && city.userData.animate ? [city] : [];
   garages(course, group, venue);

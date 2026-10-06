@@ -40,6 +40,9 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
     // A city of its own (Las Vegas's Strip, r3d/vegas.js) or landmarks by site.
     if (v.city) {
       assert.ok((VENUE_MODELS[id] || []).includes(v.city), `${id}'s city ${v.city} is not among its models`);
+      // Its other landmarks (the Sphere) are loaded too, and its fallback names them.
+      (v.cityFallback.landmarks || []).forEach((n) => assert.ok(VENUE_MODELS[id].includes(n), `${id}'s ${n} is not among its models`));
+      assert.ok(v.cityFallback.extras.includes("siteLandmarks"), `${id}'s fallback doesn't build its landmarks`);
       return;
     }
     assert.ok(Array.isArray(v.landmarks) && v.landmarks.length >= 1, `${id} lists no landmark`);

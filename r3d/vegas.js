@@ -18,11 +18,12 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { tracksideModel, floats } from "./models.js";
 import { color } from "./textures.js";
+import { shiftClear, tileKey } from "./vegas-place.js";
 
 export const VEGAS_SCALE = 1.3;
 // Where the model's origin (the circuit's projection centre) lies in the
 // game: tools/vegas/strip.json origin.game (tests/vegas-strip.test.js).
-export const VEGAS_ORIGIN = { x: 1290.3, z: 1729.8 };
+export const VEGAS_ORIGIN = { x: 1290.35, z: 1729.8 };
 // How far from the barrier a building's ground must stay, and how far one may
 // be moved to get there before it is left out (game units).
 const MARGIN = 10;
@@ -31,7 +32,6 @@ const MAX_SHIFT = 70;
 // The Strip's own materials by role (the rest are the landmarks' own).
 function stripMaterials(night, facadeMaterial, clock) {
   const made = {};
-  const neon = () => new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   return (src) => {
     const name = src.name;
     if (made[name]) return made[name];
@@ -40,7 +40,7 @@ function stripMaterials(night, facadeMaterial, clock) {
       // Hotel rooms (3.6 m bays), most of them lit on race night.
       out = facadeMaterial(night, night ? { glass: "#151b26", lit: 0.62, floors: 0.45, room: [3.6, 3.1], glow: 0.5, fromVertex: true } : { glass: "#56708c", room: [3.6, 3.1], fromVertex: true });
     } else if (name === "neon") {
-      out = neon();
+      out = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
       // By day the tubes are there but dark.
       if (!night) out.color = new THREE.Color(0.35, 0.35, 0.35);
     } else if (name === "video") {
@@ -75,17 +75,17 @@ function videoMaterial(clock) {
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uVideoTime = clock;
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vVideo; varying vec2 vScreen;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVideo = vec2(uv.x, 1.0 - uv.y);\nvScreen = (modelMatrix * vec4(position, 1.0)).xz;");
+      .replace("#include <common>", "#include <common>\nvarying vec2 vVideo; varying float vScreen;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvVideo = vec2(uv.x, 1.0 - uv.y);\nvScreen = color.r;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>
-        varying vec2 vVideo; varying vec2 vScreen; uniform float uVideoTime;
+        varying vec2 vVideo; varying float vScreen; uniform float uVideoTime;
         float vHash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
-        // Each screen its own palette and its own kind of picture (by where
-        // it stands): flowing colour, bars that sweep up, or a chase of
-        // light; switching every few seconds as a resort's screen does.
-        vec2 cell = floor(vScreen / 80.0);
+        // Each screen its own palette and its own kind of picture (its id in
+        // its vertex colours): flowing colour, bars that sweep up, or a
+        // chase of light; switching every few seconds as a resort's does.
+        vec2 cell = vec2(floor(vScreen * 255.0 + 0.5), 7.0);
         float id = vHash(cell);
         float t = uVideoTime;
         float scene = floor(t / 6.0 + id * 5.0);
@@ -102,7 +102,8 @@ function videoMaterial(clock) {
         float pix = smoothstep(0.0, 0.15, px.x) * smoothstep(0.0, 0.15, px.y);
         diffuseColor.rgb = c * mix(0.55, 1.0, pix) * 1.1;`);
   };
-  m.customProgramCacheKey = () => "vegas-video-v2";
+  m.vertexColors = true;
+  m.customProgramCacheKey = () => "vegas-video-v3";
   return m;
 }
 
@@ -116,114 +117,170 @@ function fountainMaterial(clock, night) {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nuniform float uShowTime;")
       .replace("#include <begin_vertex>", `#include <begin_vertex>
+        // (The compressed model's positions are quantized round the node's
+        // own box: the jet is stretched in the world, up from the water.)
+        vec4 world = modelMatrix * vec4(transformed, 1.0);
         float ph = color.r;
         float row = color.g;
         float cycle = mod(uShowTime, 30.0);
         float wave = pow(max(0.0, sin(uShowTime * 1.1 - ph * 18.0 + row * 1.7)), 2.0);
         float finale = smoothstep(24.0, 25.5, cycle) * (1.0 - smoothstep(28.5, 30.0, cycle));
         float h = mix(4.0 + (46.0 - row * 22.0) * wave, 70.0 - row * 18.0, finale);
-        transformed.y *= h;
+        // The jet is a metre tall in the model (its nozzle at 0.2 m): h
+        // metres tall in the world, at the Strip's 1.3 units a metre.
+        float up = max(0.0, world.y - 0.26);
+        world.y = 0.26 + up * h;
         // The water leans a little with the breeze as it climbs.
-        transformed.x += transformed.y * 0.03 * sin(uShowTime * 0.4 + ph * 6.0);`);
+        world.x += up * h * 0.03 * sin(uShowTime * 0.4 + ph * 6.0);
+        transformed = (inverse(modelMatrix) * world).xyz;`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = diffuse;");
   };
-  m.customProgramCacheKey = () => `vegas-fountain-v1-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-fountain-v2-${night ? 1 : 0}`;
   return m;
 }
 
 // The Luxor's beam: light added to the sky, fading with height.
 function beamMaterial(night) {
-  const m = new THREE.MeshBasicMaterial({ color: 0xcfe2ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: night ? 0.55 : 0.0, toneMapped: false, fog: false });
+  const m = new THREE.MeshBasicMaterial({ color: 0xcfe2ff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.55, toneMapped: false, fog: false });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying float vBeamH;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBeamH = position.y;");
+      // (The world's height: the compressed model's own positions are quantized.)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBeamH = (modelMatrix * vec4(position, 1.0)).y / 1.3;");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vBeamH;")
       .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(150.0, 1500.0, vBeamH);");
   };
-  m.customProgramCacheKey = () => "vegas-beam-v1";
+  m.customProgramCacheKey = () => "vegas-beam-v2";
+  // (By day the beam is off.)
   m.visible = night;
   return m;
 }
 
-// A node's ground: the world points of its vertices near the ground (at most
-// `cap` of them, evenly through the list).
-function groundPoints(node, cap = 96) {
+// The ground a node covers, in the world: every corner of its triangles,
+// their edges' middles and points across its large faces, dropped to the
+// ground (an edge across the margin counts, not only its ends; a piece
+// standing on another counts too), at most `cap` of them, evenly through.
+function groundPoints(node, cap = 260) {
   const pts = [];
   node.updateMatrixWorld(true);
-  const v = new THREE.Vector3();
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
   node.traverse((m) => {
     if (!m.isMesh) return;
     const pos = m.geometry.attributes.position;
-    const low = [];
-    for (let i = 0; i < pos.count; i += 1) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-      if (v.y < 4) low.push([v.x, v.z]);
+    const index = m.geometry.index;
+    const count = index ? index.count : pos.count;
+    const at = (k) => (index ? index.getX(k) : k);
+    const all = [];
+    const c = new THREE.Vector3();
+    for (let k = 0; k < count; k += 3) {
+      for (let e = 0; e < 3; e += 1) {
+        a.fromBufferAttribute(pos, at(k + e)).applyMatrix4(m.matrixWorld);
+        b.fromBufferAttribute(pos, at(k + ((e + 1) % 3))).applyMatrix4(m.matrixWorld);
+        all.push([a.x, a.z], [(a.x + b.x) / 2, (a.z + b.z) / 2]);
+      }
+      // A large face (a roof across a whole footprint): points across it
+      // too, so the ground inside a building is covered, not only its edges.
+      a.fromBufferAttribute(pos, at(k)).applyMatrix4(m.matrixWorld);
+      b.fromBufferAttribute(pos, at(k + 1)).applyMatrix4(m.matrixWorld);
+      c.fromBufferAttribute(pos, at(k + 2)).applyMatrix4(m.matrixWorld);
+      const area = Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
+      const n = Math.min(12, Math.floor(Math.sqrt(area) / 15));
+      for (let i = 1; i < n; i += 1) {
+        for (let j = 1; i + j < n; j += 1) {
+          const u = i / n;
+          const v = j / n;
+          all.push([a.x + (b.x - a.x) * u + (c.x - a.x) * v, a.z + (b.z - a.z) * u + (c.z - a.z) * v]);
+        }
+      }
     }
-    const step = Math.max(1, Math.floor(low.length / cap));
-    for (let i = 0; i < low.length; i += step) pts.push(low[i]);
+    const step = Math.max(1, Math.floor(all.length / cap));
+    for (let k = 0; k < all.length; k += step) pts.push(all[k]);
   });
   return pts;
 }
 
-// Move a node (a child of the scaled model) straight away from the track
-// until its ground clears it; returns the shift (game units), or -1 if it
-// would have to go further than MAX_SHIFT.
-function clearOfTrack(course, node, scale, maxShift = MAX_SHIFT) {
-  let shift = 0;
-  for (let k = 0; k < 6; k += 1) {
-    const pts = groundPoints(node);
-    if (!pts.length) return shift;
-    let worst = null;
-    let least = Infinity;
-    pts.forEach(([x, z]) => {
-      const c = course.clearance(x, z, MARGIN + 60);
-      if (c < least) { least = c; worst = [x, z]; }
-    });
-    if (least >= MARGIN) return shift;
-    const near = course.nearestSample(worst[0], worst[1]);
-    if (!near) return -1;
-    let dx = worst[0] - near.x;
-    let dz = worst[1] - near.y;
-    // (A point on the centreline itself: out along the track's normal.)
-    if (Math.hypot(dx, dz) < 1e-3) { dx = near.nx; dz = near.ny; }
-    const need = MARGIN - least + 3;
-    const len = Math.hypot(dx, dz) || 1;
-    const ux = dx / len;
-    const uz = dz / len;
-    node.position.x += (ux * need) / scale;
-    // (Model z is the game's z: the export turned the model's north to -z.)
-    node.position.z += (uz * need) / scale;
-    shift += need;
-    if (shift > maxShift) return -1;
-  }
-  return -1;
+// The pieces that move together: a resort's towers, parts, screens and sign
+// (so a tower and what stands on it never come apart); every other piece on
+// its own.
+function groupOf(node) {
+  if (node.userData.resort) return `resort:${node.userData.resort}`;
+  const m = /^(led|sign)_(\w+)$/.exec(node.name);
+  return m ? `resort:${m[2]}` : `piece:${node.uuid}`;
 }
 
-// The buildings' meshes merged by material once they have their places (a
-// few draw calls for two hundred buildings).
+// Each group clear of the track (moved straight away from it, each piece of
+// it by the same), then claimed; a group that can't be is left out. Moves
+// are in the model's own metres for pieces under the scaled model.
+function placeGroups(course, nodes, scale, moved, dropped, maxShift = MAX_SHIFT) {
+  const groups = new Map();
+  nodes.forEach((n) => {
+    const key = groupOf(n);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(n);
+  });
+  // The groups that need no move first: they claim their ground before any
+  // moved one looks for room.
+  const plans = [...groups.entries()].map(([key, list]) => {
+    const pts = list.flatMap((n) => groundPoints(n));
+    return { key, list, pts, r: shiftClear(pts, course, { margin: MARGIN, maxShift, blocked: null }) };
+  });
+  plans.sort((x, y) => (x.r.shift || 0) - (y.r.shift || 0));
+  plans.forEach(({ key, list, pts, r: first }) => {
+    const r = first.shift > 0
+      ? shiftClear(pts, course, { margin: MARGIN, maxShift, blocked: (x, z) => course.occupied.blocked(x, z, 4) })
+      : first;
+    if (r.dropped) {
+      list.forEach((n) => n.removeFromParent());
+      dropped.push({ name: key, why: r.dropped });
+      return;
+    }
+    if (r.shift > 0) {
+      list.forEach((n) => {
+        n.position.x += r.dx / scale;
+        n.position.z += r.dz / scale;
+        n.updateMatrixWorld(true);
+      });
+      moved.push({ name: key, shift: Math.round(r.shift) });
+    }
+    pts.forEach(([x, z], k) => { if (k % 3 === 0) course.occupied.add(x + r.dx, z + r.dz, 10); });
+  });
+}
+
+const DARK = ["beam", "fountain", "neon", "video"];
+
+// The buildings' meshes merged by material and by tile once they have their
+// places: a few draw calls for two hundred buildings, each tile still left
+// out of a view it isn't in.
 function mergeBuildings(parent) {
   parent.updateMatrixWorld(true);
-  const byMaterial = new Map();
+  const lists = new Map();
+  const box = new THREE.Box3();
+  const centre = new THREE.Vector3();
   parent.traverse((m) => {
     if (!m.isMesh) return;
     const g = new THREE.BufferGeometry();
     ["position", "normal", "uv", "color"].forEach((k) => { if (m.geometry.attributes[k]) g.setAttribute(k, floats(m.geometry.attributes[k])); });
-    if (m.geometry.index) g.setIndex(m.geometry.index.clone());
+    g.setIndex(m.geometry.index ? m.geometry.index.clone() : [...Array(g.attributes.position.count).keys()]);
     g.applyMatrix4(m.matrixWorld);
-    if (!byMaterial.has(m.material)) byMaterial.set(m.material, []);
-    byMaterial.get(m.material).push(g);
+    box.setFromBufferAttribute(g.attributes.position).getCenter(centre);
+    const key = `${m.material.uuid}|${tileKey(centre.x, centre.z)}`;
+    if (!lists.has(key)) lists.set(key, { material: m.material, list: [] });
+    lists.get(key).list.push(g);
   });
   const out = new THREE.Group();
   out.name = "strip_buildings";
-  byMaterial.forEach((list, material) => {
+  lists.forEach(({ material, list }) => {
     // Only the attributes every piece has.
-    const keys = ["position", "normal", "uv", "color"].filter((k) => list.every((g) => g.attributes[k]));
+    const keys = ["position", "normal", "uv", "color"].filter((k) => list.every((g) => g.attributes[k] && g.attributes[k].itemSize === list[0].attributes[k].itemSize));
     list.forEach((g) => Object.keys(g.attributes).forEach((k) => { if (!keys.includes(k)) g.deleteAttribute(k); }));
-    const mesh = new THREE.Mesh(mergeGeometries(list), material);
-    mesh.castShadow = true;
+    const geometry = mergeGeometries(list);
+    if (!geometry) throw new Error(`the Strip's ${material.name} pieces would not merge`);
+    list.forEach((g) => g.dispose());
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = !DARK.includes(material.name);
     mesh.receiveShadow = true;
     mesh.userData.merged = list.length;
     out.add(mesh);
@@ -250,32 +307,36 @@ export function buildVegasStrip(course, venue, { dress, facadeMaterial }) {
   group.name = "landmark:vegasStrip";
   const moved = [];
   const dropped = [];
-  const resorts = {};
-  // Each building and each landmark clear of the track, then claimed.
+  // Each building and each landmark clear of the track, a resort's pieces
+  // together, then claimed.
   const pieces = [...model.getObjectByName("buildings").children, ...model.getObjectByName("landmarks").children];
-  pieces.forEach((node) => {
-    const shift = clearOfTrack(course, node, VEGAS_SCALE);
-    if (shift < 0) { dropped.push(node.name); node.removeFromParent(); return; }
-    if (shift > 0) moved.push({ name: node.name, shift: Math.round(shift) });
-    node.updateMatrixWorld(true);
-    groundPoints(node, 48).forEach(([x, z]) => course.occupied.add(x, z, 10));
+  placeGroups(course, pieces, VEGAS_SCALE, moved, dropped);
+  const resorts = {};
+  model.getObjectByName("buildings").children.forEach((node) => {
     const resort = node.userData.resort;
-    if (resort) {
-      const box = new THREE.Box3().setFromObject(node);
-      if (!resorts[resort] || box.max.y > resorts[resort].top) resorts[resort] = { top: box.max.y, x: (box.min.x + box.max.x) / 2, z: (box.min.z + box.max.z) / 2 };
-    }
+    if (!resort) return;
+    const b = new THREE.Box3().setFromObject(node);
+    if (!resorts[resort] || b.max.y > resorts[resort].top) resorts[resort] = { top: b.max.y, x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 };
   });
   // The lake is ground (nothing stands over the track in it; the cars never see under it).
   model.traverse((m) => { if (m.isMesh && m.material.name === "lake") m.userData.ground = true; });
   // Light: the beam and the jets never cast shadows.
-  model.traverse((m) => { if (m.isMesh && ["beam", "fountain", "neon", "video"].includes(m.material.name)) { m.castShadow = false; } });
+  model.traverse((m) => {
+    if (!m.isMesh) return;
+    if (DARK.includes(m.material.name)) m.castShadow = false;
+    // (The jets are drawn up to 70 m tall from a model a metre tall: never
+    // left out of a view for their small bounds.)
+    if (m.material.name === "fountain") m.frustumCulled = false;
+  });
   const buildings = model.getObjectByName("buildings");
+  const kept = buildings.children.length;
   const merged = mergeBuildings(buildings);
   buildings.removeFromParent();
   // (Merged in world space: straight into the group.)
   group.add(merged);
   group.add(model);
   // The Sphere where it stands, at the same scale (its own model).
+  const screens = [];
   const sphereAt = model.getObjectByName("anchor_sphere");
   const sphere = tracksideModel("vegasSphere");
   if (sphere && sphereAt) {
@@ -289,20 +350,19 @@ export function buildVegasStrip(course, venue, { dress, facadeMaterial }) {
     node.name = "sphere";
     group.add(node);
     // (The circuit runs round the Sphere's own corner: it may move further.)
-    const shift = clearOfTrack(course, s, 1, 140);
-    if (shift < 0) { dropped.push("sphere"); node.removeFromParent(); }
-    else {
-      if (shift > 0) moved.push({ name: "sphere", shift: Math.round(shift) });
-      groundPoints(s, 48).forEach(([x, z]) => course.occupied.add(x, z, 10));
+    placeGroups(course, [s], 1, moved, dropped, 140);
+    if (s.parent) {
       s.updateMatrixWorld(true);
       const q = new THREE.Vector3().setFromMatrixPosition(s.matrixWorld);
       const near = course.nearestSample(q.x, q.z) || course.samples[0];
       s.name = "landmark:vegasSphere";
-      s.userData.landmark = { name: "vegasSphere", fromModel: true, trackAt: { x: Math.round(near.x), z: Math.round(near.y), d: Math.round(near.d) } };
+      s.userData.landmark = { name: "vegasSphere", fromModel: true, x: Math.round(q.x), z: Math.round(q.z), trackAt: { x: Math.round(near.x), z: Math.round(near.y), d: Math.round(near.d) } };
+      // Its image turns: its clock with the Strip's.
+      s.traverse((m) => { if (m.material && m.material.userData.time) screens.push(m.material.userData.time); });
     }
   }
   // The named landmarks, each with its nearest point of the track.
-  const nearest = (x, z) => course.samples.reduce((a, q) => (Math.hypot(q.x - x, q.y - z) < Math.hypot(a.x - x, a.y - z) ? q : a));
+  const nearest = (x, z) => course.nearestSample(x, z) || course.samples.reduce((a, q) => (Math.hypot(q.x - x, q.y - z) < Math.hypot(a.x - x, a.y - z) ? q : a));
   const named = (name, x, z, extra = {}) => {
     const q = nearest(x, z);
     return { name, fromModel: true, x: Math.round(x), z: Math.round(z), trackAt: { x: Math.round(q.x), z: Math.round(q.y), d: Math.round(q.d) }, ...extra };
@@ -319,13 +379,18 @@ export function buildVegasStrip(course, venue, { dress, facadeMaterial }) {
   };
   model.updateMatrixWorld(true);
   [...NAMED, ...(lm ? lm.children.map((c) => c.name).filter((n) => n.startsWith("sign_")) : [])].forEach((n) => {
-    const node = lm && lm.getObjectByName(n);
+    // A landmark's group (lm_<name>), a screen or sign its own node; the
+    // Luxor by its pyramid (not its beam into the sky).
+    const node = lm && (n === "luxor" ? lm.getObjectByName("luxor_pyramid") : lm.getObjectByName(`lm_${n}`) || lm.getObjectByName(n));
     if (!node) return;
     const box = new THREE.Box3().setFromObject(node);
     if (!box.isEmpty()) mark(n, (box.min.x + box.max.x) / 2, (box.min.z + box.max.z) / 2, box.max.y);
   });
   Object.entries(resorts).forEach(([name, r]) => mark(`resort_${name}`, r.x, r.z, r.top));
-  group.userData.landmark = { name: "vegasStrip", fromModel: true, buildings: merged.children.reduce((a, m) => a + m.userData.merged, 0), moved, dropped };
-  group.userData.animate = (dt) => { clock.value += dt; };
+  group.userData.landmark = { name: "vegasStrip", fromModel: true, x: Math.round(VEGAS_ORIGIN.x), z: Math.round(VEGAS_ORIGIN.z), buildings: kept, moved, dropped };
+  group.userData.animate = (dt) => {
+    clock.value += dt;
+    screens.forEach((t) => { t.value += dt; });
+  };
   return group;
 }

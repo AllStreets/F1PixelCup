@@ -31,7 +31,6 @@ build_landmarks.py (Stage J), copied so the two scripts stay independent.
   cota_tower.glb           the Austin observation tower and its red veil
   foro_sol.glb             the stadium section's horseshoe of stands
   vegas_sphere.glb         the Sphere, its LED skin painted (vertex colours)
-  vegas_strip.glb          a curved slab, a Y-plan tower, the needle tower
   losail_grandstand.glb    the floodlit main grandstand
   lusail_towers.glb        Lusail's twin crescent towers
   yas_hotel.glb            half the Yas hotel under its gridshell
@@ -874,44 +873,6 @@ def build_sphere():
     return root
 
 
-def build_strip():
-    """Along the Strip: a curved slab of bronze glass (187 m), a Y-plan
-    tower of gold glass (120 m), and far off the 350 m observation tower:
-    its tapering shaft, the pod with its lit glass bands, the mast."""
-    clear()
-    root = empty("vegas_strip")
-    c = Mesh("curved_slab")
-    arc = [(-120 + math.sin(a) * 150, 150 - math.cos(a) * 150 - 140) for a in [math.radians(-12 + 24 * k / 12) for k in range(13)]]
-    back = [(-120 + math.sin(a) * 170, 150 - math.cos(a) * 170 - 140) for a in [math.radians(-12 + 24 * k / 12) for k in range(13)]]
-    facade_tower(c, list(reversed(arc)) + back, 0, 187, "facade_bronze")
-    # Its crown: a band of light round the top, and a podium at its foot.
-    c.prism([(x * 1.0, y) for x, y in list(reversed(arc)) + back], 187, 190, "window_lit")
-    c.box((-150, -150, 0), (-90, -126, 14), "dark_glass")
-    c.finish(parent=root)
-    y = Mesh("y_tower")
-    for k in range(3):
-        a = math.radians(90 + 120 * k)
-        ux, uy = math.cos(a), math.sin(a)
-        px, py = -uy, ux
-        L, W = 52.0, 11.0
-        pts = [(px * W, py * W), (px * W + ux * L, py * W + uy * L), (-px * W + ux * L, -py * W + uy * L), (-px * W, -py * W)]
-        facade_tower(y, [(30 + x, -40 + yy) for x, yy in pts], 0, 120.0 - 8 * k, "facade_bronze")
-        y.prism([(30 + x, -40 + yy) for x, yy in pts], 120.0 - 8 * k, 122.0 - 8 * k, "window_lit")
-    y.prism([(30 + 13 * math.cos(2 * math.pi * k / 6), -40 + 13 * math.sin(2 * math.pi * k / 6)) for k in range(6)], 0, 124.0, "facade_bronze")
-    y.finish(parent=root)
-    n = Mesh("needle")
-    nx, ny = 150.0, -110.0
-    for k in range(3):
-        a = 2 * math.pi * k / 3
-        tube(n, (nx + math.cos(a) * 11, ny + math.sin(a) * 11, 0), (nx + math.cos(a) * 5, ny + math.sin(a) * 5, 262), 3.6, "concrete", 10)
-    n.lathe([(0.0, 258), (6.0, 258), (16.0, 262), (24.0, 268), (25.0, 274), (22.0, 280), (25.0, 284), (24.0, 288), (12.0, 292), (5.0, 294), (0.0, 294)], (nx, ny), "concrete", segs=24, smooth=False)
-    for z0, r in ((268.5, 24.4), (280.5, 22.4)):
-        n.lathe([(0.0, z0), (r, z0), (r + 0.3, z0 + 0.4), (r + 0.3, z0 + 3.4), (r, z0 + 3.8), (0.0, z0 + 3.8)], (nx, ny), "window_lit", segs=24, smooth=False)
-    n.lathe([(0.0, 294), (3.0, 294), (1.6, 330), (0.6, 350), (0.0, 352)], (nx, ny), "white_steel", segs=8, smooth=False)
-    n.finish(parent=root)
-    return root
-
-
 # =============================================================================
 # Losail: the floodlit grandstand, Lusail's towers
 # =============================================================================
@@ -1075,7 +1036,6 @@ MODELS = (
     (build_cota_tower, "cota_tower", (74, 80), False, False, [("front", (40, 150, 30), (0, -10, 38))], False),
     (build_foro_sol, "foro_sol", (30, 60), True, False, [("front", (0, 160, 40), (0, 20, 10))], False),
     (build_sphere, "vegas_sphere", (108, 116), False, True, [("front", (0, 330, 50), (0, 0, 55))], True),
-    (build_strip, "vegas_strip", (340, 360), True, False, [("front", (0, 560, 80), (0, -40, 150))], True),
     (build_losail_grandstand, "losail_grandstand", (18, 45), True, False, [("front", (40, 130, 20), (0, 0, 14))], True),
     (build_lusail_towers, "lusail_towers", (185, 215), True, False, [("front", (0, 480, 60), (0, 0, 100))], True),
     (build_yas_hotel, "yas_hotel", (50, 70), True, False, [("front", (40, 170, 30), (0, 0, 30))], True),

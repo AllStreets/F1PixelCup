@@ -48,12 +48,15 @@ RESORTS = {
     "resortsworld": ["Resorts World"], "strat": ["Strat", "Stratosphere"], "harrahs": ["Harrah"], "horseshoe": ["Horseshoe"],
     "trump": ["Trump"], "mandalay": ["Mandalay"],
 }
-# Points inside resorts whose towers are mapped without a name.
+# Points inside resorts whose towers are mapped without a name (and how near
+# a tower must be, metres: 90 unless given).
 RESORT_POINTS = {
     "mirage": (36.1213, -115.1752), "treasureisland": (36.1247, -115.1719), "flamingo": (36.1165, -115.1715),
     "harrahs": (36.1195, -115.1701), "aria": (36.1072, -115.1772), "mgm": (36.1024, -115.1700), "nyny": (36.1022, -115.1749),
     "excalibur": (36.0989, -115.1752), "resortsworld": (36.1347, -115.1662), "bellagio": (36.1131, -115.1763),
     "cosmopolitan": (36.1098, -115.1752), "paris": (36.1125, -115.1705), "venetian": (36.1213, -115.1693),
+    # The Luxor's two stepped towers, either side of the pyramid's north.
+    "luxor": (36.0968, -115.1758, 150.0),
 }
 # Heights for towers mapped without one (public figures; only for a tower's
 # own footprint, not a resort's whole site: under MAX_SITE square metres).
@@ -97,12 +100,15 @@ def fetch(cache):
 
 
 def number(v):
+    """A height as the map writes it: metres, or feet with ' or ft."""
     if not v:
         return None
+    v = v.split(";")[0].strip()
     try:
-        return float(re.sub(r"[^0-9.]", "", v.split(";")[0]))
+        n = float(re.sub(r"[^0-9.]", "", v))
     except ValueError:
         return None
+    return n * 0.3048 if ("'" in v or "ft" in v) else n
 
 
 def ring(e):
@@ -187,8 +193,8 @@ def main():
         for key, names in RESORTS.items():
             if name and any(n.lower() in name.lower() for n in names):
                 return key
-        for key, (plat, plon) in RESORT_POINTS.items():
-            if math.dist((lat, lon), (plat, plon)) < 0.0009:
+        for key, point in RESORT_POINTS.items():
+            if math.dist(metres(lat, lon), metres(point[0], point[1])) < (point[2] if len(point) > 2 else 90.0):
                 return key
         for key, polys in resort_polys.items():
             if any(inside((lat, lon), p) for p in polys):
@@ -196,7 +202,11 @@ def main():
         return ""
 
     parts = [(e, ring(e)) for e in elements if "building:part" in e.get("tags", {})]
-    replaced = [a["outline"] for k2, a in anchors.items() if k2 in ("eiffel", "balloon", "arc", "campanile", "sphere", "strat", "luxor", "colosseum")]
+    replaced = [a["outline"] for k2, a in anchors.items() if k2 in ("eiffel", "balloon", "arc", "campanile", "sphere", "strat", "colosseum")]
+    # The Luxor's anchor is the whole resort's site: only what stands inside
+    # the pyramid's own square (183 m) gives way to it, not its towers.
+    lx, ly = anchors["luxor"]["x"], anchors["luxor"]["y"]
+    replaced.append([(lx - 92, ly - 92), (lx + 92, ly - 92), (lx + 92, ly + 92), (lx - 92, ly + 92)])
     buildings = []
     for e, r in [(e, ring(e)) for e in elements]:
         t = e.get("tags", {})
@@ -234,6 +244,8 @@ def main():
             "roof": t.get("roof:shape", "flat"), "outline": [[round(x, 2), round(y, 2)] for x, y in outline],
         })
     lakes = [r for e, r in named if e["tags"]["name"] == "Fountains of Bellagio"]
+    if not lakes:
+        raise RuntimeError("no Fountains of Bellagio (the lake) in the map")
     out = {
         "attribution": "© OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright)",
         "origin": {"lat": lat0, "lon": lon0, "game": {"x": round(tx, 2), "z": round(ty, 2)}, "scale": SCALE, "fitError": round(err, 2)},

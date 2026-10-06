@@ -32,14 +32,14 @@ import json
 import math
 import os
 import sys
-from mathutils import Vector, Matrix
+from mathutils import Vector
 
 if (bpy.data.filepath or bpy.data.is_dirty) and os.environ.get("F1_BUILD_FORCE") != "1":
     raise RuntimeError("build_vegas.py clears the scene, and this one has work in it. Use a new file, or set F1_BUILD_FORCE=1.")
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from landmark_kit import *  # noqa: E402,F401,F403
-from landmark_kit import PALETTE, MATS, Mesh, tube, polyline, empty, clear, subtree, bounds, tris, smooth  # noqa: E402
+from landmark_kit import PALETTE, Mesh, tube, empty, clear, subtree, bounds, tris  # noqa: E402
 import landmark_kit  # noqa: E402
 
 DATA = json.load(open(os.path.join(HERE, "..", "vegas", "strip.json")))
@@ -82,10 +82,14 @@ def hexrgb(h):
 
 class VMesh(Mesh):
     """A Mesh whose faces each carry a colour (r, g, b, a), written to a
-    colour attribute (glTF COLOR_0) for the roles that read it."""
+    colour attribute (glTF COLOR_0) for the roles that read it. Colours are
+    sRGB (as the hex colours are) and stored linear, as glTF's are; with
+    `data`, the channels are numbers for a shader (the fountains' phases, a
+    screen's id) and stored as they are."""
 
-    def __init__(self, name):
+    def __init__(self, name, data=False):
         super().__init__(name)
+        self.data = data
         self.col_layer = self.bm.faces.layers.int.new("colour_index")
         self.palette = [(1.0, 1.0, 1.0, 1.0)]
 
@@ -105,11 +109,33 @@ class VMesh(Mesh):
         for poly in me.polygons:
             c = self.palette[idx.data[poly.index].value] if idx else (1, 1, 1, 1)
             for li in poly.loop_indices:
-                attr.data[li].color = c
+                if self.data:
+                    attr.data[li].color = c
+                else:
+                    attr.data[li].color_srgb = c
         me.color_attributes.active_color = attr
         if idx:
             me.attributes.remove(idx)
         return ob
+
+
+def light_bar(m, a, b, w, col):
+    """A bar of light from a to b, w thick: a closed box (its faces outward)."""
+    a, b = Vector(a), Vector(b)
+    # (A hair short of b: bars end to end stay separate closed boxes, never
+    # welded into one with walls inside it.)
+    b = a + (b - a) * 0.97
+    d = (b - a).normalized()
+    side = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
+    u = d.cross(side).normalized() * (w / 2)
+    v = d.cross(u).normalized() * (w / 2)
+    ring = lambda c: [c - u - v, c + u - v, c + u + v, c - u + v]
+    ra, rb = ring(a), ring(b)
+    for k in range(4):
+        j = (k + 1) % 4
+        m.cface((ra[k], ra[j], rb[j], rb[k]), "neon", col)
+    m.cface(list(reversed(ra)), "neon", col)
+    m.cface(rb, "neon", col)
 
 
 def ccw(outline):
@@ -181,7 +207,6 @@ def building(b, parent):
             a, c = outline[i], outline[(i + 1) % len(outline)]
             m.cface([(a[0], a[1], top), (c[0], c[1], top), (cx, cy, h)], role)
     elif roof in ("dome", "round"):
-        rad = max(math.dist((cx, cy), p) for p in outline)
         rows = [[(cx + (p[0] - cx) * math.cos(t), cy + (p[1] - cy) * math.cos(t), top + roof_h * math.sin(t)) for p in outline] for t in [math.pi / 2 * k / 5 for k in range(5)]]
         for r0, r1 in zip(rows, rows[1:]):
             for i in range(len(outline)):
@@ -190,7 +215,6 @@ def building(b, parent):
         for i in range(len(outline)):
             j = (i + 1) % len(outline)
             m.cface([rows[-1][i], rows[-1][j], (cx, cy, h)], "roof_green" if b["resort"] in ("bellagio",) else "roof_flat")
-        _ = rad
     else:
         m.cface([(x, y, top) for x, y in outline], "roof_flat")
     if b["minh"] > 0.5:
@@ -329,15 +353,14 @@ def eiffel(parent):
     li = VMesh("eiffel_lights")
     gold = (1.0, 0.78, 0.42, 1.0)
     for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-        pts = [at(sx * (side(z) / 2 + 0.6), sy * (side(z) / 2 + 0.6), z) for z in [k * 140 / 20 for k in range(21)]]
+        pts = [at(sx * (side(z) / 2 + 0.6), sy * (side(z) / 2 + 0.6), z) for z in [0.4 + k * 139.6 / 20 for k in range(21)]]
         for a, b in zip(pts, pts[1:]):
-            d = Vector(b) - Vector(a)
-            u = Vector((-d.y, d.x, 0)).normalized() * 0.18 if d.length else Vector((0.18, 0, 0))
-            li.cface([Vector(a) - u, Vector(a) + u, Vector(b) + u, Vector(b) - u], "neon", gold)
-            li.cface([Vector(b) - u, Vector(b) + u, Vector(a) + u, Vector(a) - u], "neon", gold)
+            light_bar(li, a, b, 0.36, gold)
+    # The beacon: a closed cone of light round the mast.
+    rim = [at(math.cos(2 * math.pi * k / 8) * 1.4, math.sin(2 * math.pi * k / 8) * 1.4, 147) for k in range(8)]
     for k in range(8):
-        t = 2 * math.pi * k / 8
-        li.cface([at(math.cos(t) * 1.4, math.sin(t) * 1.4, 147), at(math.cos(t + 0.8) * 1.4, math.sin(t + 0.8) * 1.4, 147), at(0, 0, 150)], "neon", (1.0, 0.9, 0.7, 1.0))
+        li.cface([rim[k], rim[(k + 1) % 8], at(0, 0, 150)], "neon", (1.0, 0.9, 0.7, 1.0))
+    li.cface(list(reversed(rim)), "neon", (1.0, 0.9, 0.7, 1.0))
     li.finish(parent=ob)
     return ob
 
@@ -518,15 +541,16 @@ def colosseum(parent):
 
 
 def high_roller(parent):
-    """The High Roller (167 m): a 158 m wheel, a deep tubular rim, cable
-    spokes to its hub, 28 glass cabins on the rim, the hub on a pair of
-    raked legs from one side; its rim's lights at night."""
+    """The High Roller (167.6 m): 158.5 m across its cabins, a deep tubular
+    rim, cable spokes to its hub, 28 glass cabins on the rim, the hub on a
+    pair of raked legs from one side; its rim's lights at night. Its lowest
+    cabin boards from a platform 9 m up."""
     a = DATA["anchors"]["highroller"]
     # The wheel's plane faces the Strip (its face toward the circuit's west side).
     t = a["facing"]
     nx, ny = math.cos(t), math.sin(t)
     ux, uy = -ny, nx
-    R, HUB = 79.0, 88.6
+    R, HUB = 72.0, 88.3
     at = lambda u, w, z: (a["x"] + ux * u + nx * w, a["y"] + uy * u + ny * w, z)
     m = Mesh("high_roller")
     n = 56
@@ -555,8 +579,7 @@ def high_roller(parent):
         col = (0.6 + 0.4 * math.sin(hue * 6.28), 0.2, 0.7 + 0.3 * math.cos(hue * 6.28), 1.0)
         for w in (-1.4, 1.4):
             d = Vector((nx * w, ny * w, 0))
-            li.cface([p + off + d, q + off + d, q + off * 1.4 + d, p + off * 1.4 + d], "neon", col)
-            li.cface([p + off * 1.4 + d, q + off * 1.4 + d, q + off + d, p + off + d], "neon", col)
+            light_bar(li, p + off * 1.2 + d, q + off * 1.2 + d, 0.5, col)
     return li.finish(parent=parent)
 
 
@@ -675,7 +698,7 @@ def bellagio_lake(parent):
 
     # Rows along the front: the lake's east edge, stepping in.
     ys = [p[1] for p in lake]
-    jets = VMesh("bellagio_fountains")
+    jets = VMesh("bellagio_fountains", data=True)
     count = 0
     for row in range(4):
         for k in range(120):
@@ -705,6 +728,15 @@ def bellagio_lake(parent):
     jets.finish(parent=parent, extras={"jets": count})
 
 
+def vbox(m, lo, hi, screen):
+    """A box of screens, its id (1 to 255) in its vertex colours' red: each
+    screen its own picture."""
+    (x0, y0, z0), (x1, y1, z1) = lo, hi
+    p = [Vector((x, y, z)) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+    for q in ((0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)):
+        m.cface([p[i] for i in q], "video", (screen / 255.0, 0.0, 0.0, 1.0))
+
+
 def led_walls(parent):
     """The LED walls: Planet Hollywood's along its front to the Strip, the
     Cosmopolitan's marquee pillar by the Strip, Resorts World's on its tower's
@@ -715,24 +747,24 @@ def led_walls(parent):
         return min(p[0] for p in pts), max(p[0] for p in pts), min(p[1] for p in pts), max(p[1] for p in pts)
 
     # Planet Hollywood: a long curved screen on its podium's west front.
-    m = Mesh("led_planethollywood")
+    m = VMesh("led_planethollywood", data=True)
     x0, x1, y0, y1 = resort_box("planethollywood")
     for k in range(10):
         f0, f1 = k / 10, (k + 1) / 10
         ya, yb = y0 + (y1 - y0) * f0, y0 + (y1 - y0) * f1
         xa = x0 - 4 - 6 * math.sin(math.pi * f0)
         xb = x0 - 4 - 6 * math.sin(math.pi * f1)
-        m.box((min(xa, xb) - 0.6, ya, 6.0), (max(xa, xb), yb, 26.0), "video")
+        vbox(m, (min(xa, xb) - 0.6, ya, 6.0), (max(xa, xb), yb, 26.0), 201)
     m.finish(parent=parent)
     # The Cosmopolitan's marquee: a tall pillar of screens by the Strip.
-    m = Mesh("led_cosmopolitan")
+    m = VMesh("led_cosmopolitan", data=True)
     x0, x1, y0, y1 = resort_box("cosmopolitan")
-    m.box((x1 + 8, (y0 + y1) / 2 - 3, 0.0), (x1 + 14, (y0 + y1) / 2 + 3, 62.0), "video")
+    vbox(m, (x1 + 8, (y0 + y1) / 2 - 3, 0.0), (x1 + 14, (y0 + y1) / 2 + 3, 62.0), 202)
     m.finish(parent=parent)
     # Resorts World: its tower's face to the Strip, screens from 30 to 150 m.
-    m = Mesh("led_resortsworld")
+    m = VMesh("led_resortsworld", data=True)
     x0, x1, y0, y1 = resort_box("resortsworld")
-    m.box((x1 - 1.0, y0 + (y1 - y0) * 0.25, 30.0), (x1 + 0.6, y0 + (y1 - y0) * 0.75, 150.0), "video")
+    vbox(m, (x1 - 1.0, y0 + (y1 - y0) * 0.25, 30.0), (x1 + 0.6, y0 + (y1 - y0) * 0.75, 150.0), 203)
     m.finish(parent=parent)
 
 
@@ -753,14 +785,24 @@ def signs(parent):
         p, c = best
         d = math.dist(p, c) or 1.0
         ux, uy = (p[0] - c[0]) / d, (p[1] - c[1]) / d
-        x, y = c[0] + ux * min(36.0, d * 0.6), c[1] + uy * min(36.0, d * 0.6)
+        # Past the game's road and run-off (about 45 m from the centreline)
+        # and its margin, short of the resort itself.
+        off = max(46.0, min(d - 6.0, 52.0))
+        x, y = c[0] + ux * off, c[1] + uy * off
         vx, vy = -uy, ux
-        m = Mesh(f"sign_{key}")
+        m = VMesh(f"sign_{key}", data=True)
         corner = lambda a, b: (x + vx * a + ux * b, y + vy * a + uy * b)
         base = [corner(-5, -2), corner(5, -2), corner(5, 2), corner(-5, 2)]
         m.prism(base, 0.0, 6.0, "stone")
         board = [corner(-4, -1.2), corner(4, -1.2), corner(4, 1.2), corner(-4, 1.2)]
-        m.prism(board, 6.0, 38.0, "video")
+        sid = (SIGNS.index(key) + 1) / 255.0
+        lo = [(x, y, 6.0) for x, y in board]
+        hi = [(x, y, 38.0) for x, y in board]
+        for i in range(4):
+            j = (i + 1) % 4
+            u0 = math.dist(board[0], board[i]) if i else 0.0
+            m.cface((lo[i], lo[j], hi[j], hi[i]), "video", (sid, 0.0, 0.0, 1.0), uvs=[(u0, 6.0), (u0 + math.dist(board[i], board[j]), 6.0), (u0 + math.dist(board[i], board[j]), 38.0), (u0, 38.0)])
+        m.cface(hi, "video", (sid, 0.0, 0.0, 1.0))
         cap = [corner(-4.6, -1.6), corner(4.6, -1.6), corner(4.6, 1.6), corner(-4.6, 1.6)]
         m.prism(cap, 38.0, 40.0, "white_steel")
         m.finish(parent=parent)
@@ -778,7 +820,7 @@ def build():
         empty(f"anchor_{key}", (a["x"], a["y"], 0.0), parent=root)
     lm = empty("landmarks", parent=root)
     for fn in (eiffel, balloon, arc, campanile, doges, rialto, colosseum, high_roller, liberty, luxor, strat, bellagio_lake):
-        sub = empty(fn.__name__, parent=lm)
+        sub = empty(f"lm_{fn.__name__}", parent=lm)
         fn(sub)
     # (Each wall and sign its own landmark node.)
     led_walls(lm)
