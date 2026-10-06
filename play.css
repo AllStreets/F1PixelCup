@@ -417,6 +417,7 @@ html, body { height: 100%; overflow: hidden; }
 .bc-seek input { flex: 1; accent-color: var(--red); height: 1.6em; cursor: pointer; }
 .bc-time { font: 700 0.85em/1 var(--font); font-variant-numeric: tabular-nums; white-space: nowrap; color: #d6d6e0; }
 .bc-focus span { min-width: 3.4em; text-align: center; font: italic 900 1em/1 var(--font); letter-spacing: 0.08em; }
+.bc-auto { margin-left: 0.25em; }
 .bc-exit { margin-left: auto; background: #fff; color: #0b0b12; border-color: #fff; }
 
 /* Narrow windows: the seek bar takes a row of its own, under the buttons. */

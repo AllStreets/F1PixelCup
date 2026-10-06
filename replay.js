@@ -239,6 +239,17 @@
         ch.hasMid[j] = 1;
       },
 
+      // A knock between two cars (where, when), kept once: the same knock
+      // felt over the next few steps, near the same place, is not another.
+      contacts: [],
+      addContact(c) {
+        // (Only the last few can be that recent: looked at from the end.)
+        for (let i = rec.contacts.length - 1; i >= 0 && c.at - rec.contacts[i].at < CONTACT_MS; i -= 1) {
+          if (Math.hypot(c.x - rec.contacts[i].x, c.y - rec.contacts[i].y) < CONTACT_NEAR) return;
+        }
+        rec.contacts.push({ x: c.x, y: c.y, at: c.at });
+      },
+
       addFlash(f) {
         rec.flashes.push({ x: f.x, y: f.y, d: f.d, color: f.color, size: f.size, at: f.at, until: f.until });
       },
@@ -378,6 +389,40 @@
       },
     };
     return rec;
+  }
+
+  // ---- What happened between two moments (the replay's sounds) ----
+  // Between race times a and b, as the replay plays forward: hits and
+  // bounces (the recorded flashes, at x, y), knocks between cars (the
+  // recorded contacts), the player's chequered flag, items fired (a shot or slick
+  // appearing on the road, at d, lat), item boxes taken (by index), and
+  // boosts and spins starting (by car, at its x, y). None for a seek: going
+  // back, standing still, or a jump of more than EVENT_SPAN.
+  const EVENT_SPAN = 500;
+  const CONTACT_MS = 130;
+  const CONTACT_NEAR = 40;
+  function eventsBetween(rec, a, b) {
+    if (!(b > a) || b - a > EVENT_SPAN || rec.count < 2) return [];
+    const events = [];
+    rec.flashes.forEach((f) => { if (f.at > a && f.at <= b) events.push({ type: "impact", x: f.x, y: f.y, size: f.size }); });
+    rec.contacts.forEach((c) => { if (c.at > a && c.at <= b) events.push({ type: "contact", x: c.x, y: c.y }); });
+    if (rec.chequerAt > a && rec.chequerAt <= b) events.push({ type: "finish" });
+    const k0 = rec.indexAt(a);
+    const k1 = rec.indexAt(b);
+    let prev = rec.sampleAt(k0);
+    for (let k = k0 + 1; k <= k1; k += 1) {
+      const cur = rec.sampleAt(k);
+      const before = new Set(prev.objects.map((o) => o.id));
+      cur.objects.forEach((o) => { if (!before.has(o.id)) events.push({ type: "item", d: o.d, lat: o.lat, item: o.type }); });
+      cur.boxes.forEach((taken, i) => { if (taken && !prev.boxes[i]) events.push({ type: "box", box: i }); });
+      cur.cars.forEach((c, i) => {
+        const was = prev.cars[i];
+        if (c.boosting && !was.boosting) events.push({ type: "boost", car: i, x: c.x, y: c.y });
+        if (c.spinning && !was.spinning) events.push({ type: "spin", car: i, x: c.x, y: c.y });
+      });
+      prev = cur;
+    }
+    return events;
   }
 
   // ---- TV cameras ----
@@ -649,6 +694,35 @@
     return shots[lo];
   }
 
+  // ---- The viewer's choices ----
+  // camera: "director" or a camera; focusId: the car the viewer chose (null:
+  // none yet, the director picks). Only the director picks cars, and only
+  // while the viewer has not: once a car is chosen, or a camera (which keeps
+  // the car on screen then), it stays through every camera, the director's
+  // cuts included. Pressing Director while it is on gives it the cars back.
+  function viewChoice() {
+    return { camera: "director", focusId: null };
+  }
+
+  function chooseCamera(view, mode, onScreenId) {
+    if (mode === "director") {
+      return view.camera === "director" ? { camera: "director", focusId: null } : { camera: "director", focusId: view.focusId };
+    }
+    return { camera: mode, focusId: view.focusId || onScreenId || null };
+  }
+
+  function chooseCar(view, id) {
+    return { camera: view.camera, focusId: id };
+  }
+
+  // What is on screen: the director's shot (its camera; its car unless the
+  // viewer chose one), or the viewer's camera on the viewer's car.
+  function viewShot(view, directorShot, playerId) {
+    const carChosen = Boolean(view.focusId);
+    if (view.camera === "director") return { mode: directorShot.mode, focusId: view.focusId || directorShot.focusId, director: true, carChosen };
+    return { mode: view.camera, focusId: view.focusId || playerId, director: false, carChosen };
+  }
+
   // The next (dir 1) or previous (-1) car in the running order, round the ends.
   function neighbour(cars, id, dir) {
     const order = [...cars].sort((a, b) => a.place - b.place);
@@ -658,6 +732,6 @@
 
   return {
     SAMPLE_EVERY, CHUNK, JUMP, OBJECT_TYPES, FLAGS, KEYS, BITS, TV_CAM, DIRECTOR,
-    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour,
+    COVER_BIN, createRecording, quantizeSample, placeTvCameras, tvCameraFor, assignTvCoverage, assignTvCoverageLanes, tvCameraAt, zoomFov, directorShots, shotAt, neighbour, viewChoice, chooseCamera, chooseCar, viewShot, eventsBetween,
   };
 }));
