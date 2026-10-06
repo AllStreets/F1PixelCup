@@ -212,8 +212,10 @@ function groupOf(node) {
 }
 
 // Each group clear of the track (moved straight away from it, each piece of
-// it by the same), then claimed; a group that can't be is left out. Moves
-// are in the model's own metres for pieces under the scaled model.
+// it by the same), then claimed; a group that can't be is left out. A moved
+// group keeps off its neighbours' ground where it can; where it can't (they
+// stand wall to wall) it moves all the same and says so. Moves are in the
+// model's own metres for pieces under the scaled model.
 function placeGroups(course, nodes, scale, moved, dropped, maxShift = MAX_SHIFT) {
   const groups = new Map();
   nodes.forEach((n) => {
@@ -229,9 +231,17 @@ function placeGroups(course, nodes, scale, moved, dropped, maxShift = MAX_SHIFT)
   });
   plans.sort((x, y) => (x.r.shift || 0) - (y.r.shift || 0));
   plans.forEach(({ key, list, pts, r: first }) => {
-    const r = first.shift > 0
-      ? shiftClear(pts, course, { margin: MARGIN, maxShift, blocked: (x, z) => course.occupied.blocked(x, z, 4) })
+    let r = first.shift > 0
+      ? shiftClear(pts, course, { margin: MARGIN, maxShift, blocked: (x, z) => course.occupied.blocked(x, z, 1) })
       : first;
+    // Hemmed in by its neighbours (the Strip's resorts stand wall to wall):
+    // its move off the track all the same, recorded, rather than leaving a
+    // resort out.
+    let touches = false;
+    if (r.dropped === "crowded") {
+      r = first;
+      touches = true;
+    }
     if (r.dropped) {
       list.forEach((n) => n.removeFromParent());
       dropped.push({ name: key, why: r.dropped });
@@ -243,9 +253,9 @@ function placeGroups(course, nodes, scale, moved, dropped, maxShift = MAX_SHIFT)
         n.position.z += r.dz / scale;
         n.updateMatrixWorld(true);
       });
-      moved.push({ name: key, shift: Math.round(r.shift) });
+      moved.push({ name: key, shift: Math.round(r.shift), ...(touches ? { touches } : {}) });
     }
-    pts.forEach(([x, z], k) => { if (k % 3 === 0) course.occupied.add(x + r.dx, z + r.dz, 10); });
+    pts.forEach(([x, z], k) => { if (k % 2 === 0) course.occupied.add(x + r.dx, z + r.dz, 6); });
   });
 }
 
