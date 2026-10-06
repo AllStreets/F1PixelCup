@@ -214,6 +214,17 @@ Committed (user, 2026-10-01: "all the way through the two player option").
 
 Stage R comes last because its screenshots should show the finished game. If a README pass is wanted sooner, a first version can follow Stage K, since the podium is the best image.
 
+## 8b. After the order (user, 2026-10-05)
+
+- [ ] **Safety Car entrances** (branch `sc-entries`): several service entrances round every circuit; the car joins where it reaches the leader soonest without appearing next to anyone, catches up fast, and drives back to the pit lane to park.
+- [ ] **Balance** (branch `balance`): measure comebacks from last on every difficulty first; then a stronger Formation Lap, Overtake Mode and DRS, position-weighted odds, fairer CPU defending; before and after numbers.
+- [ ] **Barcelona's main grandstand** across the straight from the pits, and **landmarks for the eight historic circuits** (branch `historic-landmarks`).
+
+- [ ] **Performance headroom** (branch `perf`): the lag was the agents' load on the user's Mac (gone when paused); still a resolution cap per tier with dynamic scaling, smarter auto quality, fewer draw calls, a headed Retina perf check.
+- [ ] **Steering and contact** (branch `balance`): an unsteered car runs wide and hits the barrier; a real bounce back onto the track; cars behind get by easily while you recover or after a Steward Penalty; the Steward Penalty the heaviest hit, well above the Oil Slick; every power-up stronger on offense and defence, true to its Mario Kart counterpart.
+- [ ] **Replays and sound** (branch `stage-m-replays`): switching cameras keeps the car you're watching; sound in replays; an engine that lives at full throttle (rpm wobble, shift blips, turbo, crackles on lift-off); the finished car stays still on the line.
+- [ ] **The Las Vegas Strip** (branch `landmarks-2025`) **[REVIEW]**: every major Strip building at the casino's level of detail, accurate and lit at night.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
