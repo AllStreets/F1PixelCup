@@ -93,7 +93,8 @@ async (page) => {
     const bad = [];
     Object.entries(m).forEach(([tier, v]) => {
       if (!v || typeof v !== "object") { bad.push(`${tier}: ${v}`); return; }
-      const cap = Quality.ratioCap(tier, devicePixelRatio);
+      // The spec's caps (High 2, Medium 1.5, Low 1), never above the screen's ratio.
+      const cap = Math.min(devicePixelRatio, { high: 2, medium: 1.5, low: 1 }[tier]);
       if (v.buffer[0] > Math.ceil(v.css[0] * cap) + 1) bad.push(`${tier}: ${v.buffer[0]}px wide for ${v.css[0]} css px at cap ${cap}`);
     });
     return bad.length === 0 || JSON.stringify(bad);
