@@ -17,7 +17,7 @@ const file = (n) => path.join(DIR, `${n}.glb`);
 // its top in the range it has in life.
 const MODELS = {
   motodrom: { parts: ["stand", "end_L", "end_R", "roof"], top: [30, 45] },
-  nurburg_castle: { parts: ["hill", "trees", "castle"], top: [95, 110] },
+  nurburg_castle: { parts: ["hill", "trees", "castle", "village"], top: [82, 100] },
   estoril_grandstand: { parts: ["stand", "roof"], top: [16, 26] },
   sintra_hills: { parts: ["ridge", "pena_palace"], top: [200, 260] },
   joburg_skyline: { parts: ["hillbrow", "ponte", "carlton", "city"], top: [265, 275] },
@@ -58,15 +58,20 @@ test("Hockenheim: the Motodrom's stand is long and tiered, its ends turned towar
   assert.ok(part(glb, "end_L").hi[0] < stand.lo[0] + 5 && part(glb, "end_R").lo[0] > stand.hi[0] - 5, "an end at each end");
 });
 
-test("the Nurburg: a round keep on top of a wooded hill", () => {
+test("the Nurburg: a round keep in its crenellated curtain wall on top of a wooded hill, the village at its foot", () => {
   const glb = load(file("nurburg_castle"));
   const hill = part(glb, "hill");
   const castle = part(glb, "castle");
-  assert.ok(hill.size[0] > 300 && hill.hi[1] > 60, `the hill is ${hill.size[0].toFixed(0)} m across, ${hill.hi[1].toFixed(0)} m high`);
+  const village = part(glb, "village");
+  assert.ok(hill.size[0] > 300 && hill.hi[1] > 50, `the hill is ${hill.size[0].toFixed(0)} m across, ${hill.hi[1].toFixed(0)} m high`);
   assert.ok(hill.materials.includes("forest"), "the hill is wooded");
-  assert.ok(castle.lo[1] > 60, `the castle stands on the summit (from ${castle.lo[1].toFixed(0)} m)`);
-  assert.ok(castle.hi[1] - castle.lo[1] > 18, "its keep stands above its walls");
-  assert.ok(castle.size[0] < 70, "a castle, not a town");
+  assert.ok(castle.lo[1] > 40, `the castle stands on the summit (from ${castle.lo[1].toFixed(0)} m)`);
+  assert.ok(castle.hi[1] - hill.hi[1] > 22, "its keep stands over the hill");
+  assert.ok(castle.size[0] > 60 && castle.size[0] < 130, `a castle of ${castle.size[0].toFixed(0)} m, not a town`);
+  assert.ok(castle.tris > 1500, `${castle.tris} triangles: walls, towers and merlons, not a block`);
+  // The village below: white houses under slate roofs, low, in front.
+  assert.ok(village.materials.includes("slate") && village.materials.includes("render"));
+  assert.ok(village.hi[1] < 32 && village.lo[2] < castle.lo[2] - 60, "at the hill's foot, toward the track");
 });
 
 test("Estoril: a covered grandstand of about 200 m; the Sintra ridge with the Pena Palace on its summit", () => {

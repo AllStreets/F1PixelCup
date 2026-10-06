@@ -19,7 +19,7 @@ from public photographs, used only as reference. The mesh kit is the one of
 build_landmarks_2025.py, copied so the scripts stay independent.
 
   motodrom.glb             Hockenheim: the Motodrom's great stand, three tiers, its roof
-  nurburg_castle.glb       the ruined Nurburg on its wooded hill
+  nurburg_castle.glb       the ruined Nurburg on its wooded hill, the village below
   estoril_grandstand.glb   Estoril's main grandstand under its long flat roof
   sintra_hills.glb         the Serra de Sintra's forested ridge, the Pena Palace on top
   joburg_skyline.glb       Johannesburg: the Hillbrow Tower, Ponte City, the Carlton Centre
@@ -107,6 +107,7 @@ PALETTE = {
     "dark_glass": ((0.05, 0.07, 0.1), 0.4, 0.1),
     # The historic venues' roles.
     "basalt": ((0.36, 0.34, 0.32), 0.0, 0.9),
+    "slate": ((0.2, 0.22, 0.26), 0.1, 0.6),
     "forest": ((0.10, 0.22, 0.11), 0.0, 0.95),
     "forest_tree": ((0.09, 0.2, 0.1), 0.0, 0.9),
     "forest_autumn": ((0.55, 0.24, 0.08), 0.0, 0.95),
@@ -478,27 +479,55 @@ def build_motodrom():
 # The Nurburgring: the castle on its hill
 # =============================================================================
 
-NUR_R = 170.0
-NUR_H = 78.0
+NUR_R = 150.0
+NUR_H = 62.0
+NUR_TOP = 40.0
 
 
 def nur_height(x, y):
     r = math.hypot(x / 1.25, y)
-    t = min(1.0, max(0.0, (r - 22.0) / (NUR_R - 22.0)))
+    t = min(1.0, max(0.0, (r - NUR_TOP) / (NUR_R - NUR_TOP)))
     bump = 1.0 + 0.06 * math.sin(math.atan2(y, x) * 5.0) * t
     return NUR_H * (0.5 + 0.5 * math.cos(math.pi * t)) * bump
 
 
+def merlons(m, a, b, z, role, every=3.2, size=1.3, thick=1.9):
+    """A crenellated top along a wall from a to b at height z."""
+    a, b = Vector((a[0], a[1], 0)), Vector((b[0], b[1], 0))
+    n = max(1, int((b - a).length / every))
+    for k in range(n):
+        p = a + (b - a) * ((k + 0.5) / n)
+        m.box((p.x - size / 2, p.y - size / 2, z), (p.x + size / 2, p.y + size / 2, z + 1.6), role)
+
+
+def house(m, x, y, z, w, d, h, turn):
+    """A village house: white walls, a steep slate roof (an Eifel house)."""
+    rot = Matrix.Rotation(turn, 3, "Z")
+    m.box((x - w / 2, y - d / 2, max(0.0, z - 1.0)), (x + w / 2, y + d / 2, z + h), "render", rot=rot, about=(x, y, z))
+    roof = [(x - w / 2 - 0.4, y - d / 2 - 0.4, z + h), (x + w / 2 + 0.4, y - d / 2 - 0.4, z + h), (x + w / 2 + 0.4, y, z + h + d * 0.75), (x - w / 2 - 0.4, y, z + h + d * 0.75)]
+    roof2 = [(x + w / 2 + 0.4, y + d / 2 + 0.4, z + h), (x - w / 2 - 0.4, y + d / 2 + 0.4, z + h), (x - w / 2 - 0.4, y, z + h + d * 0.75), (x + w / 2 + 0.4, y, z + h + d * 0.75)]
+    c = Vector((x, y, z))
+    for q in (roof, roof2):
+        m.face([tuple(c + rot @ (Vector(v) - c)) for v in q], "slate")
+    for side in (-1, 1):
+        g = [(x + side * (w / 2 + 0.4), y - d / 2 - 0.4, z + h), (x + side * (w / 2 + 0.4), y + d / 2 + 0.4, z + h), (x + side * (w / 2 + 0.4), y, z + h + d * 0.75)]
+        m.face([tuple(c + rot @ (Vector(v) - c)) for v in g], "render")
+    m.face([tuple(c + rot @ (Vector(v) - c)) for v in [(x - w / 2 - 0.4, y - d / 2 - 0.4, z + h), (x - w / 2 - 0.4, y + d / 2 + 0.4, z + h), (x + w / 2 + 0.4, y + d / 2 + 0.4, z + h), (x + w / 2 + 0.4, y - d / 2 - 0.4, z + h)]], "slate")
+
+
 def build_nurburg_castle():
     """The ruined Nurburg on its wooded volcanic hill: the round keep (about
-    20 m) on the summit, the broken ring wall with its round towers, the
-    hill under forest, a grass clearing round the castle."""
+    25 m) on the summit inside its curtain wall, crenellated, with its round
+    towers and the gatehouse toward the track, the palace's broken walls
+    within, an outer wall below; the hill under forest, a grass clearing
+    round the castle; the village of Nurburg, white houses under slate roofs
+    and its church, along the hill's foot."""
     clear()
     root = empty("nurburg_castle")
     h = Mesh("hill")
     h.upward = True
     segs = 40
-    radii = [0.0, 8.0, 16.0, 24.0, 32.0] + [32.0 + (NUR_R - 32.0) * k / 12 for k in range(1, 13)]
+    radii = [0.0, 10.0, 20.0, 30.0, NUR_TOP] + [NUR_TOP + (NUR_R - NUR_TOP) * k / 12 for k in range(1, 13)]
     ring = lambda r: [(math.cos(2 * math.pi * i / segs) * r * 1.25, math.sin(2 * math.pi * i / segs) * r) for i in range(segs)]
     for r0, r1 in zip(radii, radii[1:]):
         a = ring(r0)
@@ -508,44 +537,77 @@ def build_nurburg_castle():
             pts = [(b[i][0], b[i][1], nur_height(*b[i])), (b[j][0], b[j][1], nur_height(*b[j])), (a[j][0], a[j][1], nur_height(*a[j])), (a[i][0], a[i][1], nur_height(*a[i]))]
             if r0 == 0.0:
                 pts = pts[:3]
-            h.face(pts, "grass" if r1 <= 40.0 else "forest")
+            h.face(pts, "grass" if r1 <= NUR_TOP + 14.0 or r0 >= NUR_R - 20.0 else "forest")
     h.finish(parent=root)
     t = Mesh("trees")
-    k = 0
-    for ri in range(9):
-        r = 46.0 + ri * 14.0
-        n = int(2 * math.pi * r / 21)
+    for ri in range(7):
+        r = NUR_TOP + 22.0 + ri * 12.0
+        n = int(2 * math.pi * r / 20)
         for i in range(n):
             a = 2 * math.pi * (i + 0.5 * (ri % 2)) / n + hash01(ri, i) * 0.2
             x, y = math.cos(a) * r * 1.25, math.sin(a) * r
-            z = nur_height(x, y)
-            hh = 15.0 + hash01(i, ri) * 8.0
-            conifer(t, x, y, z, hh, 3.6, "forest_tree")
-            k += 1
+            # (A cleared slope below the gate, toward the track and the village.)
+            if y > 0 and abs(x) < 26.0:
+                continue
+            conifer(t, x, y, nur_height(x, y), 14.0 + hash01(i, ri) * 7.0, 3.4, "forest_tree")
     t.finish(parent=root)
     c = Mesh("castle")
     top = NUR_H
     # The keep: a round tower, its crown of merlons.
-    c.lathe([(0.0, top - 2.0), (6.0, top - 2.0), (5.6, top + 6.0), (5.4, top + 21.0), (0.0, top + 21.0)], (0.0, 4.0), "basalt", segs=16, smooth=False)
-    for i in range(12):
-        a = 2 * math.pi * i / 12
-        x, y = math.cos(a) * 4.9, 4.0 + math.sin(a) * 4.9
-        c.box((x - 0.8, y - 0.8, top + 20.8), (x + 0.8, y + 0.8, top + 22.6), "basalt")
-    # The ring wall: broken, its pieces of different heights.
-    n = 14
-    pts = [(math.cos(2 * math.pi * i / n) * 27.0, math.sin(2 * math.pi * i / n) * 22.0 + 2.0) for i in range(n)]
+    c.lathe([(0.0, top - 2.0), (7.0, top - 2.0), (6.6, top + 7.0), (6.4, top + 24.0), (0.0, top + 24.0)], (0.0, -2.0), "basalt", segs=20, smooth=False)
+    for i in range(14):
+        a = 2 * math.pi * i / 14
+        x, y = math.cos(a) * 5.9, -2.0 + math.sin(a) * 5.9
+        c.box((x - 0.9, y - 0.9, top + 23.8), (x + 0.9, y + 0.9, top + 25.8), "basalt")
+    # The curtain wall round the summit, crenellated, two breaches.
+    n = 16
+    pts = [(math.cos(2 * math.pi * i / n) * 36.0, math.sin(2 * math.pi * i / n) * 27.0) for i in range(n)]
+    gate = 4
     for i in range(n):
-        if i in (3, 9):
+        if i in (9, 13):
             continue
-        hgt = 4.5 + 3.5 * hash01(i, 7)
-        wall(c, pts[i], pts[(i + 1) % n], top - 2.0, hgt + 2.0, 1.8, "basalt")
-    for i in (0, 5, 11):
+        hgt = 9.0 + 2.0 * hash01(i, 7)
+        a, b = pts[i], pts[(i + 1) % n]
+        wall(c, a, b, top - 3.0, hgt + 3.0, 2.2, "basalt")
+        merlons(c, a, b, top + hgt, "basalt")
+    for i in (0, 2, 6, 8, 11, 14):
         x, y = pts[i]
-        c.lathe([(0.0, top - 2.0), (3.4, top - 2.0), (3.2, top + 9.5), (0.0, top + 9.5)], (x, y), "basalt", segs=10, smooth=False)
-    # The palace's ruined walls inside the ring.
-    wall(c, (-16.0, -8.0), (-2.0, -14.0), top - 1.0, 7.0, 1.4, "stone_dark")
-    wall(c, (-16.0, -8.0), (-18.0, 6.0), top - 1.0, 5.0, 1.4, "stone_dark")
+        c.lathe([(0.0, top - 3.0), (4.2, top - 3.0), (4.0, top + 13.0), (0.0, top + 13.0)], (x, y), "basalt", segs=12, smooth=False)
+        for k in range(8):
+            a = 2 * math.pi * k / 8
+            c.box((x + math.cos(a) * 3.6 - 0.6, y + math.sin(a) * 3.6 - 0.6, top + 12.8), (x + math.cos(a) * 3.6 + 0.6, y + math.sin(a) * 3.6 + 0.6, top + 14.4), "basalt")
+    # The gatehouse toward the track (+y), its dark arch.
+    gx, gy = pts[gate]
+    c.box((gx - 6.0, gy - 4.0, top - 3.0), (gx + 6.0, gy + 4.0, top + 14.0), "stone_dark")
+    c.box((gx - 2.2, gy + 3.9, top - 0.5), (gx + 2.2, gy + 4.2, top + 5.5), "gear")
+    merlons(c, (gx - 6.0, gy + 3.4), (gx + 6.0, gy + 3.4), top + 14.0, "stone_dark", every=2.6)
+    # The palace's ruined walls inside, window gaps in them.
+    for x0 in (-24.0, -14.0):
+        wall(c, (x0, -16.0), (x0 + 8.0, -18.0), top - 1.0, 11.0, 1.4, "stone_dark")
+    wall(c, (-24.0, -16.0), (-26.0, 4.0), top - 1.0, 8.0, 1.4, "stone_dark")
+    wall(c, (10.0, 10.0), (22.0, 6.0), top - 1.0, 6.0, 1.4, "stone_dark")
+    # The outer wall lower down on the track's side.
+    on = [(math.cos(math.radians(a)) * 58.0, math.sin(math.radians(a)) * 44.0) for a in range(20, 170, 15)]
+    for a, b in zip(on, on[1:]):
+        za = nur_height(*a)
+        zb = nur_height(*b)
+        z0 = max(0.0, min(za, zb) - 2.0)
+        wall(c, a, b, z0, max(za, zb) + 4.0 - z0, 1.6, "basalt")
     c.finish(parent=root)
+    v = Mesh("village")
+    k = 0
+    for ring_r, count in ((NUR_R - 8.0, 13), (NUR_R + 12.0, 11)):
+        for i in range(count):
+            a = math.radians(30 + 120 * (i + 0.5 * hash01(i, ring_r)) / count)
+            x, y = math.cos(a) * ring_r * 1.25, math.sin(a) * ring_r
+            house(v, x, y, nur_height(x, y), 9.0 + 3.0 * hash01(i, 2.0), 7.0 + 2.0 * hash01(i, 3.0), 5.5 + 2.0 * hash01(i, 4.0), a + math.pi / 2 + 0.3 * (hash01(i, 5.0) - 0.5))
+            k += 1
+    # The church: its nave and its tower with a slate spire.
+    cx, cy = 0.0, NUR_R + 4.0
+    house(v, cx, cy + 6.0, 0.0, 9.0, 18.0, 9.0, 0.0)
+    v.box((cx - 3.0, cy - 6.0, 0.0), (cx + 3.0, cy, 18.0), "render")
+    v.lathe([(0.0, 18.0), (4.3, 18.0), (0.0, 30.0)], (cx, cy - 3.0), "slate", segs=4, smooth=False)
+    v.finish(parent=root)
     return root
 
 
@@ -1047,7 +1109,7 @@ def preview(root, tag, shots, night=False):
 MODELS = (
     # build, name, top (m), uvs (a facade), vertex colours, preview shots, night
     (build_motodrom, "motodrom", (30, 45), True, False, [("front", (80, 200, 40), (0, 0, 15))], False),
-    (build_nurburg_castle, "nurburg_castle", (95, 110), True, False, [("front", (60, 420, 70), (0, 0, 70))], False),
+    (build_nurburg_castle, "nurburg_castle", (82, 100), True, False, [("front", (60, 420, 70), (0, 0, 60))], False),
     (build_estoril_grandstand, "estoril_grandstand", (16, 26), True, False, [("front", (60, 150, 25), (0, 0, 10))], False),
     (build_sintra_hills, "sintra_hills", (200, 260), True, False, [("front", (60, 900, 120), (60, -100, 120))], False),
     (build_joburg_skyline, "joburg_skyline", (265, 275), True, False, [("front", (0, 650, 90), (-20, -40, 130))], False),

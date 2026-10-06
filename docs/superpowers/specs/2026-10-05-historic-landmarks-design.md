@@ -19,7 +19,7 @@ Each era as the layout raced: the cars, stands and graphics stay the game's own 
 | Venue | File | What it is, in proportion |
 | --- | --- | --- |
 | Hockenheim | `motodrom.glb` | The Motodrom's great stand opposite the pits (the main and south grandstands along the straight, 2002 on): about 260 m of three tiers of concrete terraces, the upper tier ("Oberrang") over the middle, a long roof over the centre on trussed masts, stair towers at the back, its ends turned toward the track as the stadium's stands close round it. It is the venue's `mainStand` |
-| Nürburgring | `nurburg_castle.glb` | The ruined Nürburg on its wooded volcanic hill: the round keep (about 20 m), the ring walls with their round towers, crenellated and broken, on a forested cone, seen from the GP circuit to the north-north-east |
+| Nürburgring | `nurburg_castle.glb` | The ruined Nürburg on its wooded volcanic hill: the round keep (about 25 m) inside its crenellated curtain wall with round towers and the gatehouse toward the track, the palace's broken walls within, an outer wall lower down; the village of Nürburg (white houses under slate roofs, its church) along the hill's foot. To the north-north-east, as in life, but nearer than in life (it is some way off), so it reads as a castle from the track |
 | Estoril | `estoril_grandstand.glb` | The main grandstand opposite the pits: about 200 m of seats under a long flat roof on a row of columns, the boxes' glass along the back. The venue's `mainStand` |
 | Estoril | `sintra_hills.glb` | The Serra de Sintra to the north (the Pena Palace stands almost due north of the circuit): a long forested ridge with its rocky crest and, on its summit, the Pena Palace (its red and yellow towers, small at that distance) |
 | Kyalami | `joburg_skyline.glb` | Johannesburg's skyline to the south: the Hillbrow Tower (269 m, its pod), Ponte City (173 m, the hollow cylinder; no sign on its crown), the Carlton Centre (223 m) |
@@ -45,8 +45,10 @@ New material roles: `basalt` (the Nürburg's stone), `terracotta` (roof tiles), 
 - `VENUE_MODELS` (`r3d/models.js`): each historic venue's models, loaded with its circuit only.
 - Stands: the decor stands (Stage J's models, their 3D crowds) are unchanged; the landmark stands carry the painted crowd rows like every landmark stand (the 3D figures are at the car's scale, the landmarks at the city's).
 
+- **The countryside has no city towers** (`venue.farm`): at Mugello, the Nürburgring, Kyalami, Istanbul Park and Watkins Glen the circuit data's generic towers are farmhouses in the place's own colours (Tuscan stone and terracotta with cypresses, Eifel white and slate, Highveld whitewash and red tin, Anatolian render and tile, Finger Lakes red barns).
+
 ## 4. Checks
 
 - Node: `tests/landmark-models-historic.test.js` (above); `tests/venue-models.test.js`: every historic venue lists its landmarks from models it loads and builds them.
-- Browser: `trackside-models-check` (every historic venue's landmarks built from their models; the main grandstands of Barcelona, Hockenheim, Estoril and Istanbul at the barrier opposite the pits, Barcelona's other stands along the straight, Sepang's with a stretch behind it; the crowd heard where the stands are, every circuit; `auditScenery` 0 and nobody on the road everywhere; frame time on every circuit, all three tiers).
+- Browser: `trackside-models-check` (every historic venue's landmarks built from their models; the main grandstands of Barcelona, Hockenheim, Estoril and Istanbul at the barrier opposite the pits, Barcelona's other stands along the straight, Sepang's with a stretch behind it; no city towers in the countryside; the crowd heard where the stands are, every circuit; `auditScenery` 0 and nobody on the road everywhere; frame time on every circuit, all three tiers).
 - Review: screenshots from the track of each historic venue at 1600x900, `docs/review/2026-10-05/historic-<id>.jpg`, and Barcelona's stand, `docs/review/2026-10-05/barcelona-grandstand.jpg`; the site's Historic cups section shows them; the README's note that the historic circuits have no landmark is replaced.

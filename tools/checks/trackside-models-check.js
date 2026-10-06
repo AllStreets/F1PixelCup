@@ -104,6 +104,19 @@ async (page) => {
     return bad.length === 0 || JSON.stringify(bad).slice(0, 600);
   });
 
+  // The countryside venues have no city towers: the track data's towers are
+  // farmhouses there (Mugello's Tuscan hills, the Eifel, the Highveld, the
+  // dry hills of Istanbul, the Finger Lakes).
+  results.countrysideHasNoTowers = await step(() => {
+    const bad = [];
+    ["mugello", "nurburgring", "kyalami", "istanbul", "watkinsglen"].forEach((id) => {
+      Render3D.auditScenery(TRACKS.find((t) => t.id === id), { step: 80, lanes: 1 });
+      const k = Render3D.inspect().trackside.decorKinds;
+      if (k.tower || !k.farmhouse) bad.push({ id, k });
+    });
+    return bad.length === 0 || JSON.stringify(bad);
+  });
+
   // Miami's stadium inside the circuit's loop, as in life (the track runs
   // round it), at no more than the city's scale and no less than the map's.
   results.miamiStadiumInside = await step(() => {

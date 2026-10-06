@@ -648,7 +648,10 @@ function inspect() {
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
   const stats = { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: +frameStats.cpuMs.toFixed(2) };
-  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
+  // What the track data's scenery became (stands, boards, towers, farmhouses).
+  const decorKinds = {};
+  if (current) current.decor.children.forEach((o) => { const k = o.userData.kind; if (k) decorKinds[k] = (decorKinds[k] || 0) + 1; });
+  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, decorKinds, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
   // Where each car was drawn (game x, y), and whether it was.
   const drawn = {};
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });

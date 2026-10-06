@@ -267,6 +267,8 @@ export const VENUES = {
     // The Nürburg on its hill to the north-north-east.
     extras: ["siteLandmarks"],
     landmarks: ["nurburgCastle"],
+    // The Eifel's farms and villages: white walls, slate roofs.
+    farm: { wall: "#ecebe4", roof: "#34383f" },
   },
   estoril: {
     // Pines on the hills behind Cascais, the Atlantic to the south.
@@ -292,6 +294,8 @@ export const VENUES = {
     extras: ["siteLandmarks", "skylineArc"],
     landmarks: ["joburgSkyline", "hillside"],
     hillside: { corner: "CROWTHORNE" },
+    // Highveld farmsteads: whitewashed, red tin roofs.
+    farm: { wall: "#e9e3d3", roof: "#8e3a2a" },
   },
   sepang: {
     // Oil-palm country outside Kuala Lumpur: palms everywhere, rain often.
@@ -316,6 +320,8 @@ export const VENUES = {
     landmarks: ["istanbulGrandstand", "hillside"],
     mainStand: "istanbulGrandstand",
     hillside: { share: 0.455 },
+    // Village houses in the dry hills: pale render, tiled roofs.
+    farm: { wall: "#ddd0b4", roof: "#a4542f" },
   },
   mugello: {
     // A Tuscan valley: cypresses, olive groves and green hills all round.
@@ -328,6 +334,8 @@ export const VENUES = {
     landmarks: ["hillside", "tuscanHill"],
     // (Back from the fence far enough for the marshals' posts in front.)
     hillside: { corner: "ARRABBIATA", minGap: 26 },
+    // Tuscan farmhouses: stone, terracotta, cypresses.
+    farm: { wall: "#cdb68e", roof: "#a9542f", cypress: true },
   },
   watkinsglen: {
     // The Finger Lakes' hills in the autumn: maples turning, the glen's woods.
@@ -339,6 +347,8 @@ export const VENUES = {
     extras: ["siteLandmarks"],
     landmarks: ["hillside", "fingerLakes"],
     hillside: { corner: "THE ESSES" },
+    // Finger Lakes farms: red barns under grey roofs.
+    farm: { wall: "#8c2f24", roof: "#4b4c50" },
   },
 };
 
@@ -1329,7 +1339,9 @@ const SITES = {
   // The historic venues (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
   motodrom: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160, 220], step: 18, gapFirst: true, faceTrack: true }),
   // North-north-east of the GP circuit, as the Nürburg is.
-  nurburgCastle: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.6), gaps: [450, 650, 900, 1200], step: 40, landscape: true }),
+  // Nearer than in life (it is some way off) so it reads as a castle from
+  // the track.
+  nurburgCastle: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.6), gaps: [120, 200, 300, 450, 650], step: 40, gapFirst: true, landscape: true }),
   estorilGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160], step: 18, gapFirst: true, faceTrack: true }),
   // North of the circuit, as the Pena Palace is.
   sintraHills: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [900, 1200, 1500, 1900], step: 60, landscape: true }),

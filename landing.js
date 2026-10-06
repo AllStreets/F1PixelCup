@@ -97,7 +97,7 @@
   // pictured in the game (tools/capture-shots.js, part "historic").
   const HISTORIC_SIGHTS = [
     { id: "hockenheim", title: "Hockenheim's Motodrom", alt: "The Motodrom's three-tier stand under its long roof across the straight from the pits at Hockenheim", text: "The Motodrom's great stand across the straight from the pits: three tiers of terraces under a long roof." },
-    { id: "nurburgring", title: "The Nürburg", alt: "The ruined Nürburg castle on its wooded hill above the Eifel forest", text: "The ruined castle on its wooded hill, above the Eifel forest." },
+    { id: "nurburgring", title: "The Nürburg", alt: "The ruined Nürburg castle with its round keep and crenellated walls on its wooded hill, the village and its church below", text: "The ruined castle on its wooded hill, the village of Nürburg and its church at its foot." },
     { id: "estoril", title: "Estoril and Sintra", alt: "The forested Serra de Sintra above Estoril, the red and yellow Pena Palace on its summit", text: "The Serra de Sintra above the circuit, the Pena Palace on its summit." },
     { id: "kyalami", title: "Johannesburg from Kyalami", alt: "Johannesburg's skyline with the Hillbrow Tower and the cylinder of Ponte City across the Highveld", text: "The Hillbrow Tower, Ponte City and the Carlton Centre across the Highveld." },
     { id: "sepang", title: "Sepang's leaf canopies", alt: "Sepang's double-fronted grandstand under white canopies shaped like palm leaves", text: "The double-fronted grandstand under canopies shaped like the leaves of oil palms." },

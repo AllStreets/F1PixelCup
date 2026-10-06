@@ -899,6 +899,7 @@ export function buildDecor(course, venue) {
     obj.rotation.y = -d.face - Math.PI / 2;
     // Where it stands round the lap (a stand's crowd is heard there).
     obj.userData.d = d.d;
+    obj.userData.kind = obj.name === "farmhouse" ? "farmhouse" : d.type;
     group.add(obj);
   });
   group.userData.dropped = dropped;
@@ -955,6 +956,31 @@ function buildDecorPiece(d, bg, venue, i) {
       face.rotation.y = Math.PI;
       g.add(face);
     }
+    return g;
+  }
+  // In the countryside (venue.farm) the track data's towers are farmhouses:
+  // a long house under a pitched roof in the place's own colours, a lower
+  // barn beside it, and (Tuscany) its cypresses.
+  if (d.type === "tower" && venue.farm) {
+    const f = venue.farm;
+    const wall = std(color(f.wall), { roughness: 0.9 });
+    const roofMat = std(color(f.roof), { roughness: 0.75 });
+    const gable = (w, dp, h, x, z, turn = 0) => {
+      const shape = new THREE.Shape([new THREE.Vector2(-dp / 2 - 1, 0), new THREE.Vector2(dp / 2 + 1, 0), new THREE.Vector2(0, dp * 0.42)]);
+      const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: w + 2, bevelEnabled: false }).translate(0, 0, -(w + 2) / 2).rotateY(Math.PI / 2 + turn), roofMat);
+      roof.position.set(x, h, z);
+      roof.castShadow = true;
+      roof.receiveShadow = true;
+      g.add(roof);
+      add(new THREE.BoxGeometry(w, h, dp), wall, x, h / 2, z).rotation.y = turn;
+    };
+    gable(30, 14, 15, -4, 4);
+    gable(16, 11, 10, 14, -8, Math.PI / 2);
+    if (f.cypress) {
+      const dark = std(color("#24432a"), { roughness: 0.9, flatShading: true });
+      [[-22, -12], [-26, 2], [-24, 16], [20, 14]].forEach(([x, z]) => add(new THREE.ConeGeometry(3.4, 34, 7), dark, x, 17, z));
+    }
+    g.name = "farmhouse";
     return g;
   }
   if (d.type === "tower") {
