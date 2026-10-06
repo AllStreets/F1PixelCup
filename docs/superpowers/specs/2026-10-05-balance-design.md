@@ -105,4 +105,56 @@ The user liked the harder CPUs, and asked for more:
 
 ## Result
 
-See the tables below.
+Measured with `tools/balance/` (the second round's harness: the autopilot as above, 8 circuits x 6 seeds per row, 5 laps, dry). "Before" is main at 0f239b3; "after" is this branch.
+
+**From the back (P20):**
+
+| | mean finish | win | top 3 | top 5 | top 10 | places/lap | stuck | blocked, not passed |
+|---|---|---|---|---|---|---|---|---|
+| Rookie before | 4.5 | 29 % | 50 % | 71 % | 90 % | 3.11 | 46 % | 15 % |
+| Rookie after | 1.4 | 81 % | 96 % | 98 % | 100 % | 3.71 | 18 % | 6 % |
+| Pro before | 12.3 | 0 % | 0 % | 2 % | 33 % | 1.54 | 51 % | 34 % |
+| Pro after | 5.4 | 21 % | 40 % | 54 % | 88 % | 2.93 | 30 % | 32 % |
+| Legend before | 16.8 | 0 % | 0 % | 0 % | 2 % | 0.65 | 40 % | 60 % |
+| Legend after | 10.7 | 0 % | 4 % | 19 % | 54 % | 1.87 | 37 % | 50 % |
+
+**From pole:**
+
+| | before: mean, win | after: mean, win |
+|---|---|---|
+| Rookie | 1.1, 98 % | 1.1, 90 % |
+| Pro | 1.1, 92 % | 4.5, 25 % |
+| Legend | 1.4, 73 % | 9.2, 4 % |
+
+**Places gained in the 8 s after use, from the back on Pro:**
+
+| Item | before | after |
+|---|---|---|
+| Safety Car | +1.1 | +8.2 |
+| Overtake Mode | +0.2 | +6.1 |
+| Formation Lap | +0.4 | +5.0 |
+| Steward Penalty | 0.0 | +2.1 |
+| DRS | +0.3 | +1.4 |
+| Undercut | +0.3 | +0.7 |
+| Debris | +0.2 | -0.1 |
+| Oil Slick | +0.7 | -0.5 |
+
+The race average is about +0.8 places per 8 s. The Oil Slick and Debris are defensive or chancy items, so their place gains are near zero by nature.
+
+**Steering:** driven alone, two laps per circuit:
+- **Steered** (the autopilot): no wall hits at Monaco, Monza, Spa, Suzuka or the Hungaroring, and 3 at Singapore. The car is off the road 1 to 7 % of the time.
+- **Unsteered** (throttle only): 6 to 21 wall hits per lap, off the road 38 to 93 % of the time, and laps 50 to 90 % slower.
+- **In races:** the steered player meets the wall about twice a race; before this branch, never, because the wall stood at the road's edge.
+
+**The Steward Penalty:** the leader all but stops. A car hit by it at full speed loses more than twice the road it loses to an Oil Slick (`powerups-check` `stewardCostsMoreThanOil`).
+
+**Against the targets:**
+- **Rookie:** met (top 3 96 %, win 81 %).
+- **Pro:**
+  - top 5 54 %, just under the 55 % target;
+  - win 21 % and top 10 88 %;
+  - stuck 30 %, over the 25 % target.
+  
+  The heavier hits and the run-off cost some of the first round's gains (top 5 74 %, stuck 22 %).
+- **Legend:** top 10 54 % and top 5 19 % are met. No win from the back in these 48 races.
+- **The leader:** Rookie wins 90 % from pole. On Pro and Legend, starting on pole no longer wins most races (25 % and 4 %); the user approved harder pole races on 2026-10-05.
