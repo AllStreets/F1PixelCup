@@ -18,7 +18,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
-import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
+import { loadCar, buildCar, SHADOW_LAYER, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
@@ -170,6 +170,8 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -280, right: 280, top: 280, bottom: -280, near: 10, far: 1500 });
 sun.shadow.bias = -0.0004;
+// The cars' one-mesh shadows are drawn into the shadow map only (r3d/car.js).
+sun.shadow.camera.layers.enable(SHADOW_LAYER);
 sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();

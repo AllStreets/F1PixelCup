@@ -405,6 +405,36 @@ function numberDecals() {
   return numberGeometries;
 }
 
+// The car's shadow (docs/superpowers/specs/2026-10-05-performance-headroom-design.md):
+// one mesh of the whole car, drawn only into the sun's shadow map (the shadow
+// layer), in place of a shadow draw for each of its twenty-odd parts. The
+// wheels' turn and steer are too small to see in a shadow.
+export const SHADOW_LAYER = 1;
+const shadowMaterial = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+let shadowGeometry = null;
+function carShadowGeometry() {
+  if (shadowGeometry) return shadowGeometry;
+  template.updateMatrixWorld(true);
+  const inverse = template.matrixWorld.clone().invert();
+  const positions = [];
+  const v = new THREE.Vector3();
+  template.traverse((node) => {
+    if (!node.isMesh) return;
+    const m = new THREE.Matrix4().multiplyMatrices(inverse, node.matrixWorld);
+    const pos = node.geometry.attributes.position;
+    const index = node.geometry.index;
+    const count = index ? index.count : pos.count;
+    for (let i = 0; i < count; i += 1) {
+      v.fromBufferAttribute(pos, index ? index.getX(i) : i).applyMatrix4(m);
+      positions.push(v.x, v.y, v.z);
+    }
+  });
+  shadowGeometry = new THREE.BufferGeometry();
+  shadowGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  shadowGeometry.computeBoundingSphere();
+  return shadowGeometry;
+}
+
 export function buildCar(kart, driver) {
   const root = new THREE.Group();
   root.rotation.order = "YXZ";
@@ -414,6 +444,7 @@ export function buildCar(kart, driver) {
   let flap = null;
   model.traverse((node) => {
     if (node.isMesh) {
+      node.castShadow = false;
       node.material = Array.isArray(node.material)
         ? node.material.map((m) => mats.get(m.name) || m)
         : mats.get(node.material.name) || node.material;
@@ -435,6 +466,11 @@ export function buildCar(kart, driver) {
   // Race numbers: on the nose, and both flanks of the engine cover.
   const numberMat = mats.get("__number");
   numberDecals().forEach((geometry) => model.add(new THREE.Mesh(geometry, numberMat)));
+  const shadow = new THREE.Mesh(carShadowGeometry(), shadowMaterial);
+  shadow.name = "carShadow";
+  shadow.castShadow = true;
+  shadow.layers.set(SHADOW_LAYER);
+  model.add(shadow);
 
   model.scale.setScalar(CAR_SCALE);
   root.add(model);
