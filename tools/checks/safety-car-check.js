@@ -106,7 +106,7 @@ async (page) => {
           // Through the barrier only where the 3D world leaves it open: where
           // it crosses the barrier's line (r3d/track.js lays it at the
           // run-off's edge, buildCourse) the barrier must have its gap.
-          if (way.kind === "access") {
+          if (way.kind === "access" && !joined) {
             const e = track.entrances[way.index];
             const line = e.barrier;
             if ((Math.abs(last.lat) - line) * (Math.abs(sc.lat) - line) <= 0 && last.lat !== sc.lat) {
@@ -310,7 +310,7 @@ async (page) => {
       deploySafetyCar(caller, t);
       const sc = state.safetyCar;
       const reached = () => (phase === "leading" ? sc.leading : sc.phase === phase);
-      t = race(60 * 20, t, () => !reached());
+      if (!reached()) t = race(60 * 20, t, () => !reached());
       if (!reached()) { bad.push(`never reached ${phase}`); continue; }
       const before = { d: sc.d, lat: sc.lat, phase: sc.phase };
       const untilBefore = sc.until;
@@ -326,10 +326,12 @@ async (page) => {
     const sc = state.safetyCar;
     sc.holdUntil = t;
     t = race(60 * 2, t, () => sc.phase !== "join");
-    sc.until = t;
-    t = race(60 * 30, t, () => !sc.leaving);
+    // (Long past, whatever clock the race's physics steps keep.)
+    sc.until = 0;
+    let said = null;
+    t = race(60 * 30, t, () => { if (sc.leaving) said = state.feed[0] && state.feed[0].message; return !sc.leaving; });
     if (!sc.leaving) bad.push("deadline: never went in");
-    else if (sc.led || !state.feed.some((f) => f.message === "Safety Car called in.")) bad.push("deadline: claimed a spell it never led");
+    else if (sc.led || said !== "Safety Car called in.") bad.push(`deadline: claimed a spell it never led (${said})`);
     // Parked: a while at its bay, then backed into its garage and put away.
     t = race(60 * 120, t, () => !sc.parked);
     if (!sc.parked) bad.push("never parked");
@@ -343,8 +345,9 @@ async (page) => {
     t = 7e7;
     deploySafetyCar(caller, t);
     const alone = state.safetyCar;
-    t = race(60 * 60, t, () => !(alone.parked || state.safetyCar !== alone));
-    if (!(alone.parked || state.safetyCar !== alone)) bad.push("alone: never went in");
+    // (The race itself would end: the Safety Car alone, stepped by hand.)
+    for (let i = 0; i < 60 * 90 && !alone.parked; i += 1) { t += 1000 / 60; updateSafetyCar(1 / 60, t); }
+    if (!alone.parked) bad.push(`alone: never went in (${alone.phase}, leaving ${alone.leaving})`);
     racers.forEach((r) => { r.finished = false; r.lap = 0; r.trackDistance = 0; });
     state.safetyCar = null;
     state.paused = true;
