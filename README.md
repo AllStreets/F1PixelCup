@@ -262,7 +262,7 @@ Every driver keeps their own career, saved in the browser. **Career points** onl
 
 ### The power-ups
 
-The item you get depends on your place, or on how far you are behind the leader if that puts you further back, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare, and the back of the field gets the fast ones most (none of the three strongest in the first fifteen seconds, and never two Steward Penalties within 45 seconds). A broken box is back in a second, so the cars at the back get theirs too.
+The item you get depends on your place, or on how far you are behind the leader if that puts you further back, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare, and the back of the field gets the fast ones most (none of the three strongest in the first fifteen seconds, and never two Steward Penalties within 60 seconds). A broken box is back in two seconds, so the cars at the back get theirs too.
 
 | Item | Mario Kart | What it does |
 |---|---|---|

@@ -42,11 +42,11 @@ test("no safety car before 20 seconds or within 30 seconds of the last", () => {
   assert.equal(P.rollItem({ ...base, raceTime: 50, lastSafetyCarAt: 20, rng: sc }), "safetyCar");
 });
 
-test("no steward penalty within 45 seconds of the last", () => {
+test("no steward penalty within 60 seconds of the last", () => {
   const sp = rngFor("tail", "stewardPenalty");
-  assert.equal(P.LIMITS.stewardCooldown, 45);
-  assert.notEqual(P.rollItem({ ...base, raceTime: 104.9, lastStewardAt: 60, rng: sp }), "stewardPenalty");
-  assert.equal(P.rollItem({ ...base, raceTime: 105, lastStewardAt: 60, rng: sp }), "stewardPenalty");
+  assert.equal(P.LIMITS.stewardCooldown, 60);
+  assert.notEqual(P.rollItem({ ...base, raceTime: 119.9, lastStewardAt: 60, rng: sp }), "stewardPenalty");
+  assert.equal(P.rollItem({ ...base, raceTime: 120, lastStewardAt: 60, rng: sp }), "stewardPenalty");
   assert.equal(P.rollItem({ ...base, raceTime: 61, lastStewardAt: null, rng: sp }), "stewardPenalty");
 });
 

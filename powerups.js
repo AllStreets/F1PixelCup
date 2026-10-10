@@ -34,7 +34,7 @@
   const ODDS = Object.fromEntries(COLUMNS.map((col, c) => [col, Object.fromEntries(ITEM_ORDER.map((id) => [id, table[id][c]]))]));
 
   // Seconds of race time.
-  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30, stewardCooldown: 45 };
+  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30, stewardCooldown: 60 };
   const STRONG = ["stewardPenalty", "formationLap", "safetyCar"];
 
   // By place, the field is cut in quarters behind the leader (20 cars:
@@ -131,14 +131,14 @@
   const SPIN_MS = { undercut: 1100, debris: 1000, oilSlick: 850, stewardLeader: 2600, stewardSplash: 1200, contact: 650 };
   const SPIN_KEEP = { undercut: 0.45, debris: 0.5, oilSlick: 0.65, stewardLeader: 0.08, stewardSplash: 0.4, contact: 0.7 };
   const TIMINGS = {
-    rouletteMs: 1100, boxHiddenMs: 1000, armMs: 300, oilArmMs: 1000, oilLifeMs: 15000,
+    rouletteMs: 1100, boxHiddenMs: 2000, armMs: 300, oilArmMs: 1000, oilLifeMs: 15000,
     drsMs: 3000, drsStraightMs: 4500, overtakeModeMs: 8000, formationLapMs: 6000,
     // A Formation Lap ends only once the car is clear of every other car;
     // this long at most past its time, it ends wherever it is.
     formationGraceMs: 2000,
     // After a spin a car can't be spun again for this long: hit after hit
     // can't pin it down.
-    spinGraceMs: 3500,
+    spinGraceMs: 4500,
     safetyCarMs: 7000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
     // A Steward Penalty has no time limit: it ends on the leader, or when nobody is left racing.
     lifeMs: { undercut: 12000, debris: 8000, stewardPenalty: Infinity },

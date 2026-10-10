@@ -286,8 +286,8 @@ test("the fast items: Formation Lap and Overtake Mode outrun DRS and last longer
   assert.ok(T.formationLapMs >= 6000 && T.overtakeModeMs >= 8000 && T.drsStraightMs > T.drsMs);
   // However long the drop takes, a Formation Lap always ends.
   assert.ok(T.formationGraceMs > 0 && T.formationGraceMs <= 3000);
-  // A broken box is back in a second, so the cars at the back get theirs too.
-  assert.ok(T.boxHiddenMs <= 1000);
+  // A broken box is soon back (it was three seconds), so the cars at the back get theirs too.
+  assert.ok(T.boxHiddenMs <= 2000);
 });
 
 test("the Steward Penalty is the heaviest hit in the game; the Oil Slick is a short spin", () => {
