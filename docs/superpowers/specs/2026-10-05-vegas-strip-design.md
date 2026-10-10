@@ -34,7 +34,7 @@ A footprint from the map is a building's true plan (the Wynn's curve, the Mirage
 | Stone (1.0) | a window set in each room's bay, the wall floodlit warm at night, a room in five softly lit | Caesars, Bellagio, Paris, the Venetian and Palazzo, Treasure Island (coral), Excalibur, Harrah's |
 | Quiet (0.9) | the same, dim and unlit | the towers the map gives no resort, so the named stand out |
 | Plain (0.8) | stone without windows | cornices, belts, attics, tiled roofs, low casino halls |
-| Ribbon (0.65) | glass over half of each floor between pale bands | the Mirage and Mandalay Bay (gold), the Flamingo (pink), Planet Hollywood, the LINQ, Vdara |
+| Ribbon (0.65) | glass over two thirds of each floor between pale bands | the Mirage and Mandalay Bay (gold), the Flamingo (pink), Planet Hollywood, the LINQ, Vdara |
 | Lined (0.5) | tinted glass, a fine pale line every second floor | the Wynn and Encore (bronze), Aria |
 | Glass (0.35) | a curtain of tinted glass | MGM Grand (emerald), the Cosmopolitan and the Fontainebleau (blue), Resorts World (red), the Luxor (black) |
 
@@ -53,6 +53,6 @@ A resort's own pieces are placed together (the Bellagio's lake with its tower an
 
 ## 4. Checks
 
-- Node (`tests/vegas-strip.test.js`): the data credited and fitted; every major resort and anchor present; the model's buildings and landmarks, their heights (Eiffel 165 m, High Roller 167 m, campanile 96 m, the Strat 350 m, the pyramid 107 m), the materials, the budget.
+- Node (`tests/vegas-strip.test.js`): the data credited and fitted; every major resort and anchor present; the model's buildings and landmarks, their heights (Eiffel 165 m, High Roller 167 m, campanile 96 m, the Strat 350 m, the pyramid 107 m), the materials, the budget; each resort's kind of wall and tint, the unnamed towers quiet, the shader's thresholds; the resorts' own shapes (the Bellagio's tower and cupola, the castle's cones, the skyline's crowns built down from the map's heights, light in the temple fronts, arcade, dormers and arches, the screens on their buildings).
 - Browser: `trackside-models-check` (Las Vegas built from its models, nothing on the track, frame time on every tier).
 - Screenshots from the track at night: `docs/review/2026-10-10/vegas-*.jpg`.

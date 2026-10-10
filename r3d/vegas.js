@@ -114,21 +114,22 @@ function stripFacade(night) {
         float win = smoothstep(0.27 - fw, 0.31 + fw, f.x) * smoothstep(0.27 - fw, 0.31 + fw, 1.0 - f.x)
           * smoothstep(0.3 - fw, 0.34 + fw, f.y) * smoothstep(0.2 - fw, 0.24 + fw, 1.0 - f.y);
         win = mix(win, 0.2, farAway);
-        // Ribbons: glass over more than half of each floor, pale band between.
-        float rib = mix(smoothstep(0.28 - fw, 0.32 + fw, f.y) * smoothstep(0.1 - fw, 0.14 + fw, 1.0 - f.y), 0.56, farAway);
+        // Ribbons: glass over two thirds of each floor, a pale band between.
+        float rib = mix(smoothstep(0.2 - fw, 0.24 + fw, f.y) * smoothstep(0.06 - fw, 0.1 + fw, 1.0 - f.y), 0.68, farAway);
         // Lined: a pale line every second floor.
         float two = vFacade.y / 6.6;
         float fw2 = fwidth(two);
         float line = mix(1.0 - smoothstep(0.0, 0.015 + fw2, abs(fract(two) - 0.5) - 0.045), 0.09, smoothstep(0.25, 0.6, fw2));
         // The curtain's own lines: a spandrel at each floor, mullions.
         float spandrel = mix(1.0 - smoothstep(0.1 - fw, 0.14 + fw, f.y), 0.12, farAway);
-        float mullion = smoothstep(0.44 - fw, 0.5, abs(fract(cell.x * 2.0) - 0.5)) * (1.0 - farAway);
+        float fwM = fwidth(cell.x * 2.0);
+        float mullion = smoothstep(0.44 - fwM, 0.5, abs(fract(cell.x * 2.0) - 0.5)) * (1.0 - smoothstep(0.2, 0.45, fwM));
         float sky = smoothstep(0.0, 160.0, vFacade.y);
         vec3 glassC = mix(mix(tint * 0.62, mix(vec3(0.5, 0.66, 0.86), vec3(0.78, 0.86, 0.95), sky), 0.2 + 0.5 * aslant), tint * 0.3, uNight);
-        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.07, 0.08, 0.1) + tint * 0.22, uNight);
+        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.1, 0.11, 0.13) + tint * 0.3, uNight);
         vec3 pale = mix(vec3(0.9, 0.87, 0.8), tint, 0.12);
         // A curtain's panes each catch the light a little differently.
-        float facet = 0.86 + 0.28 * sHash(vec2(floor(cell.x / 3.0), floor(cell.y / 4.0))) * (1.0 - farAway) + 0.14 * farAway;
+        float facet = 0.95 + 0.1 * sHash(vec2(floor(cell.x / 3.0), floor(cell.y / 4.0))) * (1.0 - farAway) + 0.05 * farAway;
         glassC *= facet;
         vec3 c = mix(tint, mix(tint, pane, win), windowed);
         c = mix(c, mix(pale, glassC * (1.0 - 0.25 * mullion), rib), isRibbon);
@@ -139,25 +140,26 @@ function stripFacade(night) {
         diffuseColor.rgb = c;
         float glassAt = isRibbon * rib + isLined * (1.0 - line) + isGlass;`)
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
-        roughnessFactor = mix(roughnessFactor, 0.2, glassAt);
+        roughnessFactor = mix(roughnessFactor, 0.38, glassAt);
         metalnessFactor = mix(metalnessFactor, 0.25, glassAt);
-        // A hotel's evening: three rooms in ten in stone, fewer behind glass,
+        // A hotel's evening: a room in five in stone, fewer behind glass,
         // each its own soft brightness, most of them warm.
-        float share = isStone * 0.3 + isQuiet * 0.07 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
+        float share = isStone * 0.2 + isQuiet * 0.07 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
         float roomH = sHash(room + floor(vFacade.x / 37.0));
         float lit = step(mix(roomH, sHash(vec2(room.y * 0.37, 7.1)), 0.2), share) * step(8.0, vFacade.y);
         float opening = windowed * win + isRibbon * rib * (1.0 - mullion) + (isLined * (1.0 - line) + isGlass) * (1.0 - spandrel) * (1.0 - mullion);
         float on = mix(lit * (0.4 + 0.45 * sHash(room * 1.7 + 3.1)), share * 0.62, farAway) * opening;
         vec3 roomLight = mix(vec3(1.0, 0.76, 0.5), vec3(0.85, 0.9, 1.0), step(0.9, sHash(vec2(room.y, 5.7))));
-        totalEmissiveRadiance += roomLight * on * mix(0.62, 0.42, glassy) * uNight;
+        // (Behind glass a lit room is dimmer, and takes the glass's colour.)
+        vec3 hue = tint / max(max(tint.r, max(tint.g, tint.b)), 0.05);
+        totalEmissiveRadiance += roomLight * mix(vec3(1.0), 0.5 + 0.5 * hue, glassy) * on * mix(0.62, 0.22, glassy) * uNight;
         // Stone floodlit warm from the street (brighter low down); a quiet
         // tower hardly at all.
-        float wallAt = isPlain + isStone * (1.0 - win) + isQuiet * (1.0 - win) * 0.1 + isRibbon * (1.0 - rib) * 0.5 + isLined * line * 0.9;
+        float wallAt = isPlain + isStone * (1.0 - win) + isQuiet * (1.0 - win) * 0.1 + isRibbon * (1.0 - rib) * 0.3 + isLined * line * 0.9;
         vec3 wallC = mix(tint, pale, isRibbon + isLined);
         totalEmissiveRadiance += wallC * vec3(1.0, 0.9, 0.76) * (0.12 + 0.13 * exp(-vFacade.y / 45.0)) * wallAt * uNight;
         // Glass: the Strip's glow in the tower's own colour, and the smears
         // of the lights below it.
-        vec3 hue = tint / max(max(tint.r, max(tint.g, tint.b)), 0.05);
         float low = exp(-vFacade.y / 70.0);
         // (Warm, in the tower's own colour: soft columns, no rainbow.)
         float fwS = fwidth(vFacade.x / 9.0);
@@ -167,11 +169,16 @@ function stripFacade(night) {
         totalEmissiveRadiance += glow * glassAt * uNight;
         // The casino floors and shopfronts at street level: bright, warm,
         // each frontage its own tint.
-        float street = (1.0 - smoothstep(6.0, 7.5, vFacade.y)) * (1.0 - 0.8 * isQuiet);
-        vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.45, 0.7), sHash(vec2(floor(vFacade.x / 23.0), 2.2)));
-        totalEmissiveRadiance += shop * street * 0.6 * uNight;`);
+        // (Lit bays between dark piers under a fascia, on the stone and
+        // ribbon hotels and their halls; not on glass, not on a quiet tower.)
+        float bayX = vFacade.x / 7.0;
+        float fwB = fwidth(bayX);
+        float pier = mix(smoothstep(0.1 - fwB, 0.14 + fwB, fract(bayX)) * smoothstep(0.1 - fwB, 0.14 + fwB, 1.0 - fract(bayX)), 0.75, smoothstep(0.25, 0.6, fwB));
+        float street = smoothstep(0.7, 1.1, vFacade.y) * (1.0 - smoothstep(5.2, 5.8, vFacade.y)) * pier * (isStone + isPlain + isRibbon);
+        vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.5, 0.62), sHash(vec2(floor(vFacade.x / 28.0), 2.2)));
+        totalEmissiveRadiance += shop * street * 0.3 * uNight;`);
   };
-  m.customProgramCacheKey = () => `vegas-facade-v3-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-facade-v4-${night ? 1 : 0}`;
   return m;
 }
 
@@ -235,33 +242,35 @@ function fountainMaterial(clock, night) {
         float h = mix(4.0 + (46.0 - row * 22.0) * wave, 70.0 - row * 18.0, finale);
         // (Blue: a small fountain, a few metres of water, no finale.)
         h = mix(h, 3.5 + 5.5 * wave - row * 1.5, color.b);
-        // The jet is a metre tall in the model (its nozzle at 0.2 m): h
-        // metres tall in the world, at the Strip's 1.3 units a metre.
-        float up = max(0.0, world.y - 0.26);
-        world.y = 0.26 + up * h;
+        // The jet's plume runs from 0.2 m to 1 m in the model (0.26 to 1.3
+        // units at the Strip's 1.3 a metre): h metres tall in the world.
+        float up = max(0.0, world.y - 0.26) / 1.04;
+        world.y = 0.26 + up * h * 1.3;
         // The water leans a little with the breeze as it climbs.
-        world.x += up * h * 0.03 * sin(uShowTime * 0.4 + ph * 6.0);
+        world.x += up * h * 1.3 * 0.03 * sin(uShowTime * 0.4 + ph * 6.0);
         transformed = (inverse(modelMatrix) * world).xyz;`);
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb = diffuse;");
   };
-  m.customProgramCacheKey = () => `vegas-fountain-v3-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-fountain-v4-${night ? 1 : 0}`;
   return m;
 }
 
-// The Luxor's beam: light added to the sky, fading with height.
+// The Luxor's beam: light added to the sky, soft at its edges, fading with height.
 function beamMaterial(night) {
-  const m = new THREE.MeshBasicMaterial({ color: 0xdfeaff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9, toneMapped: false, fog: false });
+  const m = new THREE.MeshBasicMaterial({ color: 0xdfeaff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.5, toneMapped: false, fog: false });
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying float vBeamH;")
+      .replace("#include <common>", "#include <common>\nvarying float vBeamH; varying float vBeamFace;")
+      // (Soft at its edges: brightest where it is seen face on.)
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvBeamFace = abs(dot(normalize(normalMatrix * normal), normalize(-mvPosition.xyz)));")
       // (The world's height: the compressed model's own positions are quantized.)
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBeamH = (modelMatrix * vec4(position, 1.0)).y / 1.3;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vBeamH;")
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= 1.0 - smoothstep(300.0, 2600.0, vBeamH);");
+      .replace("#include <common>", "#include <common>\nvarying float vBeamH; varying float vBeamFace;")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.a *= (1.0 - smoothstep(300.0, 2600.0, vBeamH)) * pow(vBeamFace, 1.5);");
   };
-  m.customProgramCacheKey = () => "vegas-beam-v3";
+  m.customProgramCacheKey = () => "vegas-beam-v4";
   // (By day the beam is off.)
   m.visible = night;
   return m;

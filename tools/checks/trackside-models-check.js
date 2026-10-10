@@ -31,6 +31,10 @@ async (page) => {
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 60000 });
+  // (A mistyped id would leave nothing to check, and everything passing.)
+  const unknown = await p.evaluate(() => CHECK_ONLY.filter((id) => !CIRCUITS.some((c) => c.id === id)));
+  if (unknown.length) errors.push(`CIRCUITS names no such circuit: ${unknown.join(", ")}`);
+  results.circuitsChecked = only.length ? only.length > unknown.length : true;
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
   // Only the raced venue's models are held: built for Albert Park, then for
   // Shanghai, Melbourne's towers are let go and Shanghai's grandstand is in

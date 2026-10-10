@@ -21,7 +21,7 @@ STONE, QUIET, PLAIN, RIBBON, LINED, GLASS = 1.0, 0.9, 0.8, 0.65, 0.5, 0.35
 # The towers the map leaves unnamed, by their footprints' ids.
 RESORT_OF = {
     "w52175577": "vdara", "w134932948": "vdara", "w134932949": "vdara", "w52134834": "veer", "w52134835": "veer",
-    "w27897921": "horseshoe", "w118347176": "mandalay", "w27831695": "parkmgm",
+    "w27897921": "horseshoe", "w134921371": "planethollywood", "w134921379": "planethollywood", "w118347176": "mandalay", "w27831695": "parkmgm",
     "w95223224": "signature", "w95223231": "signature", "w95223232": "signature",
 }
 
@@ -81,9 +81,6 @@ def prepare(data):
 
 def rgb(h):
     return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
-
-
-hexrgb = rgb
 
 
 def tone(h, kind):
@@ -243,7 +240,7 @@ def ring(m, outline, z0, z1, col, role=F, out=0.4, inn=0.3):
     for k in range(n):
         j = (k + 1) % n
         seg = math.dist(o[k], o[j])
-        m.cface([(*o[k], z0), (*o[j], z0), (*o[j], z1), (*o[k], z1)], role, col, uvs=[(run, z0), (run + seg, z0), (run + seg, z1), (run, z1)] if role == F else None)
+        m.cface([(*o[k], z0), (*o[j], z0), (*o[j], z1), (*o[k], z1)], role, col, uvs=[(run, z0), (run + seg, z0), (run + seg, z1), (run, z1)] if role in (F, "video") else None)
         m.cface([(*i[j], z0), (*i[k], z0), (*i[k], z1), (*i[j], z1)], role, col)
         m.cface([(*o[k], z1), (*o[j], z1), (*i[j], z1), (*i[k], z1)], role, col)
         m.cface([(*i[k], z0), (*i[j], z0), (*o[j], z0), (*o[k], z0)], role, col)
@@ -323,15 +320,15 @@ def temple(m, p, t, w, top, trim):
     n = (t[1], -t[0])
     at = lambda a, b: (p[0] + t[0] * a + n[0] * b, p[1] + t[1] * a + n[1] * b)
     z0 = top - 22.0
-    cbox(m, at(0, 0.6), t, w / 2 - 0.8, 0.3, z0 + 0.4, top - 2.9, (1.0, 0.7, 0.36, 1.0), "neon")
+    cbox(m, at(0, 0.6), t, w / 2 - 0.8, 0.3, z0 + 0.4, top - 2.9, (0.85, 0.7, 0.47, 1.0), "neon")
     cbox(m, at(0, 2.0), t, w / 2 + 0.6, 2.4, z0 - 1.4, z0, trim)
     for k in range(6):
         cbox(m, at(-w / 2 + 1.6 + k * (w - 3.2) / 5, 3.0), t, 1.1, 1.1, z0 + 0.02, top - 2.72, trim)
-    cbox(m, at(0, 2.1), t, w / 2 + 0.8, 2.5, top - 2.7, top, trim)
+    cbox(m, at(0, 2.1), t, w / 2 + 0.8, 2.5, top - 2.7, top + 0.02, trim)
     # The pediment: a triangle's prism on the entablature.
     a0, a1 = -w / 2 - 0.8, w / 2 + 0.8
     lo, hi = -0.3, 4.6
-    z = top + 0.02
+    z = top + 0.04
     tri = lambda b: [(*at(a0, b), z), (*at(a1, b), z), (*at(0, b), z + w * 0.2)]
     f, bk = tri(hi), tri(lo)
     m.cface(f, F, trim)
@@ -354,9 +351,9 @@ def arcade(m, outline, trim):
         for k in range(count):
             s = length / 2 + (k - (count - 1) / 2) * 8.0
             c = (a[0] + t[0] * s, a[1] + t[1] * s)
-            arch(m, c, t, 5.2, 13.0, 1.0, 0.45, (1.0, 0.68, 0.34, 1.0))
-            arch(m, (c[0] - t[0] * 2.0, c[1] - t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (1.0, 0.7, 0.4, 1.0))
-            arch(m, (c[0] + t[0] * 2.0, c[1] + t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (1.0, 0.7, 0.4, 1.0))
+            arch(m, c, t, 5.2, 13.0, 1.0, 0.45, (0.85, 0.7, 0.47, 1.0))
+            arch(m, (c[0] - t[0] * 2.0, c[1] - t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (0.85, 0.7, 0.47, 1.0))
+            arch(m, (c[0] + t[0] * 2.0, c[1] + t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (0.85, 0.7, 0.47, 1.0))
     ring(m, outline, 15.2, 16.6, trim, out=1.0)
     ring(m, outline, 25.0, 26.2, trim, out=0.9)
 
@@ -387,7 +384,7 @@ def turret(m, c, r, z0, z1, cone, col, k, segs=10):
     m.lathe([(0.0, z1 + 0.52), (r * 1.18, z1 + 0.52), (0.0, z1 + 0.52 + cone)], c, ("roof_red", "roof_blue", "roof_gold")[k % 3], segs=segs, smooth=False)
 
 
-def castle(m, b, outline, h):
+def castle(m, outline, h):
     """Excalibur: white walls and battlements, round turrets under cones of
     red, blue and gold."""
     xs = [p[0] for p in outline]
@@ -399,11 +396,10 @@ def castle(m, b, outline, h):
     key = int(abs(cx * 7 + cy * 3))
     if len(outline) >= 12 and wide <= 16:
         # A turret of the castle: the map's height is its cone's tip.
-        # (Half as wide again and taller than the map's, as the castle
-        # reads from the Strip: its turrets are what it is.)
-        r = wide * 0.75
-        cone = max(14.0, r * 3.2)
-        turret(m, (cx, cy), r, 0.0, h * 1.25, cone, plain, key, segs=12)
+        # (A quarter wider than the map's, so the castle reads from the Strip.)
+        r = wide * 0.62
+        cone = max(12.0, r * 3.0)
+        turret(m, (cx, cy), r, 0.0, h - cone - 0.52, cone, plain, key, segs=12)
         return
     if h > 60:
         # The hotel's towers round the castle: rooms in white walls, the
@@ -420,7 +416,7 @@ def castle(m, b, outline, h):
             if cross / (la * lb or 1) < 0.8 or min(la, lb) < 8 or any(math.dist(p1, q) < 22 for q in placed):
                 continue
             placed.append(p1)
-            turret(m, p1, 4.6, h - 16.0, h + 6.0, 14.0, plain, len(placed))
+            turret(m, p1, 4.6, h - 16.0, h + 2.0, 11.0, plain, len(placed))
         return
     walls(m, outline, 0.0, h, F, plain if wide > 40 else white)
     flat(m, outline, h)
@@ -436,10 +432,20 @@ def skyline(m, b, outline, z0, h):
     w = extent(outline)
     if b["id"] not in NYNY:
         # A slender piece: a spire of steel.
-        walls(m, outline, z0, h - 14.0, F, tone("#c9cdd2", PLAIN))
-        m.lathe([(0.0, h - 14.0), (w * 0.55, h - 14.0), (0.3, h + 4.0), (0.0, h + 5.0)], (cx, cy), "white_steel", segs=8, smooth=False)
+        walls(m, outline, z0, h - 19.0, F, tone("#c9cdd2", PLAIN))
+        m.lathe([(0.0, h - 19.0), (w * 0.55, h - 19.0), (0.3, h - 1.0), (0.0, h)], (cx, cy), "white_steel", segs=8, smooth=False)
         return
     hexc, kind, crown = NYNY[b["id"]]
+    # (The map's height is the tower's tip: its crown is built down from it.)
+    tip = h
+    if crown == "mast":
+        h = tip - 47.0
+    elif crown == "spire":
+        h = tip - 38.0
+    elif crown == "ziggurat":
+        h = tip - 18.0
+    elif crown in ("hip", "gable"):
+        h = tip - 8.0
     col = tone(hexc, kind)
     trim = tone(hexc, PLAIN)
     if crown == "hip":
@@ -512,7 +518,7 @@ def cupola(m, c, r, z, trim):
     for a, b in zip(oct_, oct_[1:] + oct_[:1]):
         length = math.dist(a, b)
         t = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
-        arch(m, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), t, length * 0.5, 6.6, z + 1.2, 0.25, (0.95, 0.66, 0.34, 1.0))
+        arch(m, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), t, length * 0.5, 6.6, z + 1.2, 0.25, (0.85, 0.7, 0.47, 1.0))
     m.lathe([(0.0, z + 10.42), (r * 0.92, z + 10.42), (r * 0.86, z + 13.0), (r * 0.62, z + 15.6), (r * 0.3, z + 17.2), (0.0, z + 17.6)], c, "roof_green", segs=16)
     m.lathe([(0.0, z + 17.3), (1.4, z + 17.3), (1.4, z + 20.2), (1.9, z + 20.4), (0.0, z + 23.6)], c, "roof_gold", segs=8, smooth=False)
 
@@ -538,7 +544,7 @@ def building(b, parent):
     extras = {"resort": resort, "height": h}
     tall = h - z0 >= 45
     if resort == "excalibur":
-        castle(m, b, outline, h)
+        castle(m, outline, h)
         return m.finish(parent=parent, extras=extras)
     if resort == "nyny" and h >= 75:
         skyline(m, b, outline, z0, h)
@@ -586,7 +592,7 @@ def building(b, parent):
                 count = int(length / 7.0)
                 for k in range(count):
                     s = length / 2 + (k - (count - 1) / 2) * 7.0
-                    cbox(m, (a[0] + t[0] * s - t[1] * 1.6, a[1] + t[1] * s + t[0] * 1.6), t, 0.9, 1.0, top + 2.2, top + 4.8, (0.9, 0.6, 0.3, 1.0), "neon")
+                    cbox(m, (a[0] + t[0] * s - t[1] * 1.6, a[1] + t[1] * s + t[0] * 1.6), t, 0.9, 1.0, top + 2.2, top + 4.8, (0.85, 0.7, 0.47, 1.0), "neon")
         if crown:
             band(m, outline, top - 3.4, top - 2.5, crown, out=0.5)
     else:
@@ -635,8 +641,19 @@ def building(b, parent):
             if hu > 30:
                 for sgn in (1, -1):
                     p = wall_point(outline, c, (v[0] * sgn, v[1] * sgn))
-                    if p:
-                        temple(m, p, (-u[0] * sgn, -u[1] * sgn), min(hu * 0.7, 46.0), h, trim)
+                    if not p:
+                        continue
+                    # As wide as the wall stays flat behind it: on a curved
+                    # tower the front narrows until its ends stand within a
+                    # metre of the wall.
+                    d = (v[0] * sgn, v[1] * sgn)
+                    wide = min(hu * 0.7, 46.0)
+                    while wide > 14.0:
+                        ends = [wall_point(outline, (p[0] + u[0] * e * wide / 2 - d[0] * 60, p[1] + u[1] * e * wide / 2 - d[1] * 60), d) for e in (-1, 1)]
+                        if all(q and (p[0] - q[0]) * d[0] + (p[1] - q[1]) * d[1] < 1.0 for q in ends):
+                            break
+                        wide -= 4.0
+                    temple(m, p, (-u[0] * sgn, -u[1] * sgn), wide, h, trim)
         if st.get("neon"):
             # The Flamingo's neon: bands of pink and orange up its towers.
             for k in range(3):

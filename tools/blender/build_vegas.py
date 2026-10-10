@@ -27,7 +27,6 @@ the circuit map's own scale, so every building stands where it does in life
 relative to the streets the circuit runs on).
 """
 import bpy
-import bmesh
 import json
 import math
 import os
@@ -59,14 +58,18 @@ PALETTE.update({
     "copper_green": ((0.38, 0.6, 0.52), 0.3, 0.6),
     "black_glass": ((0.03, 0.035, 0.045), 0.6, 0.08),
     "sandstone": ((0.82, 0.7, 0.5), 0.0, 0.9),
-    "roof_red": ((0.65, 0.1, 0.1), 0.2, 0.5),
-    "roof_blue": ((0.12, 0.25, 0.65), 0.2, 0.5),
-    "roof_gold": ((0.85, 0.65, 0.2), 0.8, 0.35),
+    "roof_red": ((0.82, 0.07, 0.06), 0.2, 0.5),
+    "roof_blue": ((0.07, 0.2, 0.8), 0.2, 0.5),
+    "roof_gold": ((0.95, 0.7, 0.12), 0.8, 0.35),
     "doge_pink": ((0.86, 0.62, 0.58), 0.0, 0.85),
 })
 
-from vegas_resorts import (F, STONE, PLAIN, GLASS, STYLES, VMesh, light_bar, ccw, tidy, walls, ring, band, arch, offset, tone, building, prepare)  # noqa: E402
+from vegas_resorts import (F, STONE, PLAIN, GLASS, STYLES, VMesh, light_bar, ccw, tidy, walls, ring, RESORT_OF, band, arch, offset, tone, building, prepare)  # noqa: E402
 
+# (The towers the map leaves unnamed belong to their resorts everywhere
+# here: the signs, the screens and the placing with them.)
+for _b in DATA["buildings"]:
+    _b["resort"] = RESORT_OF.get(_b["id"], _b["resort"])
 prepare(DATA)
 
 
@@ -335,7 +338,7 @@ def colosseum(parent):
         t = 2 * math.pi * (k + 0.5) / 32
         c = (a["x"] + math.cos(t) * (R - 0.05), a["y"] + math.sin(t) * (R - 0.05))
         for z, hh in ((2.5, 8.0), (12.0, 8.0), (21.5, 7.5)):
-            arch(m, c, (-math.sin(t), math.cos(t)), 4.0, hh, z, 0.5, (0.95, 0.62, 0.3, 1.0))
+            arch(m, c, (-math.sin(t), math.cos(t)), 4.0, hh, z, 0.5, (0.85, 0.7, 0.47, 1.0))
     circle = [(a["x"] + math.cos(2 * math.pi * k / 48) * R, a["y"] + math.sin(2 * math.pi * k / 48) * R) for k in range(48)]
     band(m, circle, 31.4, 32.6, (0.3, 0.55, 1.0, 1.0), out=1.4)
     return m.finish(parent=parent)
@@ -494,7 +497,7 @@ def bellagio_tower():
     wx = ax - (R + D / 2) * math.cos(aw)
     wing = [(wx - 78.0, cy + 11.0), (wx - 78.0, cy - 11.0)]
     south = [pt(R + D / 2, -aw - (A - aw) * k / 6) for k in range(7)]
-    return {"id": "bellagio_tower", "resort": "bellagio", "h": 151.0, "minh": 0.0, "colour": STYLES["bellagio"]["c"], "glass": False, "roof": "flat", "outline": inner + north + wing + south}
+    return {"id": "bellagio_tower", "resort": "bellagio", "h": 151.0, "minh": 0.0, "roof": "flat", "outline": inner + north + wing + south}
 
 
 def bellagio_village(parent):
@@ -521,7 +524,7 @@ def bellagio_village(parent):
         ring(m, o, hh - 0.7, hh - 0.05, tile, out=0.7)
         y += wide + 3.0
         k += 1
-    return m.finish(parent=parent, extras={"resort": "bellagio", "height": 18.0})
+    return m.finish(parent=parent, extras={"resort": "bellagio", "height": 21.0})
 
 
 def caesars_fountains(parent):
@@ -605,13 +608,14 @@ def bellagio_lake(parent):
 
 def planethollywood_base():
     """Planet Hollywood's base before its tower: a low hall whose front to
-    the Strip is one long curve (the map has its tower alone)."""
-    tower = max((b for b in DATA["buildings"] if b["resort"] == "planethollywood"), key=lambda b: b["h"])
-    xs = [p[0] for p in tower["outline"]]
-    ys = [p[1] for p in tower["outline"]]
+    the Strip is one long curve (the map has its towers alone)."""
+    towers = [b for b in DATA["buildings"] if b["resort"] == "planethollywood" and b["h"] > 45]
+    xs = [p[0] for b in towers for p in b["outline"]]
+    ys = [p[1] for b in towers for p in b["outline"]]
+    # (Before every tower of the resort: its front clear of them all.)
     x0, y0, y1 = min(xs), min(ys), max(ys)
-    front = [(x0 - 5.0 - 20.0 * math.sin(math.pi * k / 12), y0 + (y1 - y0) * k / 12) for k in range(13)]
-    return tidy([(x0 - 1.0, y1), *reversed(front), (x0 - 1.0, y0)])
+    front = [(x0 - 6.0 - 20.0 * math.sin(math.pi * k / 12), y0 + (y1 - y0) * k / 12) for k in range(13)]
+    return tidy([(x0 - 2.0, y1), *reversed(front), (x0 - 2.0, y0)])
 
 
 def planethollywood_hall(parent):
@@ -652,8 +656,28 @@ def led_walls(parent):
     m.finish(parent=parent)
     # Resorts World: its tower's face to the Strip, screens from 30 to 150 m.
     m = VMesh("led_resortsworld", data=True)
-    x0, x1, y0, y1 = resort_box("resortsworld")
-    vbox(m, (x1 - 1.0, y0 + (y1 - y0) * 0.25, 30.0), (x1 + 0.6, y0 + (y1 - y0) * 0.75, 150.0), 203)
+    tower = max((b for b in DATA["buildings"] if b["resort"] == "resortsworld"), key=lambda b: b["h"])
+    o = tidy(tower["outline"])
+    run = 0.0
+    for a, b in zip(o, o[1:] + o[:1]):
+        length = math.dist(a, b)
+        nx, ny = (b[1] - a[1]) / length, -(b[0] - a[0]) / length
+        # (Its walls that look east, on each of them: a slab 0.6 m proud.)
+        if nx < 0.5 or length < 12:
+            continue
+        a2 = (a[0] + (b[0] - a[0]) * 0.06, a[1] + (b[1] - a[1]) * 0.06)
+        b2 = (a[0] + (b[0] - a[0]) * 0.94, a[1] + (b[1] - a[1]) * 0.94)
+        slab = [(a2[0] + nx * 0.05, a2[1] + ny * 0.05), (b2[0] + nx * 0.05, b2[1] + ny * 0.05), (b2[0] + nx * 0.6, b2[1] + ny * 0.6), (a2[0] + nx * 0.6, a2[1] + ny * 0.6)]
+        z0, z1 = 30.0, min(150.0, tower["h"] - 12.0)
+        col = (203 / 255.0, 0.0, 0.0, 1.0)
+        seg = length * 0.88
+        m.cface([(*slab[3], z0), (*slab[2], z0), (*slab[2], z1), (*slab[3], z1)], "video", col, uvs=[(run + seg, z0), (run, z0), (run, z1), (run + seg, z1)])
+        m.cface([(*slab[1], z0), (*slab[0], z0), (*slab[0], z1), (*slab[1], z1)], "video", col)
+        m.cface([(*slab[0], z0), (*slab[3], z0), (*slab[3], z1), (*slab[0], z1)], "video", col)
+        m.cface([(*slab[2], z0), (*slab[1], z0), (*slab[1], z1), (*slab[2], z1)], "video", col)
+        m.cface([(*p, z1) for p in slab], "video", col)
+        m.cface([(*p, z0) for p in reversed(slab)], "video", col)
+        run += seg
     m.finish(parent=parent)
 
 
