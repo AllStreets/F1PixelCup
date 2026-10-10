@@ -63,6 +63,68 @@ async (page) => {
   // No pops on the way up or flat out; three or more on the lift.
   results.liftOffCrackles = (live && live.popsBefore === 0 && live.popsAfter >= 3) || JSON.stringify(live);
 
+  // Starting up. Qualifying: the player's own car is fired up (the starter
+  // turning it over, the catch, a flare over idle, a settle) and the running
+  // engine takes over as it rolls out, in its gear at once: no run up
+  // through the gears (the old start was that, a quick arpeggio of shifts on
+  // clean oscillators). The grid: the player's and the field's around them.
+  // The start-up's own sound (rendered noise and uneven firings) is far
+  // from a pure note: its spectral flatness against the oscillators' note.
+  const starts = await step(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    Game.backToPitLane();
+    Game.selectCup(0); Game.selectGridMode("qualifying"); Game.startCup();
+    const quali = { log: null, gears: new Set(), startingFrames: 0, runningWhileStarting: 0 };
+    for (let i = 0; i < 3000 && !(state.phase === "qualifying" && state.qualifying && state.qualifying.handedOver); i += 1) {
+      await frame();
+      const e = state.engineSound;
+      if (state.phase === "qualifying" && e && !e.starting) quali.gears.add(e.gear);
+      if (state.engineStart && audio.start) quali.startingFrames += 1;
+    }
+    const qs = state.engineStart;
+    quali.kind = qs && qs.kind;
+    quali.field = qs && qs.field;
+    quali.log = qs ? qs.log : [];
+    quali.ended = qs && qs.endedAt;
+    quali.settledAt = qs && qs.settledAt;
+    const shape = (log) => {
+      const crank = log.filter((x) => x.starter > 0.5);
+      const peak = Math.max(0, ...log.map((x) => x.rpm));
+      return { frames: log.length, cranking: crank.length, crankMax: Math.max(0, ...crank.map((x) => x.rpm)), peak, last: log.length ? log[log.length - 1].rpm : 0 };
+    };
+    quali.shape = shape(quali.log);
+    quali.gears = [...quali.gears];
+    // The grid.
+    Game.backToPitLane();
+    Game.selectGridMode("back"); Game.startCup();
+    for (let i = 0; i < 3000 && state.phase !== "race"; i += 1) await frame();
+    const rs = state.engineStart;
+    const race = { kind: rs && rs.kind, field: rs && rs.field, shape: shape(rs ? rs.log : []), delays: rs ? rs.plan.map((p) => +p.delay.toFixed(2)) : [], ended: rs && rs.endedAt };
+    Game.backToPitLane();
+    // The sound itself.
+    let flat = null;
+    if (EngineSound.renderStartup) {
+      const sr = 16000;
+      const audioData = EngineSound.renderStartup(qs ? qs.seed : 1, sr);
+      const p = EngineSound.startup(qs ? qs.seed : 1);
+      const cut = (a, b) => audioData.slice(Math.floor(a * sr), Math.floor(b * sr));
+      const old = new Float32Array(sr / 2);
+      for (let i = 0; i < old.length; i += 1) { const t = i / sr; const saw = (f) => 2 * ((t * f) % 1) - 1; old[i] = 0.5 * saw(100) + 0.2 * saw(200) + 0.2 * Math.sign(Math.sin(2 * Math.PI * 50 * t)); }
+      flat = { old: EngineSound.spectralFlatness(old, sr), crank: EngineSound.spectralFlatness(cut(0.1, p.catchAt), sr), settle: EngineSound.spectralFlatness(cut(p.runAt + 0.2, p.blips[0].at), sr), blip: EngineSound.spectralFlatness(cut(p.blips[0].at, p.blips[0].at + 0.4), sr) };
+      Object.keys(flat).forEach((k) => { flat[k] = +flat[k].toFixed(4); });
+    }
+    return { quali, race, flat };
+  });
+  info.starts = starts && typeof starts === "object" ? { ...starts, quali: { ...starts.quali, log: undefined } } : starts;
+  const sq = starts && starts.quali;
+  results.qualifyingStartsAnEngine = (sq && sq.kind === "qualifying" && sq.field === 0 && sq.shape.cranking >= 10 && sq.shape.crankMax < 700
+    && sq.shape.peak > 4800 && sq.shape.peak < 7500 && sq.ended >= sq.settledAt) || `quali: ${JSON.stringify(sq && { ...sq, log: undefined })}`;
+  results.rollsOutInGearNoArpeggio = (sq && sq.gears.length === 1) || `gears while rolling out: ${JSON.stringify(sq && sq.gears)}`;
+  const sr2 = starts && starts.race;
+  results.gridStartsTheField = (sr2 && sr2.kind === "race" && sr2.field >= 4 && sr2.shape.cranking >= 10 && sr2.shape.peak > 6500 && sr2.delays.every((d, i) => !i || d > sr2.delays[i - 1])) || `race: ${JSON.stringify(sr2)}`;
+  const fl = starts && starts.flat;
+  results.startSoundsLikeAnEngine = (fl && fl.crank > fl.old * 5 && fl.settle > fl.old * 4 && fl.blip > fl.old * 5) || `flatness: ${JSON.stringify(fl)}`;
+
   // The replay: a one-lap race run on autopilot, its replay opened.
   const replay = await step(async () => {
     Game.backToPitLane();
