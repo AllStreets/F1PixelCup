@@ -53,6 +53,15 @@
   const TUNNEL_MARGIN = 150;
   const BRIDGE_MARGIN = 500;
   const UNDER_MARGIN = 150;
+  // Stretches of a side kept for a venue's own landmark right behind the
+  // barrier (lap distances; signed from the line where negative): Monaco's
+  // harbour front and its moored yachts (r3d/landmarks.js VENUES; all but
+  // its last stretch, where one gate leaves fifteen yachts on the front),
+  // the Las Vegas Strip's frontage.
+  const KEEP_OUT = {
+    monaco: [{ from: -1500, to: -700, side: -1 }],
+    lasvegas: [{ from: 6000, to: 6900, side: 1 }],
+  };
   // A straight: the heading changes by less than this over the slip road.
   const STRAIGHT = 1.2;
   // On the inside of a bend its line (and the carport's far side) runs
@@ -268,13 +277,14 @@
 
   // Does `e` fit here (see the spec)? `o` has the lap and what to keep clear of.
   function fits(e, o) {
-    const { lap, total, W, runoff, lane, tunnel, bridges, decor } = o;
+    const { lap, total, W, runoff, lane, tunnel, bridges, decor, keepOut } = o;
     const from = e.startD - CARPORT.back - 40;
     const to = e.startD + e.length + 40;
     const inSpan = (d, a, b) => wrap(d - a, total) <= wrap(b - a, total);
     // The start, the pit zone, the tunnel and the bridges.
     const spanHits = (a, b) => inSpan(a, from, to) || inSpan(b, from, to) || inSpan(from, a, b);
     if (spanHits(-START_BEFORE, START_AFTER)) return false;
+    if ((keepOut || []).some((k) => k.side === e.side && spanHits(k.from, k.to))) return false;
     // (On the pit side: across the road from the pits there is room.)
     if (lane && e.side === lane.side && spanHits(lane.entry - PIT_MARGIN, lane.exit + PIT_MARGIN)) return false;
     if (tunnel && spanHits(tunnel.from - TUNNEL_MARGIN, tunnel.to + TUNNEL_MARGIN)) return false;
@@ -355,14 +365,15 @@
   // length, `halfWidth` the road's, `street` whether its run-off is the narrow
   // one, `pit` its pitlane.js lane (or null), `tunnel` { from, to }, `bridges`
   // where it crosses itself ({ d, raised }: the lap distance on each level,
-  // raised on the bridge), `decor` the track data's scenery ({ type, x, y }).
-  function place({ points, total, halfWidth, street = false, pit = null, tunnel = null, bridges = [], decor = [] }) {
+  // raised on the bridge), `decor` the track data's scenery ({ type, x, y }),
+  // `keepOut` the circuit's KEEP_OUT stretches.
+  function place({ points, total, halfWidth, street = false, pit = null, tunnel = null, bridges = [], decor = [], keepOut = [] }) {
     const lap = lapOf(points, total);
     const L = lap.total;
     const W = halfWidth;
     const runoff = W + (street ? RUNOFF_STREET : RUNOFF);
     const o = {
-      lap, total: L, W, runoff, lane: pit, tunnel, bridges,
+      lap, total: L, W, runoff, lane: pit, tunnel, bridges, keepOut,
       decor: decor.filter((s) => FOOTPRINT[s.type]).map((s) => ({ x: s.x, y: s.y, r: FOOTPRINT[s.type] })),
     };
     // Every spot an entrance could join the road (every 24), on either side.
@@ -774,7 +785,7 @@
   }
 
   return {
-    STEP, SHAPES, LENGTH, OUT, FOLD, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
+    STEP, SHAPES, LENGTH, OUT, FOLD, KEEP_OUT, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
     START_BEFORE, START_AFTER, PIT_MARGIN, TUNNEL_MARGIN, BRIDGE_MARGIN, UNDER_MARGIN, STRAIGHT, CARPORT, BOOTH,
     ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, GIVE_WAY_BACK, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
     place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,

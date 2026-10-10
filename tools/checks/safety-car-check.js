@@ -74,7 +74,7 @@ async (page) => {
       if (!track.pitLane) { bad.push({ id: c.id, why: "no pit lane" }); return; }
       state.track = track;
       const ways = safetyCarWays(track);
-      if (ways.filter((w) => w.kind === "access").length < Entrances.MIN_COUNT) bad.push({ id: c.id, why: `${ways.length - 1} entrances` });
+      if (ways.filter((w) => w.kind === "access").length < (c.id === "monaco" ? 2 : Entrances.MIN_COUNT)) bad.push({ id: c.id, why: `${ways.length - 1} entrances` });
       ways.forEach((way) => {
         state.racers = racers;
         state.safetyCar = null;

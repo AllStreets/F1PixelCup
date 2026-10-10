@@ -270,6 +270,7 @@ function trackDefinition(definition) {
   let entrances = null;
   Object.defineProperty(track, "entrances", {
     enumerable: false,
+    configurable: true,
     get() {
       if (!entrances) {
         entrances = window.Entrances ? Entrances.place({
@@ -280,6 +281,7 @@ function trackDefinition(definition) {
             { d: cumulativeStarts[b.under % cumulativeStarts.length], raised: false },
           ]),
           decor: shape.decor || [],
+          keepOut: Entrances.KEEP_OUT[definition.id] || [],
         }) : [];
       }
       return entrances;

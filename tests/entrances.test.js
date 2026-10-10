@@ -34,7 +34,7 @@ function circuit(id) {
     { d: starts[b.over % starts.length], raised: true },
     { d: starts[b.under % starts.length], raised: false },
   ]);
-  const input = { points, total, halfWidth: W, street: Entrances.STREET.includes(id), pit: lane, tunnel: shape.tunnel || null, bridges, decor: shape.decor || [] };
+  const input = { points, total, halfWidth: W, street: Entrances.STREET.includes(id), pit: lane, tunnel: shape.tunnel || null, bridges, decor: shape.decor || [], keepOut: Entrances.KEEP_OUT[id] || [] };
   return { id, shape, points, total, lane, bridges, input, entrances: Entrances.place(input) };
 }
 const CIRCUITS = Object.keys(SHAPES).map(circuit);
@@ -65,10 +65,34 @@ test("the renderer's street circuits, run-off and scenery footprints are the one
   });
 });
 
+test("no entrance on a stretch kept for a venue's landmark behind the barrier (Monaco's harbour front, the Las Vegas Strip)", () => {
+  // Monaco's is the harbour front the renderer moors its yachts along.
+  const landmarksJs = fs.readFileSync(path.join(root, "r3d", "landmarks.js"), "utf8");
+  const front = landmarksJs.match(/front: \{ from: (-?\d+), to: (-?\d+), side: (-?\d+)/);
+  // (Most of it: one gate fits at the Rascasse end, with fifteen yachts
+  // still moored along the front, as tools/checks/trackside-models-check.js asks.)
+  const kept = Entrances.KEEP_OUT.monaco[0];
+  assert.equal(kept.side, Number(front[3]));
+  assert.equal(kept.from, Number(front[1]));
+  assert.ok(kept.to <= Number(front[2]) && kept.to - kept.from >= 0.5 * (Number(front[2]) - Number(front[1])));
+  Object.entries(Entrances.KEEP_OUT).forEach(([id, spans]) => {
+    const c = CIRCUITS.find((x) => x.id === id);
+    assert.ok(c, id);
+    spans.forEach((k) => c.entrances.forEach((e) => {
+      if (e.side !== k.side) return;
+      const from = e.startD - Entrances.CARPORT.back;
+      const hit = inSpan(k.from, from, e.mergeD, c.total) || inSpan(k.to, from, e.mergeD, c.total) || inSpan(from, k.from, k.to, c.total);
+      assert.ok(!hit, `${id}: entrance ${e.index} at ${Math.round(e.mergeD)} on a kept stretch`);
+    }));
+  });
+});
+
 test("every circuit has 3 to 7 service entrances, spread round the lap", () => {
   CIRCUITS.forEach((c) => {
     const list = c.entrances;
-    assert.ok(list.length >= Entrances.MIN_COUNT && list.length <= Entrances.MAX_COUNT, `${c.id}: ${list.length}`);
+    // (Monaco, between its harbour front and the town, has room for two.)
+    const least = c.id === "monaco" ? 2 : Entrances.MIN_COUNT;
+    assert.ok(list.length >= least && list.length <= Entrances.MAX_COUNT, `${c.id}: ${list.length}`);
     list.forEach((e, i) => {
       assert.equal(e.index, i);
       if (i) assert.ok(e.mergeD > list[i - 1].mergeD, `${c.id}: sorted`);
