@@ -25,6 +25,10 @@ async (page) => {
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 30000 });
+  // Only some circuits (globalThis.CIRCUITS or the CIRCUITS environment
+  // variable, comma-separated ids): the full sweep takes over an hour.
+  const only = String(globalThis.CIRCUITS || (typeof process !== "undefined" && process.env.CIRCUITS) || "").split(",").filter(Boolean);
+  if (only.length) await p.evaluate((ids) => { window.CHECK_ONLY = ids; }, only);
   // Every venue's models in, so each circuit is audited with its landmarks.
   await p.evaluate(() => Render3D.loadAllModels());
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
@@ -39,7 +43,7 @@ async (page) => {
   // photographers and one TV camera operator on a platform.
   results.nothingOnTheTrack = await step(() => {
     const bad = [];
-    CIRCUITS.forEach((c) => {
+    CIRCUITS.filter((x) => !window.CHECK_ONLY || window.CHECK_ONLY.includes(x.id)).forEach((c) => {
       const track = TRACKS.find((t) => t.id === c.id);
       const hits = Render3D.auditScenery(track);
       const people = Render3D.auditPeople ? Render3D.auditPeople(track) : null;
@@ -61,7 +65,7 @@ async (page) => {
   results.everyoneFacesTheTrack = await step(() => {
     const bad = [];
     const cone = Math.cos(70 * Math.PI / 180);
-    CIRCUITS.forEach((c) => {
+    CIRCUITS.filter((x) => !window.CHECK_ONLY || window.CHECK_ONLY.includes(x.id)).forEach((c) => {
       const track = TRACKS.find((t) => t.id === c.id);
       const people = Render3D.auditPeople(track);
       const figures = people.figures || [];
