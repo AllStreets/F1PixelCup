@@ -4,7 +4,7 @@
 // Measures, per scene and tier: rAF intervals (median, p95, % > 20 ms, % > 33 ms),
 // the game's rAF callback time (JS + render submission), GPU time where the
 // timer query exists, draw calls and triangles per frame, render() calls per frame.
-const { chromium, webkit } = require("/private/tmp/claude-501/pw/node_modules/playwright");
+const { chromium, webkit } = require(require("os").homedir() + "/.f1pixelcup/pw/node_modules/playwright");
 const fs = require("fs");
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => {
@@ -86,7 +86,7 @@ const SCENES = {
   monza: { circuit: "monza", weather: "dry" },
 };
 
-const SLOT_DIR = "/private/tmp/claude-501/pw/slots";
+const SLOT_DIR = require("os").homedir() + "/.f1pixelcup/pw/slots";
 async function takeSlot() {
   const path = require("path");
   fs.mkdirSync(SLOT_DIR, { recursive: true });

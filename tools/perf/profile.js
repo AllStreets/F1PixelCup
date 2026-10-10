@@ -2,9 +2,9 @@
 // and by which part of the world (the world group's children, cars, etc.).
 // node profile.js --port 8784 --circuit monaco [--tier high]
 const fs = require("fs");
-const { chromium } = require("/private/tmp/claude-501/pw/node_modules/playwright");
+const { chromium } = require(require("os").homedir() + "/.f1pixelcup/pw/node_modules/playwright");
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => { if (a.startsWith("--")) acc.push([a.slice(2), all[i + 1]]); return acc; }, []));
-const src = fs.readFileSync("/private/tmp/claude-501/perf/harness.js", "utf8");
+const src = fs.readFileSync(__dirname + "/harness.js", "utf8");
 const INIT = eval(src.match(/const INIT = (`[\s\S]*?`);/)[1]);
 eval(src.match(/const SLOT_DIR[\s\S]*?\n}\n/)[0].replace("const SLOT_DIR", "var SLOT_DIR"));
 (async () => {

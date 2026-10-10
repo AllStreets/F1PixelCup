@@ -1,7 +1,7 @@
 // A real play session, timed end to end: page load and the showroom, then
 // races, frame intervals in 2 s windows with marks.
 // node session.js --base https://f1-pixel-cup.vercel.app --label live [--size 1512x982] [--browser webkit] [--tier auto]
-const { chromium, webkit } = require("/private/tmp/claude-501/pw/node_modules/playwright");
+const { chromium, webkit } = require(require("os").homedir() + "/.f1pixelcup/pw/node_modules/playwright");
 const fs = require("fs");
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => {
   if (a.startsWith("--")) acc.push([a.slice(2), all[i + 1] && !all[i + 1].startsWith("--") ? all[i + 1] : true]);
@@ -12,10 +12,10 @@ const [W, H] = String(args.size || "1728x1117").split("x").map(Number);
 const tier = args.tier || "auto";
 const circuits = String(args.circuits || "monaco,lasvegas").split(",");
 const RACE_S = Number(args.race || 30);
-const harnessSrc = fs.readFileSync("/private/tmp/claude-501/perf/harness.js", "utf8");
+const harnessSrc = fs.readFileSync(__dirname + "/harness.js", "utf8");
 const INIT = eval(harnessSrc.match(/const INIT = (`[\s\S]*?`);/)[1]);
 
-const SLOT_DIR = "/private/tmp/claude-501/pw/slots";
+const SLOT_DIR = require("os").homedir() + "/.f1pixelcup/pw/slots";
 async function takeSlot() {
   const path = require("path");
   fs.mkdirSync(SLOT_DIR, { recursive: true });

@@ -4,8 +4,8 @@
 //   node tools/perf/check-headed.js <port>
 const fs = require("fs");
 const path = require("path");
-const { chromium } = require(process.env.PLAYWRIGHT || "/private/tmp/claude-501/pw/node_modules/playwright");
-const SLOT_DIR = process.env.PW_SLOTS || "/private/tmp/claude-501/pw/slots";
+const { chromium } = require(process.env.PLAYWRIGHT || require("os").homedir() + "/.f1pixelcup/pw/node_modules/playwright");
+const SLOT_DIR = process.env.PW_SLOTS || require("os").homedir() + "/.f1pixelcup/pw/slots";
 async function takeSlot() {
   fs.mkdirSync(SLOT_DIR, { recursive: true });
   for (;;) {
