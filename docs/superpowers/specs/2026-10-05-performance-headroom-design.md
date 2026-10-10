@@ -38,16 +38,27 @@ buffer), timing real `requestAnimationFrame` intervals, the GPU (the
    fails waits twice as long next time. The High look at full size is kept
    whenever the machine holds it.
 3. **Smarter auto quality.** In Auto, the tier steps down only once the dynamic
-   resolution is at its floor and the frames still miss 60 fps, so a machine that
-   can hold High at a lower ratio keeps High's effects.
-4. **Cheaper shadows.** Small scenery (anything whose bounding sphere is under a
-   few metres) no longer casts into the sun's shadow map, where it was a draw
-   call each for a shadow too small to see at the map's resolution; the cars, the
-   buildings, the stands, the trees and the barriers still do.
-5. **A perf check that can fail** (`tools/checks/perf-check.js`): a race at Monaco
-   on High at DPR 2 (CDP device metrics) must keep the median frame interval under
-   18 ms and the drawing buffer within the tier's cap, and the scaler must step
-   the ratio down when frames are slow.
+   resolution is at its floor and the frames have missed 60 fps for three windows
+   running, so a machine that can hold High at a lower ratio keeps High's effects.
+   The stepped-down tier starts no higher than the ratio it had. The first second
+   of racing (and after a pause) is not judged. A new circuit starts at the tier's
+   own ratio again. The showroom and the podium always draw at the tier's cap.
+4. **Cheaper shadows.** Each car casts its shadow from one mesh of the whole car
+   (`carShadow`, which writes no colour or depth when the scene is drawn) in place
+   of a shadow draw for each of its twenty-odd parts: at Monaco the shadow map
+   went from about 440 draws a frame to under 100. The turn of the wheels and the
+   DRS flap no longer show in the shadow (too small to see there).
+5. **Bloom without full-size copies.** The frame copied off the canvas is read
+   straight by the bloom (half size and down) and by the finish pass, which adds
+   the bloom as it reads the frame. The old chain copied the frame into a
+   full-size half-float buffer, blended the bloom over it full size and copied
+   again; the picture is the same sum (frame + bloom).
+6. **A perf check that can fail** (`tools/checks/perf-check.js`, headed through
+   `tools/perf/check-headed.js`): a race at Monaco at DPR 2 (CDP device metrics)
+   must draw within each tier's cap, cast every car's shadow from its one mesh,
+   keep the shadow map's draws few, and lower the ratio when frames are made slow;
+   headed, High and Medium and the showroom must hold 60 fps and the ratio must
+   climb back.
 
 ## Not changed
 

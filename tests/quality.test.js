@@ -27,23 +27,6 @@ test("a first guess from the device", () => {
   assert.equal(Quality.initialTier({ cores: 4, memoryGb: 16, touchOnly: false, gpu: "ANGLE (AMD, AMD Radeon RX 6700 XT Direct3D11)" }), "high");
 });
 
-test("steps down once when the first seconds of racing run slow, never up", () => {
-  const frames = (ms, n = 90) => Array.from({ length: n }, () => ms);
-  assert.equal(Quality.adjustTier("high", frames(12)), "high");
-  assert.equal(Quality.adjustTier("high", frames(26)), "medium");
-  assert.equal(Quality.adjustTier("medium", frames(26)), "low");
-  assert.equal(Quality.adjustTier("low", frames(40)), "low");
-  // Fast frames never raise the tier.
-  assert.equal(Quality.adjustTier("medium", frames(6)), "medium");
-  // Too few frames to judge: no change. MIN_FRAMES is the first count judged.
-  assert.equal(Quality.MIN_FRAMES, 60);
-  assert.equal(Quality.adjustTier("high", frames(40, 20)), "high");
-  assert.equal(Quality.adjustTier("high", frames(40, 59)), "high");
-  assert.equal(Quality.adjustTier("high", frames(40, 60)), "medium");
-  // One hitch doesn't count: the median does.
-  assert.equal(Quality.adjustTier("high", [...frames(12, 80), ...frames(200, 10)]), "high");
-});
-
 test("the player's choice wins over the automatic tier; anything unknown reads as auto", () => {
   assert.deepEqual(Quality.CHOICES, ["auto", "high", "medium", "low"]);
   assert.equal(Quality.effectiveTier("auto", "medium"), "medium");
@@ -87,8 +70,17 @@ test("dynamic resolution: steps down when frames miss 60 fps, to the tier's floo
   for (let i = 0; i < 10; i += 1) feed(s, WIN(25));
   assert.equal(s.ratio, 1.25);
   assert.equal(s.atFloor, true);
-  // A machine at its floor and still slow: the auto tier may step down.
-  assert.equal(s.slowAtFloor, true);
+  // At its floor and slow for a few windows running: the auto tier may step
+  // down. One slow window there (a hitch, a busy second) is not enough.
+  const u = Quality.createScaler({ cap: 1, floor: 1 });
+  feed(u, WIN(25));
+  assert.equal(u.slowAtFloor, false);
+  feed(u, WIN(25));
+  feed(u, WIN(16.7));
+  feed(u, WIN(25));
+  assert.equal(u.slowAtFloor, false);
+  for (let i = 0; i < Quality.SLOW_WINDOWS_AT_FLOOR; i += 1) feed(u, WIN(25));
+  assert.equal(u.slowAtFloor, true);
 });
 
 test("dynamic resolution: one hitch is not slow, a steady 60 Hz screen is not slow", () => {
@@ -151,4 +143,35 @@ test("auto steps a tier down only once dynamic resolution is at its floor and st
   assert.equal(Quality.nextAutoTier("high", { slowAtFloor: true }), "medium");
   assert.equal(Quality.nextAutoTier("medium", { slowAtFloor: true }), "low");
   assert.equal(Quality.nextAutoTier("low", { slowAtFloor: true }), "low");
+});
+
+test("dynamic resolution: racing just begun (or resumed) skips its first frames, which carry one-off work", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  s.resume();
+  feed(s, WIN(40));
+  assert.equal(s.ratio, 2);
+  feed(s, WIN(40));
+  assert.equal(s.ratio, 1.875);
+});
+
+test("dynamic resolution: a tier stepped down starts no higher than the ratio it had", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  for (let i = 0; i < 8; i += 1) feed(s, WIN(25));
+  assert.equal(s.ratio, 1.25);
+  s.reset({ cap: 1.5, floor: 1, ratio: s.ratio });
+  assert.equal(s.ratio, 1.25);
+  s.reset({ cap: 1, floor: 0.75, ratio: 1.25 });
+  assert.equal(s.ratio, 1);
+});
+
+test("dynamic resolution: failed probes back off, but never past a limit", () => {
+  const s = Quality.createScaler({ cap: 2, floor: 1.25 });
+  feed(s, WIN(25));
+  // Probe, fail, probe, fail... many times over.
+  for (let k = 0; k < 12; k += 1) {
+    let waited = 0;
+    while (s.ratio < 2 && waited < 1000) { feed(s, WIN(16.7)); waited += 1; }
+    assert.ok(waited <= Quality.PROBE_WINDOWS_MAX, `probe ${k} waited ${waited} windows`);
+    feed(s, WIN(25));
+  }
 });

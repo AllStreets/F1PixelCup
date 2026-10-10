@@ -31,6 +31,7 @@ async function takeSlot() {
   });
   const page = await (await browser.newContext({ viewport: null })).newPage();
   const src = fs.readFileSync(path.join(__dirname, "..", "checks", "perf-check.js"), "utf8").replaceAll("localhost:8765", `localhost:${port}`);
+  globalThis.PERF_HEADED = true;
   let out;
   try { out = await eval(src)(page); } catch (e) { out = `CRASH: ${e.stack || e}`; }
   console.log(JSON.stringify(out, null, 1));

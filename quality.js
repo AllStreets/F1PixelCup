@@ -4,8 +4,9 @@
 //
 // A first guess comes from the device. While racing, dynamic resolution
 // lowers the render pixel ratio when frames run slow; once it is at its floor
-// and they still do, auto steps the tier down (never up on its own). The player's choice in Settings (auto, high,
-// medium, low) overrides it and is kept.
+// and they still do, auto steps the tier down (never up on its own). The
+// player's choice in Settings (auto, high, medium, low) overrides it and is
+// kept.
 (function attach(root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -13,10 +14,6 @@
 }(typeof globalThis !== "undefined" ? globalThis : this, () => {
   const TIERS = ["high", "medium", "low"];
   const CHOICES = ["auto", ...TIERS];
-  // Slower than this (median frame, ms) and the tier steps down.
-  const SLOW_FRAME_MS = 22;
-  // Frames needed before judging.
-  const MIN_FRAMES = 60;
 
   // cores (navigator.hardwareConcurrency), memoryGb (navigator.deviceMemory),
   // touchOnly (Device.isTouchOnly), gpu (the WebGL renderer string).
@@ -34,18 +31,6 @@
     if (integrated) return "medium";
     if ((cores || 0) >= 6 || /apple m\d|nvidia|geforce|radeon|rtx|gtx|\barc\b|arc\(tm\)/.test(g)) return "high";
     return "medium";
-  }
-
-  function median(values) {
-    const sorted = [...values].sort((a, b) => a - b);
-    return sorted[Math.floor(sorted.length / 2)];
-  }
-
-  function adjustTier(tier, frameMs) {
-    if (!Array.isArray(frameMs) || frameMs.length < MIN_FRAMES) return tier;
-    if (median(frameMs) <= SLOW_FRAME_MS) return tier;
-    const i = TIERS.indexOf(tier);
-    return i >= 0 && i < TIERS.length - 1 ? TIERS[i + 1] : tier;
   }
 
   function parseChoice(value) {
@@ -76,6 +61,11 @@
   // Steady windows before probing a step up when no headroom can be seen (a
   // 60 Hz screen); doubled each time a probe fails.
   const PROBE_WINDOWS = 5;
+  const PROBE_WINDOWS_MAX = 40;
+  // Slow windows running, at the floor, before auto may step the tier down.
+  const SLOW_WINDOWS_AT_FLOOR = 3;
+  // Frames skipped when racing begins or resumes (they carry one-off work).
+  const RESUME_SKIP = 60;
   // Longer than this is a pause or a load, not a frame.
   const GAP_MS = 250;
   // Missing 60 fps: the median frame, or the slowest tenth.
@@ -91,6 +81,8 @@
     let block = 0;
     let windowIndex = 0;
     let lastUp = -Infinity;
+    let slowRun = 0;
+    let skip = 0;
     const s = {
       ratio: cap,
       cap,
@@ -99,6 +91,7 @@
       get atFloor() { return s.ratio <= s.floor; },
       sample(ms) {
         if (!(ms > 0) || ms > GAP_MS) return s.ratio;
+        if (skip > 0) { skip -= 1; return s.ratio; }
         frames.push(ms);
         if (frames.length >= SCALE_WINDOW) {
           judge(frames);
@@ -106,11 +99,21 @@
         }
         return s.ratio;
       },
+      // Racing begins or resumes: what was gathered is dropped, and the
+      // next frames are not judged.
+      resume() {
+        frames = [];
+        skip = RESUME_SKIP;
+      },
+      // New limits (the tier or the screen changed): from the cap again, or
+      // from `ratio` where that is lower (a tier stepped down for being slow).
       reset(next) {
         s.cap = next.cap;
         s.floor = Math.min(next.floor, next.cap);
-        s.ratio = s.cap;
+        s.ratio = Math.max(s.floor, Math.min(s.cap, next.ratio ?? s.cap));
         s.slowAtFloor = false;
+        slowRun = 0;
+        skip = 0;
         frames = [];
         steady = 0;
         block = 0;
@@ -134,12 +137,13 @@
       if (slow || judder) {
         steady = 0;
         if (s.ratio <= s.floor) {
-          s.slowAtFloor = slow;
+          slowRun = slow ? slowRun + 1 : 0;
+          s.slowAtFloor = slowRun >= SLOW_WINDOWS_AT_FLOOR;
           return;
         }
         // Down soon after a step up: that step failed, so wait longer next time.
         if (windowIndex - lastUp <= 2) {
-          probeWait *= 2;
+          probeWait = Math.min(PROBE_WINDOWS_MAX, probeWait * 2);
           block = probeWait;
         } else {
           block = 0;
@@ -148,6 +152,7 @@
         return;
       }
       s.slowAtFloor = false;
+      slowRun = 0;
       if (s.ratio >= s.cap) {
         steady = 0;
         return;
@@ -172,8 +177,8 @@
   }
 
   return {
-    nextAutoTier,
-    TIERS, CHOICES, SLOW_FRAME_MS, MIN_FRAMES, initialTier, adjustTier, parseChoice, effectiveTier, passesFor,
-    PIXEL_RATIO, RATIO_FLOOR, ratioCap, ratioFloor, SCALE_WINDOW, SCALE_STEP, PROBE_WINDOWS, createScaler,
+    TIERS, CHOICES, initialTier, nextAutoTier, parseChoice, effectiveTier, passesFor,
+    PIXEL_RATIO, RATIO_FLOOR, ratioCap, ratioFloor,
+    SCALE_WINDOW, SCALE_STEP, PROBE_WINDOWS, PROBE_WINDOWS_MAX, SLOW_WINDOWS_AT_FLOOR, createScaler,
   };
 }));

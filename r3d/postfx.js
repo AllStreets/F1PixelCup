@@ -101,8 +101,8 @@ const FinishShader = {
     varying vec2 vUv;
     // The frame with its bloom added, as an additive blend would have it.
     vec3 frameAt(vec2 p) {
-      vec4 b = texture2D(tBloom, p);
-      return texture2D(tDiffuse, p).rgb + b.rgb * b.a * uBloom;
+      vec3 b = texture2D(tBloom, p).rgb;
+      return texture2D(tDiffuse, p).rgb + b * uBloom;
     }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
     // Rain on the lens: in each cell of a grid, maybe a drop, that lands,
@@ -237,7 +237,10 @@ export function createPostFx(renderer, scene, camera) {
   // The frame, copied off the canvas: sized to its drawing buffer, or to the
   // view's part of it.
   function frameSize() {
-    return pixels ? new THREE.Vector2(pixels.w, pixels.h) : renderer.getDrawingBufferSize(new THREE.Vector2());
+    const buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
+    // (A view is never larger than the buffer: at a fractional pixel ratio
+    // its rounded size could be a pixel more.)
+    return pixels ? new THREE.Vector2(Math.min(pixels.w, buffer.x), Math.min(pixels.h, buffer.y)) : buffer;
   }
 
   // The copied frame is read straight by the bloom (at half size and down)

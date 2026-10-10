@@ -251,7 +251,7 @@ async (page) => {
   results.frameFollowsResize = await step(() => {
     const f = Render3D.inspect().postfx.frame;
     const c = document.getElementById("game3d");
-    return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Math.min(devicePixelRatio, 2))) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
+    return (f && f.width === c.width && f.height === c.height && c.width === Math.floor(c.clientWidth * Render3D.graphics().ratio)) || JSON.stringify({ f, canvas: [c.width, c.height, c.clientWidth] });
   });
   await size(1440, 900);
   await p.waitForTimeout(400);

@@ -18,7 +18,7 @@
 import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { color, luminance, photo, makeSmokeTexture, setAnisotropy } from "./r3d/textures.js";
-import { loadCar, buildCar, SHADOW_LAYER, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
+import { loadCar, buildCar, CAR_SCALE, helmetInfo as paintedHelmet, setTyreCompound, carLooks } from "./r3d/car.js";
 import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TUNNEL_ROOF } from "./r3d/track.js";
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
@@ -126,18 +126,25 @@ function renderRatio() {
 }
 
 // Racing frames (not paused, not loading) feed dynamic resolution; once it is
-// at its floor and they are still slow, auto steps the tier down.
+// at its floor and they stay slow, auto steps the tier down (and starts no
+// higher than the ratio it had).
 function sampleFrame(racing) {
   const t = performance.now();
   if (!racing) { lastFrameAt = 0; return; }
-  if (lastFrameAt) {
+  if (!lastFrameAt) {
+    renderRatio();
+    scaler.resume();
+  } else {
     const ms = t - lastFrameAt;
     renderRatio();
     scaler.sample(ms);
     if (graphicsChoice === "auto" && frameSamples.length < 90) frameSamples.push(ms);
     const next = graphicsChoice === "auto" ? Quality.nextAutoTier(autoTier, scaler) : autoTier;
     if (next !== autoTier) {
+      const had = scaler.ratio;
       autoTier = next;
+      scalerFor = `${currentTier()}|${screenRatio()}`;
+      scaler.reset({ ...ratioLimits(), ratio: had });
       postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
@@ -170,8 +177,6 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -280, right: 280, top: 280, bottom: -280, near: 10, far: 1500 });
 sun.shadow.bias = -0.0004;
-// The cars' one-mesh shadows are drawn into the shadow map only (r3d/car.js).
-sun.shadow.camera.layers.enable(SHADOW_LAYER);
 sun.shadow.normalBias = 0.6;
 scene.add(sun, sun.target);
 const SUN_DIR = new THREE.Vector3(0.5, 0.42, -0.6).normalize();
@@ -982,6 +987,8 @@ function ensureWorld(track) {
   if (current) disposeWorld(current);
   // The venues not raced give their models back (r3d/models.js).
   releaseOtherVenues(track.id, venueStand(track.id));
+  // A new circuit starts at the tier's own ratio again.
+  scalerFor = "";
   current = buildWorld(track);
   current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);
@@ -1152,10 +1159,12 @@ function setFov(fov) {
   }
 }
 
-function resize() {
+// full: at the tier's own pixel ratio (the showroom, the podium), not the
+// ratio dynamic resolution has the race at.
+function resize(full = false) {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
-  const dpr = renderRatio();
+  const dpr = full ? (renderRatio(), scaler.cap) : renderRatio();
   // The effects work at the size of one split-screen view, or the canvas.
   const split = viewports ? viewports[0] : null;
   const effects = split ? `${split.w}x${split.h}` : "";
@@ -1311,6 +1320,9 @@ function drawFrame(frame) {
     dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
     lastNow = now;
     lastDt = dt;
+    // Before the canvas is sized: a new ratio must never come between a
+    // split screen's two views (sizing clears what the first drew).
+    sampleFrame(Boolean(frame.racing));
   }
   resize();
   // (The venue's own models still on their way, the circuit is built at once
@@ -1446,7 +1458,6 @@ function drawFrame(frame) {
   });
 
   // The frame, through the post-processing of the current tier.
-  if (first) sampleFrame(Boolean(frame.racing));
   // A replay's fixed cameras (trackside, the helicopter) do not move with the
   // car: no speed blur or streaks there, only onboard.
   const still = frame.view && viewInfo && viewInfo.shot !== "onboard";
@@ -2034,7 +2045,7 @@ garage.group.visible = false;
 // left out, the car stands where it always did.
 function renderGarage(kart, driver, now, area) {
   if (!api.ready) return false;
-  resize();
+  resize(true);
   useViewport(null);
   if (current) {
     disposeWorld(current);
@@ -2119,6 +2130,9 @@ function fitShowroom(area) {
     // measure it: the box of its parts' boxes).
     const spin = root.rotation.y;
     const box = new THREE.Box3();
+    // (Its parts' boxes: not its one-mesh shadow's, a looser box.)
+    const shadowHome = garage.car.shadow.parent;
+    shadowHome.remove(garage.car.shadow);
     let r = 0;
     for (let a = 0; a < 36; a += 1) {
       root.rotation.y = (a / 36) * Math.PI * 2;
@@ -2126,6 +2140,7 @@ function fitShowroom(area) {
       box.setFromObject(root);
       r = Math.max(r, Math.abs(box.min.x), Math.abs(box.max.x), Math.abs(box.min.z), Math.abs(box.max.z));
     }
+    shadowHome.add(garage.car.shadow);
     root.rotation.y = spin;
     root.updateMatrixWorld(true);
     garage.sweep = { key: garage.key, r: r * 1.03, y0: box.min.y, y1: box.max.y };
@@ -2164,7 +2179,10 @@ function fitShowroom(area) {
 function garageCarRect() {
   if (!garage.car || !garage.car.root.visible) return null;
   garage.car.root.updateMatrixWorld(true);
+  const shadowHome = garage.car.shadow.parent;
+  shadowHome.remove(garage.car.shadow);
   const box = new THREE.Box3().setFromObject(garage.car.root);
+  shadowHome.add(garage.car.shadow);
   const rect = canvas3d.getBoundingClientRect();
   const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   const v = new THREE.Vector3();
@@ -2274,7 +2292,7 @@ function podiumFrame(now, reserve = null) {
   const podium = ceremony.podium;
   if (!podium) return { drawing: false };
   podium.setReserve(reserve);
-  resize();
+  resize(true);
   useViewport(null);
   const ready = podiumPrepare() === "ready";
   const w = canvas2d.clientWidth || canvas2d.width;

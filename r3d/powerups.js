@@ -331,6 +331,9 @@ export function createPowerUpLayer(scene) {
   function aura(car) {
     if (!car.aura) {
       const shell = car.model.clone(true);
+      // (Not the car's shadow mesh: it is no part of the car to gild.)
+      const shadow = shell.getObjectByName("carShadow");
+      if (shadow) shadow.removeFromParent();
       shell.traverse((node) => {
         if (node.isMesh) { node.material = auraMats.gold; node.castShadow = false; node.receiveShadow = false; }
       });
