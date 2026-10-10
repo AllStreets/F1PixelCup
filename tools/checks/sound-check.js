@@ -17,43 +17,51 @@ async (page) => {
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 200)}`; } };
   const saved = await step(() => ({ grid: localStorage.getItem("f1pixelcup.grid"), sound: localStorage.getItem("f1pixelcup.sound") }));
 
-  // The race, live: the player's car on autopilot for twenty seconds of
-  // real play, the engine's state read every frame. Flat out at top speed
-  // the note is alive (it moves, the turbo is spooled, the hybrid deploys);
-  // lifting off at speed crackles.
+  // The engine as the game voices it, on the race's own clock and with no
+  // luck in it (no circuit, traffic or frame timing): at Monza, by name, the
+  // game's own audio update is fed a car that accelerates flat out for
+  // twelve seconds, holds top speed for eight (a long straight), then lifts.
+  // Flat out at top speed the note is alive (it moves, the turbo is spooled,
+  // the hybrid deploys); the crackles on the lift are counted from the
+  // engine's own log of the pops it played.
   const live = await step(async () => {
     initAudio();
-    Game.selectCup(0); Game.selectGridMode("back"); Game.startCup();
+    const cup = CUP_DEFS.findIndex((c) => c.circuitIds.includes("monza"));
+    Game.selectCup(cup); Game.selectGridMode("back"); Game.startCup();
     for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
-    for (let i = 0; i < 900 && state.phase !== "race"; i += 1) await new Promise((r) => requestAnimationFrame(r));
-    const player = getPlayer();
-    player.isPlayer = false;
+    startRace(getActiveCup().tracks.findIndex((t) => t.id === "monza"));
+    state.preparing = null;
+    const track = state.track.id;
+    const max = getPlayer().physics.maxSpeed;
+    const car = { speed: 0, physics: { maxSpeed: max }, throttleIn: 1, brakeIn: 0, finished: false, trackDistance: 0 };
+    state.phase = "race";
+    state.paused = false;
+    state.lastTick = 100000;
+    freshEngines();
     const top = [];
     let topTurbo = 0;
     let topErs = 0;
-    const t0 = performance.now();
-    while (performance.now() - t0 < 20000 && state.phase === "race") {
-      await new Promise((r) => requestAnimationFrame(r));
-      const e = state.engineSound;
-      if (!e) continue;
-      if (Math.abs(player.speed) > player.physics.maxSpeed * 0.95 && (player.throttleIn || 0) > 0.8) {
-        top.push(e.rpm);
-        topTurbo = Math.max(topTurbo, e.turbo);
-        topErs = Math.max(topErs, e.ers);
-      }
+    const tick = () => { state.lastTick += 1000 / 60; updateEngineAudio(car); return state.engineSound; };
+    tick();
+    for (let n = 0; n < 60 * 12; n += 1) { car.speed = max * Math.min(1, n / (60 * 11)); tick(); }
+    for (let n = 0; n < 60 * 8; n += 1) {
+      const e = tick();
+      top.push(e.rpm);
+      topTurbo = Math.max(topTurbo, e.turbo);
+      topErs = Math.max(topErs, e.ers);
     }
-    // A lift at speed.
-    const popsBefore = state.engineSound ? state.engineSound.pops : 0;
-    player.isPlayer = true;
-    input.throttle = false;
-    for (let i = 0; i < 40; i += 1) await new Promise((r) => requestAnimationFrame(r));
-    const popsAfter = state.engineSound ? state.engineSound.pops : 0;
-    const range = top.length ? Math.max(...top) - Math.min(...top) : 0;
-    return { frames: top.length, range: Math.round(range), topTurbo: +topTurbo.toFixed(2), topErs: +topErs.toFixed(2), popsBefore, popsAfter, speed: Math.round(player.speed) };
+    const popsBefore = state.engineSound.pops;
+    car.throttleIn = 0;
+    for (let n = 0; n < 60; n += 1) { car.speed *= 0.998; tick(); }
+    const popsAfter = state.engineSound.pops;
+    state.phase = "results";
+    const range = Math.max(...top) - Math.min(...top);
+    return { track, frames: top.length, range: Math.round(range), gear: state.engineSound.gear, topTurbo: +topTurbo.toFixed(2), topErs: +topErs.toFixed(2), popsBefore, popsAfter };
   });
   info.live = live;
-  results.engineAliveAtTopSpeed = (live && live.frames > 30 && live.range > 60 && live.range < 900 && live.topTurbo > 0.5 && live.topErs > 0.5) || JSON.stringify(live);
-  results.liftOffCrackles = (live && live.popsAfter > live.popsBefore) || JSON.stringify(live);
+  results.engineAliveAtTopSpeed = (live && live.track === "monza" && live.frames === 480 && live.range > 60 && live.range < 900 && live.topTurbo > 0.7 && live.topErs > 0.7) || JSON.stringify(live);
+  // No pops on the way up or flat out; three or more on the lift.
+  results.liftOffCrackles = (live && live.popsBefore === 0 && live.popsAfter >= 3) || JSON.stringify(live);
 
   // The replay: a one-lap race run on autopilot, its replay opened.
   const replay = await step(async () => {
@@ -88,7 +96,14 @@ async (page) => {
       go();
       await frames(2);
       const after = { ...state.replaySound.engine };
-      return { before: [Math.round(before.rpm), before.gear], after: [Math.round(after.rpm), after.gear] };
+      // Where an engine at this car's speed would be (the car has moved on
+      // while it was not heard): its gear, its revs.
+      const ghost = r.ghosts.get(r.focusId);
+      const model = EngineSound.createModel(1);
+      const ratio = Math.abs(ghost.speed) / ghost.physics.maxSpeed;
+      model.prime({ ratio, throttle: ghost.throttleIn || 0 });
+      const want = model.step({ dt: 0, ratio, throttle: ghost.throttleIn || 0, brake: 0 });
+      return { before: [Math.round(before.rpm), before.gear], after: [Math.round(after.rpm), after.gear], want: [Math.round(want.rpm), want.gear] };
     };
     out.afterPause = await resume(() => Game.replay.togglePlay(), () => Game.replay.togglePlay());
     out.after4x = await resume(() => Game.replay.setSpeed(4), () => Game.replay.setSpeed(1));
@@ -153,7 +168,7 @@ async (page) => {
   info.replay = replay;
   const ok = replay && typeof replay === "object";
   results.replayOnboardEngine = (ok && replay.onboard.rpm > 8000 && replay.onboard.gear >= 4) || `onboard: ${JSON.stringify(replay && replay.onboard)} (${typeof replay === "string" ? replay : ""})`;
-  const same = (x) => x && Math.abs(x.after[0] - x.before[0]) < 1500 && Math.abs(x.after[1] - x.before[1]) <= 1;
+  const same = (x) => x && Math.abs(x.after[0] - x.want[0]) < 1500 && Math.abs(x.after[1] - x.want[1]) <= 1 && x.after[0] > 6000;
   results.replayEngineResumesWhereItWas = (ok && same(replay.afterPause) && same(replay.after4x)) || `resume: ${JSON.stringify(replay && { pause: replay.afterPause, x4: replay.after4x })}`;
   results.replayTracksideDoppler = (ok && replay.trackside.up > 1.02 && replay.trackside.down < 0.98 && replay.trackside.loud > replay.trackside.quiet * 2) || `trackside: ${JSON.stringify(replay && replay.trackside)}`;
   results.replaySpeedsAndPause = (ok && replay.double.pitch > 1 && replay.double.engine > 0

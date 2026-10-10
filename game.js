@@ -2878,6 +2878,7 @@ function coolDown(racer, dt) {
   const route = getItemRoute(state.track);
   racer.drawFrom = { x: racer.x, y: racer.y, heading: racer.heading };
   racer.speed = Math.max(0, racer.speed - COOL_DOWN_BRAKE * dt);
+  racer.coasting = racer.speed > 0;
   if (racer.speed <= 0) return;
   const d = racer.trackDistance || 0;
   const side = racer.lat >= 0 ? 1 : -1;
@@ -4542,6 +4543,9 @@ function placeForDrawing() {
   const moved = [];
   state.racers.forEach((racer) => {
     const from = racer.drawFrom;
+    // A car home is parked where it stopped (even before the next step has
+    // let go of its last one), except one coasting off the line (coolDown).
+    if (racer.finished && !racer.coasting) return;
     if (!from || Math.hypot(racer.x - from.x, racer.y - from.y) > 60) return;
     moved.push([racer, racer.x, racer.y, racer.heading]);
     racer.x = from.x + (racer.x - from.x) * alpha;
