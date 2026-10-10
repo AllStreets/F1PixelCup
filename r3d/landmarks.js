@@ -694,15 +694,23 @@ function floodlights(course, group, venue) {
   const parts = { poles: [], heads: [], pools: [] };
   let open = 0;
   for (let i = 0; i < samples.length; i += every) {
-    const p = samples[i];
     const side = (i / every) % 2 ? 1 : -1;
     // Past the barrier (it stands 2 beyond the run-off's edge) by 10.
-    const off = side * ((side > 0 ? p.outerR : p.outerL) + 12);
-    const x = p.x + p.nx * off;
-    const z = p.y + p.ny * off;
+    const spot = (j) => {
+      const q = samples[((i + j) % samples.length + samples.length) % samples.length];
+      const off = side * ((side > 0 ? q.outerR : q.outerL) + 12);
+      return { p: q, x: q.x + q.nx * off, z: q.y + q.ny * off };
+    };
+    let { p, x, z } = spot(0);
     // (No room at all where two stretches share their run-off.)
     if (course.clearance(x, z) < 8) continue;
     open += 1;
+    // Something standing there (a service entrance's road, a board): a few
+    // steps along the lap either way instead.
+    if (course.occupied.blocked(x, z, 3)) {
+      const moved = [-3, 3, -6, 6, -9, 9].map(spot).find((s) => course.clearance(s.x, s.z) >= 8 && !course.occupied.blocked(s.x, s.z, 3));
+      if (moved) ({ p, x, z } = moved);
+    }
     if (course.occupied.blocked(x, z, 3)) continue;
     course.occupied.add(x, z, 4);
     parts.poles.push(new THREE.CylinderGeometry(0.9, 1.3, 70, 6).translate(x, p.h + 35, z));

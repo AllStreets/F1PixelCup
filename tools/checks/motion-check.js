@@ -77,7 +77,7 @@ async (page) => {
     state.track.laps = 1;
     const player = getPlayer();
     // (The field slowed, so the player is home with cars still racing.)
-    state.racers.forEach((r) => { if (r !== player) r.physics = { ...r.physics, maxSpeed: r.physics.maxSpeed * 0.5 }; });
+    state.racers.forEach((r) => { if (r !== player) r.physics = { ...r.physics, maxSpeed: r.physics.maxSpeed * 0.15 }; });
     player.isPlayer = false;
     let now = state.lastTick || performance.now();
     for (let n = 0; !player.finished && n < 60 * 300; n += 1) { now += 1000 / 60; updateRace(1 / 60, now); }

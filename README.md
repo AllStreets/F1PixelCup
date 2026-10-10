@@ -273,7 +273,7 @@ The item you get depends on your place, or on how far you are behind the leader 
 | **Overtake Mode** | Star | Eight seconds faster and untouchable; cars you touch spin and are knocked aside. |
 | **Formation Lap** | Bullet Bill | Six seconds of autopilot at huge speed straight through the field, knocking cars aside; at the end it carries you on, for up to two seconds more, until you are clear of other cars. |
 | **Steward Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, for them and anyone beside them. |
-| **Safety Car** | Lightning | Out ahead of the leader for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. |
+| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. |
 
 Shots, oil and the safety car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
 
@@ -378,7 +378,7 @@ tools/checks/      the browser checks          tests/      the Node tests
 - **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (shape sliders from a set of about forty, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
 - **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
 - **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one and stepping down if the first seconds run slow.
-- **Checked twice.** `npm test` runs 429 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 29 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
+- **Checked twice.** `npm test` runs 445 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 29 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
 
 ### Run it yourself
 

@@ -55,6 +55,8 @@ async (page) => {
     s.d = (shooter.trackDistance + state.track.totalLength / 2) % state.track.totalLength;
     shooter.currentItem = "safetyCar"; useItem(shooter, raceNow(now));
     const sc = state.safetyCar;
+    // (Out on the road leading: its way on is safety-car-check's.)
+    Object.assign(sc, { phase: "road", leading: true, until: raceNow(now) + 5000, inLane: false, exiting: false, lat: 0, speed: sc.fieldSpeed * PowerUps.FACTORS.safetyCar });
     sc.d = (s.d + 400) % state.track.totalLength;
     const d0 = s.d;
     const sc0 = sc.d;

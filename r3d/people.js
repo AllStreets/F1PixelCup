@@ -437,11 +437,26 @@ function marshalFigures(marshals, rand) {
   });
 }
 
+// The marshal at each service entrance's gate (r3d/entrances.js): standing
+// by the booth, in orange, looking out over the gate and the road.
+function gateMarshals(entrances, rand) {
+  if (!entrances || !entrances.userData.marshals) return [];
+  return entrances.userData.marshals.map((m) => {
+    const position = new THREE.Vector3(m.x, m.y, m.z);
+    const yaw = yawToward(position, m.lookX, m.lookZ);
+    return {
+      kind: "marshal", position, yaw, base: yaw,
+      skin: color(pick(rand, SKINS)), hair: color(pick(rand, HAIRS)),
+      shirt: color("#ff6a00"), trousers: color("#ff6a00"), trim: color("#f2f2f2"), phase: rand(),
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 
 // Everything: after the decor, the landmarks (the garages) and the marshals
 // have claimed their ground. `decor` holds the stands r3d/track.js built.
-export function buildPeople(course, { decor, landmarks, marshals }) {
+export function buildPeople(course, { decor, landmarks, marshals, entrances }) {
   const group = new THREE.Group();
   group.name = "people";
   if (!tracksideModel("people")) {
@@ -455,7 +470,7 @@ export function buildPeople(course, { decor, landmarks, marshals }) {
   const crew = pitCrews(landmarks, rand);
   const snappers = photographers(course, rand);
   const tv = tvPlatform(course, rand, group);
-  const posts = marshalFigures(marshals, rand);
+  const posts = [...marshalFigures(marshals, rand), ...gateMarshals(entrances, rand)];
   const still = instanced("marshal", posts, { animated: false, cast: true, materials, model: "crew" });
   if (still) group.add(still);
   const watchers = [];

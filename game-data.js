@@ -257,7 +257,7 @@ const POWER_UPS = [
     effect: "Flies over the field to the race leader and blows them to a near stop and a long spin, the heaviest hit in the game. Anyone right beside them spins too.",
     controls: "Space to call the stewards." },
   { id: "safetyCar", name: "Safety Car", counterpart: "Lightning",
-    effect: "A safety car comes out ahead of the leader for seven seconds. Every rival loses the power-up they hold, is slowed to its pace and can't overtake. You aren't.",
+    effect: "The Safety Car joins by whichever service gate (or the pit exit) gets it in front of the leader soonest, then leads the field for seven seconds. Every rival loses the power-up they hold, is slowed to its pace and can't overtake. You aren't.",
     controls: "Space to deploy it." },
 ];
 
