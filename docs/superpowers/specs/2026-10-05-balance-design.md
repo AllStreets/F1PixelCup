@@ -119,56 +119,49 @@ After the second round, starting on pole won only 25 % of races on Pro and 4 % o
 
 ## Result
 
-Measured with `tools/balance/` (the second round's harness: the autopilot as above, 8 circuits x 6 seeds per row, 5 laps, dry). "Before" is main at 0f239b3; "after" is this branch.
+Measured once on the final code (after every fix and merge) with `tools/balance/`: the autopilot as above, 8 circuits x 6 seeds per row (48 races), 5 laps, dry. "Before" is main at 0f239b3, measured the same way.
 
 **From the back (P20):**
 
 | | mean finish | win | top 3 | top 5 | top 10 | places/lap | stuck | blocked, not passed |
 |---|---|---|---|---|---|---|---|---|
 | Rookie before | 4.5 | 29 % | 50 % | 71 % | 90 % | 3.11 | 46 % | 15 % |
-| Rookie after | 1.4 | 81 % | 96 % | 98 % | 100 % | 3.71 | 18 % | 6 % |
+| Rookie after | 1.0 | 100 % | 100 % | 100 % | 100 % | 3.80 | 15 % | 0 % |
 | Pro before | 12.3 | 0 % | 0 % | 2 % | 33 % | 1.54 | 51 % | 34 % |
-| Pro after | 5.4 | 21 % | 40 % | 54 % | 88 % | 2.93 | 30 % | 32 % |
+| Pro after | 2.8 | 27 % | 73 % | 94 % | 100 % | 3.44 | 29 % | 15 % |
 | Legend before | 16.8 | 0 % | 0 % | 0 % | 2 % | 0.65 | 40 % | 60 % |
-| Legend after | 10.7 | 0 % | 4 % | 19 % | 54 % | 1.87 | 37 % | 50 % |
+| Legend after | 6.0 | 4 % | 25 % | 44 % | 96 % | 2.80 | 39 % | 29 % |
 
 **From pole:**
 
-| | before: mean, win | after: mean, win |
+| | before: mean, win | after: mean, win, top 3 |
 |---|---|---|
-| Rookie | 1.1, 98 % | 1.1, 90 % |
-| Pro | 1.1, 92 % | 4.5, 25 % |
-| Legend | 1.4, 73 % | 9.2, 4 % |
+| Rookie | 1.1, 98 % | 1.0, 100 %, 100 % |
+| Pro | 1.1, 92 % | 1.9, 60 %, 79 % |
+| Legend | 1.4, 73 % | 4.1, 13 %, 40 % |
+
+With 48 races a row, a win rate is good to about 7 points either way: the same code measured 42 % from pole on Pro over 64 races the run before.
 
 **Places gained in the 8 s after use, from the back on Pro:**
 
 | Item | before | after |
 |---|---|---|
-| Safety Car | +1.1 | +8.2 |
-| Overtake Mode | +0.2 | +6.1 |
-| Formation Lap | +0.4 | +5.0 |
-| Steward Penalty | 0.0 | +2.1 |
-| DRS | +0.3 | +1.4 |
-| Undercut | +0.3 | +0.7 |
-| Debris | +0.2 | -0.1 |
-| Oil Slick | +0.7 | -0.5 |
+| Overtake Mode | +0.2 | +7.0 |
+| Safety Car | +1.1 | +4.0 |
+| Formation Lap | +0.4 | +2.7 |
+| Steward Penalty | 0.0 | +1.5 |
+| DRS | +0.3 | +1.3 |
+| Undercut | +0.3 | +1.2 |
+| Debris | +0.2 | +0.5 |
+| Oil Slick | +0.7 | 0.0 |
 
-The race average is about +0.8 places per 8 s. The Oil Slick and Debris are defensive or chancy items, so their place gains are near zero by nature.
+**Steering** (measured in the second round; the assist is unchanged since): driven alone, a steered car meets the wall 0 to 3 times in two laps; an unsteered one 6 to 21 times a lap, and laps 50 to 90 % slower.
 
-**Steering:** driven alone, two laps per circuit:
-- **Steered** (the autopilot): no wall hits at Monaco, Monza, Spa, Suzuka or the Hungaroring, and 3 at Singapore. The car is off the road 1 to 7 % of the time.
-- **Unsteered** (throttle only): 6 to 21 wall hits per lap, off the road 38 to 93 % of the time, and laps 50 to 90 % slower.
-- **In races:** the steered player meets the wall about twice a race; before this branch, never, because the wall stood at the road's edge.
+**The Steward Penalty:** a car hit by it at full speed loses more than twice the road it loses to an Oil Slick (`powerups-check` `stewardCostsMoreThanOil`).
 
-**The Steward Penalty:** the leader all but stops. A car hit by it at full speed loses more than twice the road it loses to an Oil Slick (`powerups-check` `stewardCostsMoreThanOil`).
+**On screen** (`docs/review/2026-10-10/balance-*.jpg`, from the real game): the wall hit from the chase camera and from the replay's trackside camera, the Steward Penalty's blast, and the field going round a spinning car. Looking at them found two faults, both fixed: the chase camera stayed on the road while the car went to the wall, and CPU cars drove straight through a spinning car instead of round it.
 
 **Against the targets:**
-- **Rookie:** met (top 3 96 %, win 81 %).
-- **Pro:**
-  - top 5 54 %, just under the 55 % target;
-  - win 21 % and top 10 88 %;
-  - stuck 30 %, over the 25 % target.
-  
-  The heavier hits and the run-off cost some of the first round's gains (top 5 74 %, stuck 22 %).
-- **Legend:** top 10 54 % and top 5 19 % are met. No win from the back in these 48 races.
-- **The leader:** Rookie wins 90 % from pole. On Pro and Legend, starting on pole no longer wins most races (25 % and 4 %); the user approved harder pole races on 2026-10-05.
+- **From last:** Pro top 5 94 % (the target was at least 55 %); Legend top 10 96 % with a win in 4 % of races; Rookie wins every time.
+- **From pole:** Pro 60 % (the aim was 45 to 55 %), Legend 13 % (15 to 25 %), Rookie 100 % (about 90 %). Pro and Legend are within the measurement's noise of their aims. Rookie is easier than aimed for, from either end of the grid.
+- **Stuck behind a car on Pro:** 29 %, over the first round's 25 % target; blocked episodes that end without a pass are down from 34 % to 15 %.

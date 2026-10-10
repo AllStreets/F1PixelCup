@@ -36,7 +36,7 @@ async (page) => {
   }, circuit);
   const run = (fn, arg) => p.evaluate(fn, arg);
 
-  // Item boxes: taking one hides it for 3 s, only the first car gets a roll.
+  // Item boxes: taking one hides it for a moment, only the first car gets a roll.
   await setup();
   results.boxHidesAndReturns = await run(async () => {
     const pl = getPlayer();
