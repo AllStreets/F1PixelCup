@@ -17,6 +17,7 @@ import {
 } from "./textures.js";
 import { wettable, WET_ROAD, WET_RUNOFF, WET_GRAVEL, WET_PAINT } from "./rain.js";
 import { tracksideModel, STAND_MODELS } from "./models.js";
+import { inEntranceGap } from "./entrances.js";
 
 export const SAMPLE_STEP = 6;
 export const BRIDGE_HEIGHT = 26;
@@ -36,23 +37,25 @@ export class Occupancy {
     this.map = new Map();
   }
   key(ix, iz) { return `${ix},${iz}`; }
-  add(x, z, r) {
+  // `tag`: what claimed it, where a question may leave some claims out.
+  add(x, z, r, tag) {
     const c = this.cell;
     for (let ix = Math.floor((x - r) / c); ix <= Math.floor((x + r) / c); ix += 1) {
       for (let iz = Math.floor((z - r) / c); iz <= Math.floor((z + r) / c); iz += 1) {
         const k = this.key(ix, iz);
         if (!this.map.has(k)) this.map.set(k, []);
-        this.map.get(k).push({ x, z, r });
+        this.map.get(k).push({ x, z, r, tag });
       }
     }
   }
-  blocked(x, z, r) {
+  blocked(x, z, r, ignore) {
     const c = this.cell;
     for (let ix = Math.floor((x - r) / c); ix <= Math.floor((x + r) / c); ix += 1) {
       for (let iz = Math.floor((z - r) / c); iz <= Math.floor((z + r) / c); iz += 1) {
         const list = this.map.get(this.key(ix, iz));
         if (!list) continue;
         for (const o of list) {
+          if (ignore && o.tag === ignore) continue;
           if ((o.x - x) ** 2 + (o.z - z) ** 2 < (o.r + r) ** 2) return true;
         }
       }
@@ -489,9 +492,12 @@ export function buildCircuit(course, venue) {
   // Along the garages' frontage the garages are the boundary: no barrier
   // (nor, on the street circuits, catch fence).
   const atGarages = (p) => Boolean(pitLane) && pitLane.atGarage(p.d, 4);
+  // Open too where a service entrance comes through (r3d/entrances.js).
+  const entrances = track.entrances || [];
+  const atGate = (p, sign) => inEntranceGap(entrances, sign, p.d, track.totalLength);
   [["left", (p) => -p.outerL - 1, -1], ["right", (p) => p.outerR + 1, 1]].forEach(([side, off, sign]) => {
     const onPitSide = pitLane && pitLane.side === sign;
-    const m = mesh(wall(samples, off, c(0), c(barrierH), 150, onPitSide ? (p) => !atGarages(p) : undefined), barrierMat, { cast: true });
+    const m = mesh(wall(samples, off, c(0), c(barrierH), 150, (p) => !(onPitSide && atGarages(p)) && !atGate(p, sign)), barrierMat, { cast: true });
     m.userData.advertSide = side;
   });
   if (pitLane) group.add(buildPitLane(course, pitLane, occluders));
@@ -504,7 +510,7 @@ export function buildCircuit(course, venue) {
     [[(p) => -p.outerL - 1, -1], [(p) => p.outerR + 1, 1]].forEach(([off, sign]) => {
       const onPitSide = pitLane && pitLane.side === sign;
       // (Marked: the replay's TV cameras stand high enough to see over it.)
-      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, (p) => !inTunnel(p) && !(onPitSide && atGarages(p))), fence).userData.catchFence = true;
+      mesh(wall(samples, off, c(barrierH), c(barrierH + 24), 24, (p) => !inTunnel(p) && !(onPitSide && atGarages(p)) && !atGate(p, sign)), fence).userData.catchFence = true;
     });
   }
   if (track.tunnel) group.add(buildTunnel(course, track.tunnel, occluders));

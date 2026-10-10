@@ -131,7 +131,11 @@ async (page) => {
   results.recordingDoesNotChangeRace = (race && race.sameRace === true) || JSON.stringify(race);
   // Every second step is a sample; memory and cost within the spec's budget.
   results.recordedEverySecondStep = (race && race.samples === Math.floor(race.steps / 2) + 1) || JSON.stringify(race);
-  const mbPerMinute = race && race.bytes / 1e6 / (race.duration / 60000);
+  // (The rate of the samples kept: the last chunk's unused slack, a fixed
+  // cost whatever the race's length, is left out, so a shorter race does not
+  // read as a dearer one.)
+  const used = race && race.samples / (Math.ceil(race.samples / 128) * 128);
+  const mbPerMinute = race && (race.bytes * used) / 1e6 / (race.duration / 60000);
   info.mbPerMinute = mbPerMinute;
   info.recordPercentOfStep = race && (race.recordUs / race.stepUs) * 100;
   results.memoryWithinBudget = (mbPerMinute > 0 && mbPerMinute <= 1.5) || `${mbPerMinute} MB a minute`;

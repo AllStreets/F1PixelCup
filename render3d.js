@@ -26,6 +26,7 @@ import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
+import { buildEntrances, updateEntrances, inspectEntrances } from "./r3d/entrances.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
 import { loadItemModels, whenItemsReady, itemsState, itemTemplates, disposeItemCopy } from "./r3d/items.js";
@@ -592,6 +593,8 @@ function auditVenue(track) {
       // Standing on the ground (the flat plane), none floating.
       offGround: world.marshals ? world.marshals.children.filter((g) => Math.abs(g.position.y) > 0.01).length : 0,
     },
+    // The Safety Car's service entrances: each gate and how open it is.
+    entrances: inspectEntrances(world.entrances),
     // The starter's rostrum: clear of the barriers and of other scenery.
     starter: world.starter ? { clear: Math.round(world.course.clearance(world.starter.position.x, world.starter.position.z)) } : null,
     tunnel: tunnel ? { roof: Math.round(roof), from: track.tunnel.from, to: track.tunnel.to } : null,
@@ -918,6 +921,10 @@ function buildWorld(track) {
   group.add(buildGround(course, venue, bg));
   const circuit = buildCircuit(course, venue);
   group.add(circuit);
+  // The Safety Car's service entrances (r3d/entrances.js): part of the
+  // circuit, so they claim their ground before any scenery is placed.
+  const entrances = buildEntrances(course, venue);
+  group.add(entrances);
   // Decor from the track data first (it was laid out with the circuit), then
   // landmarks and trees fill round it. Everything claims its footprint.
   const decor = buildDecor(course, venue);
@@ -935,7 +942,7 @@ function buildWorld(track) {
   if (starter) group.add(starter);
   // The people (r3d/people.js): the crowd in the stands, the pit crews, the
   // photographers and the TV crew, after everything else has its ground.
-  const people = buildPeople(course, { decor, landmarks, marshals });
+  const people = buildPeople(course, { decor, landmarks, marshals, entrances });
   group.add(people);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
@@ -946,7 +953,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
-  return { trackId: track.id, course, venue, group, circuit, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
+  return { trackId: track.id, course, venue, group, circuit, entrances, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -1353,6 +1360,8 @@ function drawFrame(frame) {
     powerUpLayer.group.visible = particles.visible = true;
     syncCars(world, racers, player, now, dt, (frame.view && frame.view.alsoShow) || frame.alsoShow, cut);
     if (powerUps) powerUpLayer.sync({ powerUps, racers, cars: world.cars, course, now, dt });
+    // The service gates open as the Safety Car comes (in a replay too).
+    updateEntrances(world.entrances, powerUps && powerUps.safetyCar, now / 1000, dt, cut);
     syncParticles(list, course);
     world.boxes.forEach((b, i) => {
       const hidden = powerUps && powerUps.boxHidden[i];
@@ -1598,6 +1607,8 @@ function sightIndex(world) {
   [world.marshals, world.starter].filter(Boolean).forEach((root) => root.traverse((o) => {
     if (o.isMesh && !o.userData.ground) take(o, false);
   }));
+  // The service entrances' booths and carports (their gates swing: left out).
+  if (world.entrances) world.entrances.children.forEach((o) => { if (o.isMesh && !o.userData.ground) take(o, false); });
   const v = new THREE.Vector3();
   world.circuit.traverseVisible((o) => {
     if (!o.isMesh || o.userData.ground) return;
@@ -1856,7 +1867,7 @@ function auditScenery(track, { step = 2, lanes = 7 } = {}) {
   world.group.updateMatrixWorld(true);
   // Every yacht drawn (a view may have left some out of sight).
   showYachtsFor(world.yachts, null, "high");
-  const targets = [world.decor, world.landmarks, world.marshals, world.starter, world.people].filter(Boolean);
+  const targets = [world.decor, world.landmarks, world.entrances, world.marshals, world.starter, world.people].filter(Boolean);
   const ray = new THREE.Raycaster();
   const down = new THREE.Vector3(0, -1, 0);
   const origin = new THREE.Vector3();
