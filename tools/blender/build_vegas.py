@@ -65,215 +65,9 @@ PALETTE.update({
     "doge_pink": ((0.86, 0.62, 0.58), 0.0, 0.85),
 })
 
-# Each resort's band of light round its tall towers' tops (night), rgb.
-CROWN = {
-    "caesars": (0.25, 0.5, 1.0), "palazzo": (1.0, 0.85, 0.6), "mgm": (0.2, 1.0, 0.45), "mirage": (1.0, 0.75, 0.3),
-    "treasureisland": (1.0, 0.25, 0.2), "harrahs": (1.0, 0.2, 0.25), "horseshoe": (1.0, 0.75, 0.3), "linq": (0.35, 0.55, 1.0),
-    "planethollywood": (0.75, 0.35, 1.0), "flamingo": (1.0, 0.35, 0.6), "excalibur": (1.0, 0.8, 0.35), "paris": (1.0, 0.85, 0.55),
-    "resortsworld": (1.0, 0.2, 0.15), "fontainebleau": (0.4, 0.75, 1.0), "strat": (0.7, 0.3, 1.0), "nyny": (1.0, 0.9, 0.7),
-    "cosmopolitan": (0.9, 0.95, 1.0), "aria": (0.85, 0.9, 1.0), "bellagio": (1.0, 0.9, 0.7), "venetian": (1.0, 0.9, 0.7),
-    "mandalay": (1.0, 0.8, 0.4), "trump": (1.0, 0.85, 0.5),
-}
+from vegas_resorts import (F, STONE, PLAIN, GLASS, STYLES, VMesh, light_bar, ccw, tidy, walls, ring, band, arch, offset, tone, building, prepare)  # noqa: E402
 
-
-def hexrgb(h):
-    return tuple(int(h[i:i + 2], 16) / 255 for i in (1, 3, 5))
-
-
-class VMesh(Mesh):
-    """A Mesh whose faces each carry a colour (r, g, b, a), written to a
-    colour attribute (glTF COLOR_0) for the roles that read it. Colours are
-    sRGB (as the hex colours are) and stored linear, as glTF's are; with
-    `data`, the channels are numbers for a shader (the fountains' phases, a
-    screen's id) and stored as they are."""
-
-    def __init__(self, name, data=False):
-        super().__init__(name)
-        self.data = data
-        self.col_layer = self.bm.faces.layers.int.new("colour_index")
-        self.palette = [(1.0, 1.0, 1.0, 1.0)]
-
-    def cface(self, pts, role, col=None, uvs=None):
-        f = self.face(pts, role, uvs=uvs)
-        if col is not None:
-            if col not in self.palette:
-                self.palette.append(col)
-            f[self.col_layer] = self.palette.index(col)
-        return f
-
-    def finish(self, extras=None, parent=None):
-        ob = super().finish(extras=extras, parent=parent)
-        me = ob.data
-        idx = me.attributes.get("colour_index")
-        attr = me.color_attributes.new("Color", "FLOAT_COLOR", "CORNER")
-        for poly in me.polygons:
-            c = self.palette[idx.data[poly.index].value] if idx else (1, 1, 1, 1)
-            for li in poly.loop_indices:
-                if self.data:
-                    attr.data[li].color = c
-                else:
-                    attr.data[li].color_srgb = c
-        me.color_attributes.active_color = attr
-        if idx:
-            me.attributes.remove(idx)
-        return ob
-
-
-def light_bar(m, a, b, w, col):
-    """A bar of light from a to b, w thick: a closed box (its faces outward)."""
-    a, b = Vector(a), Vector(b)
-    # (A hair short of b: bars end to end stay separate closed boxes, never
-    # welded into one with walls inside it.)
-    b = a + (b - a) * 0.97
-    d = (b - a).normalized()
-    side = Vector((0, 0, 1)) if abs(d.z) < 0.9 else Vector((1, 0, 0))
-    u = d.cross(side).normalized() * (w / 2)
-    v = d.cross(u).normalized() * (w / 2)
-    ring = lambda c: [c - u - v, c + u - v, c + u + v, c - u + v]
-    ra, rb = ring(a), ring(b)
-    for k in range(4):
-        j = (k + 1) % 4
-        m.cface((ra[k], ra[j], rb[j], rb[k]), "neon", col)
-    m.cface(list(reversed(ra)), "neon", col)
-    m.cface(rb, "neon", col)
-
-
-def ccw(outline):
-    area = sum(a[0] * b[1] - b[0] * a[1] for a, b in zip(outline, outline[1:] + outline[:1]))
-    return outline if area > 0 else list(reversed(outline))
-
-
-def walls(m, outline, z0, z1, role, col):
-    """A footprint's walls from z0 to z1, the UVs' u round them in metres."""
-    run = 0.0
-    n = len(outline)
-    for i in range(n):
-        a, b = outline[i], outline[(i + 1) % n]
-        seg = math.dist(a, b)
-        if seg < 0.05:
-            continue
-        m.cface([(a[0], a[1], z0), (b[0], b[1], z0), (b[0], b[1], z1), (a[0], a[1], z1)], role, col,
-                 uvs=[(run, z0), (run + seg, z0), (run + seg, z1), (run, z1)])
-        run += seg
-
-
-def band(m, outline, z0, z1, col, out=0.25):
-    """A band of light round a footprint (its own thin closed ring)."""
-    cx = sum(p[0] for p in outline) / len(outline)
-    cy = sum(p[1] for p in outline) / len(outline)
-    o = []
-    for x, y in outline:
-        d = math.hypot(x - cx, y - cy) or 1
-        o.append((x + (x - cx) / d * out, y + (y - cy) / d * out))
-    i = [(x - (x - cx) / math.hypot(x - cx, y - cy) * 0.3 if math.hypot(x - cx, y - cy) > 0.5 else x, y - (y - cy) / math.hypot(x - cx, y - cy) * 0.3 if math.hypot(x - cx, y - cy) > 0.5 else y) for x, y in outline]
-    n = len(outline)
-    for k in range(n):
-        j = (k + 1) % n
-        m.cface([(o[k][0], o[k][1], z0), (o[j][0], o[j][1], z0), (o[j][0], o[j][1], z1), (o[k][0], o[k][1], z1)], "neon", col)
-        m.cface([(i[j][0], i[j][1], z0), (i[k][0], i[k][1], z0), (i[k][0], i[k][1], z1), (i[j][0], i[j][1], z1)], "neon", col)
-        m.cface([(o[k][0], o[k][1], z1), (o[j][0], o[j][1], z1), (i[j][0], i[j][1], z1), (i[k][0], i[k][1], z1)], "neon", col)
-        m.cface([(i[k][0], i[k][1], z0), (i[j][0], i[j][1], z0), (o[j][0], o[j][1], z0), (o[k][0], o[k][1], z0)], "neon", col)
-
-
-def building(b, parent):
-    """One footprint: its walls, its roof (flat, a pyramid or a dome), and a
-    band of light round the top of a tall one."""
-    outline = ccw([tuple(p) for p in b["outline"]])
-    # Drop points closer than 0.3 m (map noise) so the walls stay clean.
-    clean = [outline[0]]
-    for p in outline[1:]:
-        if math.dist(p, clean[-1]) > 0.3:
-            clean.append(p)
-    if len(clean) > 3 and math.dist(clean[0], clean[-1]) < 0.3:
-        clean.pop()
-    if len(clean) < 3:
-        return None
-    outline = clean
-    r, g, bb = hexrgb(b["colour"])
-    col = (r, g, bb, 0.35 if b["glass"] else 1.0)
-    m = VMesh(f'b_{b["id"]}')
-    z0, h = b["minh"], b["h"]
-    roof = b["roof"]
-    xs = [p[0] for p in outline]
-    ys = [p[1] for p in outline]
-    w = min(max(xs) - min(xs), max(ys) - min(ys))
-    roof_h = min(w * 0.6, h * 0.35) if roof in ("pyramidal", "dome", "round") else 0.0
-    top = h - roof_h
-    walls(m, outline, z0, top, "facade_vegas", col)
-    cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
-    if roof == "pyramidal":
-        role = ("roof_red", "roof_blue", "roof_gold")[int(abs(cx * 7 + cy * 3)) % 3] if b["resort"] == "excalibur" else "roof_flat"
-        for i in range(len(outline)):
-            a, c = outline[i], outline[(i + 1) % len(outline)]
-            m.cface([(a[0], a[1], top), (c[0], c[1], top), (cx, cy, h)], role)
-    elif roof in ("dome", "round"):
-        rows = [[(cx + (p[0] - cx) * math.cos(t), cy + (p[1] - cy) * math.cos(t), top + roof_h * math.sin(t)) for p in outline] for t in [math.pi / 2 * k / 5 for k in range(5)]]
-        for r0, r1 in zip(rows, rows[1:]):
-            for i in range(len(outline)):
-                j = (i + 1) % len(outline)
-                m.cface([r0[i], r0[j], r1[j], r1[i]], "roof_green" if b["resort"] in ("bellagio",) else "roof_flat")
-        for i in range(len(outline)):
-            j = (i + 1) % len(outline)
-            m.cface([rows[-1][i], rows[-1][j], (cx, cy, h)], "roof_green" if b["resort"] in ("bellagio",) else "roof_flat")
-    else:
-        m.cface([(x, y, top) for x, y in outline], "roof_flat")
-    if b["minh"] > 0.5:
-        m.cface([(x, y, z0) for x, y in reversed(outline)], "roof_flat")
-    if roof == "flat" and top - z0 > 60 and inside_poly((cx, cy), outline):
-        crown_details(m, b, outline, cx, cy, w, top)
-    crown = CROWN.get(b["resort"])
-    if crown and top - z0 > 55:
-        c = (*crown, 1.0)
-        band(m, outline, top - 2.6, top - 1.4, c)
-        if b["resort"] == "flamingo":
-            # The Flamingo's neon: pink and orange bands up its towers.
-            for k, z in enumerate(range(12, int(top) - 8, 14)):
-                band(m, outline, z, z + 0.9, (1.0, 0.3, 0.6, 1.0) if k % 2 else (1.0, 0.55, 0.2, 1.0))
-    return m.finish(parent=parent, extras={"resort": b["resort"], "height": b["h"]})
-
-
-def inside_poly(pt, poly):
-    x, y = pt
-    hit = False
-    for (ax, ay), (bx, by) in zip(poly, poly[1:] + poly[:1]):
-        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
-            hit = not hit
-    return hit
-
-
-def crown_details(m, b, outline, cx, cy, w, top):
-    """A tall tower's top: the plant room on its roof, and a resort's own
-    crown: New York-New York's towers stepping up to their spires (as the
-    skyline they copy), the Palazzo's lantern, Paris's mansard roof."""
-    s = max(4.0, min(w * 0.28, 16.0))
-    if b["resort"] == "nyny" and b["h"] > 110:
-        # Setbacks to a mast (an Empire State or a Chrysler of the skyline).
-        z = top
-        for k, f in enumerate((0.55, 0.38, 0.24)):
-            hs = w * f / 2
-            sq = [(cx - hs, cy - hs), (cx + hs, cy - hs), (cx + hs, cy + hs), (cx - hs, cy + hs)]
-            walls(m, sq, z, z + 7.0 - k, "facade_vegas", (0.7, 0.62, 0.52, 1.0))
-            m.cface([(x, y, z + 7.0 - k) for x, y in sq], "roof_flat")
-            z += 7.0 - k
-        m.lathe([(0.0, z), (w * 0.08, z), (0.4, z + 26.0), (0.0, z + 27.0)], (cx, cy), "white_steel", segs=8, smooth=False)
-        m.cface([(cx - 1.2, cy - 1.2, z + 4.0), (cx + 1.2, cy - 1.2, z + 4.0), (cx, cy, z + 9.0)], "neon", (1.0, 0.9, 0.7, 1.0))
-        return
-    if b["resort"] == "palazzo":
-        m.lathe([(0.0, top), (s, top), (s, top + 6.0), (s * 0.8, top + 8.0), (s * 0.45, top + 13.0), (0.0, top + 15.0)], (cx, cy), "roof_gold", segs=12)
-        return
-    if b["resort"] == "paris":
-        # A slate mansard round the top, in from its edges.
-        inset = [(cx + (x - cx) * 0.9, cy + (y - cy) * 0.9) for x, y in outline]
-        for i in range(len(outline)):
-            j = (i + 1) % len(outline)
-            m.cface([(outline[i][0], outline[i][1], top), (outline[j][0], outline[j][1], top), (inset[j][0], inset[j][1], top + 7.0), (inset[i][0], inset[i][1], top + 7.0)], "roof_flat")
-        m.cface([(x, y, top + 7.0) for x, y in inset], "roof_flat")
-        return
-    # The plant room.
-    sq = [(cx - s, cy - s * 0.6), (cx + s, cy - s * 0.6), (cx + s, cy + s * 0.6), (cx - s, cy + s * 0.6)]
-    if all(inside_poly(p, outline) for p in sq):
-        walls(m, sq, top, top + 6.0, "roof_flat", None)
-        m.cface([(x, y, top + 6.0) for x, y in sq], "roof_flat")
+prepare(DATA)
 
 
 # =============================================================================
@@ -526,7 +320,8 @@ def rialto(parent):
 
 def colosseum(parent):
     """Caesars' Colosseum (the theatre): a white drum about 70 m across and
-    35 high, a ring of columns round its face, its crown band lit blue."""
+    35 high, a ring of columns round its face and three tiers of lit arches
+    between them, its crown band lit blue."""
     a = DATA["anchors"]["colosseum"]
     m = VMesh("colosseum")
     R = 36.0
@@ -535,8 +330,14 @@ def colosseum(parent):
         t = 2 * math.pi * k / 32
         c = (a["x"] + math.cos(t) * (R + 1.6), a["y"] + math.sin(t) * (R + 1.6))
         m.lathe([(0.9, 0.0), (0.9, 30.0), (1.3, 31.0), (0.0, 31.0)], c, "stone", segs=8, smooth=False)
-    ring = [(a["x"] + math.cos(2 * math.pi * k / 48) * R, a["y"] + math.sin(2 * math.pi * k / 48) * R) for k in range(48)]
-    band(m, ring, 31.4, 32.6, (0.3, 0.55, 1.0, 1.0), out=1.4)
+    # Three tiers of arches between the columns, lit from within.
+    for k in range(32):
+        t = 2 * math.pi * (k + 0.5) / 32
+        c = (a["x"] + math.cos(t) * (R - 0.05), a["y"] + math.sin(t) * (R - 0.05))
+        for z, hh in ((2.5, 8.0), (12.0, 8.0), (21.5, 7.5)):
+            arch(m, c, (-math.sin(t), math.cos(t)), 4.0, hh, z, 0.5, (0.95, 0.62, 0.3, 1.0))
+    circle = [(a["x"] + math.cos(2 * math.pi * k / 48) * R, a["y"] + math.sin(2 * math.pi * k / 48) * R) for k in range(48)]
+    band(m, circle, 31.4, 32.6, (0.3, 0.55, 1.0, 1.0), out=1.4)
     return m.finish(parent=parent)
 
 
@@ -618,20 +419,19 @@ def luxor(parent):
     corners = [(cx + math.cos(ang + k * math.pi / 2) * half, cy + math.sin(ang + k * math.pi / 2) * half) for k in range(4)]
     m = VMesh("luxor_pyramid")
     H = 107.0
+    glass = tone("#2e2823", GLASS)
     for k in range(4):
         p, q = corners[k], corners[(k + 1) % 4]
-        m.cface([(p[0], p[1], 0.0), (q[0], q[1], 0.0), (cx, cy, H)], "black_glass")
+        m.cface([(p[0], p[1], 0.0), (q[0], q[1], 0.0), (cx, cy, H)], F, glass, uvs=[(0.0, 0.0), (183.0, 0.0), (91.5, H)])
+    # Its four edges lit their whole length, and the lamp room at its apex.
     for k in range(4):
         p = corners[k]
-        d = Vector((cx - p[0], cy - p[1], H))
-        u = Vector((-(cy - p[1]), cx - p[0], 0)).normalized() * 0.8
-        base = Vector((p[0], p[1], 1.0))
-        top = Vector((cx, cy, H - 0.5))
-        lift = d.normalized().cross(u).normalized() * 0.4
-        m.cface([base - u + lift, base + u + lift, top + u + lift, top - u + lift], "neon", (0.95, 0.95, 1.0, 1.0))
+        light_bar(m, (cx + (p[0] - cx) * 1.004, cy + (p[1] - cy) * 1.004, 2.2), (cx, cy, H + 0.4), 2.2, (0.95, 0.95, 1.0, 1.0))
+    light_bar(m, (cx, cy, H - 4.0), (cx, cy, H + 2.0), 4.5, (1.0, 1.0, 1.0, 1.0))
     m.finish(parent=parent)
+    # The beam: the strongest light on the Strip, 14 m across, into the sky.
     beam = Mesh("luxor_beam")
-    beam.lathe([(0.0, H), (3.0, H), (3.0, H + 1400.0), (0.0, H + 1400.0)], (cx, cy), "beam", segs=12, smooth=True)
+    beam.lathe([(0.0, H), (7.0, H), (7.0, H + 2600.0), (0.0, H + 2600.0)], (cx, cy), "beam", segs=12, smooth=True)
     beam.finish(parent=parent)
     # The sphinx: toward the Strip, a lion's long body and paws, its head in its headdress.
     t = a["facing"]
@@ -664,6 +464,89 @@ def strat(parent):
     ring = [(cx + math.cos(2 * math.pi * k / 28) * 24.6, cy + math.sin(2 * math.pi * k / 28) * 24.6) for k in range(28)]
     band(m, ring, 287.0, 288.4, (0.7, 0.3, 1.0, 1.0), out=0.6)
     return m.finish(parent=parent)
+
+
+def plume(jets, x, y, r, col):
+    """A jet of water a metre tall (the game stretches it to its height)."""
+    prof = [(0.25, 0.2), (0.45, 0.45), (0.8, 0.85), (0.55, 0.97), (0.0, 1.0)]
+    for (ra, za), (rb, zb) in zip(prof, prof[1:]):
+        for s in range(6):
+            t0 = 2 * math.pi * s / 6
+            t1 = 2 * math.pi * (s + 1) / 6
+            q = [(x + math.cos(t0) * ra * r, y + math.sin(t0) * ra * r, za), (x + math.cos(t1) * ra * r, y + math.sin(t1) * ra * r, za),
+                 (x + math.cos(t1) * rb * r, y + math.sin(t1) * rb * r, zb), (x + math.cos(t0) * rb * r, y + math.sin(t0) * rb * r, zb)]
+            jets.cface(q if rb > 0 else q[:3], "fountain", col)
+
+
+def bellagio_tower():
+    """The Bellagio's tower as a footprint (the map has it without a height):
+    two long wings in one curve, hollow toward the lake, and a third behind,
+    from the hub its cupola stands on; 151 m, 36 floors."""
+    hub = next(b for b in DATA["buildings"] if b["resort"] == "bellagio" and b["roof"] in ("dome", "round"))
+    cx = sum(p[0] for p in hub["outline"]) / len(hub["outline"])
+    cy = sum(p[1] for p in hub["outline"]) / len(hub["outline"])
+    R, D, A = 215.0, 22.0, math.radians(34)
+    ax = cx + R
+    pt = lambda r, a: (ax - r * math.cos(a), cy + r * math.sin(a))
+    inner = [pt(R - D / 2, -A + 2 * A * k / 12) for k in range(13)]
+    aw = math.asin(11.0 / (R + D / 2))
+    north = [pt(R + D / 2, A - (A - aw) * k / 6) for k in range(7)]
+    wx = ax - (R + D / 2) * math.cos(aw)
+    wing = [(wx - 78.0, cy + 11.0), (wx - 78.0, cy - 11.0)]
+    south = [pt(R + D / 2, -aw - (A - aw) * k / 6) for k in range(7)]
+    return {"id": "bellagio_tower", "resort": "bellagio", "h": 151.0, "minh": 0.0, "colour": STYLES["bellagio"]["c"], "glass": False, "roof": "flat", "outline": inner + north + wing + south}
+
+
+def bellagio_village(parent):
+    """The houses along the lake's shore before the tower: stucco in the
+    colours of an Italian lakeside, their low roofs tiled."""
+    lake = DATA["lake"]
+    ys = [p[1] for p in lake]
+    m = VMesh("b_bellagio_village")
+    cols = ["#e6c98f", "#d9a37c", "#efe0c0", "#d6b48a", "#e3bfa0", "#cfa07a"]
+    tile = tone("#b0603f", PLAIN)
+    y = min(ys) + 30.0
+    k = 0
+    while y < max(ys) - 50.0:
+        wide, deep, hh = 20.0 + (k * 7) % 9, 14.0 + (k * 5) % 6, 10.0 + (k * 3) % 8
+        west = min(p[0] for p in lake if abs(p[1] - (y + wide / 2)) < 30)
+        x1 = west - 10.0
+        o = [(x1 - deep, y), (x1, y), (x1, y + wide), (x1 - deep, y + wide)]
+        walls(m, o, 0.0, hh, F, tone(cols[k % len(cols)], STONE))
+        hi = offset(o, -min(deep, wide) * 0.32)
+        for i in range(4):
+            j = (i + 1) % 4
+            m.cface([(*o[i], hh), (*o[j], hh), (*hi[j], hh + 3.6), (*hi[i], hh + 3.6)], F, tile)
+        m.cface([(*p, hh + 3.6) for p in hi], F, tile)
+        ring(m, o, hh - 0.7, hh - 0.05, tile, out=0.7)
+        y += wide + 3.0
+        k += 1
+    return m.finish(parent=parent, extras={"resort": "bellagio", "height": 18.0})
+
+
+def caesars_fountains(parent):
+    """Caesars' fountains before its front: three round basins in a row
+    toward the Strip, a ring of low jets and one at the middle of each."""
+    pts = [p for b in DATA["buildings"] if b["resort"] == "caesars" for p in b["outline"]]
+    p, c = min(((p, c) for p in pts for c in DATA["circuit"][::2]), key=lambda pc: math.dist(pc[0], pc[1]))
+    d = math.dist(p, c)
+    ux, uy = (p[0] - c[0]) / d, (p[1] - c[1]) / d
+    off = max(62.0, d - 24.0)
+    basins = VMesh("caesars_basins")
+    jets = VMesh("caesars_fountains", data=True)
+    count = 0
+    for k, along in enumerate((20.0, 42.0, 64.0)):
+        x, y = c[0] + ux * off - uy * along, c[1] + uy * off + ux * along
+        circle = [(x + math.cos(2 * math.pi * i / 20) * 8.0, y + math.sin(2 * math.pi * i / 20) * 8.0) for i in range(20)]
+        ring(basins, circle, 0.0, 0.9, tone(STYLES["caesars"]["trim"], PLAIN), out=0.5, inn=0.5)
+        basins.prism(offset(circle, -0.6), 0.02, 0.55, "lake", cap_bottom=True)
+        # (Blue 1: a small fountain, a few metres of water, no finale.)
+        plume(jets, x, y, 1.5, (k / 3.0, 0.0, 1.0, 1.0))
+        for i in range(6):
+            plume(jets, x + math.cos(2 * math.pi * i / 6) * 5.0, y + math.sin(2 * math.pi * i / 6) * 5.0, 0.9, ((k / 3.0 + 0.4 + i / 12.0) % 1.0, 1.0, 1.0, 1.0))
+        count += 7
+    basins.finish(parent=parent)
+    jets.finish(parent=parent, extras={"jets": count})
 
 
 def bellagio_lake(parent):
@@ -715,17 +598,29 @@ def bellagio_lake(parent):
             col = (phase, row / 3.0, 0.0, 1.0)
             # A plume: narrow at the nozzle, opening as it climbs, its crown
             # rounded (the game stretches it to the jet's height).
-            r = 2.4 if row % 2 == 0 else 1.7
-            prof = [(0.25, 0.2), (0.45, 0.45), (0.8, 0.85), (0.55, 0.97), (0.0, 1.0)]
-            for (ra, za), (rb, zb) in zip(prof, prof[1:]):
-                for s in range(6):
-                    t0 = 2 * math.pi * s / 6
-                    t1 = 2 * math.pi * (s + 1) / 6
-                    q = [(x + math.cos(t0) * ra * r, y + math.sin(t0) * ra * r, za), (x + math.cos(t1) * ra * r, y + math.sin(t1) * ra * r, za),
-                         (x + math.cos(t1) * rb * r, y + math.sin(t1) * rb * r, zb), (x + math.cos(t0) * rb * r, y + math.sin(t0) * rb * r, zb)]
-                    jets.cface(q if rb > 0 else q[:3], "fountain", col)
+            plume(jets, x, y, 2.4 if row % 2 == 0 else 1.7, col)
             count += 1
     jets.finish(parent=parent, extras={"jets": count})
+
+
+def planethollywood_base():
+    """Planet Hollywood's base before its tower: a low hall whose front to
+    the Strip is one long curve (the map has its tower alone)."""
+    tower = max((b for b in DATA["buildings"] if b["resort"] == "planethollywood"), key=lambda b: b["h"])
+    xs = [p[0] for p in tower["outline"]]
+    ys = [p[1] for p in tower["outline"]]
+    x0, y0, y1 = min(xs), min(ys), max(ys)
+    front = [(x0 - 5.0 - 20.0 * math.sin(math.pi * k / 12), y0 + (y1 - y0) * k / 12) for k in range(13)]
+    return tidy([(x0 - 1.0, y1), *reversed(front), (x0 - 1.0, y0)])
+
+
+def planethollywood_hall(parent):
+    o = planethollywood_base()
+    m = VMesh("b_planethollywood_base")
+    walls(m, o, 0.0, 24.0, F, tone(STYLES["planethollywood"]["pod"], PLAIN))
+    m.cface([(x, y, 24.0) for x, y in o], "roof_flat")
+    ring(m, o, 22.6, 24.6, tone(STYLES["planethollywood"]["trim"], PLAIN), out=0.9)
+    return m.finish(parent=parent, extras={"resort": "planethollywood", "height": 24.0})
 
 
 def vbox(m, lo, hi, screen):
@@ -746,15 +641,9 @@ def led_walls(parent):
         pts = [p for b in DATA["buildings"] if b["resort"] == key for p in b["outline"]]
         return min(p[0] for p in pts), max(p[0] for p in pts), min(p[1] for p in pts), max(p[1] for p in pts)
 
-    # Planet Hollywood: a long curved screen on its podium's west front.
+    # Planet Hollywood: its curved base along the Strip, wrapped in screens.
     m = VMesh("led_planethollywood", data=True)
-    x0, x1, y0, y1 = resort_box("planethollywood")
-    for k in range(10):
-        f0, f1 = k / 10, (k + 1) / 10
-        ya, yb = y0 + (y1 - y0) * f0, y0 + (y1 - y0) * f1
-        xa = x0 - 4 - 6 * math.sin(math.pi * f0)
-        xb = x0 - 4 - 6 * math.sin(math.pi * f1)
-        vbox(m, (min(xa, xb) - 0.6, ya, 6.0), (max(xa, xb), yb, 26.0), 201)
+    ring(m, planethollywood_base(), 6.0, 21.0, (201 / 255.0, 0.0, 0.0, 1.0), role="video", out=0.7, inn=0.2)
     m.finish(parent=parent)
     # The Cosmopolitan's marquee: a tall pillar of screens by the Strip.
     m = VMesh("led_cosmopolitan", data=True)
@@ -808,19 +697,26 @@ def signs(parent):
         m.finish(parent=parent)
 
 
+GROUPED = {"bellagio_lake": "bellagio", "colosseum": "caesars", "caesars_fountains": "caesars"}
+
+
 def build():
     clear()
     root = empty("vegas_strip")
     bl = empty("buildings", parent=root)
-    for b in DATA["buildings"]:
+    for b in [*DATA["buildings"], bellagio_tower()]:
         building(b, bl)
+    bellagio_village(bl)
+    planethollywood_hall(bl)
     # The anchors (the game places the Sphere on its own, and names the
     # landmarks for the checks and the photographs).
     for key, a in DATA["anchors"].items():
         empty(f"anchor_{key}", (a["x"], a["y"], 0.0), parent=root)
     lm = empty("landmarks", parent=root)
-    for fn in (eiffel, balloon, arc, campanile, doges, rialto, colosseum, high_roller, liberty, luxor, strat, bellagio_lake):
-        sub = empty(f"lm_{fn.__name__}", parent=lm)
+    for fn in (eiffel, balloon, arc, campanile, doges, rialto, colosseum, high_roller, liberty, luxor, strat, bellagio_lake, caesars_fountains):
+        # (A resort's own pieces are placed with it: the lake with its tower
+        # and village, the Colosseum and the fountains with Caesars.)
+        sub = empty(f"lm_{fn.__name__}", parent=lm, extras={"resort": GROUPED[fn.__name__]} if fn.__name__ in GROUPED else None)
         fn(sub)
     # (Each wall and sign its own landmark node.)
     led_walls(lm)
@@ -833,8 +729,8 @@ objs = subtree(root)
 total = sum(tris(o) for o in objs)
 lo, hi = bounds(objs)
 print(f"vegas_strip: {total} triangles, {len([o for o in objs if o.type == 'MESH'])} meshes, {lo.x:.0f}..{hi.x:.0f} x {lo.y:.0f}..{hi.y:.0f} x {lo.z:.2f}..{hi.z:.0f}")
-if total > 400000:
-    raise RuntimeError(f"vegas_strip has {total} triangles, over its 400000")
+if total > 200000:
+    raise RuntimeError(f"vegas_strip has {total} triangles, over its 200000")
 for o in objs:
     if o.type == "MESH" and min((o.matrix_world @ v.co).z for v in o.data.vertices) < -0.01:
         print("below ground:", o.name)

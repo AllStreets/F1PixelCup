@@ -797,11 +797,8 @@ export { LANDMARK_SCALE };
 // floors: how much a room's light follows its floor's (1: whole floors
 // together; lower: each room its own). room: a room's width and a floor's
 // height (metres); glow: how bright a lit room is.
-// fromVertex: the slab's colour from the model's vertex colours (rgb), its
-// alpha how much of a glass tower it is (1 stone, lower glass): many
-// buildings, one material (Las Vegas's Strip).
-export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.55, fromVertex = false } = {}) {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35, vertexColors: fromVertex });
+function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55, floors = 0.65, room = [4, 3.2], glow = 0.55 } = {}) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.35 });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uGlass = { value: color(glass) };
     shader.uniforms.uSlab = { value: color(slab) };
@@ -834,14 +831,7 @@ export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit
         float farAway = smoothstep(0.22, 0.55, fw);
         float glassShare = 0.78;
         float inset = mix(glassIn, glassShare, farAway);
-        ${fromVertex ? `vec3 slabC = vColor.rgb * (1.0 - 0.58 * uNight);
-        #ifdef USE_COLOR_ALPHA
-          float stone = vColor.a;
-        #else
-          float stone = 1.0;
-        #endif
-        vec3 glassC = mix(uGlass, vColor.rgb * 0.5, 0.15 + 0.5 * (1.0 - stone));
-        diffuseColor.rgb = mix(slabC, glassC, inset);` : "diffuseColor.rgb = mix(uSlab, uGlass, inset);"}
+        diffuseColor.rgb = mix(uSlab, uGlass, inset);
         // The walls darken toward the ground (the light reaches less of them).
         diffuseColor.rgb *= mix(0.62, 1.0, smoothstep(0.0, 14.0, vFacade.y));
         // Whole floors light together (a hotel's evening), a room here and
@@ -864,17 +854,9 @@ export function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         vec3 roomLight = mix(vec3(1.0, 0.74, 0.44), vec3(0.85, 0.9, 1.0), step(0.9, facadeHash(vec2(room.y, 5.7))));
         // The unlit rooms keep a faint glow from the corridors.
-        totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;
-        ${fromVertex ? `// A stone hotel floodlit at night, warm on its frame and slabs (a
-        // glass tower is not: its rooms carry it).
-        totalEmissiveRadiance += vColor.rgb * vec3(1.0, 0.86, 0.7) * 0.2 * stone * (1.0 - inset) * uNight * smoothstep(0.0, 30.0, vFacade.y + 6.0);
-        // The casino floors and shopfronts at street level: bright, warm,
-        // each frontage its own tint.
-        float street = 1.0 - smoothstep(6.5, 8.0, vFacade.y);
-        vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.45, 0.7), facadeHash(vec2(floor(vFacade.x / 23.0), 2.2)));
-        totalEmissiveRadiance += shop * street * (0.55 + 0.45 * glassIn) * 0.9 * uNight;` : ""}`);
+        totalEmissiveRadiance += (roomLight * on * uGlow + vec3(0.05, 0.045, 0.04) * inset) * uNight;`);
   };
-  m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}-${fromVertex}`;
+  m.customProgramCacheKey = () => `facade-v7-${night ? 1 : 0}-${glass}-${lit}-${floors}-${room}-${glow}`;
   return m;
 }
 
@@ -1792,7 +1774,7 @@ const EXTRAS = {
 // A venue's city, built before anything else claims its ground (the track
 // data's grandstands fill in round it): Las Vegas's Strip. Or null.
 export function buildCity(course, venue) {
-  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark, facadeMaterial });
+  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark });
   return null;
 }
 
