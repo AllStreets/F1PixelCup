@@ -752,7 +752,20 @@ function buildSky(bg, night, fogColor) {
         c = mix(c, vec3(grey) * mix(0.9, 0.55, night), overcast * 0.75);
         float s = max(dot(normalize(vDir), sunDir), 0.0);
         c += sunColor * (pow(s, 900.0) * 3.0 + pow(s, 12.0) * 0.25) * (1.0 - night) * (1.0 - overcast * 0.9);
-        c += sunColor * pow(s, 400.0) * night * 1.5 * (1.0 - overcast * 0.8);
+        // Night: no sun. The moon where the sun would stand (a pale disc with
+        // its seas and a soft halo) and stars, both lost behind rain cloud.
+        vec3 d = normalize(vDir);
+        float clear = night * (1.0 - overcast * 0.9);
+        float disc = smoothstep(0.99962, 0.99974, s);
+        vec3 m = (d - sunDir) * 22.0;
+        float seas = 0.5 + 0.5 * sin(m.x * 5.1 + 1.3) * sin(m.y * 4.3 + 0.4) * sin(m.z * 4.7 + 2.1);
+        vec3 moon = vec3(0.93, 0.95, 1.0) * (0.84 + 0.16 * smoothstep(0.25, 0.75, seas));
+        c = mix(c, moon, disc * clear);
+        c += vec3(0.62, 0.7, 1.0) * (pow(s, 2600.0) * 0.5 + pow(s, 90.0) * 0.07) * (1.0 - disc) * clear;
+        vec3 q = d * 130.0; vec3 cell = floor(q);
+        float rnd = fract(sin(dot(cell, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+        float star = step(0.99, rnd) * smoothstep(0.2, 0.04, length(fract(q) - 0.5));
+        c += vec3(0.85, 0.9, 1.0) * star * (0.35 + 0.65 * fract(rnd * 91.7)) * smoothstep(0.02, 0.3, d.y) * (1.0 - disc) * clear;
         gl_FragColor = vec4(c, 1.0); }`,
   });
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 32, 16), mat);
