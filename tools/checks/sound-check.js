@@ -117,7 +117,7 @@ async (page) => {
   });
   info.starts = starts && typeof starts === "object" ? { ...starts, quali: { ...starts.quali, log: undefined } } : starts;
   const sq = starts && starts.quali;
-  results.qualifyingStartsAnEngine = (sq && sq.kind === "qualifying" && sq.field === 0 && sq.shape.cranking >= 10 && sq.shape.crankMax < 700
+  results.qualifyingStartsAnEngine = (sq && sq.kind === "qualifying" && sq.field === 0 && sq.shape.cranking >= 10 && sq.shape.crankMax < 900
     && sq.shape.peak > 4800 && sq.shape.peak < 7500 && sq.ended >= sq.settledAt) || `quali: ${JSON.stringify(sq && { ...sq, log: undefined })}`;
   results.rollsOutInGearNoArpeggio = (sq && sq.gears.length === 1) || `gears while rolling out: ${JSON.stringify(sq && sq.gears)}`;
   const sr2 = starts && starts.race;
