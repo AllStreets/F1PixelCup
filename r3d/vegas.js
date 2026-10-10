@@ -111,9 +111,9 @@ function stripFacade(night) {
         float fw = max(fwidth(cell.x), fwidth(cell.y));
         float farAway = smoothstep(0.25, 0.6, fw);
         // Stone: a window set in each bay. Its share of the wall far off.
-        float win = smoothstep(0.2 - fw, 0.24 + fw, f.x) * smoothstep(0.2 - fw, 0.24 + fw, 1.0 - f.x)
-          * smoothstep(0.26 - fw, 0.3 + fw, f.y) * smoothstep(0.16 - fw, 0.2 + fw, 1.0 - f.y);
-        win = mix(win, 0.3, farAway);
+        float win = smoothstep(0.27 - fw, 0.31 + fw, f.x) * smoothstep(0.27 - fw, 0.31 + fw, 1.0 - f.x)
+          * smoothstep(0.3 - fw, 0.34 + fw, f.y) * smoothstep(0.2 - fw, 0.24 + fw, 1.0 - f.y);
+        win = mix(win, 0.2, farAway);
         // Ribbons: glass over more than half of each floor, pale band between.
         float rib = mix(smoothstep(0.28 - fw, 0.32 + fw, f.y) * smoothstep(0.1 - fw, 0.14 + fw, 1.0 - f.y), 0.56, farAway);
         // Lined: a pale line every second floor.
@@ -125,8 +125,11 @@ function stripFacade(night) {
         float mullion = smoothstep(0.44 - fw, 0.5, abs(fract(cell.x * 2.0) - 0.5)) * (1.0 - farAway);
         float sky = smoothstep(0.0, 160.0, vFacade.y);
         vec3 glassC = mix(mix(tint * 0.62, mix(vec3(0.5, 0.66, 0.86), vec3(0.78, 0.86, 0.95), sky), 0.2 + 0.5 * aslant), tint * 0.3, uNight);
-        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.05, 0.06, 0.085) + tint * 0.05, uNight);
+        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.07, 0.08, 0.1) + tint * 0.22, uNight);
         vec3 pale = mix(vec3(0.9, 0.87, 0.8), tint, 0.12);
+        // A curtain's panes each catch the light a little differently.
+        float facet = 0.86 + 0.28 * sHash(vec2(floor(cell.x / 3.0), floor(cell.y / 4.0))) * (1.0 - farAway) + 0.14 * farAway;
+        glassC *= facet;
         vec3 c = mix(tint, mix(tint, pane, win), windowed);
         c = mix(c, mix(pale, glassC * (1.0 - 0.25 * mullion), rib), isRibbon);
         c = mix(c, mix(glassC * (1.0 - 0.2 * mullion) * (1.0 - 0.3 * spandrel), pale, line), isLined);
@@ -149,7 +152,7 @@ function stripFacade(night) {
         totalEmissiveRadiance += roomLight * on * mix(0.62, 0.42, glassy) * uNight;
         // Stone floodlit warm from the street (brighter low down); a quiet
         // tower hardly at all.
-        float wallAt = isPlain + isStone * (1.0 - win) + isQuiet * (1.0 - win) * 0.1 + isRibbon * (1.0 - rib) * 0.9 + isLined * line * 0.9;
+        float wallAt = isPlain + isStone * (1.0 - win) + isQuiet * (1.0 - win) * 0.1 + isRibbon * (1.0 - rib) * 0.5 + isLined * line * 0.9;
         vec3 wallC = mix(tint, pale, isRibbon + isLined);
         totalEmissiveRadiance += wallC * vec3(1.0, 0.9, 0.76) * (0.12 + 0.13 * exp(-vFacade.y / 45.0)) * wallAt * uNight;
         // Glass: the Strip's glow in the tower's own colour, and the smears
@@ -160,7 +163,7 @@ function stripFacade(night) {
         float fwS = fwidth(vFacade.x / 9.0);
         float smear = mix(sHash(vec2(floor(vFacade.x / 9.0), 3.3)), 0.5, smoothstep(0.25, 0.6, fwS));
         float streak = smoothstep(0.5, 1.0, smear) * low;
-        vec3 glow = mix(tint, hue * 0.5, 0.5) * (0.1 + 0.2 * low + 0.3 * aslant) + mix(hue, vec3(1.0, 0.8, 0.55), 0.5) * streak * 0.07 + vec3(0.04, 0.05, 0.08) * aslant;
+        vec3 glow = mix(tint, hue * 0.5, 0.5) * facet * (0.17 + 0.22 * low + 0.3 * aslant + 0.1 * spandrel) + mix(hue, vec3(1.0, 0.8, 0.55), 0.5) * streak * 0.07 + vec3(0.04, 0.05, 0.08) * aslant;
         totalEmissiveRadiance += glow * glassAt * uNight;
         // The casino floors and shopfronts at street level: bright, warm,
         // each frontage its own tint.
@@ -168,7 +171,7 @@ function stripFacade(night) {
         vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.45, 0.7), sHash(vec2(floor(vFacade.x / 23.0), 2.2)));
         totalEmissiveRadiance += shop * street * 0.6 * uNight;`);
   };
-  m.customProgramCacheKey = () => `vegas-facade-v2-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-facade-v3-${night ? 1 : 0}`;
   return m;
 }
 

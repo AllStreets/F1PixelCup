@@ -36,7 +36,7 @@ STYLES = {
     "palazzo": dict(k=STONE, c="#e8d2a8", trim="#f5e9d0", top="lantern", belts=1, crown=(1.0, 0.85, 0.6), arcade=True),
     "wynn": dict(k=LINED, c="#8f5631", trim="#efe6d6", top="cap", crown=(1.0, 0.8, 0.55), pod="#d9c9ae"),
     "encore": dict(k=LINED, c="#8f5631", trim="#efe6d6", top="cap", crown=(1.0, 0.8, 0.55), pod="#d9c9ae"),
-    "mirage": dict(k=RIBBON, c="#c9992f", trim="#f2ede3", top="cap", crown=(1.0, 0.78, 0.35)),
+    "mirage": dict(k=RIBBON, c="#e0a21a", trim="#f2ede3", top="cap", crown=(1.0, 0.78, 0.35)),
     "treasureisland": dict(k=STONE, c="#d98e72", trim="#f5ede1", top="classical", belts=1, crown=(1.0, 0.3, 0.2)),
     "cosmopolitan": dict(k=GLASS, c="#4a7fb0", trim="#cdd6de", top="lightbox", pod="#aab4bd"),
     "aria": dict(k=LINED, c="#5d8fb6", trim="#d5dde5", top="plain", crown=(0.8, 0.9, 1.0), pod="#b9c2ca"),
@@ -45,8 +45,8 @@ STYLES = {
     "planethollywood": dict(k=RIBBON, c="#3a4f6e", trim="#e9ebee", top="cap", crown=(0.75, 0.35, 1.0), pod="#3a3f48"),
     "mgm": dict(k=GLASS, c="#1f9a5e", trim="#35b877", top="cap", crown=(0.2, 1.0, 0.45), pod="#2a7d55"),
     "signature": dict(k=GLASS, c="#a89544", trim="#d8c77a", top="cap", crown=(1.0, 0.85, 0.45)),
-    "luxor": dict(k=GLASS, c="#3a3028", trim="#4a4038", top="plain", all=True),
-    "mandalay": dict(k=RIBBON, c="#d1a53e", trim="#f0e7d0", top="cap", crown=(1.0, 0.8, 0.4), pod="#e3d6b8"),
+    "luxor": dict(k=GLASS, c="#6a563e", trim="#5a4a3a", top="plain", all=True),
+    "mandalay": dict(k=RIBBON, c="#e2a822", trim="#f0e7d0", top="cap", crown=(1.0, 0.8, 0.4), pod="#e3d6b8"),
     "flamingo": dict(k=RIBBON, c="#e56a9a", trim="#f7f1ef", top="cap", crown=(1.0, 0.35, 0.6), neon=True),
     "linq": dict(k=RIBBON, c="#4a5d78", trim="#eef0f2", top="cap", crown=(0.35, 0.55, 1.0)),
     "harrahs": dict(k=STONE, c="#e6d7b8", trim="#f3ead4", top="classical", belts=1, crown=(1.0, 0.25, 0.3)),
@@ -317,21 +317,22 @@ def wall_point(outline, origin, d):
 
 
 def temple(m, p, t, w, top, trim):
-    """A temple front at a tower's top (Caesars): columns before a lit
-    recess, their entablature and pediment above the roof line."""
+    """A temple front at a tower's top (Caesars): six tall columns before a
+    lit recess, their entablature, and a pediment above the roof line; large
+    enough to read from the street."""
     n = (t[1], -t[0])
     at = lambda a, b: (p[0] + t[0] * a + n[0] * b, p[1] + t[1] * a + n[1] * b)
-    z0 = top - 12.0
-    cbox(m, at(0, 0.5), t, w / 2 - 0.6, 0.25, z0 + 0.4, top - 1.9, (0.95, 0.62, 0.3, 1.0), "neon")
-    cbox(m, at(0, 1.2), t, w / 2 + 0.4, 1.5, z0 - 0.9, z0, trim)
+    z0 = top - 22.0
+    cbox(m, at(0, 0.6), t, w / 2 - 0.8, 0.3, z0 + 0.4, top - 2.9, (1.0, 0.7, 0.36, 1.0), "neon")
+    cbox(m, at(0, 2.0), t, w / 2 + 0.6, 2.4, z0 - 1.4, z0, trim)
     for k in range(6):
-        cbox(m, at(-w / 2 + 1.0 + k * (w - 2.0) / 5, 1.7), t, 0.6, 0.6, z0 + 0.02, top - 1.72, trim)
-    cbox(m, at(0, 1.3), t, w / 2 + 0.5, 1.6, top - 1.7, top, trim)
+        cbox(m, at(-w / 2 + 1.6 + k * (w - 3.2) / 5, 3.0), t, 1.1, 1.1, z0 + 0.02, top - 2.72, trim)
+    cbox(m, at(0, 2.1), t, w / 2 + 0.8, 2.5, top - 2.7, top, trim)
     # The pediment: a triangle's prism on the entablature.
-    a0, a1 = -w / 2 - 0.5, w / 2 + 0.5
-    lo, hi = -0.2, 2.8
+    a0, a1 = -w / 2 - 0.8, w / 2 + 0.8
+    lo, hi = -0.3, 4.6
     z = top + 0.02
-    tri = lambda b: [(*at(a0, b), z), (*at(a1, b), z), (*at(0, b), z + 4.4)]
+    tri = lambda b: [(*at(a0, b), z), (*at(a1, b), z), (*at(0, b), z + w * 0.2)]
     f, bk = tri(hi), tri(lo)
     m.cface(f, F, trim)
     m.cface(list(reversed(bk)), F, trim)
@@ -341,18 +342,23 @@ def temple(m, p, t, w, top, trim):
 
 
 def arcade(m, outline, trim):
-    """An arcade along a building's foot (the Venetian's): a lit arch each
-    bay of its long walls, a cornice above them."""
+    """An arcade along a building's foot (the Venetian's): two storeys of
+    lit arches on its long walls, tall enough to show over the fences, a
+    cornice above each."""
     for a, b in zip(outline, outline[1:] + outline[:1]):
         length = math.dist(a, b)
-        if length < 9:
+        if length < 12:
             continue
         t = ((b[0] - a[0]) / length, (b[1] - a[1]) / length)
-        count = int((length - 2.0) / 6.2)
+        count = int((length - 3.0) / 8.0)
         for k in range(count):
-            s = length / 2 + (k - (count - 1) / 2) * 6.2
-            arch(m, (a[0] + t[0] * s, a[1] + t[1] * s), t, 3.8, 7.6, 1.0, 0.3, (0.95, 0.62, 0.3, 1.0))
-    ring(m, outline, 10.4, 11.5, trim, out=0.8)
+            s = length / 2 + (k - (count - 1) / 2) * 8.0
+            c = (a[0] + t[0] * s, a[1] + t[1] * s)
+            arch(m, c, t, 5.2, 13.0, 1.0, 0.45, (1.0, 0.68, 0.34, 1.0))
+            arch(m, (c[0] - t[0] * 2.0, c[1] - t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (1.0, 0.7, 0.4, 1.0))
+            arch(m, (c[0] + t[0] * 2.0, c[1] + t[1] * 2.0), t, 2.6, 6.4, 17.6, 0.4, (1.0, 0.7, 0.4, 1.0))
+    ring(m, outline, 15.2, 16.6, trim, out=1.0)
+    ring(m, outline, 25.0, 26.2, trim, out=0.9)
 
 
 def crenels(m, outline, z, col):
@@ -393,9 +399,11 @@ def castle(m, b, outline, h):
     key = int(abs(cx * 7 + cy * 3))
     if len(outline) >= 12 and wide <= 16:
         # A turret of the castle: the map's height is its cone's tip.
-        r = wide / 2
-        cone = max(10.0, r * 2.6)
-        turret(m, (cx, cy), r, 0.0, h - cone * 0.55, cone, plain, key, segs=12)
+        # (Half as wide again and taller than the map's, as the castle
+        # reads from the Strip: its turrets are what it is.)
+        r = wide * 0.75
+        cone = max(14.0, r * 3.2)
+        turret(m, (cx, cy), r, 0.0, h * 1.25, cone, plain, key, segs=12)
         return
     if h > 60:
         # The hotel's towers round the castle: rooms in white walls, the
@@ -601,6 +609,10 @@ def building(b, parent):
                 m.lathe([(0.0, top + 3.62), (s, top + 3.62), (s, top + 9.6), (s * 0.8, top + 11.6), (s * 0.45, top + 16.6), (0.0, top + 18.6)], (cx, cy), "roof_gold", segs=12)
         elif kind == "cap":
             ring(m, outline, top - 4.2, top + 1.4, trim, out=0.5)
+            if resort == "mgm" and crown:
+                # MGM Grand's crown: its top storeys' edge in emerald light.
+                band(m, outline, top + 1.42, top + 2.6, crown, out=0.3)
+                band(m, outline, top - 9.0, top - 8.2, crown, out=0.4)
             if crown:
                 band(m, outline, top - 5.7, top - 4.8, crown, out=0.4)
         elif kind == "lightbox":
@@ -624,12 +636,12 @@ def building(b, parent):
                 for sgn in (1, -1):
                     p = wall_point(outline, c, (v[0] * sgn, v[1] * sgn))
                     if p:
-                        temple(m, p, (-u[0] * sgn, -u[1] * sgn), min(hu * 0.5, 30.0), h, trim)
+                        temple(m, p, (-u[0] * sgn, -u[1] * sgn), min(hu * 0.7, 46.0), h, trim)
         if st.get("neon"):
             # The Flamingo's neon: bands of pink and orange up its towers.
             for k in range(3):
                 z = z0 + (h - z0) * (k + 1) / 4
                 band(m, outline, z, z + 0.8, (1.0, 0.3, 0.6, 1.0) if k % 2 else (1.0, 0.55, 0.2, 1.0), out=0.35)
-    if st.get("arcade") and h - z0 > 14 and z0 < 0.5:
+    if st.get("arcade") and h - z0 > 30 and z0 < 0.5:
         arcade(m, outline, trim)
     return m.finish(parent=parent, extras=extras)

@@ -419,7 +419,7 @@ def luxor(parent):
     corners = [(cx + math.cos(ang + k * math.pi / 2) * half, cy + math.sin(ang + k * math.pi / 2) * half) for k in range(4)]
     m = VMesh("luxor_pyramid")
     H = 107.0
-    glass = tone("#2e2823", GLASS)
+    glass = tone("#6a563e", GLASS)
     for k in range(4):
         p, q = corners[k], corners[(k + 1) % 4]
         m.cface([(p[0], p[1], 0.0), (q[0], q[1], 0.0), (cx, cy, H)], F, glass, uvs=[(0.0, 0.0), (183.0, 0.0), (91.5, H)])
