@@ -125,7 +125,7 @@ function stripFacade(night) {
         float mullion = smoothstep(0.44 - fw, 0.5, abs(fract(cell.x * 2.0) - 0.5)) * (1.0 - farAway);
         float sky = smoothstep(0.0, 160.0, vFacade.y);
         vec3 glassC = mix(mix(tint * 0.62, mix(vec3(0.5, 0.66, 0.86), vec3(0.78, 0.86, 0.95), sky), 0.2 + 0.5 * aslant), tint * 0.3, uNight);
-        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.03, 0.035, 0.045), uNight);
+        vec3 pane = mix(vec3(0.16, 0.2, 0.26) + 0.25 * aslant, vec3(0.05, 0.06, 0.085) + tint * 0.05, uNight);
         vec3 pale = mix(vec3(0.9, 0.87, 0.8), tint, 0.12);
         vec3 c = mix(tint, mix(tint, pane, win), windowed);
         c = mix(c, mix(pale, glassC * (1.0 - 0.25 * mullion), rib), isRibbon);
@@ -138,9 +138,9 @@ function stripFacade(night) {
       .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>
         roughnessFactor = mix(roughnessFactor, 0.2, glassAt);
         metalnessFactor = mix(metalnessFactor, 0.25, glassAt);
-        // A hotel's evening: a room in five in stone, fewer behind glass,
+        // A hotel's evening: three rooms in ten in stone, fewer behind glass,
         // each its own soft brightness, most of them warm.
-        float share = isStone * 0.2 + isQuiet * 0.07 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
+        float share = isStone * 0.3 + isQuiet * 0.07 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
         float roomH = sHash(room + floor(vFacade.x / 37.0));
         float lit = step(mix(roomH, sHash(vec2(room.y * 0.37, 7.1)), 0.2), share) * step(8.0, vFacade.y);
         float opening = windowed * win + isRibbon * rib * (1.0 - mullion) + (isLined * (1.0 - line) + isGlass) * (1.0 - spandrel) * (1.0 - mullion);
@@ -151,15 +151,16 @@ function stripFacade(night) {
         // tower hardly at all.
         float wallAt = isPlain + isStone * (1.0 - win) + isQuiet * (1.0 - win) * 0.1 + isRibbon * (1.0 - rib) * 0.9 + isLined * line * 0.9;
         vec3 wallC = mix(tint, pale, isRibbon + isLined);
-        totalEmissiveRadiance += wallC * vec3(1.0, 0.9, 0.76) * (0.24 + 0.2 * exp(-vFacade.y / 45.0)) * wallAt * uNight;
+        totalEmissiveRadiance += wallC * vec3(1.0, 0.9, 0.76) * (0.12 + 0.13 * exp(-vFacade.y / 45.0)) * wallAt * uNight;
         // Glass: the Strip's glow in the tower's own colour, and the smears
         // of the lights below it.
         vec3 hue = tint / max(max(tint.r, max(tint.g, tint.b)), 0.05);
         float low = exp(-vFacade.y / 70.0);
-        float smear = sHash(vec2(floor(vFacade.x / 5.0), 3.3));
-        vec3 smearC = 0.5 + 0.5 * cos(6.2831 * (vec3(0.0, 0.33, 0.67) + smear * 3.0));
-        float streak = smoothstep(0.55, 1.0, smear) * low * (0.6 + 0.4 * sin(vFacade.y * 0.35 + smear * 40.0)) * (1.0 - farAway);
-        vec3 glow = mix(tint, hue * 0.5, 0.5) * (0.14 + 0.26 * low + 0.34 * aslant) + smearC * streak * 0.2 + vec3(0.04, 0.05, 0.08) * aslant;
+        // (Warm, in the tower's own colour: soft columns, no rainbow.)
+        float fwS = fwidth(vFacade.x / 9.0);
+        float smear = mix(sHash(vec2(floor(vFacade.x / 9.0), 3.3)), 0.5, smoothstep(0.25, 0.6, fwS));
+        float streak = smoothstep(0.5, 1.0, smear) * low;
+        vec3 glow = mix(tint, hue * 0.5, 0.5) * (0.1 + 0.2 * low + 0.3 * aslant) + mix(hue, vec3(1.0, 0.8, 0.55), 0.5) * streak * 0.07 + vec3(0.04, 0.05, 0.08) * aslant;
         totalEmissiveRadiance += glow * glassAt * uNight;
         // The casino floors and shopfronts at street level: bright, warm,
         // each frontage its own tint.
@@ -167,7 +168,7 @@ function stripFacade(night) {
         vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.45, 0.7), sHash(vec2(floor(vFacade.x / 23.0), 2.2)));
         totalEmissiveRadiance += shop * street * 0.6 * uNight;`);
   };
-  m.customProgramCacheKey = () => `vegas-facade-v1-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-facade-v2-${night ? 1 : 0}`;
   return m;
 }
 
