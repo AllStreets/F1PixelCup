@@ -102,7 +102,6 @@ function deviceInfo() {
 
 let graphicsChoice = storedGraphics();
 let autoTier = Quality.initialTier(deviceInfo());
-let autoSettled = false;
 const frameSamples = [];
 let lastFrameAt = 0;
 const currentTier = () => Quality.effectiveTier(graphicsChoice, autoTier);
@@ -111,23 +110,47 @@ postfx.setTier(currentTier());
 const rain = createRain(scene);
 rain.setTier(currentTier());
 
-// The first 90 frames of racing (not paused) decide whether auto steps down.
+// The render pixel ratio: the tier's cap (never above the screen's own), lowered
+// by dynamic resolution when racing frames run slow
+// (docs/superpowers/specs/2026-10-05-performance-headroom-design.md).
+const screenRatio = () => window.devicePixelRatio || 1;
+const ratioLimits = () => ({ cap: Quality.ratioCap(currentTier(), screenRatio()), floor: Quality.ratioFloor(currentTier(), screenRatio()) });
+const scaler = Quality.createScaler(ratioLimits());
+let scalerFor = "";
+function renderRatio() {
+  const key = `${currentTier()}|${screenRatio()}`;
+  if (key !== scalerFor) {
+    scalerFor = key;
+    scaler.reset(ratioLimits());
+  }
+  return scaler.ratio;
+}
+
+// Racing frames (not paused, not loading) feed dynamic resolution; once it is
+// at its floor and they stay slow, auto steps the tier down (and starts no
+// higher than the ratio it had).
 function sampleFrame(racing) {
-  if (autoSettled || graphicsChoice !== "auto") return;
   const t = performance.now();
   if (!racing) { lastFrameAt = 0; return; }
-  if (lastFrameAt) frameSamples.push(t - lastFrameAt);
-  lastFrameAt = t;
-  if (frameSamples.length >= 90) {
-    autoSettled = true;
-    // The first frames of a race carry one-off work: judge the rest.
-    const next = Quality.adjustTier(autoTier, frameSamples.slice(10));
+  if (!lastFrameAt) {
+    renderRatio();
+    scaler.resume();
+  } else {
+    const ms = t - lastFrameAt;
+    renderRatio();
+    scaler.sample(ms);
+    if (graphicsChoice === "auto" && frameSamples.length < 90) frameSamples.push(ms);
+    const next = graphicsChoice === "auto" ? Quality.nextAutoTier(autoTier, scaler) : autoTier;
     if (next !== autoTier) {
+      const had = scaler.ratio;
       autoTier = next;
+      scalerFor = `${currentTier()}|${screenRatio()}`;
+      scaler.reset({ ...ratioLimits(), ratio: had });
       postfx.setTier(raceFxTier());
       rain.setTier(currentTier());
     }
   }
+  lastFrameAt = t;
 }
 
 function setGraphics(choice) {
@@ -144,7 +167,8 @@ function setGraphics(choice) {
 }
 
 function graphics() {
-  return { choice: graphicsChoice, autoTier, tier: currentTier(), sampled: frameSamples.length, settled: autoSettled };
+  renderRatio();
+  return { choice: graphicsChoice, autoTier, tier: currentTier(), sampled: frameSamples.length, ratio: scaler.ratio, cap: scaler.cap, floor: scaler.floor };
 }
 
 const hemi = new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.1);
@@ -983,6 +1007,8 @@ function ensureWorld(track) {
   if (current) disposeWorld(current);
   // The venues not raced give their models back (r3d/models.js).
   releaseOtherVenues(track.id, venueStand(track.id));
+  // A new circuit starts at the tier's own ratio again.
+  scalerFor = "";
   current = buildWorld(track);
   current.modelsComplete = venueModelsSettled(track.id);
   scene.add(current.group);
@@ -1153,10 +1179,12 @@ function setFov(fov) {
   }
 }
 
-function resize() {
+// full: at the tier's own pixel ratio (the showroom, the podium), not the
+// ratio dynamic resolution has the race at.
+function resize(full = false) {
   const w = canvas2d.clientWidth || canvas2d.width;
   const h = canvas2d.clientHeight || canvas2d.height;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = full ? (renderRatio(), scaler.cap) : renderRatio();
   // The effects work at the size of one split-screen view, or the canvas.
   const split = viewports ? viewports[0] : null;
   const effects = split ? `${split.w}x${split.h}` : "";
@@ -1312,6 +1340,9 @@ function drawFrame(frame) {
     dt = Math.min(0.05, Math.max(0, (now - (lastNow || now)) / 1000));
     lastNow = now;
     lastDt = dt;
+    // Before the canvas is sized: a new ratio must never come between a
+    // split screen's two views (sizing clears what the first drew).
+    sampleFrame(Boolean(frame.racing));
   }
   resize();
   // (The venue's own models still on their way, the circuit is built at once
@@ -1449,7 +1480,6 @@ function drawFrame(frame) {
   });
 
   // The frame, through the post-processing of the current tier.
-  if (first) sampleFrame(Boolean(frame.racing));
   // A replay's fixed cameras (trackside, the helicopter) do not move with the
   // car: no speed blur or streaks there, only onboard.
   const still = frame.view && viewInfo && viewInfo.shot !== "onboard";
@@ -2039,7 +2069,7 @@ garage.group.visible = false;
 // left out, the car stands where it always did.
 function renderGarage(kart, driver, now, area) {
   if (!api.ready) return false;
-  resize();
+  resize(true);
   useViewport(null);
   if (current) {
     disposeWorld(current);
@@ -2124,6 +2154,9 @@ function fitShowroom(area) {
     // measure it: the box of its parts' boxes).
     const spin = root.rotation.y;
     const box = new THREE.Box3();
+    // (Its parts' boxes: not its one-mesh shadow's, a looser box.)
+    const shadowHome = garage.car.shadow.parent;
+    shadowHome.remove(garage.car.shadow);
     let r = 0;
     for (let a = 0; a < 36; a += 1) {
       root.rotation.y = (a / 36) * Math.PI * 2;
@@ -2131,6 +2164,7 @@ function fitShowroom(area) {
       box.setFromObject(root);
       r = Math.max(r, Math.abs(box.min.x), Math.abs(box.max.x), Math.abs(box.min.z), Math.abs(box.max.z));
     }
+    shadowHome.add(garage.car.shadow);
     root.rotation.y = spin;
     root.updateMatrixWorld(true);
     garage.sweep = { key: garage.key, r: r * 1.03, y0: box.min.y, y1: box.max.y };
@@ -2169,7 +2203,10 @@ function fitShowroom(area) {
 function garageCarRect() {
   if (!garage.car || !garage.car.root.visible) return null;
   garage.car.root.updateMatrixWorld(true);
+  const shadowHome = garage.car.shadow.parent;
+  shadowHome.remove(garage.car.shadow);
   const box = new THREE.Box3().setFromObject(garage.car.root);
+  shadowHome.add(garage.car.shadow);
   const rect = canvas3d.getBoundingClientRect();
   const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   const v = new THREE.Vector3();
@@ -2279,7 +2316,7 @@ function podiumFrame(now, reserve = null) {
   const podium = ceremony.podium;
   if (!podium) return { drawing: false };
   podium.setReserve(reserve);
-  resize();
+  resize(true);
   useViewport(null);
   const ready = podiumPrepare() === "ready";
   const w = canvas2d.clientWidth || canvas2d.width;
