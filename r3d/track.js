@@ -37,23 +37,25 @@ export class Occupancy {
     this.map = new Map();
   }
   key(ix, iz) { return `${ix},${iz}`; }
-  add(x, z, r) {
+  // `tag`: what claimed it, where a question may leave some claims out.
+  add(x, z, r, tag) {
     const c = this.cell;
     for (let ix = Math.floor((x - r) / c); ix <= Math.floor((x + r) / c); ix += 1) {
       for (let iz = Math.floor((z - r) / c); iz <= Math.floor((z + r) / c); iz += 1) {
         const k = this.key(ix, iz);
         if (!this.map.has(k)) this.map.set(k, []);
-        this.map.get(k).push({ x, z, r });
+        this.map.get(k).push({ x, z, r, tag });
       }
     }
   }
-  blocked(x, z, r) {
+  blocked(x, z, r, ignore) {
     const c = this.cell;
     for (let ix = Math.floor((x - r) / c); ix <= Math.floor((x + r) / c); ix += 1) {
       for (let iz = Math.floor((z - r) / c); iz <= Math.floor((z + r) / c); iz += 1) {
         const list = this.map.get(this.key(ix, iz));
         if (!list) continue;
         for (const o of list) {
+          if (ignore && o.tag === ignore) continue;
           if ((o.x - x) ** 2 + (o.z - z) ** 2 < (o.r + r) ** 2) return true;
         }
       }
