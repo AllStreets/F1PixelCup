@@ -219,12 +219,14 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [ ] **Balance** (branch `balance`): measure comebacks from last on every difficulty first; then a stronger Formation Lap, Overtake Mode and DRS, position-weighted odds, fairer CPU defending; before and after numbers.
 - [ ] **Barcelona's main grandstand** across the straight from the pits, and **landmarks for the eight historic circuits** (branch `historic-landmarks`).
 
-- [ ] **Performance headroom** (branch `perf`): the lag was the agents' load on the user's Mac (gone when paused); still a resolution cap per tier with dynamic scaling, smarter auto quality, fewer draw calls, a headed Retina perf check.
+- [x] **Performance headroom** (branch `perf`): the lag was the agents' load on the user's Mac (gone when paused); still a resolution cap per tier with dynamic scaling, smarter auto quality, fewer draw calls, a headed Retina perf check.
 - [ ] **Steering and contact** (branch `balance`): an unsteered car runs wide and hits the barrier; a real bounce back onto the track; cars behind get by easily while you recover or after a Steward Penalty; the Steward Penalty the heaviest hit, well above the Oil Slick; every power-up stronger on offense and defence, true to its Mario Kart counterpart.
 - [x] **Replays and sound** (branch `stage-m-replays`): switching cameras keeps the car you're watching; sound in replays; an engine that lives at full throttle (rpm wobble, shift blips, turbo, crackles on lift-off); the finished car stays still on the line.
 - [ ] **The Las Vegas Strip** (branch `landmarks-2025`) **[REVIEW]**: every major Strip building at the casino's level of detail, accurate and lit at night.
 
-- [ ] **Engine start-up sound** (branch `stage-m-replays`; user, 2026-10-10): the start of qualifying sounds like an EDM sweep; make it a real engine firing up (starter, catch, rough idle, blips), and the field's engines before a race start from the back.
+- [x] **Engine start-up sound** (branch `stage-m-replays`; user, 2026-10-10): the start of qualifying sounds like an EDM sweep; make it a real engine firing up (starter, catch, rough idle, blips), and the field's engines before a race start from the back.
+
+- [x] **Night sky** (user, 2026-10-10): the moon and stars in place of the sun at night races.
 
 ## 9. Stop before Supabase
 
