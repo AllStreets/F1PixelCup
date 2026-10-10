@@ -122,3 +122,110 @@ test("primed for a car already at speed (a replay cutting to it), the engine is 
     for (let i = 0; i < 60; i += 1) assert.equal(model.step({ dt: DT, ratio, throttle: 1, brake: 0 }).shift, null);
   }
 });
+
+// ---- Starting up ----
+
+test("start-up: the starter turns it over, it catches unevenly, flares, settles roughly to idle, then blips", () => {
+  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+    const s = EngineSound.startup(seed);
+    // The starter cranks for about half a second or more, slowly.
+    assert.ok(s.catchAt > 0.45 && s.catchAt < 0.95, `catch at ${s.catchAt}`);
+    for (let t = 0.05; t < s.catchAt; t += 0.05) assert.ok(s.at(t).rpm < 700 && s.at(t).starter > 0.5, `cranking at ${t}`);
+    // It catches on a few fires, unevenly spaced.
+    assert.ok(s.fires.length >= 3 && s.fires.length <= 6);
+    const gaps = s.fires.slice(1).map((f, i) => f - s.fires[i]);
+    assert.ok(Math.max(...gaps) / Math.min(...gaps) > 1.25, `gaps ${gaps}`);
+    // The flare over idle, then idle (roughly at first) before the first blip.
+    const flare = Math.max(...Array.from({ length: 60 }, (_, i) => s.at(s.runAt + i * 0.01).rpm));
+    assert.ok(flare > EngineSound.IDLE_RPM + 800 && flare < 7500, `flare ${flare}`);
+    const settled = s.at(s.blips[0].at - 0.05);
+    assert.ok(Math.abs(settled.rpm - EngineSound.IDLE_RPM) < 350, `settled ${settled.rpm}`);
+    assert.ok(s.at(s.runAt + 0.3).rough > settled.rough && settled.rough < 0.35);
+    assert.equal(settled.starter, 0);
+    // Two or three blips of throttle, each up and back.
+    assert.ok(s.blips.length >= 2 && s.blips.length <= 3);
+    s.blips.forEach((b) => {
+      assert.ok(b.peak > 6500 && b.peak < 10500);
+      assert.ok(s.at(b.at + b.rise).rpm > b.peak - 300);
+      assert.ok(s.at(b.at + b.rise * 0.9).load > 0.6);
+    });
+    assert.ok(Math.abs(s.at(s.duration).rpm - EngineSound.IDLE_RPM) < 500);
+    assert.ok(s.duration > 2.6 && s.duration < 4.9, `duration ${s.duration}`);
+  }
+});
+
+test("start-up: every car's is its own, and the same every time for that car", () => {
+  const a = EngineSound.startup(11);
+  const b = EngineSound.startup(12);
+  assert.deepEqual(EngineSound.startup(11).fires, a.fires);
+  assert.notDeepEqual(a.fires, b.fires);
+  assert.notEqual(a.catchAt, b.catchAt);
+  const x = EngineSound.renderStartup(11, 8000);
+  assert.deepEqual(Array.from(EngineSound.renderStartup(11, 8000).slice(0, 4000)), Array.from(x.slice(0, 4000)));
+});
+
+// The old sound at a start: the oscillators' steady note (a saw and a square
+// a fifth apart, as the engine was before; or the idle's saw and octave).
+function oldNote(seconds, sr) {
+  const out = new Float32Array(Math.floor(seconds * sr));
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / sr;
+    const saw = (f) => 2 * ((t * f) % 1) - 1;
+    out[i] = 0.5 * saw(100) + 0.2 * saw(200) + 0.2 * Math.sign(Math.sin(2 * Math.PI * 50 * t));
+  }
+  return out;
+}
+
+test("start-up: it sounds like an engine, noise and uneven harmonics, not a clean synthesiser note", () => {
+  const sr = 16000;
+  const audio = EngineSound.renderStartup(5, sr);
+  const s = EngineSound.startup(5);
+  assert.equal(audio.length, Math.ceil(s.duration * sr));
+  audio.forEach((v) => assert.ok(v >= -1 && v <= 1 && !Number.isNaN(v)));
+  const slice = (from, to) => audio.slice(Math.floor(from * sr), Math.floor(to * sr));
+  const old = EngineSound.spectralFlatness(oldNote(0.5, sr), sr);
+  // Cranking is mostly noise; the settle and the blips are far less pure than the old note.
+  const crank = EngineSound.spectralFlatness(slice(0.1, s.catchAt), sr);
+  const settle = EngineSound.spectralFlatness(slice(s.runAt + 0.2, s.blips[0].at), sr);
+  const blip = EngineSound.spectralFlatness(slice(s.blips[0].at, s.blips[0].at + 0.4), sr);
+  assert.ok(old < 0.02, `old ${old}`);
+  assert.ok(crank > old * 5 && crank > 0.06, `crank ${crank}`);
+  assert.ok(settle > old * 4 && settle > 0.04, `settle ${settle} against ${old}`);
+  assert.ok(blip > old * 5 && blip > 0.06, `blip ${blip}`);
+  // Loud enough to hear all through, and never clipping flat.
+  const rms = (a) => Math.sqrt(a.reduce((n, v) => n + v * v, 0) / a.length);
+  const levels = [rms(slice(0.1, s.catchAt)), rms(slice(s.runAt, s.duration))];
+  assert.ok(levels[0] > 0.03 && levels[1] > 0.08 && levels[0] < 0.45 && levels[1] < 0.45, `levels ${levels}`);
+});
+
+test("a car's speed jumping (rolled out of the pit lane, a rescue) does not run up through the gears", () => {
+  const model = EngineSound.createModel(3);
+  for (let i = 0; i < 30; i += 1) model.step({ dt: DT, ratio: 0, throttle: 0, brake: 0 });
+  // From a standstill to 60% of top speed in one step, and held there.
+  let shifts = 0;
+  let first = null;
+  for (let i = 0; i < 120; i += 1) {
+    const s = model.step({ dt: DT, ratio: 0.6, throttle: 1, brake: 0 });
+    if (!first) first = s;
+    if (s.shift) shifts += 1;
+  }
+  assert.equal(shifts, 0);
+  assert.ok(first.gear >= 5 && first.rpm > 9000, `${first.gear} ${first.rpm}`);
+});
+
+test("the start plan: qualifying is your own car; a race start is yours and the field's around you, staggered", () => {
+  const quali = EngineSound.startPlan("qualifying", 7, []);
+  assert.deepEqual(quali, [{ seed: 7, delay: 0, gain: 1, rate: 1, own: true }]);
+  const field = [21, 22, 23, 24, 25, 26, 27, 28];
+  const race = EngineSound.startPlan("race", 7, field);
+  assert.equal(race[0].own, true);
+  const others = race.slice(1);
+  assert.ok(others.length >= 4 && others.length <= 6);
+  others.forEach((o, i) => {
+    assert.ok(field.includes(o.seed));
+    assert.ok(o.gain < 0.6 && o.gain > 0.1 && o.delay > 0 && o.delay < 1.6);
+    assert.ok(o.rate > 0.9 && o.rate < 1.1 && o.rate !== 1);
+    if (i) assert.ok(o.delay > others[i - 1].delay, "one after another");
+  });
+  assert.deepEqual(EngineSound.startPlan("race", 7, field), race);
+});

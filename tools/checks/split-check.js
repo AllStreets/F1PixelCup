@@ -226,7 +226,7 @@ async (page) => {
     return out;
   });
   info.frameMsTwoViews = await tierFrames();
-  const viewPx = await step(() => { const r = Game.splitInfo().views[0].rect; const d = Math.min(devicePixelRatio || 1, 2); return { w: Math.round(r.w * d), h: Math.round(r.h * d) }; });
+  const viewPx = await step(() => { const r = Game.splitInfo().views[0].rect; const d = Render3D.graphics().ratio; return { w: Math.round(r.w * d), h: Math.round(r.h * d) }; });
   results.effectsDrawInEachView = ["medium", "high"].every((t) => info.frameMsTwoViews[t].effects && info.frameMsTwoViews[t].frame
     && info.frameMsTwoViews[t].frame.width === viewPx.w && info.frameMsTwoViews[t].frame.height === viewPx.h) || JSON.stringify({ viewPx, f: info.frameMsTwoViews });
 

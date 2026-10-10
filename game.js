@@ -1419,7 +1419,12 @@ function simulateQualifyingLapSeeded(entry, track, seed) {
 }
 
 // Engines fresh for a session (a replay may have had other cars' in them).
-function freshEngines() {
+// starting: the session whose engines are about to be started ("race" or
+// "qualifying": heard once the circuit is on screen; updateEngineAudio).
+function freshEngines(starting = null) {
+  stopEngineStart(0);
+  audio.startPending = starting;
+  state.engineStart = null;
   if (!audio.engine || !window.EngineSound) return;
   [[audio.engine, 11], [audio.engine2, 29]].forEach(([voice, seed]) => { voice.model = EngineSound.createModel(seed); voice.carId = null; });
   audio.engineClock = undefined;
@@ -1431,7 +1436,7 @@ function startQualifying(index) {
   state.track = cup.tracks[index];
   getRunoff(state.track);
   setRaceWeather(index);
-  freshEngines();
+  freshEngines("qualifying");
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
     shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, lastStewardAt: null, fxFlashes: [], finishQueue: [], particles: [],
@@ -1921,7 +1926,7 @@ function startRace(index) {
   // A new race, a new recording (the last one's replay is gone).
   state.recording = null;
   state.replay = null;
-  freshEngines();
+  freshEngines("race");
   state.cameraHeading = state.track.startHeading;
   state.camPos = null;
   state.camRoll = 0;
@@ -6272,6 +6277,107 @@ function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Starting the engines (engine-sound.js: startup, renderStartup, startPlan).
+// Before a qualifying lap the player's own car is fired up: the starter
+// turning it over, a few uneven fires as it catches, a flare and a rough
+// settle to idle, and it pulls out. On the grid, the player's and the
+// field's around them, one after another, blipping before the lights. The
+// sound is rendered once per variant (noise and uneven firings through the
+// exhaust's resonances: no oscillator in it) and played as it is; the
+// engine's running voice takes over where it ends.
+// ---------------------------------------------------------------------------
+
+const START_VARIANTS = 8;
+const START_RATE = 24000;
+const START_LEVEL = 0.2;
+const startVariant = (id) => (hashSeed(String(id)) % START_VARIANTS) + 1;
+
+function startBuffer(variant) {
+  audio.startBuffers = audio.startBuffers || new Map();
+  if (!audio.startBuffers.has(variant)) {
+    const samples = EngineSound.renderStartup(variant, START_RATE);
+    const buffer = audio.ctx.createBuffer(1, samples.length, START_RATE);
+    buffer.getChannelData(0).set(samples);
+    audio.startBuffers.set(variant, buffer);
+  }
+  return audio.startBuffers.get(variant);
+}
+
+function playEngineStart(kind, player) {
+  if (!audio.ready || !window.EngineSound || !player) return;
+  const ctxA = audio.ctx;
+  const L = state.track.totalLength;
+  // The field by how near each car is on the grid, nearest first.
+  const near = (r) => Math.abs(((r.trackDistance - player.trackDistance) % L + L * 1.5) % L - L / 2);
+  const field = kind === "race" ? state.racers.filter((r) => r !== player).sort((a, b) => near(a) - near(b)).map((r) => startVariant(r.id)) : [];
+  const own = startVariant(player.id);
+  const plan = EngineSound.startPlan(kind, own, field);
+  const at = ctxA.currentTime + 0.05;
+  const sources = plan.map((p) => {
+    const source = ctxA.createBufferSource();
+    source.buffer = startBuffer(p.seed);
+    source.playbackRate.value = p.rate;
+    const gain = ctxA.createGain();
+    gain.gain.value = p.gain * START_LEVEL;
+    source.connect(gain);
+    gain.connect(audio.master);
+    source.start(at + p.delay);
+    return { source, gain };
+  });
+  const profile = EngineSound.startup(own);
+  audio.start = { kind, at, sources, profile };
+  // What is being played (for the checks).
+  state.engineStart = { kind, seed: own, field: plan.length - 1, duration: profile.duration, settledAt: profile.blips[0].at, plan, log: [] };
+}
+
+function stopEngineStart(fade = 0.12) {
+  const start = audio.start;
+  if (!start) return;
+  const t = audio.ctx.currentTime;
+  start.sources.forEach(({ source, gain }) => {
+    gain.gain.cancelScheduledValues(t);
+    gain.gain.setTargetAtTime(0, t, Math.max(0.005, fade / 3));
+    try { source.stop(t + fade + 0.05); } catch (e) { /* already stopped */ }
+  });
+  audio.start = null;
+}
+
+// The start-up as it goes: begun once the circuit is on screen, handed over
+// to the running engine when the car pulls out (qualifying: once it has
+// settled), at lights out (a race), or at its end. True while it is heard.
+function updateEngineStart(player) {
+  if (audio.startPending && player && worldView() !== "loading") {
+    const kind = audio.startPending;
+    const due = kind === "race" ? state.phase === "countdown" : state.phase === "qualifyingSim" || state.phase === "qualifying";
+    if (due) {
+      audio.startPending = null;
+      playEngineStart(kind, player);
+    } else if (!["countdown", "qualifyingSim", "qualifying"].includes(state.phase)) {
+      audio.startPending = null;
+    }
+  }
+  const start = audio.start;
+  if (!start) return false;
+  const elapsed = audio.ctx.currentTime - start.at;
+  const session = start.kind === "race" ? state.phase === "countdown" : state.phase === "qualifyingSim" || state.phase === "qualifying";
+  const pulledOut = start.kind === "qualifying" && state.phase === "qualifying" && elapsed >= start.profile.blips[0].at;
+  if (!session || pulledOut || elapsed >= start.profile.duration) {
+    stopEngineStart(session ? 0.12 : 0.25);
+    // The running engine from where the car is (idling, or rolling out).
+    if (player && audio.engine.model) {
+      audio.engine.model.prime({ ratio: Math.abs(player.speed) / Math.max(1, player.physics.maxSpeed), throttle: player.throttleIn || 0 });
+    }
+    if (state.engineStart) state.engineStart.endedAt = elapsed;
+    return false;
+  }
+  if (state.engineStart && elapsed >= 0) {
+    const m = start.profile.at(elapsed);
+    state.engineStart.log.push({ t: +elapsed.toFixed(3), rpm: Math.round(m.rpm), starter: m.starter });
+  }
+  return true;
+}
+
 // second: player 2's car in a two-player race.
 function updateEngineAudio(player, second = null) {
   if (!audio.ready || !audio.engine) return;
@@ -6282,12 +6388,14 @@ function updateEngineAudio(player, second = null) {
   const clock = state.paused ? audio.engineClock || 0 : renderClock();
   const dt = clamp((clock - (audio.engineClock ?? clock)) / 1000, 0, 0.1);
   audio.engineClock = clock;
-  driveEngineVoice(audio.engine, player, { on: racing, share: second ? 0.75 : 1, dt });
+  // While it is being started, the running voice is not heard.
+  const starting = updateEngineStart(player);
+  driveEngineVoice(audio.engine, player, { on: racing && !starting, share: second ? 0.75 : 1, dt });
   driveEngineVoice(audio.engine2, second, { on: racing && Boolean(second), share: 0.75, pitch: 1.12, dt });
   // What the engine is doing, for the checks.
   if (audio.engine.last) {
     const e = audio.engine.last;
-    state.engineSound = { rpm: e.rpm, gear: e.gear, turbo: e.turbo, ers: e.ers, pops: audio.engine.pops, freq: e.rpm / 40 };
+    state.engineSound = { rpm: e.rpm, gear: e.gear, turbo: e.turbo, ers: e.ers, pops: audio.engine.pops, freq: e.rpm / 40, starting };
   }
 
   if (audio.venue) {

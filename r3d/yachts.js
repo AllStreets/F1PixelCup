@@ -180,8 +180,10 @@ export function harbourSide(course, venue) {
     // edge on the front's water side, unless something already stands there
     // (a grandstand, a board: the quay widens to carry it) or the front ends
     // within half a berth; elsewhere the town's 190.
+    // (A service entrance there stands on its own pier, r3d/entrances.js:
+    // the quay stays as it is, the yachts moored either side of it.)
     const narrow = (p, s) => side(p) === s && !course.occupied.blocked(
-      p.x + p.nx * s * ((s > 0 ? p.outerR : p.outerL) + 40), p.y + p.ny * s * ((s > 0 ? p.outerR : p.outerL) + 40), 30,
+      p.x + p.nx * s * ((s > 0 ? p.outerR : p.outerL) + 40), p.y + p.ny * s * ((s > 0 ? p.outerR : p.outerL) + 40), 30, "entrance",
     );
     const reachMemo = new Map();
     const reach = (p, s) => {

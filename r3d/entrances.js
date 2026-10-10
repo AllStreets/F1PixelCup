@@ -14,6 +14,8 @@ import { wettable, WET_ROAD, WET_PAINT } from "./rain.js";
 // Lifted over the run-off (0.03) and gravel (0.07), under the road (0.14).
 const ROAD_LIFT = 0.12;
 const LINE_LIFT = 0.16;
+const PIER_LIFT = 0.06;
+const PIER_DEPTH = 8;
 const GATE_H = 9;
 const GATE_OUT = 3;
 const CARPORT_H = 15;
@@ -57,6 +59,25 @@ function strip(e, course, r0, r1, a, b, lift, vScale = 20) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
   geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// A pier's side: a wall down from the edge of its deck (an offset across
+// the road's line) into the water.
+function skirt(e, course, r0, r1, edge) {
+  const top = strip(e, course, r0, r1, edge, edge, PIER_LIFT).attributes.position;
+  const pos = [];
+  const idx = [];
+  for (let k = 0; k < top.count; k += 2) {
+    pos.push(top.getX(k), top.getY(k), top.getZ(k), top.getX(k), top.getY(k) - PIER_DEPTH, top.getZ(k));
+    const b = pos.length / 3 - 2;
+    if (k) idx.push(b - 2, b, b - 1, b - 1, b, b + 1);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
   geo.setIndex(idx);
   geo.computeVertexNormals();
   return geo;
@@ -121,12 +142,12 @@ export function buildEntrances(course, venue) {
   const glass = owned(new THREE.MeshStandardMaterial({ color: 0x1a2430, roughness: 0.15, metalness: 0.5 }));
   const sign = owned(new THREE.MeshStandardMaterial({ map: signTexture(), roughness: 0.5, emissive: 0xffffff, emissiveIntensity: venue.night ? 0.35 : 0.05 }));
   sign.emissiveMap = sign.map;
-  const parts = { road: [], lines: [], steel: [], dark: [], stripe: [], white: [], roof: [], glass: [], sign: [] };
+  const parts = { pier: [], road: [], lines: [], steel: [], dark: [], stripe: [], white: [], roof: [], glass: [], sign: [] };
   const H = (d) => course.heightAt(d);
 
   list.forEach((e) => {
     // Its ground, claimed before anything else is placed round it.
-    e.footprint.forEach((c) => course.occupied.add(c.x, c.y, c.r));
+    e.footprint.forEach((c) => course.occupied.add(c.x, c.y, c.r, "entrance"));
     group.userData.claimed += e.footprint.length;
     const yawAt = (d, lat) => {
       const a = e.lap.point(d - 2, lat);
@@ -141,6 +162,17 @@ export function buildEntrances(course, venue) {
     const linesTo = e.gateU + e.halfWidth;
     [[-e.halfWidth + 0.4, -e.halfWidth + 1.6], [e.halfWidth - 1.6, e.halfWidth - 0.4]].forEach(([a, b]) => parts.lines.push(strip(e, course, from, linesTo, a, b, LINE_LIFT)));
     // (Where the Safety Car's nose is when it stops to give way.)
+    // On a harbour front (Monaco's quay: the water right behind the barrier)
+    // it stands on a pier of its own: a deck under the road and the carport,
+    // out from the quay, its sides down into the water.
+    const quay = venue.harbour && venue.harbour.front;
+    const lapLength = course.track.totalLength;
+    const rel = ((e.gateD % lapLength) + lapLength * 1.5) % lapLength - lapLength / 2;
+    if (quay && quay.side === e.side && rel >= quay.from && rel <= quay.to) {
+      const wide = Entrances.CARPORT.half + 5;
+      parts.pier.push(strip(e, course, from - 4, e.gateU + e.halfWidth, -wide, wide, PIER_LIFT));
+      [-wide, wide].forEach((edge) => parts.pier.push(skirt(e, course, from - 4, e.gateU + e.halfWidth, edge)));
+    }
     const stopAt = e.gateU - Entrances.GIVE_WAY_BACK + Entrances.CAR_LENGTH / 2;
     parts.lines.push(strip(e, course, stopAt, stopAt + 1.6, -e.halfWidth + 0.4, e.halfWidth - 0.4, LINE_LIFT));
 
@@ -268,6 +300,7 @@ export function buildEntrances(course, venue) {
     group.add(m);
     return m;
   };
+  add(parts.pier, owned(new THREE.MeshStandardMaterial({ color: 0xb9b6ae, roughness: 0.85, side: THREE.DoubleSide })), { userData: { ground: true }, name: "entrancePiers" });
   add(parts.road, tarmac, { userData: { ground: true }, name: "accessRoads" });
   add(parts.lines, paint, { userData: { ground: true }, name: "accessRoadLines" });
   add(parts.dark, dark, { cast: true, name: "gatePostsAndCarports" });
