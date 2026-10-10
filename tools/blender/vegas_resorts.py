@@ -43,7 +43,7 @@ STYLES = {
     "vdara": dict(k=RIBBON, c="#34506e", trim="#e1e6ea", top="plain", crown=(0.8, 0.9, 1.0)),
     "veer": dict(k=GLASS, c="#a9a23c", trim="#d9d6c0", top="plain", crown=(1.0, 0.95, 0.6)),
     "planethollywood": dict(k=RIBBON, c="#3a4f6e", trim="#e9ebee", top="cap", crown=(0.75, 0.35, 1.0), pod="#3a3f48"),
-    "mgm": dict(k=GLASS, c="#1f9a5e", trim="#35b877", top="cap", crown=(0.2, 1.0, 0.45), pod="#2a7d55"),
+    "mgm": dict(k=GLASS, c="#0c4a2e", trim="#0f5a38", top="cap", crown=(0.2, 1.0, 0.45), pod="#0f3d28", edges=True),
     "signature": dict(k=GLASS, c="#a89544", trim="#d8c77a", top="cap", crown=(1.0, 0.85, 0.45)),
     "luxor": dict(k=GLASS, c="#6a563e", trim="#5a4a3a", top="plain", all=True),
     "mandalay": dict(k=RIBBON, c="#e2a822", trim="#f0e7d0", top="cap", crown=(1.0, 0.8, 0.4), pod="#e3d6b8"),
@@ -654,6 +654,16 @@ def building(b, parent):
                             break
                         wide -= 4.0
                     temple(m, p, (-u[0] * sgn, -u[1] * sgn), wide, h, trim)
+        if st.get("edges") and h > 80:
+            # MGM Grand's dark glass: only its corners drawn in green light.
+            n = len(outline)
+            for i in range(n):
+                p0, p1, p2 = outline[i - 1], outline[i], outline[(i + 1) % n]
+                la, lb = math.dist(p0, p1), math.dist(p1, p2)
+                cross = ((p1[0] - p0[0]) * (p2[1] - p1[1]) - (p1[1] - p0[1]) * (p2[0] - p1[0])) / (la * lb or 1)
+                if cross > 0.6 and min(la, lb) > 6:
+                    q = offset(outline, 0.35)[i]
+                    light_bar(m, (q[0], q[1], z0 + 9.0), (q[0], q[1], h - 5.0), 0.6, (*st["crown"], 1.0))
         if st.get("neon"):
             # The Flamingo's neon: bands of pink and orange up its towers.
             for k in range(3):

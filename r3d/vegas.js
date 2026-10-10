@@ -165,7 +165,9 @@ function stripFacade(night) {
         float fwS = fwidth(vFacade.x / 9.0);
         float smear = mix(sHash(vec2(floor(vFacade.x / 9.0), 3.3)), 0.5, smoothstep(0.25, 0.6, fwS));
         float streak = smoothstep(0.5, 1.0, smear) * low;
-        vec3 glow = mix(tint, hue * 0.5, 0.5) * facet * (0.17 + 0.22 * low + 0.3 * aslant + 0.1 * spandrel) + mix(hue, vec3(1.0, 0.8, 0.55), 0.5) * streak * 0.07 + vec3(0.04, 0.05, 0.08) * aslant;
+        // (A dark glass glows less than a bright one: MGM Grand stays deep green.)
+        float deep = max(tint.r, max(tint.g, tint.b));
+        vec3 glow = (tint * 0.5 + hue * (0.07 + 0.55 * deep)) * facet * (0.17 + 0.22 * low + 0.3 * aslant + 0.1 * spandrel) + mix(hue, vec3(1.0, 0.8, 0.55), 0.5) * streak * 0.07 + vec3(0.04, 0.05, 0.08) * aslant;
         totalEmissiveRadiance += glow * glassAt * uNight;
         // The casino floors and shopfronts at street level: bright, warm,
         // each frontage its own tint.
@@ -178,7 +180,7 @@ function stripFacade(night) {
         vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.5, 0.62), sHash(vec2(floor(vFacade.x / 28.0), 2.2)));
         totalEmissiveRadiance += shop * street * 0.3 * uNight;`);
   };
-  m.customProgramCacheKey = () => `vegas-facade-v4-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-facade-v5-${night ? 1 : 0}`;
   return m;
 }
 

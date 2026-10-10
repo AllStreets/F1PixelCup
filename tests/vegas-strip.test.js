@@ -65,15 +65,15 @@ test("the model: a node per building, the landmarks by hand, in proportion", () 
     if (["facade_vegas", "neon", "video", "fountain"].includes(name) && p.attributes.COLOR_0 === undefined) colourless.push(`${m.name}:${name}`);
   }));
   assert.deepEqual(colourless.slice(0, 5), [], "pieces without their colours");
-  // A resort's colour stored linear (as glTF's are): MGM Grand's emerald
-  // glass (#1f9a5e in tools/blender/vegas_resorts.py), its alpha its kind
+  // A resort's colour stored linear (as glTF's are): MGM Grand's deep green
+  // glass (#0c4a2e in tools/blender/vegas_resorts.py), its alpha its kind
   // of wall (0.35: a curtain of glass).
   const styles = fs.readFileSync(path.join(ROOT, "tools", "blender", "vegas_resorts.py"), "utf8");
-  assert.ok(/"mgm": dict\(k=GLASS, c="#1f9a5e"/.test(styles), "MGM Grand's glass is not the test's");
+  assert.ok(/"mgm": dict\(k=GLASS, c="#0c4a2e"/.test(styles), "MGM Grand's glass is not the test's");
   const c = kindOf(glb, "mgm", 0.35);
   assert.ok(c, "MGM Grand has no curtain of glass");
   const lin = (v) => ((v / 255 + 0.055) / 1.055) ** 2.4;
-  assert.ok(Math.abs(c[1] - lin(0x9a)) < 0.02 && Math.abs(c[0] - lin(0x1f)) < 0.02 && Math.abs(c[2] - lin(0x5e)) < 0.02, `MGM's green stored as ${c.map((v) => v.toFixed(3))}`);
+  assert.ok(Math.abs(c[1] - lin(0x4a)) < 0.02 && Math.abs(c[0] - lin(0x0c)) < 0.02 && Math.abs(c[2] - lin(0x2e)) < 0.02, `MGM's green stored as ${c.map((v) => v.toFixed(3))}`);
   assert.ok(Math.abs(part(glb).lo[1]) < 0.05, "on the ground");
 });
 

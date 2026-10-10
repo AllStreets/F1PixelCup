@@ -36,7 +36,7 @@ A footprint from the map is a building's true plan (the Wynn's curve, the Mirage
 | Plain (0.8) | stone without windows | cornices, belts, attics, tiled roofs, low casino halls |
 | Ribbon (0.65) | glass over two thirds of each floor between pale bands | the Mirage and Mandalay Bay (gold), the Flamingo (pink), Planet Hollywood, the LINQ, Vdara |
 | Lined (0.5) | tinted glass, a fine pale line every second floor | the Wynn and Encore (bronze), Aria |
-| Glass (0.35) | a curtain of tinted glass | MGM Grand (emerald), the Cosmopolitan and the Fontainebleau (blue), Resorts World (red), the Luxor (black) |
+| Glass (0.35) | a curtain of tinted glass | MGM Grand (deep green, its crown and corners lit), the Cosmopolitan and the Fontainebleau (blue), Resorts World (red), the Luxor (black) |
 
 Glass at night is not a wall of lamps: it carries the street's glow in the tower's own colour, brighter low down and where it is seen aslant, with smears of the lights below and a few rooms softly lit. Rooms smaller than a pixel give way to the wall's average.
 
