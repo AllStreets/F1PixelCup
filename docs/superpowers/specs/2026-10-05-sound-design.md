@@ -76,3 +76,31 @@ The replay is heard from its camera.
   - a trackside camera hears the Doppler shift both ways and the fall-off;
   - 2x is pitched up, while 4x and pause have no engine;
   - the first event of the race is heard as it plays, and a seek past events is silent.
+
+## Starting up (user, 2026-10-10)
+
+"The sound at the start of qualifying is a little too artificial; it almost sounds like an EDM sound or song and not an engine. I want the sound to be an engine starting up, either from the back or for qualifying."
+
+**The cause.** A qualifying lap begins with the car rolled out at speed. The engine model began in first gear at idle, so it ran up through six gears in about a second, each with its cut, on clean oscillators: an arpeggio.
+
+**The fix:**
+- **No run up through the gears.** A jump in a car's speed between two steps (more than a fifth of its top speed) puts the engine straight into the gear for it.
+- **A start-up** (`EngineSound.startup`, a seeded timeline, every car's a little its own):
+  - the starter turns the engine over for 0.5 to 0.85 s, slowly and in lumps;
+  - it catches on three to five unevenly spaced fires;
+  - the revs run up, flare to 5,300 to 6,600 and settle to idle, hunting and rough at first;
+  - then two or three blips of throttle to 7,000 to 9,800.
+- **Its sound** (`EngineSound.renderStartup`) has no oscillator in it:
+  - every firing is a pulse of its own, its strength and timing a little off the last, more so while the engine is rough;
+  - the pulses ring through four exhaust resonances;
+  - the gas rushes out as noise in step with the firings;
+  - the starter motor's whirr and the turbo's breath are filtered noise.
+- **Qualifying:** the player's own car is started while the field is timed. Once it has settled and the session is on, the running engine takes over as the car rolls out, in its gear.
+- **A race:** when the grid is on screen, the player's car and six of the field's nearest it start one after another (`EngineSound.startPlan`: each later, quieter with distance, turning over a touch faster or slower) and blip before the lights. The running engine takes over when the start-up ends, or at lights out.
+- **Not changed:** the start lights' beeps, which are the lights' own signal.
+
+**Checks:**
+- **Node:** the start-up's shape for eight seeds, its determinism, the plan, the jump into gear, and its spectral flatness (how noise-like it is) against the old oscillators' note: cranking and blips over five times it, the settle over four.
+- **Browser** (`sound-check`): qualifying plays the player's start-up (cranking under 900 rpm, a flare, handed over only once settled) and rolls out in one gear. The grid plays the player's and at least four of the field's, staggered. The flatness is checked again in the page.
+- **Proof against the old code:** the old code fails all four new results, rolling out through gears 1 to 6.
+- **To listen:** `node tools/render-engine-start.js` writes `docs/review/2026-10-10/engine-start.wav` from the same code: a qualifying start, then a grid start from the back.
