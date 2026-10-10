@@ -756,11 +756,16 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
     const side = -dx * sin + dy * cos;
-    if (forward < -16 || forward > 90 || Math.abs(side) > 42) return;
+    // A car spinning or shaken off a wall is seen from further away and given
+    // a wider berth: the field goes round it where it can (and through it
+    // where it can't; handleRacerContacts).
+    const stricken = isRecovering(other, now);
+    const reach = stricken ? 200 : 90;
+    if (forward < -16 || forward > reach || Math.abs(side) > 42) return;
 
-    const forwardWeight = 1 - clamp((forward + 16) / 106, 0, 1);
+    const forwardWeight = 1 - clamp((forward + 16) / (reach + 16), 0, 1);
     const sideWeight = 1 - clamp(Math.abs(side) / 42, 0, 1);
-    const pressure = forwardWeight * sideWeight;
+    const pressure = forwardWeight * sideWeight * (stricken ? 2 : 1);
     const steerAway = side >= 0 ? -1 : 1;
     steerAdjust += steerAway * pressure * 0.88;
     if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0) && !isRecovering(other, now)) {
@@ -5198,6 +5203,18 @@ function updateCameraRig(player, track) {
     state.camPos = {
       x: state.camPos.x + -sinH * excess,
       y: state.camPos.y + cosH * excess,
+    };
+  }
+
+  // Off the road on the outside of a corner the car leaves the lap's line
+  // behind, and the camera with it: keep the car no further ahead than a
+  // little past its usual place, so a trip to the wall is seen from close by.
+  const ahead = (player.x - state.camPos.x) * cosH + (player.y - state.camPos.y) * sinH;
+  const maxAhead = CAMERA.back + 8;
+  if (ahead > maxAhead) {
+    state.camPos = {
+      x: state.camPos.x + cosH * (ahead - maxAhead),
+      y: state.camPos.y + sinH * (ahead - maxAhead),
     };
   }
 
