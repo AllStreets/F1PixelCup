@@ -224,6 +224,8 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Replays and sound** (branch `stage-m-replays`): switching cameras keeps the car you're watching; sound in replays; an engine that lives at full throttle (rpm wobble, shift blips, turbo, crackles on lift-off); the finished car stays still on the line.
 - [ ] **The Las Vegas Strip** (branch `landmarks-2025`) **[REVIEW]**: every major Strip building at the casino's level of detail, accurate and lit at night.
 
+- [ ] **Engine start-up sound** (branch `stage-m-replays`; user, 2026-10-10): the start of qualifying sounds like an EDM sweep; make it a real engine firing up (starter, catch, rough idle, blips), and the field's engines before a race start from the back.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
