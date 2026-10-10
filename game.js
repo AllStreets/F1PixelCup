@@ -2233,10 +2233,10 @@ function useItem(racer, now, { trail = false } = {}) {
     racer.speed = Math.max(racer.speed, Math.min(racer.speed + racer.physics.maxSpeed * PowerUps.FACTORS.drsKick,
       racer.physics.maxSpeed * PowerUps.FACTORS.boost));
   } else if (item === "overtakeMode") {
-    racer.protectedUntil = now + T.overtakeModeMs;
+    racer.protectedUntil = now + T.overtakeModeMs + HALF_STEP_MS;
     emitFx("overtakeMode", racer);
   } else if (item === "formationLap") {
-    racer.formationUntil = now + T.formationLapMs;
+    racer.formationUntil = now + T.formationLapMs + HALF_STEP_MS;
     racer.formationEndsBy = racer.formationUntil + T.formationGraceMs;
   } else if (item === "oilSlick") {
     dropOil(racer, now, PowerUps.DROP_GAP);
@@ -2316,7 +2316,10 @@ function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
   if (!racer || isProtected(racer, now)) return false;
   // Brief grace period after recovering, so overlapping hits cannot pin a car.
   if (now < (racer.spinImmuneUntil || 0)) return false;
-  racer.spinUntil = Math.max(racer.spinUntil, now + duration);
+  // (Timers end half a step off the physics' own ticks: a timer ending exactly
+  // on a tick would fall either side of it with the clock's rounding, and a
+  // slow machine's race would then differ from a fast one's.)
+  racer.spinUntil = Math.max(racer.spinUntil, now + duration + HALF_STEP_MS);
   racer.spinImmuneUntil = now + duration + 1400;
   racer.recoverCapAt = racer.spinUntil + RECOVER_GRACE_MS;
   if (racer.isPlayer) {
@@ -2464,12 +2467,14 @@ function updateSafetyCar(dt, now) {
 // wobble (updateRacer). A hard hit throws sparks and a puff of dust, and for a
 // moment the car is shaken out of the race: cars behind slip past it
 // (handleRacerContacts).
+const HALF_STEP_MS = 1000 / 120;
 const WALL_RESTITUTION = 0.35;
 const WOBBLE_SECONDS = 0.8;
 const PLAYER_STEER_ASSIST = 0.08;
 // Off the road, on the run-off: more drag than the road (and a lower top
 // speed, the car's offroadFactor).
 const RUNOFF_DRAG = 0.985;
+const KERB_WIDTH = 8;
 const WALL_FRICTION = 0.45;
 const WALL_RECOVERY_MS = 900;
 const WALL_MAX_ANGLE = 0.35;
@@ -2551,7 +2556,7 @@ function applyTrackBarrier(racer, surface, now = raceNow()) {
     racer.wobbleAt = now;
   }
   if (into >= WALL_HARD_HIT) {
-    racer.recoverUntil = Math.max(racer.recoverUntil || 0, now + WALL_RECOVERY_MS);
+    racer.recoverUntil = Math.max(racer.recoverUntil || 0, now + WALL_RECOVERY_MS + HALF_STEP_MS);
     racer.recoverCapAt = racer.recoverUntil + RECOVER_GRACE_MS;
     racer.wallHits = (racer.wallHits || 0) + 1;
     wallSparks(racer, wallX, wallY, into);
@@ -2783,7 +2788,9 @@ function updateRacer(racer, dt, now) {
     targetAngle = Math.atan2(aimY - racer.y, aimX - racer.x);
   }
   const surface = getActiveSurfaceInfo(racer, state.track, now);
-  const offroad = !surface.onRoad;
+  // Off the road means past the kerb: a car with a wheel on the kerb is still
+  // on it (the car's centre up to KERB_WIDTH past the road's edge).
+  const offroad = surface.distance > surface.segmentWidth + KERB_WIDTH;
 
   let throttle = 0;
   let brake = 0;
@@ -2975,7 +2982,7 @@ function updateRacer(racer, dt, now) {
   // Knocked off a wall: the nose swings away and back, dying out (applyTrackBarrier).
   if (racer.wobble) {
     const t = (now - racer.wobbleAt) / 1000;
-    if (t > WOBBLE_SECONDS) racer.wobble = 0;
+    if (t > WOBBLE_SECONDS + HALF_STEP_MS / 1000) racer.wobble = 0;
     else yaw += racer.wobble * 6 * Math.exp(-t / 0.18) * Math.cos((2 * Math.PI * t) / 0.42);
   }
   racer.heading += yaw * dt;
@@ -3043,7 +3050,7 @@ function updateRacer(racer, dt, now) {
   // grace it ends wherever it is.
   if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS * 1.5 && now < racer.formationEndsBy
     && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
-    racer.formationUntil = now + PHYSICS_STEP_MS * 2;
+    racer.formationUntil = now + PHYSICS_STEP_MS * 2.5;
   }
 
   // Out of a spin (or off a wall) the car rejoins the fight only once it is
@@ -3052,7 +3059,7 @@ function updateRacer(racer, dt, now) {
   const recoveringTo = Math.max(racer.spinUntil || 0, racer.recoverUntil || 0);
   if (recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
     && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
-    racer.recoverUntil = now + PHYSICS_STEP_MS * 2;
+    racer.recoverUntil = now + PHYSICS_STEP_MS * 2.5;
   }
 
   const boosting = racer.boostUntil > now || racer.formationUntil > now;

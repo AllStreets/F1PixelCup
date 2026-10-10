@@ -283,10 +283,12 @@
   // Two cars touch when their footprints overlap (along and across are the
   // one's offset from the other, in track coordinates). The way they overlap
   // least is the way they met: wheel to wheel ("side") or nose to tail ("rear").
+  const CONTACT_SLOP = 0.02;
   function contactKind(along, across) {
     const deepAlong = CAR_LENGTH - Math.abs(along);
     const deepAcross = CAR_WIDTH - Math.abs(across);
-    if (deepAlong <= 0 || deepAcross <= 0) return null;
+    // (Deeper than a hair: cars pushed apart to just touching are apart.)
+    if (deepAlong <= CONTACT_SLOP || deepAcross <= CONTACT_SLOP) return null;
     return deepAcross < deepAlong ? "side" : "rear";
   }
 

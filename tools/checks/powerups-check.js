@@ -84,7 +84,7 @@ async (page) => {
     const pl = getPlayer(); const now = performance.now();
     pl.currentItem = "overtakeMode"; useItem(pl, now);
     const spun = spinRacer(pl, 850, now);
-    return pl.protectedUntil - now === PowerUps.TIMINGS.overtakeModeMs && spun === false && pl.spinUntil <= now;
+    return Math.abs(pl.protectedUntil - now - PowerUps.TIMINGS.overtakeModeMs) < 10 && spun === false && pl.spinUntil <= now;
   });
 
   // A car in Overtake Mode, or on a Formation Lap, that runs into another
@@ -273,7 +273,7 @@ async (page) => {
   results.formationLap = await run(() => {
     const pl = getPlayer(); const now = performance.now();
     pl.currentItem = "formationLap"; useItem(pl, now);
-    return pl.formationUntil - now === PowerUps.TIMINGS.formationLapMs && isProtected(pl, now) && spinRacer(pl, 850, now) === false;
+    return Math.abs(pl.formationUntil - now - PowerUps.TIMINGS.formationLapMs) < 10 && isProtected(pl, now) && spinRacer(pl, 850, now) === false;
   });
 
   // It sets the car down only where it is clear of every other car: over a

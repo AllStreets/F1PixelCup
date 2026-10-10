@@ -251,6 +251,11 @@ test("contacts are between car-shaped footprints: wheel to wheel or nose to tail
   // Clear either way: no contact. Side by side a car's width apart is not a touch.
   assert.equal(P.contactKind(L + 1, 0), null);
   assert.equal(P.contactKind(0, W + 0.5), null);
+  // Pushed apart to exactly touching, they no longer touch, whichever way the
+  // rounding falls (the next pass must not see a contact one run and not another).
+  assert.equal(P.contactKind(0, W - 1e-9), null);
+  assert.equal(P.contactKind(L - 1e-9, 0), null);
+  assert.equal(P.contactKind(0, W - 0.1), "side");
   // Alongside, overlapping a little across: wheel to wheel.
   assert.equal(P.contactKind(4, W - 2), "side");
   assert.equal(P.contactKind(-4, -(W - 2)), "side");
