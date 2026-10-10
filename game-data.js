@@ -255,7 +255,7 @@ const POWER_UPS = [
     effect: "Four seconds of autopilot at huge speed along the racing line, untouchable, spinning anyone in the way.",
     controls: "Space to engage." },
   { id: "safetyCar", name: "Safety Car", counterpart: "Lightning",
-    effect: "A safety car comes out ahead of the leader for five seconds. Every rival is slowed to its pace and can't overtake. You aren't.",
+    effect: "The Safety Car joins by whichever service gate (or the pit exit) gets it in front of the leader soonest, then leads the field for five seconds. Every rival is slowed to its pace and can't overtake. You aren't.",
     controls: "Space to deploy it." },
 ];
 
