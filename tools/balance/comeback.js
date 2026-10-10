@@ -163,7 +163,7 @@
         const d = player.trackDistance || 0;
         let close = null;
         let gap = 60;
-        if (!safetyCarActive(now)) {
+        if (!safetyCarHolds(player, now)) {
           for (const o of state.racers) {
             if (o === player || o.finished) continue;
             const a = PowerUps.wrapDelta(o.trackDistance || 0, d, L);
