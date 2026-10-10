@@ -406,6 +406,7 @@ const state = {
   hazards: [],
   safetyCar: null,
   lastSafetyCarAt: null,
+  lastStewardAt: null,
   boxHiddenUntil: [],
   fxFlashes: [],
   simOffset: 0,
@@ -1428,7 +1429,7 @@ function startQualifying(index) {
   freshEngines();
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
-    shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
+    shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, lastStewardAt: null, fxFlashes: [], finishQueue: [], particles: [],
     simOffset: 0, stepAccum: 0, lastTick: null, flagOutAt: 0, resultsQueued: false, resultTimeoutAt: 0, finalLapAt: 0,
     paused: false, pausedAt: 0, camPos: null, camRoll: 0, hudLastPlace: 0, hudPlaceFlashUntil: 0,
   });
@@ -1904,6 +1905,7 @@ function startRace(index) {
   state.hazards = [];
   state.safetyCar = null;
   state.lastSafetyCarAt = null;
+  state.lastStewardAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
@@ -2201,6 +2203,7 @@ function finishRoulette(racer, now) {
     raceTime: raceSeconds(now),
     lastSafetyCarAt: state.lastSafetyCarAt,
     stewardInFlight: state.shots.some((shot) => shot.type === "stewardPenalty"),
+    lastStewardAt: state.lastStewardAt,
   });
   racer.rouletteUntil = 0;
   racer.itemHeldSince = now;
@@ -2335,6 +2338,7 @@ function fireShot(racer, requested, now) {
     expiresAt: now + T.lifeMs[type],
     age: 0,
   });
+  if (type === "stewardPenalty") state.lastStewardAt = raceSeconds(now);
   if (type === "stewardPenalty" && target) addFeed(`Steward Penalty on ${target.driver.code}.`);
 }
 
@@ -2347,7 +2351,7 @@ function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
   // on a tick would fall either side of it with the clock's rounding, and a
   // slow machine's race would then differ from a fast one's.)
   racer.spinUntil = Math.max(racer.spinUntil, now + duration + HALF_STEP_MS);
-  racer.spinImmuneUntil = now + duration + 1400;
+  racer.spinImmuneUntil = now + duration + PowerUps.TIMINGS.spinGraceMs;
   racer.recoverCapAt = racer.spinUntil + RECOVER_GRACE_MS;
   if (racer.isPlayer) {
     addScreenShake(10, 420, racer);
@@ -4317,6 +4321,7 @@ function resetToGarage() {
   state.hazards = [];
   state.safetyCar = null;
   state.lastSafetyCarAt = null;
+  state.lastStewardAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;

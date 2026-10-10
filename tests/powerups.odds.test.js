@@ -33,11 +33,11 @@ test("every column adds up to 100", () => {
 });
 
 test("the odds table is the one in the spec", () => {
-  assert.deepEqual(P.ODDS.lead, { drs: 10, oilSlick: 55, debris: 35, undercut: 0, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.front, { drs: 15, oilSlick: 40, debris: 33, undercut: 12, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.mid, { drs: 24, oilSlick: 25, debris: 15, undercut: 20, overtakeMode: 12, formationLap: 2, stewardPenalty: 2, safetyCar: 0 });
-  assert.deepEqual(P.ODDS.back, { drs: 30, oilSlick: 5, debris: 8, undercut: 16, overtakeMode: 20, formationLap: 10, stewardPenalty: 6, safetyCar: 5 });
-  assert.deepEqual(P.ODDS.tail, { drs: 33, oilSlick: 0, debris: 4, undercut: 12, overtakeMode: 24, formationLap: 16, stewardPenalty: 6, safetyCar: 5 });
+  assert.deepEqual(P.ODDS.lead, { drs: 10, oilSlick: 70, debris: 20, undercut: 0, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.front, { drs: 25, oilSlick: 45, debris: 20, undercut: 10, overtakeMode: 0, formationLap: 0, stewardPenalty: 0, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.mid, { drs: 30, oilSlick: 25, debris: 22, undercut: 13, overtakeMode: 8, formationLap: 2, stewardPenalty: 0, safetyCar: 0 });
+  assert.deepEqual(P.ODDS.back, { drs: 35, oilSlick: 5, debris: 8, undercut: 18, overtakeMode: 18, formationLap: 10, stewardPenalty: 3, safetyCar: 3 });
+  assert.deepEqual(P.ODDS.tail, { drs: 36, oilSlick: 0, debris: 4, undercut: 12, overtakeMode: 24, formationLap: 16, stewardPenalty: 4, safetyCar: 4 });
 });
 
 test("columnFor uses the gap to the leader without a place", () => {
@@ -76,8 +76,8 @@ test("rollItem rolls from the place's column: last in a bunched field gets the s
   for (let k = 0; k < 20000; k += 1) {
     if (STRONG.includes(P.rollItem({ gapFraction: 0.01, isLeader: false, place: 20, field: 20, ...LATE, rng }))) tail += 1;
   }
-  // The tail column's strong share is 51 %.
-  assert.ok(Math.abs(tail / 200 - 51) < 1.5, `${tail / 200}`);
+  // The tail column's strong share is 48 %.
+  assert.ok(Math.abs(tail / 200 - 48) < 1.5, `${tail / 200}`);
 });
 
 test("200,000 rolls per column land within one point of the table", () => {
@@ -97,7 +97,7 @@ test("200,000 rolls per column land within one point of the table", () => {
 
 test("overall shares for a typical 20-car spread match the spec", () => {
   const s = P.overallShares();
-  const expected = { drs: 25.25, oilSlick: 18.25, debris: 15.1, undercut: 14.4, overtakeMode: 14, formationLap: 7, stewardPenalty: 3.5, safetyCar: 2.5 };
+  const expected = { drs: 30.75, oilSlick: 20, debris: 13.5, undercut: 12.75, overtakeMode: 12.5, formationLap: 7, stewardPenalty: 1.75, safetyCar: 1.75 };
   Object.entries(expected).forEach(([id, pct]) => assert.ok(Math.abs(s[id] - pct) < 1e-9, `${id} ${s[id]}`));
 });
 
@@ -108,14 +108,15 @@ test("the stronger the item, the rarer it is", () => {
   STRONG.forEach((strong) => weak.forEach((w) => assert.ok(s[strong] < s[w], `${strong} vs ${w}`)));
   // Overtake Mode is the commonest strong item, the Safety Car the rarest.
   ["formationLap", "stewardPenalty", "safetyCar"].forEach((id) => assert.ok(s[id] < s.overtakeMode, id));
-  ["overtakeMode", "formationLap", "stewardPenalty"].forEach((id) => assert.ok(s.safetyCar < s[id], id));
+  // The Safety Car and the Steward Penalty are the rarest of all.
+  ["overtakeMode", "formationLap"].forEach((id) => assert.ok(s.safetyCar < s[id] && s.stewardPenalty < s[id], id));
 });
 
 test("rarity badges", () => {
   const s = P.overallShares();
   assert.equal(P.rarityFor(s.drs), "Common");
   assert.equal(P.rarityFor(s.oilSlick), "Common");
-  assert.equal(P.rarityFor(s.debris), "Common");
+  assert.equal(P.rarityFor(s.debris), "Uncommon");
   assert.equal(P.rarityFor(s.undercut), "Uncommon");
   assert.equal(P.rarityFor(s.overtakeMode), "Uncommon");
   assert.equal(P.rarityFor(s.formationLap), "Rare");

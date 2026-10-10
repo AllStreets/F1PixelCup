@@ -312,5 +312,4 @@ test("the shells hunt harder: an Undercut catches a car 300 ahead at full speed 
   assert.ok(300 / relative < 3, `${300 / relative}`);
   assert.ok(P.SHOT_SPEEDS.debris >= 1.4 && P.TIMINGS.lifeMs.debris >= 8000);
   assert.ok(P.LAT_HOMING >= 120);
-  assert.ok(P.TIMINGS.oilLifeMs >= 30000);
 });

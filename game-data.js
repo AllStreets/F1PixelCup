@@ -139,7 +139,7 @@ const LOOKS = {
 DRIVERS.forEach((d) => { d.look = LOOKS[d.id]; });
 
 // Difficulty changes how well the AI drives, not what its cars are made of.
-// On Pro the rivals run exactly the player's physics (aiPace 1); Legend adds a 5% pace edge.
+// On Pro the rivals run exactly the player's physics (aiPace 1); Legend adds a 3% pace edge.
 // Rookie is the only setting that hands out a machinery handicap.
 // rubberBand: how much a CPU car well ahead of the player eases off
 // (racecraft.js rubberBand); cars near the player and behind are untouched.
@@ -150,22 +150,22 @@ const DIFFICULTIES = [
     cornerMargin: 0.7, // takes corners well inside what the car can do (racecraft.js)
     lineNoise: 36,     // wanders off the ideal line
     mistakeRate: 0.5,  // errors per second
-    rubberBand: 0.14,
+    rubberBand: 0.08,
     lookBase: 52, lookSpeed: 0.34,   // barely looks past the next corner
   },
   {
     id: "pro", name: "Pro",
-    aiPace: 1.0, cornerMargin: 0.85, lineNoise: 20, mistakeRate: 0.16, rubberBand: 0.11,
+    aiPace: 1.0, cornerMargin: 0.85, lineNoise: 20, mistakeRate: 0.16, rubberBand: 0.04,
     lookBase: 76, lookSpeed: 0.52,
   },
   {
     // The only setting where rivals are quicker than you rather than just
-    // better drivers: a 5% pace edge, a near-perfect line and corners taken
+    // better drivers: a 3% pace edge, a near-perfect line and corners taken
     // nearest the limit (racecraft.js). Measured by simulated laps in
     // tools/checks/grid-check.js, which requires Legend at least 2% quicker
     // than Pro and Pro at least 5% quicker than Rookie.
     id: "legend", name: "Legend",
-    aiPace: 1.05, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, rubberBand: 0.10,
+    aiPace: 1.03, cornerMargin: 0.93, lineNoise: 5, mistakeRate: 0.015, rubberBand: 0.02,
     lookBase: 76, lookSpeed: 0.52,
   },
 ];
@@ -239,7 +239,7 @@ const POWER_UPS = [
     effect: "A burst of speed at once, then your rear wing stays open for a three-second boost, or four and a half seconds if you use it on a straight: less drag and a higher top speed.",
     controls: "Space to open the wing." },
   { id: "oilSlick", name: "Oil Slick", counterpart: "Banana",
-    effect: "Drops a slick behind you, there for thirty seconds: a short spin for whoever drives through it, you included. Trail it behind your car and it blocks one Undercut or Debris from behind, or spins the first car that runs into it.",
+    effect: "Drops a slick behind you, there for fifteen seconds: a short spin for whoever drives through it, you included. Trail it behind your car and it blocks one Undercut or Debris from behind, or spins the first car that runs into it.",
     controls: "Tap Space to drop it. Hold Space to trail it; let go to drop it." },
   { id: "debris", name: "Debris", counterpart: "Green shell",
     effect: "Fired straight ahead, fast. It bounces off the edges of the track for eight seconds and spins anyone it hits, you included.",

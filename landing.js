@@ -221,7 +221,7 @@
       <tbody>${PowerUps.ITEM_ORDER.map((id) => `<tr data-id="${esc(id)}"><th scope="row">${esc(byId[id].name)}</th>${cols.map((c) =>
         `<td data-col="${esc(c)}" data-label="${esc(COLUMN_LABELS[c])}">${PowerUps.ODDS[c][id] ? `${PowerUps.ODDS[c][id]}%` : "–"}</td>`).join("")}</tr>`).join("")}</tbody>`;
     const L = PowerUps.LIMITS;
-    $("pu-odds-note").textContent = `Chances for each item box. The column is set by your place (with 20 cars: 2nd to 5th near the front, 6th to 10th midfield, 11th to 15th chasing, 16th to 20th at the back) or by your gap to the leader, whichever puts you further back: 30% of a lap behind the leader you roll from the back of the field, wherever you are. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and no new Steward Penalty comes out of a box while one is on track.`;
+    $("pu-odds-note").textContent = `Chances for each item box. The column is set by your place (with 20 cars: 2nd to 5th near the front, 6th to 10th midfield, 11th to 15th chasing, 16th to 20th at the back) or by your gap to the leader, whichever puts you further back: 30% of a lap behind the leader you roll from the back of the field, wherever you are. No Steward Penalty, Formation Lap or Safety Car in the first ${L.strongItemsAfter} seconds, no Safety Car in the first ${L.safetyCarAfter} seconds or within ${L.safetyCarCooldown} seconds of the last one, and no new Steward Penalty comes out of a box while one is on track or within ${L.stewardCooldown} seconds of the last.`;
   }
 
   // Race day: a gallery per feature, every picture the game's own

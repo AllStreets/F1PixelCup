@@ -135,7 +135,7 @@ async (page) => {
       && card.querySelector(".pu-rarity").textContent === PowerUps.rarityFor(PowerUps.overallShares()[d.id]);
   }));
   out.puOddsRows = await p.locator("#power-ups table.pu-odds tbody tr").count();
-  out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "5%");
+  out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "4%");
   out.navLink = await p.locator('nav a[href="#power-ups"]').count();
   // The promo shots show the whole grid: each alt text names its driver and
   // team (from SHOT_DRIVERS), Leclerc first and Hamilton second, and each set

@@ -135,9 +135,12 @@
           if ((aheadGap < 120 && Math.abs(ahead.lat - player.lat) < 20) || t - player.itemHeldSince > 8000) useItem(player, t);
         } else if (item === "oilSlick") {
           const behind = PowerUps.nearestGaps({ id: player.id, d }, itemBodies(), L).behind;
+          // Near the front it is held behind the car as a shield for as long
+          // as it lasts; further back, trailed at a car close behind, then dropped.
+          const shield = placeOf(player) <= 3;
           if (player.trailingOil) {
-            if (t - player.trailSince > 6000) releaseTrail(player, t);
-          } else if (behind !== null && behind < 60) {
+            if (!shield && t - player.trailSince > 6000) releaseTrail(player, t);
+          } else if (shield || (behind !== null && behind < 60)) {
             useItem(player, t, { trail: true });
           } else if (t - player.itemHeldSince > 8000) useItem(player, t);
         } else {

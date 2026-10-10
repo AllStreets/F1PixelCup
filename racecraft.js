@@ -78,7 +78,7 @@
   // about as close as a car can follow), fading to nothing at `reach`, and
   // only in its wake (within `width` across). `speed` is the top speed it is
   // worth at full strength, `drag` how much of the drag it takes away.
-  const TOW = { from: 18, reach: 130, width: 22, speed: 0.09, drag: 0.003 };
+  const TOW = { from: 18, reach: 130, width: 22, speed: 0.06, drag: 0.002 };
 
   function towShare(gap, latGap) {
     if (!(gap >= TOW.from && gap <= TOW.reach) || Math.abs(latGap) > TOW.width) return 0;

@@ -17,20 +17,24 @@
 
   // The back of the field rolls the fast items (DRS, Overtake Mode, the
   // Formation Lap) most: they are what gets a car past the others.
+  // The back of the field rolls the fast items (DRS, Overtake Mode, the
+  // Formation Lap) most: they are what gets a car past the others. The
+  // leader rolls mostly oil, to trail as a shield; the cars just behind get
+  // few shells; the Steward Penalty comes only from the back half.
   const table = {
-    drs: [10, 15, 24, 30, 33],
-    oilSlick: [55, 40, 25, 5, 0],
-    debris: [35, 33, 15, 8, 4],
-    undercut: [0, 12, 20, 16, 12],
-    overtakeMode: [0, 0, 12, 20, 24],
+    drs: [10, 25, 30, 35, 36],
+    oilSlick: [70, 45, 25, 5, 0],
+    debris: [20, 20, 22, 8, 4],
+    undercut: [0, 10, 13, 18, 12],
+    overtakeMode: [0, 0, 8, 18, 24],
     formationLap: [0, 0, 2, 10, 16],
-    stewardPenalty: [0, 0, 2, 6, 6],
-    safetyCar: [0, 0, 0, 5, 5],
+    stewardPenalty: [0, 0, 0, 3, 4],
+    safetyCar: [0, 0, 0, 3, 4],
   };
   const ODDS = Object.fromEntries(COLUMNS.map((col, c) => [col, Object.fromEntries(ITEM_ORDER.map((id) => [id, table[id][c]]))]));
 
   // Seconds of race time.
-  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30 };
+  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30, stewardCooldown: 45 };
   const STRONG = ["stewardPenalty", "formationLap", "safetyCar"];
 
   // By place, the field is cut in quarters behind the leader (20 cars:
@@ -61,17 +65,19 @@
     return COLUMNS.indexOf(byPlace) > COLUMNS.indexOf(byGap) ? byPlace : byGap;
   }
 
-  function isBlocked(id, { raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false } = {}) {
+  function isBlocked(id, { raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, lastStewardAt = null } = {}) {
     if (STRONG.includes(id) && raceTime < LIMITS.strongItemsAfter) return true;
     if (id === "safetyCar") {
       if (raceTime < LIMITS.safetyCarAfter) return true;
       if (lastSafetyCarAt !== null && lastSafetyCarAt !== undefined && raceTime - lastSafetyCarAt < LIMITS.safetyCarCooldown) return true;
     }
     if (id === "stewardPenalty" && stewardInFlight) return true;
+    // The heaviest hit in the game comes rarely: none within stewardCooldown of the last.
+    if (id === "stewardPenalty" && lastStewardAt !== null && lastStewardAt !== undefined && raceTime - lastStewardAt < LIMITS.stewardCooldown) return true;
     return false;
   }
 
-  function rollItem({ gapFraction = 0, isLeader = false, place = 0, field = 0, raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, rng = Math.random } = {}) {
+  function rollItem({ gapFraction = 0, isLeader = false, place = 0, field = 0, raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, lastStewardAt = null, rng = Math.random } = {}) {
     const odds = ODDS[columnFor(gapFraction, isLeader, place, field)];
     const live = ITEM_ORDER.filter((id) => odds[id] > 0);
     let r = Math.min(Math.max(rng(), 0), 0.999999999) * 100;
@@ -80,7 +86,7 @@
       r -= odds[id];
       if (r < 0) { pick = id; break; }
     }
-    const ctx = { raceTime, lastSafetyCarAt, stewardInFlight };
+    const ctx = { raceTime, lastSafetyCarAt, stewardInFlight, lastStewardAt };
     // Held back, it moves down to the next commoner item the column allows
     // (never up to a rarer, stronger one).
     for (let i = ITEM_ORDER.indexOf(pick); i >= 0; i -= 1) {
@@ -125,11 +131,14 @@
   const SPIN_MS = { undercut: 1100, debris: 1000, oilSlick: 850, stewardLeader: 2600, stewardSplash: 1200, contact: 650 };
   const SPIN_KEEP = { undercut: 0.45, debris: 0.5, oilSlick: 0.65, stewardLeader: 0.08, stewardSplash: 0.4, contact: 0.7 };
   const TIMINGS = {
-    rouletteMs: 1100, boxHiddenMs: 1000, armMs: 300, oilArmMs: 1000, oilLifeMs: 30000,
+    rouletteMs: 1100, boxHiddenMs: 1000, armMs: 300, oilArmMs: 1000, oilLifeMs: 15000,
     drsMs: 3000, drsStraightMs: 4500, overtakeModeMs: 8000, formationLapMs: 6000,
     // A Formation Lap ends only once the car is clear of every other car;
     // this long at most past its time, it ends wherever it is.
     formationGraceMs: 2000,
+    // After a spin a car can't be spun again for this long: hit after hit
+    // can't pin it down.
+    spinGraceMs: 3500,
     safetyCarMs: 7000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
     // A Steward Penalty has no time limit: it ends on the leader, or when nobody is left racing.
     lifeMs: { undercut: 12000, debris: 8000, stewardPenalty: Infinity },

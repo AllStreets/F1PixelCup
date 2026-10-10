@@ -103,6 +103,19 @@ The user liked the harder CPUs, and asked for more:
    - **Safety Car (Lightning):** seven seconds, and every rival loses the power-up it holds. Its routing is untouched.
    - Steward Penalties and Safety Cars come out of the boxes less often. The heavier hits made the leader's life too hard: from pole on Pro the player won only about a quarter of races.
 
+## Third round: the pole-sitter is the favourite again (2026-10-10)
+
+After the second round, starting on pole won only 25 % of races on Pro and 4 % on Legend, and starting last won more often than starting first. The measurements showed why: the leader was spun about eight times a race, and one Steward Penalty alone cost more than the usual losing margin of two seconds. The targets: from pole about 90 % on Rookie, 45 to 55 % on Pro, 15 to 25 % on Legend, with the comeback from last still there.
+
+- **The Steward Penalty is rare:** only from the back half of the field (3 % and 4 %), and never within 45 s of the last one.
+- **A car can't be pinned:** after a spin it can't be spun again for 3.5 s (it was 1.4 s).
+- **Fewer shells near the front:** P2 to P5 roll more DRS and oil, less Debris and Undercut. The leader rolls mostly oil (70 %), to trail as a shield.
+- **Oil lies for 15 s,** not 30: the leader no longer meets the whole field's slicks a lap later.
+- **The tow is 6 %,** not 9 %: a train of cars no longer reels a lone leader in.
+- **Legend's pace edge is 3 %,** not 5 %.
+- **The rubber band is weaker** (8 %, 4 %, 2 %): the power-ups carry the comeback, and nothing eases off for a player who is leading.
+- **The measuring autopilot** holds an Oil Slick behind it as a shield while it is in the top three, as a sensible leader would.
+
 ## Result
 
 Measured with `tools/balance/` (the second round's harness: the autopilot as above, 8 circuits x 6 seeds per row, 5 laps, dry). "Before" is main at 0f239b3; "after" is this branch.
