@@ -18,29 +18,34 @@
   // The winner's lift (its fanfare sting has ended, echo and all, within it).
   const TROPHY_TIME = 4.6;
   // The presentation. The table the trophies wait on stands off the podium's
-  // left end, clear of every step's front, its length running away from the
+  // left end, clear of every step's front and forward of the line the
+  // presenter walks along the podium, its length running away from the
   // camera: the bronze nearest, the gold at the back (`on`: each trophy's
   // place along it, m). The presenter stands `stand` m on the podium's side
-  // of it, side on to the camera, so the hands and the trophy are seen.
-  const TABLE = { x: -3.2, z: 1.35, width: 0.46, length: 1.3, height: 0.9, stand: 0.42, near: 0.05, on: { 3: 0.42, 2: 0, 1: -0.42 } };
+  // of it, side on to the camera, so the hands and the trophy are seen;
+  // and waits at `waitZ`, beside the podium's end and far enough back to be
+  // seen whole however close the camera comes during the anthem.
+  const TABLE = { x: -3.2, z: 1.75, width: 0.46, length: 1.3, height: 0.9, stand: 0.44, near: 0, waitZ: -0.15, on: { 3: 0.42, 2: 0, 1: -0.42 } };
   // A brisk, purposeful walk (m/s), reached and left over RAMP seconds; a
   // turn on the spot, so many radians a second on average.
-  const WALK_SPEED = 1.8;
+  const WALK_SPEED = 1.9;
   const RAMP = 0.35;
-  const TURN_RATE = 4.2;
+  const TURN_RATE = 3;
   // How far the feet step for each radian turned on the spot (m).
   const TURN_STEP = 0.16;
   // gap: the anthem's last echo to the presenter's first move; take, pick:
   // hands onto the trophy, then it is up and carried; raise, contact, give:
   // held up to the driver, the driver's hand closes on it, the presenter
-  // lets go (gold: the winner's, a little slower); nod; liftFor: how long third and second hold theirs up; pass:
+  // lets go (gold: the winner's, a little slower); nod; liftFor: how long
+  // third and second hold theirs up; pass:
   // from the right hand to the left. spotSide, spotZ: where the presenter
   // stands for a handover, from the step's middle (to the driver's right,
   // clear of the step's front). handOut, handUp: where the trophy's stem is
   // as it changes hands, from the driver toward the presenter and above the
-  // step. exit: where the presenter walks off to (out of any frame).
-  const PRESENT = { gap: 0.2, take: 0.35, pick: 0.7, raise: 0.45, contact: 0.6, give: 0.85, gold: { contact: 0.9, give: 1.25 }, nod: 0.3, liftFor: 2.0, pass: 1.0,
-    spotZ: 0.9, spotSide: -0.5, handOut: 0.55, handUp: 1.08, exit: [-9.5, 5.8] };
+  // step. exitX: how far along the podium's front the presenter walks off
+  // (past the wall's end, out of any picture).
+  const PRESENT = { gap: 0.2, take: 0.32, pick: 0.6, raise: 0.45, contact: 0.6, give: 0.85, gold: { contact: 0.9, give: 1.25 }, nod: 0.3, liftFor: 2.0, pass: 1.0,
+    spotZ: 0.9, spotSide: -0.5, handOut: 0.55, handUp: 1.08, exitX: -12.5 };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
     if (!(anthemSeconds >= 0) || !Number.isFinite(anthemSeconds)) throw new Error(`anthem length ${anthemSeconds}`);
     // Seconds from the start of the ceremony.
@@ -73,19 +78,22 @@
       const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
       return x * x * x * (x * (x * 6 - 15) + 10);
     };
-    // (A gentler ease for a turn on the spot: its fastest is half again its average.)
+    // (A gentler ease, for a turn on the spot and for hands: its fastest is half
+    // again its average.)
     const ease = (a, b, t) => {
       const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
       return x * x * (3 - 2 * x);
     };
 
     // ---- The presentation's schedule ----
-    // The presenter waits by the table from the start (as the officials of a
-    // real podium do), then for each trophy: takes it, turns, walks to the
-    // foot of the driver's step, turns to the driver, hands it up, nods,
-    // turns and walks back. Every move is one of three kinds, one after
-    // another: a "turn" on the spot, a "walk" in a straight line the way
-    // they face, a "stop" (standing: taking a trophy, giving it).
+    // The presenter waits beside the podium's end from the start (as the
+    // officials of a real podium do), steps up to the table, then for each
+    // trophy: takes it, turns, walks to the foot of the driver's step, turns
+    // to the driver, hands it up, nods, turns and walks back; and at the end
+    // away along the podium's front, behind the table. Every move is one of
+    // three kinds, one after another: a "turn" on the spot, a "walk" in a
+    // straight line the way they face, a "stop" (standing: taking a trophy,
+    // giving it).
     const tableSpot = (place) => [TABLE.x + TABLE.stand, TABLE.z + TABLE.on[place]];
     // At the foot of a driver's step, to the driver's right (the hand that
     // takes it; the viewer's left), turned to face them.
@@ -93,12 +101,13 @@
     const FACE_TABLE = -Math.PI / 2;
     const FACE_CAMERA = 0;
     const toward = (a, b) => Math.atan2(b[0] - a[0], b[1] - a[1]);
-    const driverAt = (place, forward = STEP_FORWARD) => [STEPS[place].x, STEPS[place].standZ + forward];
+    const driverAt = (place) => [STEPS[place].x, STEPS[place].standZ + STEP_FORWARD];
+    const WAITS = { x: TABLE.x + TABLE.stand, z: TABLE.waitZ, heading: FACE_CAMERA };
     const HANDOVERS = [];
     const path = [];
     let clock = BEATS.present;
-    let here = tableSpot(3);
-    let facing = FACE_CAMERA;
+    let here = [WAITS.x, WAITS.z];
+    let facing = WAITS.heading;
     const nearest = (from, to) => {
       let d = (to - from) % (2 * Math.PI);
       if (d > Math.PI) d -= 2 * Math.PI;
@@ -111,7 +120,8 @@
       let by = nearest(facing, heading);
       if (way > 0 && by < 0) by += 2 * Math.PI;
       if (Math.abs(by) < 1e-3) return;
-      const time = Math.max(0.3, Math.abs(by) / TURN_RATE);
+      // (A small turn takes its share of a quarter of a second at the least.)
+      const time = Math.max(0.25 * Math.min(1, Math.abs(by) / 0.5), Math.abs(by) / TURN_RATE);
       path.push({ kind: "turn", from: clock, to: clock + time, at: here, a: facing, by });
       clock += time;
       facing += by;
@@ -130,6 +140,7 @@
       path.push({ kind: "stop", from: clock, to: clock + time, at: here, heading: facing, place });
       clock += time;
     };
+    walk(tableSpot(3));
     turnTo(FACE_TABLE);
     [3, 2, 1].forEach((place) => {
       const h = { place };
@@ -139,8 +150,9 @@
       h.carried = h.pick + PRESENT.pick;
       stop(PRESENT.pick, place);
       // (Round by the camera's side: the trophy in hand swings over the
-      // end of the table it came from, not across the ones still on it.)
-      walk(spotFor(place), 1);
+      // end of the table it came from, not across the ones still on it.
+      // The gold, the last, the short way.)
+      walk(spotFor(place), place === 1 ? 0 : 1);
       h.arrive = clock;
       turnTo(toward(here, driverAt(place)));
       // At the step: hold it up; the driver's hand closes on it; let go, nod.
@@ -161,9 +173,9 @@
         turnTo(FACE_TABLE);
       }
     });
-    // The winner has it: away past the front of the table, toward the
-    // camera's left, out of the picture.
-    walk(PRESENT.exit);
+    // The winner has it: away along the podium's front, behind the table,
+    // out of the picture to the left.
+    walk([PRESENT.exitX, here[1]]);
     BEATS.trophy = HANDOVERS[2].release;
     BEATS.spray = BEATS.trophy + TROPHY_TIME;
     BEATS.presenterGone = clock;
@@ -172,9 +184,8 @@
     // Where a trophy's stem is as it changes hands: [x, y, z]. Out from the
     // driver toward where the presenter stands, at the height of the
     // driver's elbow, so the forearm comes to the stem level, under the cup.
-    // forward: how far the driver has stepped forward (none, with reduced motion).
-    function handPoint(place, forward = STEP_FORWARD) {
-      const d = driverAt(place, forward);
+    function handPoint(place) {
+      const d = driverAt(place);
       const p = spotFor(place);
       const far = Math.hypot(p[0] - d[0], p[1] - d[1]);
       return [d[0] + ((p[0] - d[0]) / far) * PRESENT.handOut, STEPS[place].height + PRESENT.handUp, d[1] + ((p[1] - d[1]) / far) * PRESENT.handOut];
@@ -217,9 +228,8 @@
     // trophy is in their hands), take (0..1 hands to the trophy on the
     // table), raise (0..1 holding it up to the driver), nod (0..1) }.
     function presenterAt(t) {
-      const first = path[0];
-      const out = { on: t < BEATS.presenterGone, x: first.at[0], z: first.at[1], heading: first.a, stride: 0, walking: 0, carrying: null, take: 0, raise: 0, nod: 0 };
-      if (t >= BEATS.presenterGone) return { ...out, x: PRESENT.exit[0], z: PRESENT.exit[1] };
+      const out = { on: t < BEATS.presenterGone, x: WAITS.x, z: WAITS.z, heading: WAITS.heading, stride: 0, walking: 0, carrying: null, take: 0, raise: 0, nod: 0 };
+      if (t >= BEATS.presenterGone) return { ...out, x: here[0], z: here[1] };
       if (t < BEATS.present) return out;
       const carrying = HANDOVERS.find((h) => t >= h.lifted && t < h.contact);
       out.carrying = carrying ? carrying.place : null;
@@ -396,6 +406,17 @@
       };
     }
 
+    // With reduced motion the camera holds its settled view, and for the
+    // presentation one other, cut to and back (a cut is no motion): the same
+    // view from further to the right, where the handovers are seen between
+    // the presenter and each driver and not over the presenter's shoulder.
+    const STILL_SIDE = 4.6;
+    function stillCameraAt(t) {
+      const c = cameraAt(BEATS.sweepEnd);
+      if (t >= BEATS.present && t < BEATS.trophy) c.x += STILL_SIDE;
+      return c;
+    }
+
     // The vertical field of view that keeps the 16:9 frame's width on a
     // narrower window (wider windows keep the height).
     function fitFov(fov, aspect, reference = 16 / 9) {
@@ -483,7 +504,7 @@
     return {
       BEATS, SCENES, HANDOVERS, TABLE, PRESENT, PASS, WALK_SPEED, RAMP, TURN_STEP, STEP_FORWARD, handPoint, ORBIT_PERIOD, PROP_SWAP, anthemSeconds, stepFor, sceneAt, beatAt, poseAt, forwardAt,
       presenterAt, trophyAt, reachAt, trophyShown, bottleShown, confettiOn, sprayOn, corkAt, platesShown,
-      counts, cameraAt, fitFov, cupColour, stepConfetti, sprayDrop, stepDrop,
+      counts, cameraAt, stillCameraAt, fitFov, ease, cupColour, stepConfetti, sprayDrop, stepDrop,
     };
   }
 

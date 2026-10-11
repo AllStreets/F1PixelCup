@@ -33,8 +33,13 @@ const HANDLES = {
   3: { points: [[0.078, 0.17], [0.102, 0.15], [0.106, 0.11], [0.072, 0.1]], radius: 0.008 },
 };
 
-// Where a second hand holds each, under the first: this far down the stem (m).
-const LOWER = { 3: 0.07, 2: 0.09, 1: 0.085 };
+// Where the hand that takes each holds its stem: this far under the cup (m).
+// Where a second hand holds it, under the first. And where the presenter's
+// two hands hold it, by the rim of its foot (above its underside), clear of
+// the hand that takes the stem.
+const UNDER = { 3: 0.04, 2: 0.04, 1: 0.04 };
+const LOWER = { 3: 0.07, 2: 0.09, 1: 0.065 };
+const HOLD = { 3: 0.015, 2: 0.012, 1: 0.04 };
 
 // How far out a trophy's own metal reaches at height y (from its stem), its
 // handles aside: the lathe's outline (and the plinth's).
@@ -54,7 +59,8 @@ function radiusAt(place, y) {
 
 // A trophy: { group, place, metal, height, foot (y of its underside), top,
 // baseRadius (where a presenter's hands hold it), radius (its widest, handles
-// and all), bowl (its cup's), lower (where a second hand holds its stem),
+// and all), bowl (its cup's), under and lower (where the first hand and a
+// second hold its stem), hold (the height of the presenter's hands on its foot),
 // gapTo(point): how far a point given in the trophy's own space is from its
 // metal (negative inside it) }. geo and mat record what is made, for the
 // podium to free.
@@ -111,5 +117,5 @@ export function buildTrophy(place, { geo, mat }) {
     return gap;
   }
   const bowl = Math.max(...profile.map(([r]) => r));
-  return { group, place, metal: metal.name, color: metal.color, foot, top, height: top - foot, baseRadius, radius, bowl, lower: LOWER[place], gapTo };
+  return { group, place, metal: metal.name, color: metal.color, foot, top, height: top - foot, baseRadius, radius, bowl, under: UNDER[place], lower: LOWER[place], hold: foot + HOLD[place], gapTo };
 }

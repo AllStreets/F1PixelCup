@@ -62,8 +62,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   let firstFramePrograms = null;
   const confetti = { mesh: null, pieces: [], burstAt: -1 };
   // With reduced motion asked for (read every frame, it can change): the
-  // camera holds its settled view, nobody steps (each stands forward on their
-  // step from the start), the banners hang
+  // camera holds its settled view (and one other for the presentation, cut
+  // to: ceremony.js, stillCameraAt), nobody steps (each stands forward on
+  // their step from the start), the banners hang
   // still, the confetti lies where it fell and there is no spray.
   const motionQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const still = () => Boolean(motionQuery && motionQuery.matches);
@@ -685,7 +686,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   }
 
   function placeCamera(t, calm = still(), cam = camera) {
-    const c = Ceremony.cameraAt(calm ? Ceremony.BEATS.sweepEnd : t);
+    const c = calm ? Ceremony.stillCameraAt(t) : Ceremony.cameraAt(t);
     cam.position.set(c.x, c.y, c.z);
     cam.up.set(0, 1, 0);
     cam.lookAt(c.lookX, c.lookY, c.lookZ);
@@ -820,21 +821,31 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     return r;
   }
 
-  // A box standing on the floor (its middle, half its width and depth, its
-  // height), as the camera sees it: { left, top, right, bottom } in CSS px,
-  // or null when none of it is in the picture.
-  function boxOnScreen(x, z, halfX, halfZ, height) {
+  // A box in the scene ({ min, max }), as the camera sees it: { left, top,
+  // right, bottom } in CSS px, or null when none of it is in the picture.
+  // (A box partly behind the camera is taken to fill the picture: never
+  // "out of it" by mistake.)
+  function boxOnScreen({ min, max }) {
     camera.updateMatrixWorld();
     const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    let behind = 0;
     for (let i = 0; i < 8; i += 1) {
-      corner.set(x + (i & 1 ? halfX : -halfX), i & 2 ? height : 0, z + (i & 4 ? halfZ : -halfZ)).project(camera);
-      if (corner.z > 1) return null;
+      corner.set(i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]).applyMatrix4(camera.matrixWorldInverse);
+      if (corner.z > -camera.near) { behind += 1; continue; }
+      corner.applyMatrix4(camera.projectionMatrix);
       r.left = Math.min(r.left, (corner.x * 0.5 + 0.5) * view.w);
       r.right = Math.max(r.right, (corner.x * 0.5 + 0.5) * view.w);
       r.top = Math.min(r.top, (-corner.y * 0.5 + 0.5) * view.h);
       r.bottom = Math.max(r.bottom, (-corner.y * 0.5 + 0.5) * view.h);
     }
+    if (behind === 8) return null;
+    if (behind > 0) return { left: 0, top: 0, right: view.w, bottom: view.h };
     return r.right < 0 || r.left > view.w || r.bottom < 0 || r.top > view.h ? null : r;
+  }
+  // (The presenter: a box round where they stand, as tall as they are.)
+  function aroundPresenter() {
+    const p = presentation.presenter.root.position;
+    return { min: [p.x - 0.28, 0, p.z - 0.28], max: [p.x + 0.28, 1.8, p.z + 0.28] };
   }
   const overTable = (p) => Math.abs(p.x - TABLE.x) < TABLE.width / 2 && Math.abs(p.z - TABLE.z) < TABLE.length / 2;
 
@@ -877,7 +888,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       ...(presentation ? presentation.inspect() : {}),
       // Where the table and the presenter are in the picture (CSS px), or
       // null when wholly out of it.
-      onScreen: presentation ? { table: boxOnScreen(TABLE.x, TABLE.z, TABLE.width / 2, TABLE.length / 2, TABLE.height), presenter: presentation.presenter.root.visible ? boxOnScreen(presentation.presenter.root.position.x, presentation.presenter.root.position.z, 0.28, 0.28, 1.8) : null } : null,
+      onScreen: presentation ? { table: boxOnScreen(presentation.tableBox()), presenter: presentation.presenter.root.visible ? boxOnScreen(aroundPresenter()) : null } : null,
       spray: { byPlace: Object.fromEntries(figures.map((f) => [f.entry.place, f.emitted || 0])), pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
     };
   }

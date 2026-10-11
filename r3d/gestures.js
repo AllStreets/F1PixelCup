@@ -29,7 +29,7 @@ export function rigOf(model) {
     l1: bones[`forearm_${s}`].position.length(), l2: bones[`hand_${s}`].position.length() });
   const foot = bones.shin_L.children.find((n) => n.isBone);
   const leg = bones.shin_L.position.length() + (foot ? foot.position.length() : bones.shin_L.position.length());
-  return { model, body, bones, arms: { L: arm("L"), R: arm("R") }, leg };
+  return { model, body, bones, list: Object.values(bones), arms: { L: arm("L"), R: arm("R") }, leg };
 }
 
 // A pose only writes a bone when its value changes (three's mixer), so a
@@ -50,13 +50,14 @@ function after(bone) {
   wrote(bone).written.copy(bone.quaternion);
 }
 export function settle(rig) {
-  Object.values(rig.bones).forEach((bone) => {
+  for (let i = 0; i < rig.list.length; i += 1) {
+    const bone = rig.list[i];
     const m = memo.get(bone);
-    if (!m || !m.touched) return;
+    if (!m || !m.touched) continue;
     // Still as the last gesture left it: the pose did not write it. Else the pose's own.
     if (bone.quaternion.equals(m.written)) bone.quaternion.copy(m.base);
     m.touched = false;
-  });
+  }
   rig.model.updateMatrixWorld(true);
 }
 
@@ -105,11 +106,11 @@ const posed = [new THREE.Quaternion(), new THREE.Quaternion(), new THREE.Quatern
 // The hand's turn moves where the wrist must be for the grip to land, and
 // the forearm's turn moves the hand: solved a few times over, each from the last.
 const PASSES = 3;
-export function reach(rig, s, target, { weight = 1, pole, grip = null, axis = null } = {}) {
+const CHAIN = ["upper", "fore", "hand"];
+export function reach(rig, s, target, weight, pole, grip = null, axis = null) {
   if (weight <= 0) return 0;
   const arm = rig.arms[s];
-  const chain = [arm.upper, arm.fore, arm.hand];
-  chain.forEach((bone, i) => { before(bone); posed[i].copy(bone.quaternion); });
+  for (let i = 0; i < 3; i += 1) { before(arm[CHAIN[i]]); posed[i].copy(arm[CHAIN[i]].quaternion); }
   for (let pass = 0; pass < (grip || axis ? PASSES : 1); pass += 1) {
     if (axis) {
       // The hand, turned the short way to lie along the stem.
@@ -158,8 +159,11 @@ export function reach(rig, s, target, { weight = 1, pole, grip = null, axis = nu
   else arm.hand.getWorldPosition(reached);
   const gap = reached.distanceTo(target);
   // The blend: each bone part of the way from its pose to where the reach put it.
-  if (weight < 1) chain.forEach((bone, i) => { bone.quaternion.copy(posed[i].slerp(bone.quaternion, weight)); });
-  chain.forEach((bone) => after(bone));
+  for (let i = 0; i < 3; i += 1) {
+    const bone = arm[CHAIN[i]];
+    if (weight < 1) bone.quaternion.copy(posed[i].slerp(bone.quaternion, weight));
+    after(bone);
+  }
   arm.upper.updateMatrixWorld(true);
   return gap;
 }
@@ -168,8 +172,9 @@ export function reach(rig, s, target, { weight = 1, pole, grip = null, axis = nu
 // by as much as it takes for a step that long (so the feet do not slide);
 // the arms swing against them unless they carry something. amount 0..1 eases
 // it in. right: the figure's own right, in the world.
-export const STRIDE = 1.5;
-export function walk(rig, stride, amount, right, { arms = true } = {}) {
+export const STRIDE = 1.7;
+const LIMBS = [["L", 1], ["R", -1]].map(([s, sign]) => ({ sign, thigh: `thigh_${s}`, shin: `shin_${s}`, upper: `upper_arm_${s}`, fore: `forearm_${s}` }));
+export function walk(rig, stride, amount, right, arms = true) {
   if (amount <= 0) return;
   const phase = (stride / STRIDE) * 2 * Math.PI;
   // Two steps to a stride, each the chord a leg sweeps: 2 * leg * sin(swing).
@@ -179,13 +184,14 @@ export function walk(rig, stride, amount, right, { arms = true } = {}) {
   // (About the figure's right, a limb that hangs down swings forward for a
   // positive angle.) A thigh forward, the other back; each knee bends as its
   // leg comes through; the arms swing against the legs.
-  [["L", 1], ["R", -1]].forEach(([s, sign]) => {
-    const forward = swing * sign;
-    turn(bones[`thigh_${s}`], right, forward);
-    turn(bones[`shin_${s}`], right, -(Math.max(0, Math.cos(phase) * sign) * 0.75 + 0.08) * amount);
+  for (let i = 0; i < 2; i += 1) {
+    const limb = LIMBS[i];
+    const forward = swing * limb.sign;
+    turn(bones[limb.thigh], right, forward);
+    turn(bones[limb.shin], right, -(Math.max(0, Math.cos(phase) * limb.sign) * 0.75 + 0.08) * amount);
     if (arms) {
-      turn(bones[`upper_arm_${s}`], right, -forward * 0.6);
-      turn(bones[`forearm_${s}`], right, 0.25 * amount);
+      turn(bones[limb.upper], right, -forward * 0.6);
+      turn(bones[limb.fore], right, 0.25 * amount);
     }
-  });
+  }
 }

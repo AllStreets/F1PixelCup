@@ -299,20 +299,19 @@ test("the presentation: third, second, then the winner; each trophy from the tab
     assert.equal(C.reachAt(h.place, h.release + 1), 0);
     assert.equal(C.reachAt(h.place, B.anthem + 1), 0);
     // Where it changes hands: between the two of them, above the step, at
-    // about the driver's elbow; nearer the driver when they have not stepped forward.
+    // about the driver's elbow.
     const [x, y, z] = C.handPoint(h.place);
     const step = C.stepFor(h.place);
     const p = C.presenterAt(h.contact);
     assert.ok(x > p.x && x < step.x && z < p.z && z > step.standZ + C.STEP_FORWARD, `${x}, ${z}`);
     assert.ok(y - step.height > 0.95 && y - step.height < 1.2);
     assert.ok(Math.hypot(x - p.x, z - p.z) < 0.5, "within the presenter's reach");
-    assert.ok(Math.abs(C.handPoint(h.place, 0)[2] - (z - C.STEP_FORWARD)) < 0.08, "it follows where the driver stands");
   });
   // The winner's is last: it starts the big lift. At a walking pace, with the
-  // table off the podium's end, all three take between 15 and 21 seconds.
+  // table off the podium's end, all three take between 17 and 22 seconds.
   assert.equal(H[2].place, 1);
   assert.equal(H[2].release, B.trophy);
-  assert.ok(B.trophy - B.present >= 15 && B.trophy - B.present <= 21, `${B.trophy - B.present} s`);
+  assert.ok(B.trophy - B.present >= 17 && B.trophy - B.present <= 22, `${B.trophy - B.present} s`);
   // No trophy and bottle in one hand: every trophy is in the left before any bottle is in the right.
   [1, 2, 3].forEach((p) => {
     for (let t = B.present; t < B.spray + 20; t += 0.05) {
@@ -363,7 +362,32 @@ test("the lifts: third and second lift theirs as they get it; the one big lift i
 });
 
 // The podium's camera is 36 degrees tall (r3d/podium.js: BASE_FOV). Whether a
-// figure standing at (x, z) is in its picture at time t, for a window that wide.
+// figure standing at (x, z) is in its picture at time t, for a window that
+// wide: "whole" (head to foot), "part" (cut by an edge) or "out".
+// c: the camera to ask of (the ceremony's own at t, if not given).
+function framed(C, t, x, z, aspect, c = C.cameraAt(t)) {
+  const f = [c.lookX - c.x, c.lookY - c.y, c.lookZ - c.z];
+  const fl = Math.hypot(...f);
+  f.forEach((v, i) => { f[i] = v / fl; });
+  const r = [-f[2], 0, f[0]];
+  const rl = Math.hypot(...r);
+  r.forEach((v, i) => { r[i] = v / rl; });
+  const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+  const tan = Math.tan((18 * Math.PI) / 180);
+  let seen = 0;
+  let all = 0;
+  for (let y = 0; y <= 1.8001; y += 0.3) {
+    for (const side of [-0.25, 0.25]) {
+      const d = [x - c.x, y - c.y, z - c.z];
+      const depth = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+      const across = d[0] * r[0] + d[2] * r[2] + side;
+      const up = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+      all += 1;
+      if (depth > 0.2 && Math.abs(across) < depth * tan * aspect && Math.abs(up) < depth * tan) seen += 1;
+    }
+  }
+  return seen === all ? "whole" : seen ? "part" : "out";
+}
 function inFrame(C, t, x, z, aspect) {
   const c = C.cameraAt(t);
   const f = [c.lookX - c.x, c.lookY - c.y, c.lookZ - c.z];
@@ -389,11 +413,22 @@ test("the presenter: waits by the table, to each driver in turn at a walking pac
   const C = Ceremony.withAnthem(20);
   const B = C.BEATS;
   const T = C.TABLE;
-  // There from the start, standing by the table, facing the camera; still until the anthem is over.
+  // There from the start, standing beside the podium's end by the table,
+  // facing the camera; still until the anthem is over.
   const waits = C.presenterAt(0);
-  assert.ok(waits.on && Math.abs(waits.x - (T.x + T.stand)) < 1e-9 && Math.abs(waits.heading) < 1e-9);
+  assert.ok(waits.on && Math.abs(waits.x - (T.x + T.stand)) < 1e-9 && Math.abs(waits.z - T.waitZ) < 1e-9 && Math.abs(waits.heading) < 1e-9);
   [1, B.anthem, B.anthem + 10, B.anthemEnd, B.present].forEach((t) => assert.deepEqual(C.presenterAt(t), waits, `still at ${t}`));
   assert.notDeepEqual(C.presenterAt(B.present + 0.2), waits);
+  // While they wait, they are never cut by the picture's edge, however
+  // close the camera comes for the anthem and however wide the window:
+  // seen whole, or not at all.
+  [4 / 3, 16 / 9, 21 / 9, 32 / 9].forEach((aspect) => {
+    for (let t = 0; t <= B.present; t += 0.1) {
+      assert.notEqual(framed(C, t, waits.x, waits.z, aspect), "part", `cut by a ${aspect.toFixed(2)} picture's edge at ${t.toFixed(1)}`);
+    }
+  });
+  assert.equal(framed(C, B.anthemEnd, waits.x, waits.z, 16 / 9), "whole");
+  assert.equal(framed(C, B.anthemEnd, waits.x, T.z + T.on[3], 16 / 9), "part", "(the measure: by the table's near end they would be cut)");
   // At each handover: at the foot of that driver's step, facing them, the trophy in hand.
   C.HANDOVERS.forEach((h) => {
     const p = C.presenterAt((h.raise + h.contact) / 2);
@@ -431,7 +466,8 @@ test("the presenter: waits by the table, to each driver in turn at a walking pac
     last = d;
     let turn = Math.abs(a.heading - b.heading) % (2 * Math.PI);
     if (turn > Math.PI) turn = 2 * Math.PI - turn;
-    assert.ok(turn < 0.07, `turns ${turn} at ${t}`);
+    // (No quicker than a person turns with a trophy in their hands: 4.6 rad/s at the fastest.)
+    assert.ok(turn < 0.046, `turns ${turn} at ${t}`);
     // (10 ms can span the end of a turn and a walk's first step: under 0.3 mm, 0.002 rad.)
     assert.ok(d < 3e-4 || turn < 2e-3, `turns while walking at ${t}`);
     // (Walking, they face the way they go.)
@@ -448,10 +484,16 @@ test("the presenter: waits by the table, to each driver in turn at a walking pac
     assert.ok(!inside(a, { x: T.x, z: T.z, w: T.width, d: T.length }, 0.15), `through the table at ${t}`);
   }
   assert.ok(walked > 14 && walked < 28, `walks ${walked} m`);
-  // Away before the champagne: out of the picture (a 16:9 window, and one as
-  // wide as 32:9) before the first bottle is in a hand, and never back in
-  // it; then gone from the scene.
-  [16 / 9, 21 / 9, 32 / 9].forEach((aspect) => {
+  // Away once the winner has it: along the podium's front, never toward
+  // the camera, behind the table.
+  for (let t = B.trophy; t < B.presenterGone; t += 0.05) {
+    const p = C.presenterAt(t);
+    assert.ok(Math.abs(p.z - C.PRESENT.spotZ) < 1e-9, `toward or away from the camera at ${t}`);
+    assert.ok(p.z < T.z - T.length / 2 - 0.15, "behind the table");
+  }
+  // Out of the picture (a 16:9 window, and one as wide as 21:9) before the
+  // first bottle is in a hand, and never back in it; then gone from the scene.
+  [16 / 9, 21 / 9].forEach((aspect) => {
     for (let t = B.spray - 0.3; t < B.spray + 12; t += 0.02) {
       const p = C.presenterAt(t);
       if (p.on) assert.ok(!inFrame(C, t, p.x, p.z, aspect), `in a ${aspect.toFixed(2)} picture at spray ${(t - B.spray).toFixed(2)}`);
@@ -461,6 +503,7 @@ test("the presenter: waits by the table, to each driver in turn at a walking pac
   assert.equal(C.presenterAt(B.presenterGone).on, false);
   assert.equal(C.presenterAt(B.spray + 60).on, false);
   assert.ok(B.presenterGone < B.spray + 4);
+  assert.ok(C.presenterAt(B.presenterGone - 0.01).x < -11.5, "walked out past the wall's end, not vanished in view");
 });
 
 test("the table: off the podium's end, clear of every step's front from wherever the camera is, the trophies in a row on it", () => {
@@ -495,13 +538,21 @@ test("the presentation's shot: follows each handover from its open side, at an e
     const p = C.presenterAt(h.pick + 0.2);
     assert.ok(inFrame(C, h.pick + 0.2, p.x, p.z, 16 / 9) && inFrame(C, h.pick + 0.2, C.TABLE.x - 0.3, C.TABLE.z, 16 / 9), `the table at ${h.place}`);
     // As it is given: looking at the handover, from the driver's side of
-    // the presenter (so the trophy is seen between them, not a back).
-    const c = C.cameraAt(h.contact);
-    const [x] = C.handPoint(h.place);
-    assert.ok(Math.abs(c.lookX - x) < 1.2, `looks at ${c.lookX}, the handover at ${x}`);
-    assert.ok(c.x > x + 2, `from ${c.x}`);
+    // the presenter: the line from the camera to the trophy passes the
+    // presenter's shoulder with room to spare (so it is seen between them,
+    // not hidden by a back). The same from the still camera reduced motion keeps.
+    const [x, , z] = C.handPoint(h.place);
     const q = C.presenterAt(h.contact);
+    const past = (c) => c.x + ((x - c.x) * (c.z - q.z)) / (c.z - z) - q.x;
+    const c = C.cameraAt(h.contact);
+    assert.ok(Math.abs(c.lookX - x) < 1.2, `looks at ${c.lookX}, the handover at ${x}`);
+    assert.ok(past(c) > 0.3, `the trophy ${past(c)} m past the presenter`);
     assert.ok(inFrame(C, h.contact, q.x, q.z, 16 / 9));
+    const still = C.stillCameraAt(h.contact);
+    assert.ok(past(still) > 0.3, `the still camera: the trophy ${past(still)} m past the presenter`);
+    assert.equal(framed(C, h.contact, q.x, q.z, 16 / 9, still), "whole");
+    assert.equal(framed(C, h.pick, C.TABLE.x, C.TABLE.z, 16 / 9, still), "whole");
+    assert.ok(past(C.cameraAt(B.sweepEnd)) < 0.3 || h.place === 2, "(the measure: from straight ahead the presenter is in the way)");
   });
   // Never faster than a camera on a dolly: 3 m/s.
   for (let t = B.present - 1; t < B.spray + 3; t += 0.01) {
@@ -509,6 +560,16 @@ test("the presentation's shot: follows each handover from its open side, at an e
     const b = C.cameraAt(t + 0.01);
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 0.03, `${Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) * 100} m/s at ${(t - B.present).toFixed(2)}`);
   }
+  // The still camera: the settled view, but for the presentation, when it
+  // stands further right (a cut there and back; nothing else about it moves).
+  const settled = C.cameraAt(B.sweepEnd);
+  [0, 3, B.anthem + 5, B.present - 0.01, B.trophy, B.trophy + 2, B.spray + 9].forEach((t) => assert.deepEqual(C.stillCameraAt(t), settled, `the still camera at ${t}`));
+  [B.present, B.present + 5, B.trophy - 0.01].forEach((t) => {
+    const s = C.stillCameraAt(t);
+    assert.deepEqual({ ...s, x: 0 }, { ...settled, x: 0 });
+    assert.deepEqual(s, C.stillCameraAt(B.present));
+    assert.ok(s.x - settled.x > 3);
+  });
   // Back on the winner, straight ahead, for the lift.
   const lift = C.cameraAt(B.trophy + 3);
   assert.ok(Math.abs(lift.x) < 0.2 && Math.abs(lift.lookX) < 0.05);

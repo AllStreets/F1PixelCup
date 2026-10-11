@@ -63,6 +63,7 @@
     const raise = ceremony.HANDOVERS.find((h) => h.place === 1).raise;
     const bpm = (PROCESSION.beats * 60) / (raise - B.present);
     const held = ((B.trophy - PROCESSION_TAIL - raise) * bpm) / 60;
+    if (!(held > 0)) throw new Error(`no time for the processional's last note: ${held} beats`);
     return {
       title: PROCESSION.title, bpm, beats: PROCESSION.beats + held, tail: PROCESSION_TAIL,
       melody: [...PROCESSION.melody, [PROCESSION.last[0], PROCESSION.beats, held]],
@@ -379,7 +380,7 @@
       // rising as the winner's is raised to them and held until they have
       // it (the roar is that moment's, and takes over).
       ovation: () => crowd(L.ovation, (t) => Math.min(1.1, 0.3 + 0.3 * bump(t, 0.9, 0.5, 1.2)
-        + ceremony.HANDOVERS.reduce((sum, h) => sum + (h.place === 1 ? 0.6 * Math.min(1, Math.exp(-(((h.release - B.present - t) / 0.9) ** 2)))
+        + ceremony.HANDOVERS.reduce((sum, h) => sum + (h.place === 1 ? 0.75 * Math.exp(-(((h.release - B.present - t) / 1.8) ** 2))
           : (h.place === 2 ? 0.75 : 0.6) * bump(t, h.release - B.present + 0.3, 0.3, 1.1)), 0)) * Math.min(1, (L.ovation - t) / 0.25), 23,
       { voices: 32, claps: 40, whistles: 3, hubbubGain: 0.3 }),
       ring1: () => once(() => renderRing(1, rate)),
