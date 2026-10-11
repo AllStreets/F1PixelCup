@@ -22,15 +22,17 @@ test("every driver races under a country, and each maps to its anthem or to the 
   assert.equal(DRIVERS.length, 20);
   const want = {
     verstappen: "nl", lawson: "nz", leclerc: "mc", hamilton: "gb", norris: "gb", piastri: "au", russell: "gb", antonelli: null,
-    alonso: "es", stroll: "ca", gasly: "fr", doohan: "au", albon: "th", sainz: "es", bearman: "gb", ocon: "fr", tsunoda: "jp",
+    alonso: "es", stroll: "ca", gasly: "fr", doohan: "au", albon: null, sainz: "es", bearman: "gb", ocon: "fr", tsunoda: "jp",
     hadjar: "fr", hulkenberg: "de", bortoleto: null,
   };
   DRIVERS.forEach((d) => {
     assert.ok(typeof d.country === "string" && d.country.length > 2, d.id);
     assert.equal(PodiumSound.anthemFor(d), want[d.id], d.id);
   });
-  // The two without a source free to use here: Italy and Brazil, no others.
-  assert.deepEqual(DRIVERS.filter((d) => !PodiumSound.anthemFor(d)).map((d) => d.country).sort(), ["Brazil", "Italy"]);
+  // The three without an anthem here (no score free to use for Italy and
+  // Brazil; Thailand's not clearly free everywhere), no others.
+  assert.deepEqual(DRIVERS.filter((d) => !PodiumSound.anthemFor(d)).map((d) => d.country).sort(), ["Brazil", "Italy", "Thailand"]);
+  assert.equal(Object.keys(AnthemData).length, 10);
   assert.equal(PodiumSound.anthemFor(null), null);
   assert.equal(PodiumSound.anthemFor({ country: "Atlantis" }), null);
   // Every anthem here is some driver's.
@@ -63,6 +65,8 @@ test("each anthem: a sane excerpt (length, range, notes in order, the bass under
     const last = a.melody[a.melody.length - 1];
     assert.ok(last[2] >= 1 && last[1] + last[2] >= a.beats - 1.01, `${key}: ends on ${last}`);
     assert.ok(a.country && a.title && a.composer, key);
+    // Whole bars where the anthem starts on a downbeat or was pieced together.
+    if (["ca", "es", "mc", "nz", "jp", "au", "de"].includes(key)) assert.equal(a.beats % 4, 0, `${key}: ${a.beats} beats`);
     assert.match(a.source.url, /^https:\/\/(commons\.wikimedia\.org\/wiki\/File:|nationalanthems\.info\/)/, key);
     assert.ok(free.includes(a.source.licence), `${key}: ${a.source.licence}`);
     assert.ok(a.source.author.length > 3 && ["midi", "score"].includes(a.source.kind), key);
@@ -79,6 +83,10 @@ test("the notices and the README credit every anthem's source and licence", () =
     assert.ok(readme.includes(a.title), `README: ${a.title}`);
   });
   assert.ok(!/—/.test(notices));
+  // What is not there is said, and why.
+  assert.match(notices, /Italy/);
+  assert.match(notices, /Brazil/);
+  assert.match(notices, /Thailand/);
 });
 
 test("well-known openings, as a guard against a slip in the build (intervals in semitones from the first note)", () => {
@@ -91,4 +99,31 @@ test("well-known openings, as a guard against a slip in the build (intervals in 
   assert.deepEqual(opening("de", 6), [0, 2, 4, 2, 5, 4]);
   // The melody and bass of each MIDI anthem really are different lines.
   ["fr", "gb", "de", "jp", "ca", "au"].forEach((k) => assert.ok(Math.min(...AnthemData[k].melody.map((n) => n[0])) > Math.min(...AnthemData[k].bass.map((n) => n[0])) + 7, k));
+  // La Marseillaise's bass is the left hand's bass notes (two beats each),
+  // not the chords between them. There, and under the two tunes whose bass
+  // this game wrote, no bass note sits a major seventh or a minor ninth
+  // below a tune note held with it (a source's own harmony is left as it is).
+  assert.ok(AnthemData.fr.bass.every((n) => n[2] === 2));
+  Object.entries(AnthemData).filter(([key]) => ["fr", "nl", "nz"].includes(key)).forEach(([key, a]) => a.bass.forEach(([low, at, length]) => a.melody.forEach(([high, start, held]) => {
+    if (Math.min(start + held, at + length) - Math.max(start, at) >= 0.75) {
+      assert.notEqual((high - low) % 12, 11, `${key}: a major seventh at beat ${Math.max(start, at)}`);
+      assert.notEqual((high - low) % 12, 1, `${key}: a minor ninth at beat ${Math.max(start, at)}`);
+    }
+  })));
+});
+
+test("the MIDI reader and the builder refuse what they can't read rightly", () => {
+  const { readMidi } = require("../tools/anthems/midi.js");
+  const header = (tracks) => Buffer.concat([Buffer.from("MThd"), Buffer.from([0, 0, 0, 6, 0, 1, 0, tracks, 0, 96])]);
+  const track = (bytes) => Buffer.concat([Buffer.from("MTrk"), Buffer.from([0, 0, 0, bytes.length]), Buffer.from(bytes)]);
+  const end = [0, 0xff, 0x2f, 0];
+  // A note on and off, with running status (the second message has no status byte).
+  const ok = readMidi(Buffer.concat([header(1), track([0, 0x90, 60, 100, 96, 60, 0, ...end])]));
+  assert.deepEqual(ok.tracks[0].notes, [{ pitch: 60, start: 0, end: 1 }]);
+  assert.equal(ok.tempo, 120, "no tempo given: 120");
+  // A data byte after a meta event has no status to run on.
+  assert.throws(() => readMidi(Buffer.concat([header(1), track([0, 0xff, 0x03, 1, 65, 0, 60, 100, ...end])])), /no status/);
+  // A note that never ends.
+  assert.throws(() => readMidi(Buffer.concat([header(1), track([0, 0x90, 60, 100, ...end])])), /never end/);
+  assert.throws(() => readMidi(Buffer.from("not a midi file at all")), /not a MIDI/);
 });

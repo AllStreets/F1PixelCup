@@ -10,11 +10,15 @@ const { readMidi } = require("./midi.js");
 
 // Each anthem: the composition (public domain, with why), and where its notes
 // were taken from. MIDI: which track is the tune and which the bass, and the
-// stretches (in quarter notes) that make the excerpt.
+// stretches (in quarter notes) that make the excerpt: [from, to], or
+// [from, to, rest] to add a rest after it (where the cut leaves a bar short).
+// overlaps: where the tune's own track holds a note under the next (named,
+// so that any other is caught). bassSingles: the bass track is a piano's
+// left hand (a bass note, then chords); only its bass notes are taken.
 const ANTHEMS = {
   fr: {
     country: "France", title: "La Marseillaise", composer: "Claude Joseph Rouget de Lisle (1792)",
-    midi: { file: "fr.mid", melody: 1, bass: 4, parts: [[0.25, 31.5]] },
+    midi: { file: "fr.mid", melody: 1, bass: 4, parts: [[0.25, 31.5]], bassSingles: true },
     source: { url: "https://commons.wikimedia.org/wiki/File:Allons,_enfants_de_la_patrie.mid", author: "Rabanus Flavus (Peter Gerloff)", licence: "CC0 1.0" },
   },
   gb: {
@@ -24,8 +28,9 @@ const ANTHEMS = {
   },
   de: {
     country: "Germany", title: "Das Lied der Deutschen", composer: "Joseph Haydn (1797)",
-    // The first line once (the source repeats it), then the rest of the verse.
-    midi: { file: "de.mid", melody: 1, bass: 4, parts: [[0.25, 16.25], [32.25, 63.75]] },
+    // The first line once (the source repeats it), then the rest of the verse
+    // (to the end of its last bar).
+    midi: { file: "de.mid", melody: 1, bass: 4, parts: [[0.25, 16.25], [32.25, 64.25]] },
     source: { url: "https://commons.wikimedia.org/wiki/File:Einigkeit_und_Recht.mid", author: "Rabanus Flavus (Peter Gerloff)", licence: "CC0 1.0" },
   },
   jp: {
@@ -35,19 +40,23 @@ const ANTHEMS = {
   },
   ca: {
     country: "Canada", title: "O Canada", composer: "Calixa Lavallée (1880)",
-    // The opening two lines, then the closing line.
-    midi: { file: "ca.mid", melody: 1, bass: 3, parts: [[0, 31], [96, 112]] },
+    // The opening two lines, then the closing line. The cut comes before the
+    // upbeat to the third line (on the bar's last beat), so that beat is a
+    // rest. Bar 1's rhythm (1.75 then 0.25 where the later bars have 1.5 and
+    // 0.5) is the source's own, kept as it is.
+    midi: { file: "ca.mid", melody: 1, bass: 3, parts: [[0, 31, 1], [96, 112]] },
     source: { url: "https://commons.wikimedia.org/wiki/File:O_Canada.mid", author: "Denelson83", licence: "Public domain" },
   },
   au: {
     country: "Australia", title: "Advance Australia Fair", composer: "Peter Dodds McCormick (1878)",
-    midi: { file: "au.mid", melody: 1, bass: 4, parts: [[3, 67]] },
+    // (At beat 22 the source holds "soil" under the next note.)
+    midi: { file: "au.mid", melody: 1, bass: 4, parts: [[3, 67]], overlaps: [22] },
     source: { url: "https://commons.wikimedia.org/wiki/File:Advance_Australia_Fair.mid", author: "Brian Yap, from the 1907 first edition", licence: "Public domain" },
   },
   nl: {
     country: "Netherlands", title: "Wilhelmus", composer: "Anonymous (16th century; Valerius, 1626)",
     score: "nl.txt",
-    source: { author: "Wilhelmus (Wikimedia Commons)", licence: "Public domain" },
+    source: { author: "Wilhelmus~commonswiki (Wikimedia Commons)", licence: "Public domain" },
   },
   es: {
     country: "Spain", title: "Marcha Real", composer: "Anonymous (Marcha Granadera, 1761)",
@@ -62,38 +71,63 @@ const ANTHEMS = {
   nz: {
     country: "New Zealand", title: "God Defend New Zealand", composer: "John Joseph Woods (1876)",
     score: "nz.txt",
-    source: { author: "nationalanthems.info (the New Zealand Gazette's setting)", licence: "CC BY 4.0" },
-  },
-  th: {
-    country: "Thailand", title: "Phleng Chat Thai", composer: "Phra Chenduriyang (1932)",
-    score: "th.txt",
-    source: { author: "Royal Thai Government Gazette, 1939", licence: "Public domain" },
+    // Only Woods's melody is taken (he died in 1934: public domain). The page
+    // it was read from is the New Zealand Gazette's 1978 setting, as
+    // nationalanthems.info hosts it; that page is linked, not kept here.
+    source: { author: "John Joseph Woods's melody, as printed in the New Zealand Gazette (1978), hosted by nationalanthems.info", licence: "Public domain" },
   },
 };
+// Held back: Thailand's Phleng Chat Thai (transcribed/th.txt, checked against
+// the Royal Gazette's score). Its composer, Phra Chenduriyang, died in 1968:
+// in the public domain in Thailand (and published there as a state
+// announcement), but not clearly so everywhere this game is played. A Thai
+// winner gets the fanfare until the user decides otherwise.
 
 const GRID = 0.25;
 const snap = (x) => Math.round(x / GRID) * GRID;
 const NAMES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 // One line of a MIDI track: at each onset the top (or bottom) note, held
-// until its own end or the next onset, whichever comes first.
-function line(notes, parts, pick) {
+// until its own end or the next onset, whichever comes first. A tune's note
+// still sounding at the next onset means a second voice in the track, or a
+// slip in the file: it throws unless that beat is named in overlaps. So does
+// a note that runs over the end of a part (a cut through a note).
+function line(notes, parts, pick, { overlaps = null, singles = false } = {}) {
   const out = [];
   let offset = 0;
-  parts.forEach(([from, to]) => {
+  parts.forEach(([from, to, rest = 0]) => {
     const byStart = new Map();
     notes.forEach((n) => {
       const start = snap(n.start);
       if (start < from || start >= to) return;
       const have = byStart.get(start);
-      if (!have || pick(n.pitch, have.pitch)) byStart.set(start, { pitch: n.pitch, start, end: Math.max(start + GRID, Math.ceil((n.end - 0.06) / GRID) * GRID) });
+      const end = Math.max(start + GRID, Math.ceil((n.end - 0.06) / GRID) * GRID);
+      if (!have) byStart.set(start, { pitch: n.pitch, start, end, count: 1 });
+      else {
+        have.count += 1;
+        if (pick(n.pitch, have.pitch)) Object.assign(have, { pitch: n.pitch, end });
+      }
     });
-    const picked = [...byStart.values()].sort((a, b) => a.start - b.start);
+    let picked = [...byStart.values()].sort((a, b) => a.start - b.start);
+    if (singles) {
+      // A piano's left hand: the bass notes are struck alone; a chord is
+      // taken (its bottom note) only where two beats pass without one.
+      let last = -Infinity;
+      picked = picked.filter((n) => {
+        const keep = n.count === 1 || n.start - last >= 2;
+        if (keep) last = n.start;
+        return keep;
+      });
+      picked.forEach((n, i) => { n.end = Math.min(i + 1 < picked.length ? picked[i + 1].start : to, n.start + 2); });
+    }
     picked.forEach((n, i) => {
       const next = i + 1 < picked.length ? picked[i + 1].start : to;
+      if (overlaps && n.end > next + 1e-9 && !overlaps.includes(n.start)) {
+        throw new Error(`the tune's note at beat ${n.start} runs to ${n.end}, past ${i + 1 < picked.length ? "the next note" : "the cut"} at ${next}`);
+      }
       out.push([n.pitch, n.start - from + offset, Math.min(n.end, next) - n.start]);
     });
-    offset += to - from;
+    offset += to - from + rest;
   });
   return { notes: out, beats: offset };
 }
@@ -121,10 +155,14 @@ function fromScore(file) {
   return { bpm: Number(field("bpm")[0]), beats: melody.beats, melody: melody.notes, bass: bass.notes, url: field("source")[0] };
 }
 
-function fromMidi({ file, melody, bass, parts }) {
+function fromMidi({ file, melody, bass, parts, overlaps = [], bassSingles = false }) {
   const midi = readMidi(fs.readFileSync(path.join(__dirname, "sources", file)));
-  const tune = line(midi.tracks[melody].notes, parts, (a, b) => a > b);
-  const low = line(midi.tracks[bass].notes, parts, (a, b) => a < b);
+  // One tempo for the excerpt: a change inside it would need handling.
+  midi.tempos.slice(1).forEach((t) => {
+    if (parts.some(([from, to]) => t.at > from && t.at < to)) throw new Error(`${file}: the tempo changes at beat ${t.at}, inside the excerpt`);
+  });
+  const tune = line(midi.tracks[melody].notes, parts, (a, b) => a > b, { overlaps });
+  const low = line(midi.tracks[bass].notes, parts, (a, b) => a < b, { singles: bassSingles });
   return { bpm: Math.round(midi.tempo * 10) / 10, beats: tune.beats, melody: tune.notes, bass: low.notes };
 }
 
@@ -147,7 +185,7 @@ function build() {
 // quarter notes, a melody and a bass line each, with where they came from.
 // GENERATED by tools/anthems/build.js from the sources in tools/anthems; edit
 // those, not this. Every composition is in the public domain; see
-// THIRD-PARTY-NOTICES.md for each source and its licence.
+// THIRD-PARTY-NOTICES for each source and its licence.
 (function attach(root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

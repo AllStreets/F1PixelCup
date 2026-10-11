@@ -35,6 +35,12 @@ test("an anthem is played from its notes: the right pitches at the right times, 
     const own = power(samples, hz(midi), from, to);
     [-2, -1, 1, 2].forEach((d) => assert.ok(own > power(samples, hz(midi + d), from, to) * 2, `note ${midi} at ${start} against ${midi + d}`));
   });
+  // The same note twice is heard as two: the level dips between the first
+  // two notes (both F) to well under the level of the notes themselves.
+  assert.equal(a.melody[0][0], a.melody[1][0]);
+  const joint = a.melody[1][1] * spb;
+  assert.ok(rms(samples, joint - 0.03, joint + 0.005) < rms(samples, joint - 0.4, joint - 0.1) * 0.6,
+    `the joint ${rms(samples, joint - 0.03, joint + 0.005)} against the note ${rms(samples, joint - 0.4, joint - 0.1)}`);
   // Loud while it plays, quiet by the end of the tail, never clipped, no NaN.
   assert.ok(rms(samples, 2, 4) > 0.1);
   assert.ok(rms(samples, samples.length / RATE - 0.2, samples.length / RATE) < 0.03);
@@ -51,9 +57,19 @@ test("rendering is deterministic, and every anthem and the fanfare render", () =
   });
   // In steps (as the game renders it, a task each) it is the same sound.
   const work = PodiumSound.pieceSteps("mc", RATE);
-  assert.equal(work.steps.length, 4);
+  assert.ok(work.steps.length > 20);
   work.steps.forEach((step) => step());
   assert.deepEqual(work.result(), a);
+  // Kimigayo is written an octave above where it is sung: the band plays it
+  // down the octave. No other anthem moves; O Canada's bass, under the tuba, goes up one.
+  Object.keys(PodiumSound.ANTHEMS).forEach((key) => {
+    const o = PodiumSound.pieceSteps(key, 2000).octaves;
+    assert.equal(o.melody, key === "jp" ? -1 : 0, key);
+    assert.equal(o.bass, key === "ca" ? 1 : 0, key);
+  });
+  // A name that is no anthem's (even an object's own) is the fanfare.
+  assert.deepEqual(PodiumSound.renderPiece("constructor", 2000), PodiumSound.renderPiece(null, 2000));
+  assert.equal(PodiumSound.anthemFor({ country: "constructor" }), null);
   // A winner without an anthem here gets the fanfare: the game's own tune, the same every time.
   assert.deepEqual(PodiumSound.renderPiece(null, 4000), PodiumSound.renderPiece("fanfare", 4000));
   assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - 0.6) < 1e-9);
@@ -79,6 +95,12 @@ test("the cues: each sound at its beat on the ceremony's timeline, whatever the 
       else assert.ok(at(`fizz${p}`) >= C.corkAt(p) && at(`fizz${p}`) < C.corkAt(p) + 0.1);
     });
     assert.equal(at("cheer"), B.spray);
+    // The crowd's murmur carries on for as long as the podium is up.
+    const murmur = cues.find((c) => c.id === "murmur");
+    assert.ok(murmur.loop === true && murmur.fadeIn > 1 && murmur.at > B.spray && murmur.at < B.spray + 12 - murmur.fadeIn);
+    // Where no spray is drawn at all there is no fizz, on any tier.
+    assert.ok(PodiumSound.cues(C, { tier, spray: false }).every((c) => !c.id.startsWith("fizz")));
+    assert.equal(PodiumSound.cues(C, { tier, spray: false }).filter((c) => c.id.startsWith("cork")).length, 3);
     // In order, each naming a sound that exists.
     const made = PodiumSound.sounds(C, winner, 2000);
     cues.forEach((c, i) => {
@@ -102,14 +124,22 @@ test("the mix: the crowd as they step up, the anthem alone while they stand, the
   const from = B.anthem + 0.1;
   const to = B.anthem + (first[2] * 60) / a.bpm;
   assert.ok(power(out, hz(first[0]), from, to) > power(out, hz(first[0] + 1), from, to) * 2);
-  // Each cork is a sharp rise over the moment before it.
+  // Each cork is in the mix at its moment: taking it out changes those 30 ms
+  // by the pop's own level, and nothing before them.
   [1, 2, 3].forEach((p) => {
     const t = C.corkAt(p);
-    const before = PodiumSound.mix(C, winner, { rate: RATE, until: t + 0.2 });
-    const cork = PodiumSound.renderCork(100 + p, RATE);
-    assert.ok(rms(cork, 0, 0.03) > rms(cork, 0.2, 0.3) * 8, "a pop: all at the start");
-    assert.ok(before.length === Math.ceil((t + 0.2) * RATE));
+    const without = PodiumSound.mix(C, winner, { rate: RATE, without: `cork${p}`, until: t + 0.5 });
+    const diff = out.slice(0, without.length).map((v, i) => v - without[i]);
+    assert.ok(rms(diff, t, t + 0.03) > 0.1, `cork ${p}: ${rms(diff, t, t + 0.03)}`);
+    assert.ok(rms(diff, t - 1, t - 0.001) === 0);
+    assert.ok(rms(diff, t, t + 0.03) > rms(diff, t + 0.2, t + 0.3) * 8, "a pop: all at the start");
   });
+  // Never clipped, whoever wins (the corks over the cheering are the loudest moment).
+  let peak = 0;
+  out.forEach((v) => { peak = Math.max(peak, Math.abs(v)); });
+  assert.ok(peak > 0.5 && peak <= 0.98, `peak ${peak}`);
+  // A crowd comes in from nothing.
+  assert.ok(Math.abs(out[0]) < 1e-6 && rms(out, 0, 0.01) < rms(out, 0.3, 0.6) * 0.5);
   // It ends: silence after the cheering fades.
   assert.ok(rms(out, out.length / RATE - 0.3, out.length / RATE) < 0.02);
 });

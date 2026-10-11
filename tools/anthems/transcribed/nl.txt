@@ -1,6 +1,7 @@
 # Wilhelmus (the Netherlands). Melody read from the score image below, a
 # single line in G major, half note = 66 (so 132 quarter notes a minute): the
-# whole verse, its first line repeated as the score's repeat sign says.
+# whole verse, its first line repeated as the score's repeat sign says. The
+# last note, a breve in the score (a held close), is given four beats here.
 # The bass line is this game's own (plain roots under the tune).
 source: https://commons.wikimedia.org/wiki/File:Wilhelmus_bladmuziek.jpg
 bpm: 132

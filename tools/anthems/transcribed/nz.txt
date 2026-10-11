@@ -12,7 +12,7 @@ melody: G4/1 D4/1 E4/1 F#4/1
 melody: G4/1 A4/1 B4/1.5 r/0.5
 melody: B4/1 G4/1 E4/1 A4/1
 melody: G4/1 F#4/1 G4/1.5 r/0.5
-bass: G2/2 D3/2
+bass: G2/1 D3/1 G2/1 D3/1
 bass: G2/4
 bass: C3/2 G2/2
 bass: D3/4

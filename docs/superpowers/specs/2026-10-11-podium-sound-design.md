@@ -21,12 +21,13 @@ Back to pit lane works at any moment and stops the sound. Reduced motion keeps t
 Synthesized by the game from note lists, never a recording. The melodies are not written from memory: each comes from a file kept in `tools/anthems/`, and `anthem-data.js` is generated from them by `tools/anthems/build.js` (a test checks the committed file is exactly what the sources build to).
 
 - **From MIDI files on Wikimedia Commons**, read mechanically (`tools/anthems/midi.js`: the tune's track and the bass track, the top and bottom note at each onset): France, the United Kingdom, Germany, Japan, Canada, Australia.
-- **Read by hand from a score**, typed into `tools/anthems/transcribed/<country>.txt`, each naming its score (kept in `tools/anthems/scores/`): the Netherlands, Spain and Thailand (public-domain images on Commons), Monaco and New Zealand (nationalanthems.info, CC BY 4.0).
+- **Read by hand from a score**, typed into `tools/anthems/transcribed/<country>.txt`, each naming its score: the Netherlands and Spain (public-domain files on Commons), Monaco (nationalanthems.info's score, CC BY 4.0) and New Zealand (Woods's melody, from the New Zealand Gazette's setting as nationalanthems.info hosts it; linked, not kept).
 - **None for Italy and Brazil.** No score of either that is both free to use and legible enough to read reliably was found (the candidates: a low-resolution modern edition, a museum cover, the piano introduction only). Their winners get the game's own fanfare, an original tune, in the anthem's place.
+- **Thailand's is held back.** It was transcribed from the Royal Gazette's score and checked, but its composer died in 1968: public domain in Thailand, not clearly so everywhere. A Thai winner gets the fanfare until the user decides.
 
 Every composition is in the public domain. Each source's URL, author and licence is in the data, in `THIRD-PARTY-NOTICES` and credited in the README.
 
-Each excerpt is the opening of the anthem to a cadence, at the score's tempo: 15 to 38 s (Japan's is the whole anthem; Germany's and Canada's leave out a repeat or the middle lines, Thailand's joins the opening four bars to the closing four). Where the source has no bass line, a plain one (roots under the tune) was written for the game and the transcription says so.
+Each excerpt is the opening of the anthem to a cadence, at the score's tempo: 15 to 38 s (Japan's is the whole anthem; Germany's leaves out a repeat and Canada's the middle lines). Where the source has no bass line, a plain one (roots under the tune) was written for the game and the transcription says so.
 
 Each driver in `game-data.js` has a `country`, the nationality they race under; the banners carry its flag (`r3d/flags.js`, plain geometry).
 

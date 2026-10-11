@@ -15,13 +15,13 @@
   const RATE = 24000;
 
   // Each driver's racing nationality (game-data.js: country) to its anthem.
-  const BY_COUNTRY = {};
-  Object.entries(ANTHEMS).forEach(([key, a]) => { BY_COUNTRY[a.country] = key; });
+  const BY_COUNTRY = new Map(Object.entries(ANTHEMS).map(([key, a]) => [a.country, key]));
+  const has = (key) => typeof key === "string" && Object.prototype.hasOwnProperty.call(ANTHEMS, key);
 
   // The anthem a driver's win plays, or null: then the game's own fanfare
   // stands in (a country whose melody has no source free to use here).
   function anthemFor(driver) {
-    return (driver && BY_COUNTRY[driver.country]) || null;
+    return (driver && BY_COUNTRY.get(driver.country)) || null;
   }
 
   // The game's own processional, for a winner without an anthem here: an
@@ -39,7 +39,7 @@
     bass: [[48, 0, 1], [48, 1, 2], [48, 3, 3]],
   };
 
-  const piece = (key) => (key === "sting" ? STING : ANTHEMS[key] || FANFARE);
+  const piece = (key) => (key === "sting" ? STING : has(key) ? ANTHEMS[key] : FANFARE);
   const TAIL = 1.6;
   // How long a piece sounds: its notes, then the hall dying away.
   const seconds = (key) => (piece(key).beats * 60) / piece(key).bpm + TAIL;
@@ -60,12 +60,15 @@
 
   // One brass voice: a note's harmonics, brighter as it swells, a soft
   // attack, a little vibrato once it has settled, a short release.
+  // Each note is tongued: it stops a moment before the next begins, so the
+  // same note twice is heard as two.
+  const TONGUE = 0.045;
   function voice(out, rate, notes, secondsPerBeat, { level, harmonics, attack, octave = 0, vibrato = 0.004 }) {
     notes.forEach(([midi, start, length]) => {
       const f = hz(midi + octave * 12);
       const from = Math.floor(start * secondsPerBeat * rate);
-      const held = length * secondsPerBeat;
-      const release = 0.09;
+      const release = 0.04;
+      const held = Math.max(attack, length * secondsPerBeat - TONGUE - release);
       const n = Math.floor((held + release) * rate);
       let phase = 0;
       for (let i = 0; i < n && from + i < out.length; i += 1) {
@@ -130,23 +133,32 @@
     return work.result();
   }
 
-  // The same in four steps (each instrument, then the hall), for the game to
-  // spread over as many tasks: no frame waits on a whole anthem.
+  // The same in small steps (a few notes of one instrument at a time, then
+  // the hall), for the game to spread over as many tasks: no frame waits on
+  // more than a few notes.
+  const NOTES_A_STEP = 2;
   function pieceSteps(key, rate = RATE) {
     const p = piece(key);
     const spb = 60 / p.bpm;
     const dry = new Float32Array(Math.ceil(seconds(key) * rate));
-    // Tunes written high (above the staff) sit an octave lower on the trumpets.
+    // A tune written above the trumpets' comfortable top (the C two octaves
+    // over middle C) sits an octave lower; a bass under the tuba's reach, an
+    // octave higher.
     const top = p.melody.reduce((m, n) => Math.max(m, n[0]), 0);
-    const shift = top > 86 ? -1 : 0;
-    let out = null;
-    const steps = [
-      () => voice(dry, rate, p.melody, spb, { level: 0.5, harmonics: 9, attack: 0.045, octave: shift }),
-      () => voice(dry, rate, p.melody, spb, { level: 0.3, harmonics: 5, attack: 0.07, octave: shift - 1, vibrato: 0.002 }),
-      () => voice(dry, rate, p.bass, spb, { level: 0.42, harmonics: 6, attack: 0.05, vibrato: 0 }),
-      () => { out = normalise(hall(dry, rate)); },
+    const shift = top >= 84 ? -1 : 0;
+    const lift = p.bass.reduce((m, n) => Math.min(m, n[0]), 127) < 36 ? 1 : 0;
+    const parts = [
+      [p.melody, { level: 0.5, harmonics: 9, attack: 0.045, octave: shift }],
+      [p.melody, { level: 0.3, harmonics: 5, attack: 0.07, octave: shift - 1, vibrato: 0.002 }],
+      [p.bass, { level: 0.42, harmonics: 6, attack: 0.05, octave: lift, vibrato: 0 }],
     ];
-    return { steps, result: () => out };
+    let out = null;
+    const steps = [];
+    parts.forEach(([notes, how]) => {
+      for (let i = 0; i < notes.length; i += NOTES_A_STEP) steps.push(() => voice(dry, rate, notes.slice(i, i + NOTES_A_STEP), spb, how));
+    });
+    steps.push(() => { out = normalise(hall(dry, rate)); });
+    return { steps, result: () => out, octaves: { melody: shift, bass: lift } };
   }
 
   // White noise through a band-pass (two one-pole filters), for the crowd and
@@ -177,7 +189,8 @@
         const l = layers[k];
         v += l.next() * l.gain * (0.72 + 0.28 * Math.sin(t * l.rate * 6.28 + l.phase));
       }
-      out[i] = v * level(t);
+      // (In from nothing over 80 ms: a crowd doesn't start mid-roar.)
+      out[i] = v * level(t) * Math.min(1, t / 0.08);
     }
     return normalise(out, 0.8);
   }
@@ -189,7 +202,7 @@
     const out = new Float32Array(Math.ceil(length * rate));
     const claps = Math.floor(length * 260);
     for (let c = 0; c < claps; c += 1) {
-      // More claps early: the square of a uniform draw leans to the start.
+      // More claps early: a power of a uniform draw leans to the start.
       const at = Math.floor((rnd() ** 1.6) * (length - 0.05) * rate);
       const n = Math.floor((0.004 + rnd() * 0.006) * rate);
       const gain = 0.25 + rnd() * 0.75;
@@ -247,6 +260,7 @@
     return normalise(out, 0.9);
   }
 
+  const MURMUR_SECONDS = 9;
   const bump = (t, at, rise, fall) => (t < at ? Math.exp(-(((at - t) / rise) ** 2)) : Math.exp(-(t - at) / fall));
 
   // Every sound the ceremony uses, by name, rendered once. winner: the
@@ -265,6 +279,8 @@
       roar: () => renderCrowd(ceremony.BEATS.spray - B.trophy + 1.2, (t) => Math.min(1, 0.3 + 0.9 * bump(t, 1.1, 0.7, 2.6)) * Math.min(1, (B.spray - B.trophy + 1.2 - t) / 1.0), 37, rate),
       // The champagne: cheering that settles to a murmur and fades.
       cheer: () => renderCrowd(12, (t) => (0.35 + 0.65 * bump(t, 1.0, 0.6, 3.5)) * Math.min(1, (12 - t) / 4), 53, rate),
+      // And for as long as the podium stays up: the crowd's murmur, looped.
+      murmur: () => renderCrowd(MURMUR_SECONDS, () => 1, 67, rate),
       cannon1: () => renderCannon(71, rate),
       cannon2: () => renderCannon(72, rate),
       cork1: () => renderCork(101, rate),
@@ -277,36 +293,44 @@
   }
 
   // When each sound starts (seconds into the ceremony) and how loud, in
-  // order. tier: Low has no spray (quality.js), so no fizz; the corks still go.
-  function cues(ceremony, { tier = "high" } = {}) {
+  // order. tier: Low has no spray (quality.js), so no fizz; the corks still
+  // go. spray: false where no spray is drawn at all (reduced motion). A cue
+  // with loop plays round and round from its start, faded in over fadeIn s.
+  function cues(ceremony, { tier = "high", spray = true } = {}) {
     const B = ceremony.BEATS;
     const list = [
       { id: "welcome", sound: "welcome", at: 0, gain: 0.5 },
       { id: "anthem", sound: "anthem", at: B.anthem, gain: 0.9 },
       { id: "applause", sound: "applause", at: B.anthemEnd - 0.2, gain: 0.55 },
-      { id: "roar", sound: "roar", at: B.trophy - 0.2, gain: 0.6 },
-      { id: "sting", sound: "sting", at: B.trophy + ceremony.PROP_SWAP, gain: 0.7 },
-      { id: "cannon1", sound: "cannon1", at: B.trophy + 0.02, gain: 0.75 },
-      { id: "cannon2", sound: "cannon2", at: B.trophy + 0.2, gain: 0.6 },
-      { id: "cheer", sound: "cheer", at: B.spray, gain: 0.55 },
+      { id: "roar", sound: "roar", at: B.trophy - 0.2, gain: 0.38 },
+      { id: "sting", sound: "sting", at: B.trophy + ceremony.PROP_SWAP, gain: 0.5 },
+      { id: "cannon1", sound: "cannon1", at: B.trophy + 0.02, gain: 0.42 },
+      { id: "cannon2", sound: "cannon2", at: B.trophy + 0.2, gain: 0.34 },
+      { id: "cheer", sound: "cheer", at: B.spray, gain: 0.4 },
+      { id: "murmur", sound: "murmur", at: B.spray + 7, gain: 0.14, loop: true, fadeIn: 4 },
     ];
     [1, 2, 3].forEach((place) => {
-      list.push({ id: `cork${place}`, sound: `cork${place}`, at: ceremony.corkAt(place), gain: 0.8, place });
-      if (ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, sound: `fizz${place}`, at: ceremony.corkAt(place) + 0.03, gain: 0.4, place });
+      list.push({ id: `cork${place}`, sound: `cork${place}`, at: ceremony.corkAt(place), gain: 0.6, place });
+      if (spray && ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, sound: `fizz${place}`, at: ceremony.corkAt(place) + 0.03, gain: 0.32, place });
     });
     return list.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
   // The whole ceremony mixed down (for the WAVs and the tests): every cue's
-  // sound at its time and level.
-  function mix(ceremony, winner, { tier = "high", rate = RATE, until = null } = {}) {
+  // sound at its time and level (a looped one once round, faded in and out).
+  // without: a cue's id to leave out.
+  function mix(ceremony, winner, { tier = "high", spray = true, rate = RATE, until = null, without = null } = {}) {
     const made = sounds(ceremony, winner, rate);
-    const plan = cues(ceremony, { tier }).map((c) => ({ ...c, samples: made[c.sound]() }));
+    const plan = cues(ceremony, { tier, spray }).filter((c) => c.id !== without).map((c) => ({ ...c, samples: made[c.sound]() }));
     const end = until ?? Math.max(...plan.map((c) => c.at + c.samples.length / rate));
     const out = new Float32Array(Math.ceil(end * rate));
     plan.forEach((c) => {
       const from = Math.round(c.at * rate);
-      for (let i = 0; i < c.samples.length && from + i < out.length; i += 1) out[from + i] += c.samples[i] * c.gain;
+      const n = c.samples.length;
+      for (let i = 0; i < n && from + i < out.length; i += 1) {
+        const fade = c.loop ? Math.min(1, i / (c.fadeIn * rate), (n - i) / (2 * rate)) : 1;
+        out[from + i] += c.samples[i] * c.gain * fade;
+      }
     });
     return out;
   }

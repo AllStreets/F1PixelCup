@@ -1,6 +1,7 @@
 // A small Standard MIDI File reader for the anthem sources (tools/anthems):
-// each track's notes as { pitch, start, end } in quarter notes, the tempo
-// (first set-tempo, in quarter notes a minute) and the time signature.
+// each track's notes as { pitch, start, end } in quarter notes, and every
+// tempo (quarter notes a minute, with where it starts). It throws on what it
+// does not handle rather than guess.
 function readMidi(buf) {
   let p = 0;
   const u32 = () => { const v = buf.readUInt32BE(p); p += 4; return v; };
@@ -13,34 +14,39 @@ function readMidi(buf) {
   const division = u16();
   if (division & 0x8000) throw new Error("SMPTE time division is not handled");
   p = 8 + headerLength;
-  const out = { format, division, tempo: null, tempos: [], timeSignature: null, tracks: [] };
+  const out = { format, division, tempo: 120, tempos: [], tracks: [] };
   for (let n = 0; n < count; n += 1) {
     if (buf.toString("latin1", p, p + 4) !== "MTrk") throw new Error("bad track header");
     p += 4;
     const length = u32();
     const end = p + length;
     let tick = 0;
-    let status = 0;
+    // Running status belongs to channel messages only.
+    let running = 0;
     const open = new Map();
     const track = { name: "", channel: null, program: null, notes: [] };
     const vlq = () => { let v = 0; for (;;) { const b = buf[p]; p += 1; v = (v << 7) | (b & 0x7f); if (!(b & 0x80)) return v; } };
     while (p < end) {
       tick += vlq();
-      let b = buf[p];
-      if (b & 0x80) { status = b; p += 1; } else b = status;
+      let status = buf[p];
+      if (status & 0x80) p += 1;
+      else if (running) status = running;
+      else throw new Error(`track ${n}: a data byte with no status at byte ${p}`);
       if (status === 0xff) {
         const type = buf[p]; p += 1;
         const len = vlq();
         if (type === 0x51) {
           const bpm = 60000000 / buf.readUIntBE(p, 3);
+          if (!out.tempos.length) out.tempo = bpm;
           out.tempos.push({ at: tick / division, bpm });
-          if (out.tempo === null) out.tempo = bpm;
-        } else if (type === 0x58 && !out.timeSignature) out.timeSignature = [buf[p], 2 ** buf[p + 1]];
-        else if (type === 0x03) track.name = buf.toString("latin1", p, p + len);
+        } else if (type === 0x03) track.name = buf.toString("latin1", p, p + len);
         p += len;
       } else if (status === 0xf0 || status === 0xf7) {
         p += vlq();
+      } else if (status > 0xf0) {
+        throw new Error(`track ${n}: system message 0x${status.toString(16)} is not handled`);
       } else {
+        running = status;
         const kind = status & 0xf0;
         const channel = status & 0x0f;
         const d1 = buf[p]; p += 1;
@@ -59,6 +65,7 @@ function readMidi(buf) {
         }
       }
     }
+    if (open.size) throw new Error(`track ${n}: ${open.size} notes never end`);
     p = end;
     track.notes.sort((a, b) => a.start - b.start || b.pitch - a.pitch);
     out.tracks.push(track);

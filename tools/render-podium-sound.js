@@ -12,12 +12,14 @@ const PodiumSound = require("../podium-sound.js");
 const RATE = PodiumSound.RATE;
 const dir = process.argv[2] || path.join(__dirname, "..", "docs", "review", "2026-10-12");
 
-// 16-bit mono WAV, as it is (the game plays these samples at these levels).
+// 16-bit mono WAV, exactly as rendered (the game plays these samples at these
+// levels): a sound that would clip is an error, not something to scale away.
 function write(name, samples, rate = RATE) {
   let peak = 0;
   for (let i = 0; i < samples.length; i += 1) peak = Math.max(peak, Math.abs(samples[i]));
   if (!(peak > 0.1)) throw new Error(`${name} rendered silent (peak ${peak})`);
-  const scale = peak > 0.98 ? 0.98 / peak : 1;
+  if (peak > 1) throw new Error(`${name} clips (peak ${peak})`);
+  const scale = 1;
   const data = Buffer.alloc(samples.length * 2);
   for (let i = 0; i < samples.length; i += 1) data.writeInt16LE(Math.round(samples[i] * scale * 32767), i * 2);
   const header = Buffer.alloc(44);
