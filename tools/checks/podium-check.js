@@ -454,6 +454,9 @@ async (page) => {
 
     // ---- The sound (podium-sound.js): the winner's anthem and the celebration ----
     await p.evaluate(() => { Game.setSound(true); initAudio(); });
+    // The grandstands' crowd in a race is the crowd of voices too
+    // (crowd-sound.js), rendered in the background once the sound starts.
+    results.grandstandCrowdIsVoices = await p.waitForFunction(() => audio.crowdVoices === true, null, { timeout: 20000 }).then(() => true, () => "the crowd's voices never arrived");
     // What the game says it is playing, set against the ceremony's own beats
     // and the notes of the anthem it should be (all worked out in the page).
     const sound = () => p.evaluate(() => {
