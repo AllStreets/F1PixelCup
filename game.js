@@ -281,7 +281,7 @@ function trackDefinition(definition) {
             { d: cumulativeStarts[b.under % cumulativeStarts.length], raised: false },
           ]),
           decor: shape.decor || [],
-          keepOut: Entrances.KEEP_OUT[definition.id] || [],
+          keepOut: Entrances.keepOutFor(definition.id, track.pitLane),
         }) : [];
       }
       return entrances;

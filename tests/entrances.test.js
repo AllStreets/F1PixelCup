@@ -34,7 +34,7 @@ function circuit(id) {
     { d: starts[b.over % starts.length], raised: true },
     { d: starts[b.under % starts.length], raised: false },
   ]);
-  const input = { points, total, halfWidth: W, street: Entrances.STREET.includes(id), pit: lane, tunnel: shape.tunnel || null, bridges, decor: shape.decor || [], keepOut: Entrances.KEEP_OUT[id] || [] };
+  const input = { points, total, halfWidth: W, street: Entrances.STREET.includes(id), pit: lane, tunnel: shape.tunnel || null, bridges, decor: shape.decor || [], keepOut: Entrances.keepOutFor(id, lane) };
   return { id, shape, points, total, lane, bridges, input, entrances: Entrances.place(input) };
 }
 const CIRCUITS = Object.keys(SHAPES).map(circuit);
@@ -85,6 +85,23 @@ test("no entrance on a stretch kept for a venue's landmark behind the barrier (M
       const hit = inSpan(k.from, from, e.mergeD, c.total) || inSpan(k.to, from, e.mergeD, c.total) || inSpan(from, k.from, k.to, c.total);
       assert.ok(!hit, `${id}: entrance ${e.index} at ${Math.round(e.mergeD)} on a kept stretch`);
     }));
+  });
+});
+
+test("the main grandstand's site, straight across from the pits, is kept clear at the venues that have one", () => {
+  const landmarksJs = fs.readFileSync(path.join(root, "r3d", "landmarks.js"), "utf8");
+  // Each venue block that names a mainStand.
+  const withStand = [...landmarksJs.matchAll(/\n  ([a-z]+): \{\n(?:(?!\n  \},)[\s\S])*?mainStand: "/g)].map((m) => m[1]);
+  assert.deepEqual([...withStand].sort(), [...Entrances.MAIN_STAND].sort());
+  Entrances.MAIN_STAND.forEach((id) => {
+    const c = CIRCUITS.find((x) => x.id === id);
+    const mid = (c.lane.entry + c.lane.exit) / 2;
+    c.entrances.forEach((e) => {
+      if (e.side !== -c.lane.side) return;
+      const from = e.startD - Entrances.CARPORT.back;
+      const hit = inSpan(mid - 300, from, e.mergeD, c.total) || inSpan(mid + 300, from, e.mergeD, c.total) || inSpan(from, mid - 300, mid + 300, c.total);
+      assert.ok(!hit, `${id}: entrance ${e.index} at ${Math.round(e.mergeD)} on the main stand's site`);
+    });
   });
 });
 

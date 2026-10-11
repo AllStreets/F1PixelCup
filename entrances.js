@@ -62,6 +62,21 @@
     monaco: [{ from: -1500, to: -700, side: -1 }],
     lasvegas: [{ from: 6000, to: 6900, side: 1 }],
   };
+  // The venues with a main grandstand at the barrier straight across from
+  // the pits (r3d/landmarks.js venue.mainStand, checked in the tests): that
+  // side is kept for it, this far either way from the pit zone's middle.
+  const MAIN_STAND = ["barcelona", "hockenheim", "estoril", "sepang", "istanbul"];
+  const MAIN_STAND_SPAN = 320;
+  // What a circuit keeps clear, for place(): its KEEP_OUT stretches and its
+  // main stand's site. `lane` its pitlane.js lane.
+  function keepOutFor(id, lane) {
+    const list = [...(KEEP_OUT[id] || [])];
+    if (MAIN_STAND.includes(id) && lane) {
+      const mid = (lane.entry + lane.exit) / 2;
+      list.push({ from: mid - MAIN_STAND_SPAN, to: mid + MAIN_STAND_SPAN, side: -lane.side });
+    }
+    return list;
+  }
   // A straight: the heading changes by less than this over the slip road.
   const STRAIGHT = 1.2;
   // On the inside of a bend its line (and the carport's far side) runs
@@ -785,7 +800,7 @@
   }
 
   return {
-    STEP, SHAPES, LENGTH, OUT, FOLD, KEEP_OUT, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
+    STEP, SHAPES, LENGTH, OUT, FOLD, KEEP_OUT, MAIN_STAND, MAIN_STAND_SPAN, keepOutFor, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
     START_BEFORE, START_AFTER, PIT_MARGIN, TUNNEL_MARGIN, BRIDGE_MARGIN, UNDER_MARGIN, STRAIGHT, CARPORT, BOOTH,
     ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, GIVE_WAY_BACK, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
     place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,
