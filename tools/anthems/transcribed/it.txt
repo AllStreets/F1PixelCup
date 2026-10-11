@@ -1,0 +1,47 @@
+# Il Canto degli Italiani (Italy). Melody (the Canto line) read from the score
+# below (Maurizio Benedetti's critical edition, page 2), in B flat major: the
+# first strophe, "Fratelli d'Italia" to "Iddio la creò" (the upbeat of bar 13
+# to bar 29). The piano introduction before it is left out. The fermata in
+# bar 25 is played in time. The score says "Allegro marziale" and gives no
+# metronome mark; 116 quarter notes a minute here. The bass line is this
+# game's own (plain roots under the tune).
+source: https://imslp.org/wiki/Special:ReverseLookup/847136
+bpm: 116
+# Bars 13 (the upbeat) to 17: Fratelli d'Italia, l'Italia s'è desta
+melody: F4/1
+melody: F4/0.75 G4/0.25 F4/1 r/1 D5/1
+melody: D5/0.75 Eb5/0.25 D5/1 r/1 D5/1
+melody: F5/0.75 Eb5/0.25 D5/2 C5/1
+melody: D5/0.75 C5/0.25 Bb4/1 r/1 F4/1
+# Bars 18 to 21: dell'elmo di Scipio s'è cinta la testa
+melody: F4/0.75 G4/0.25 F4/1 r/1 D5/1
+melody: D5/0.75 Eb5/0.25 D5/1 r/1 D5/1
+melody: F5/0.75 Eb5/0.25 D5/2 C5/1
+melody: D5/0.75 C5/0.25 Bb4/1 r/1 D5/1
+# Bars 22 to 25: dov'è la Vittoria? Le porga la chioma
+melody: D5/1 A4/2 Bb4/0.75 C5/0.25
+melody: Bb4/0.75 A4/0.25 G4/1 r/1 Bb4/1
+melody: A4/0.75 Bb4/0.25 C5/1 r/1 D4/1
+melody: D5/2 Eb5/1 F4/1
+# Bars 26 to 29: ché schiava di Roma Iddio la creò
+melody: F4/0.75 G4/0.25 F4/0.5 r/1.5 D5/1
+melody: D5/0.75 Eb5/0.25 D5/2 D5/1
+melody: F5/0.75 Eb5/0.25 D5/1.5 F5/0.5 C5/0.5 F5/0.5
+melody: Bb4/1
+bass: r/1
+bass: Bb2/4
+bass: Bb2/4
+bass: Bb2/2 F2/2
+bass: Bb2/4
+bass: Bb2/4
+bass: Bb2/4
+bass: Bb2/2 F2/2
+bass: Bb2/4
+bass: D3/4
+bass: G2/4
+bass: G2/2 D3/2
+bass: F2/4
+bass: Bb2/4
+bass: Bb2/4
+bass: Bb2/2 F2/2
+bass: Bb2/1

@@ -63,6 +63,25 @@ const ANTHEMS = {
     score: "es.txt",
     source: { author: "Alberto Betancourt (piano transcription)", licence: "Public domain" },
   },
+  it: {
+    country: "Italy", title: "Il Canto degli Italiani", composer: "Michele Novaro (1847)",
+    score: "it.txt",
+    source: { author: "Maurizio Benedetti's critical edition (IMSLP)", licence: "Public domain" },
+  },
+  br: {
+    country: "Brazil", title: "Hino Nacional Brasileiro", composer: "Francisco Manuel da Silva (1831)",
+    score: "br.txt",
+    source: { author: "nationalanthems.info (piano score)", licence: "CC BY 4.0" },
+  },
+  // Its composer died in 1968: in the public domain in Thailand, where the
+  // score was also published as a state announcement (the Royal Gazette,
+  // 1939), though not yet everywhere by the life-plus-70 rule. Included at
+  // the user's decision (2026-10-12).
+  th: {
+    country: "Thailand", title: "Phleng Chat Thai", composer: "Phra Chenduriyang (1932)",
+    score: "th.txt",
+    source: { author: "Royal Thai Government Gazette, 1939", licence: "Public domain" },
+  },
   mc: {
     country: "Monaco", title: "Hymne Monégasque", composer: "Théophile Bellando de Castro (1841), arranged by Charles Albrecht (1867)",
     score: "mc.txt",
@@ -77,12 +96,6 @@ const ANTHEMS = {
     source: { author: "John Joseph Woods's melody, as printed in the New Zealand Gazette (1978), hosted by nationalanthems.info", licence: "Public domain" },
   },
 };
-// Held back: Thailand's Phleng Chat Thai (transcribed/th.txt, checked against
-// the Royal Gazette's score). Its composer, Phra Chenduriyang, died in 1968:
-// in the public domain in Thailand (and published there as a state
-// announcement), but not clearly so everywhere this game is played. A Thai
-// winner gets the fanfare until the user decides otherwise.
-
 const GRID = 0.25;
 const snap = (x) => Math.round(x / GRID) * GRID;
 const NAMES = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };

@@ -454,6 +454,9 @@ async (page) => {
 
     // ---- The sound (podium-sound.js): the winner's anthem and the celebration ----
     await p.evaluate(() => { Game.setSound(true); initAudio(); });
+    // The grandstands' crowd in a race is the crowd of voices too
+    // (crowd-sound.js), rendered in the background once the sound starts.
+    results.grandstandCrowdIsVoices = await p.waitForFunction(() => audio.crowdVoices === true, null, { timeout: 20000 }).then(() => true, () => "the crowd's voices never arrived");
     // What the game says it is playing, set against the ceremony's own beats
     // and the notes of the anthem it should be (all worked out in the page).
     const sound = () => p.evaluate(() => {
@@ -569,9 +572,8 @@ async (page) => {
       && toggled[2].on && toggled[2].seconds === toggled[0].seconds && toggled[2].cues === toggled[0].cues) || JSON.stringify(toggled);
     await p.evaluate(() => resetToGarage());
 
-    // Leclerc wins: Monaco's. Antonelli wins: no Italian score free to use
-    // here, so the game's own fanfare stands in.
-    for (const [winner, key] of [["leclerc", "mc"], ["antonelli", null]]) {
+    // Leclerc wins: Monaco's. Antonelli wins: Italy's.
+    for (const [winner, key] of [["leclerc", "mc"], ["antonelli", "it"]]) {
       const run = await runCup({ via: "click", hold: 2500, winner });
       const s = await sound();
       results[`anthemFor_${winner}`] = (s && run.top[0] === winner && s.anthem === key && Math.abs(s.anthemSeconds - s.wantSeconds) < 1e-9

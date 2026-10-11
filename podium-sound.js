@@ -7,11 +7,11 @@
 // (tools/render-podium-sound.js), and placed on the ceremony's timeline
 // (ceremony.js) by cues(). Pure; window.PodiumSound in the page.
 (function attach(root, factory) {
-  const data = typeof module === "object" && module.exports ? require("./anthem-data.js") : root.AnthemData;
-  const api = factory(data);
+  const node = typeof module === "object" && module.exports;
+  const api = factory(node ? require("./anthem-data.js") : root.AnthemData, node ? require("./crowd-sound.js") : root.CrowdSound);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PodiumSound = api;
-}(typeof globalThis !== "undefined" ? globalThis : this, (ANTHEMS) => {
+}(typeof globalThis !== "undefined" ? globalThis : this, (ANTHEMS, Crowd) => {
   const RATE = 24000;
 
   // Each driver's racing nationality (game-data.js: country) to its anthem.
@@ -176,44 +176,6 @@
     };
   }
 
-  // A crowd's roar: voices as bands of noise, each swelling and falling on
-  // its own, under an overall shape (level(t), 0 to 1).
-  function renderCrowd(length, level, seed, rate = RATE) {
-    const rnd = seeded(seed);
-    const out = new Float32Array(Math.ceil(length * rate));
-    const layers = [[260, 900], [600, 1900], [1100, 3200]].map(([lo, hi], k) => ({ next: band(rnd, lo, hi, rate), rate: 0.6 + k * 0.37 + rnd() * 0.3, phase: rnd() * 6.28, gain: [1, 0.8, 0.45][k] }));
-    for (let i = 0; i < out.length; i += 1) {
-      const t = i / rate;
-      let v = 0;
-      for (let k = 0; k < layers.length; k += 1) {
-        const l = layers[k];
-        v += l.next() * l.gain * (0.72 + 0.28 * Math.sin(t * l.rate * 6.28 + l.phase));
-      }
-      // (In from nothing over 80 ms: a crowd doesn't start mid-roar.)
-      out[i] = v * level(t) * Math.min(1, t / 0.08);
-    }
-    return normalise(out, 0.8);
-  }
-
-  // Applause: many hands, each clap a few milliseconds of bright noise, thick
-  // at first and thinning out.
-  function renderApplause(length, seed, rate = RATE) {
-    const rnd = seeded(seed);
-    const out = new Float32Array(Math.ceil(length * rate));
-    const claps = Math.floor(length * 260);
-    for (let c = 0; c < claps; c += 1) {
-      // More claps early: a power of a uniform draw leans to the start.
-      const at = Math.floor((rnd() ** 1.6) * (length - 0.05) * rate);
-      const n = Math.floor((0.004 + rnd() * 0.006) * rate);
-      const gain = 0.25 + rnd() * 0.75;
-      const tone = band(rnd, 900 + rnd() * 900, 2600 + rnd() * 2400, rate);
-      for (let i = 0; i < n && at + i < out.length; i += 1) out[at + i] += tone() * gain * (1 - i / n);
-    }
-    const fade = Math.floor(0.9 * rate);
-    for (let i = 0; i < fade; i += 1) out[out.length - 1 - i] *= i / fade;
-    return normalise(out, 0.8);
-  }
-
   // A cork: the pop (a short thump whose pitch falls, as the neck empties)
   // and the first hiss of gas.
   function renderCork(seed, rate = RATE) {
@@ -263,34 +225,41 @@
   const MURMUR_SECONDS = 9;
   const bump = (t, at, rise, fall) => (t < at ? Math.exp(-(((at - t) / rise) ** 2)) : Math.exp(-(t - at) / fall));
 
-  // Every sound the ceremony uses, by name, rendered once. winner: the
-  // anthem's key (or null for the fanfare). The crowd's shapes follow the
-  // ceremony's beats (a Ceremony.withAnthem() instance).
+  // Every sound the ceremony uses, by name: each a piece of work in steps
+  // ({ steps, result }), so the game can spread it over tasks; run() does one
+  // at once. winner: the anthem's key (or null for the fanfare). The crowd
+  // (crowd-sound.js: voices, not noise) follows the ceremony's beats (a
+  // Ceremony.withAnthem() instance).
+  const once = (make) => { let out = null; return { steps: [() => { out = make(); }], result: () => out }; };
   function sounds(ceremony, winner, rate = RATE) {
     const B = ceremony.BEATS;
+    const crowd = (length, level, seed, options) => Crowd.crowdSteps(length, level, seed, { rate, ...options });
+    const trophyFor = B.spray - B.trophy + 1.2;
     return {
-      anthem: () => renderPiece(winner || "fanfare", rate),
-      sting: () => renderPiece("sting", rate),
+      anthem: () => pieceSteps(winner || "fanfare", rate),
+      sting: () => pieceSteps("sting", rate),
       // The walk on: a murmur swelling, a cheer as each driver steps up.
-      welcome: () => renderCrowd(B.anthem + 0.4, (t) => Math.min(1, 0.22 + 0.2 * (t / B.sweepEnd)
-        + [3, 2, 1].reduce((s, place) => s + 0.5 * bump(t, B.arms[place] + 0.35, 0.3, 0.9), 0)) * Math.min(1, (B.anthem + 0.4 - t) / 0.9), 11, rate),
-      applause: () => renderApplause(3.4, 23, rate),
-      // The trophy: the roar going up with it.
-      roar: () => renderCrowd(ceremony.BEATS.spray - B.trophy + 1.2, (t) => Math.min(1, 0.3 + 0.9 * bump(t, 1.1, 0.7, 2.6)) * Math.min(1, (B.spray - B.trophy + 1.2 - t) / 1.0), 37, rate),
-      // The champagne: cheering that settles to a murmur and fades.
-      cheer: () => renderCrowd(12, (t) => (0.35 + 0.65 * bump(t, 1.0, 0.6, 3.5)) * Math.min(1, (12 - t) / 4), 53, rate),
-      // And for as long as the podium stays up: the crowd's murmur, looped.
-      murmur: () => renderCrowd(MURMUR_SECONDS, () => 1, 67, rate),
-      cannon1: () => renderCannon(71, rate),
-      cannon2: () => renderCannon(72, rate),
-      cork1: () => renderCork(101, rate),
-      cork2: () => renderCork(102, rate),
-      cork3: () => renderCork(103, rate),
-      fizz1: () => renderFizz(3.2, 201, rate),
-      fizz2: () => renderFizz(2.9, 202, rate),
-      fizz3: () => renderFizz(3.0, 203, rate),
+      welcome: () => crowd(B.anthem + 0.4, (t) => Math.min(1.1, 0.25 + 0.2 * (t / B.sweepEnd)
+        + [3, 2, 1].reduce((sum, place) => sum + 0.6 * bump(t, B.arms[place] + 0.35, 0.25, 0.9), 0)) * Math.min(1, (B.anthem + 0.4 - t) / 0.9), 11, { voices: 32, whistles: 3, claps: 14 }),
+      // After the anthem: hands, and a few voices.
+      applause: () => crowd(3.6, (t) => Math.min(1, 1.3 * Math.exp(-t / 2.2)) * Math.min(1, (3.6 - t) / 0.9), 23, { voices: 14, claps: 150, whistles: 2, hubbubGain: 0.3 }),
+      // The trophy: the roar going up with it, fast, and dying slowly.
+      roar: () => crowd(trophyFor, (t) => Math.min(1.2, 0.3 + 1.0 * bump(t, 0.6, 0.35, 2.6)) * Math.min(1, (trophyFor - t) / 1.0), 37, { voices: 44, whistles: 5, horns: 2, claps: 10 }),
+      // The champagne: cheering that settles and fades.
+      cheer: () => crowd(12, (t) => (0.35 + 0.75 * bump(t, 1.0, 0.5, 3.5)) * Math.min(1, (12 - t) / 4), 53, { voices: 40, whistles: 5, horns: 1, claps: 12 }),
+      // And for as long as the podium stays up: the crowd talking, looped.
+      murmur: () => crowd(MURMUR_SECONDS, () => 0.35, 67, { voices: 24, loop: true }),
+      cannon1: () => once(() => renderCannon(71, rate)),
+      cannon2: () => once(() => renderCannon(72, rate)),
+      cork1: () => once(() => renderCork(101, rate)),
+      cork2: () => once(() => renderCork(102, rate)),
+      cork3: () => once(() => renderCork(103, rate)),
+      fizz1: () => once(() => renderFizz(3.2, 201, rate)),
+      fizz2: () => once(() => renderFizz(2.9, 202, rate)),
+      fizz3: () => once(() => renderFizz(3.0, 203, rate)),
     };
   }
+  const run = (work) => { work.steps.forEach((step) => step()); return work.result(); };
 
   // When each sound starts (seconds into the ceremony) and how loud, in
   // order. tier: Low has no spray (quality.js), so no fizz; the corks still
@@ -321,7 +290,7 @@
   // without: a cue's id to leave out.
   function mix(ceremony, winner, { tier = "high", spray = true, rate = RATE, until = null, without = null } = {}) {
     const made = sounds(ceremony, winner, rate);
-    const plan = cues(ceremony, { tier, spray }).filter((c) => c.id !== without).map((c) => ({ ...c, samples: made[c.sound]() }));
+    const plan = cues(ceremony, { tier, spray }).filter((c) => c.id !== without).map((c) => ({ ...c, samples: run(made[c.sound]()) }));
     const end = until ?? Math.max(...plan.map((c) => c.at + c.samples.length / rate));
     const out = new Float32Array(Math.ceil(end * rate));
     plan.forEach((c) => {
@@ -335,5 +304,5 @@
     return out;
   }
 
-  return { RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, renderCrowd, renderApplause, renderCork, renderFizz, renderCannon, sounds, cues, mix };
+  return { RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, run, renderCork, renderFizz, renderCannon, sounds, cues, mix };
 }));

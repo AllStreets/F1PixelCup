@@ -4244,10 +4244,10 @@ function preparePodiumSound() {
   audio.podium = plan;
   if (!anthem.on) return;
   const made = PodiumSound.sounds(ceremony, anthem.key, PodiumSound.RATE);
-  const anthemWork = PodiumSound.pieceSteps(anthem.key || "fanfare", PodiumSound.RATE);
-  const anthemSteps = [...anthemWork.steps];
-  // What is left to do, a step at a time: [the sound's name, a step of it].
+  // What is left to do, a step at a time (a few notes, a few of a crowd's voices).
   const order = [...new Set(plan.cues.map((c) => c.sound))];
+  let work = null;
+  let steps = [];
   const finish = (name, samples) => {
     const buffer = audio.ctx.createBuffer(1, samples.length, PodiumSound.RATE);
     buffer.getChannelData(0).set(samples);
@@ -4258,11 +4258,14 @@ function preparePodiumSound() {
   };
   const step = () => {
     const name = order[0];
-    if (name === "anthem") {
-      anthemSteps.shift()();
-      if (anthemSteps.length) return;
-      finish(name, anthemWork.result());
-    } else finish(name, made[name]());
+    if (!work) {
+      work = made[name]();
+      steps = [...work.steps];
+    }
+    steps.shift()();
+    if (steps.length) return;
+    finish(name, work.result());
+    work = null;
     order.shift();
   };
   const next = () => {
@@ -4994,7 +4997,7 @@ function updateReplayAudio(ghosts, focus) {
       const a = mix.ambience;
       audio.venue.reverb.gain.setTargetAtTime(venue.reverb * TUNNEL_SEND * (mix.engine > 0 ? 1 : 0), t, 0.08);
       audio.ring = venue.reverb;
-      audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07 * a, t, 0.25);
+      audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.11 * a, t, 0.25);
       audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012 * a, t, 0.4);
       audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05 * a, t, 0.3);
       audio.venue.rain.gain.setTargetAtTime(venue.rain * 0.045 * a, t, 0.4);
@@ -6276,18 +6279,33 @@ function initAudio() {
   const crowdSource = ctxA.createBufferSource();
   // Its own, longer noise: a short loop sustained past a grandstand would be
   // heard repeating.
-  crowdSource.buffer = makeNoiseBuffer(ctxA, 6);
+  // (People, not shaped noise: crowd-sound.js renders a loop of voices, a
+  // few at a time so no frame waits on it; silent until it is ready.)
   crowdSource.loop = true;
+  if (window.CrowdSound) {
+    const stands = CrowdSound.standsSteps(24000);
+    const todo = [...stands.steps];
+    const more = () => {
+      todo.shift()();
+      if (todo.length) { setTimeout(more, 20); return; }
+      const samples = stands.result();
+      const buffer = ctxA.createBuffer(1, samples.length, 24000);
+      buffer.getChannelData(0).set(samples);
+      crowdSource.buffer = buffer;
+      crowdSource.start();
+      audio.crowdVoices = true;
+    };
+    setTimeout(more, 400);
+  }
+  // A gentle roll-off only: the voices are already shaped.
   const crowdFilter = ctxA.createBiquadFilter();
-  crowdFilter.type = "bandpass";
-  crowdFilter.frequency.value = 650;
-  crowdFilter.Q.value = 0.7;
+  crowdFilter.type = "lowpass";
+  crowdFilter.frequency.value = 5000;
   const crowdGain = ctxA.createGain();
   crowdGain.gain.value = 0;
   crowdSource.connect(crowdFilter);
   crowdFilter.connect(crowdGain);
   crowdGain.connect(audio.master);
-  crowdSource.start();
   // The floodlights' mains hum: 100 Hz and its first harmonic, very quiet.
   const humGain = ctxA.createGain();
   humGain.gain.value = 0;
@@ -6722,7 +6740,7 @@ function updateEngineAudio(player, second = null) {
     }
     audio.venue.reverb.gain.setTargetAtTime(venue.reverb * TUNNEL_SEND, now, 0.08);
     audio.ring = venue.reverb;
-    audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
+    audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.11, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
     audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05, now, 0.3);
     audio.venue.rain.gain.setTargetAtTime(venue.rain * 0.045, now, 0.4);
