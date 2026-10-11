@@ -33,8 +33,11 @@
     return "medium";
   }
 
+  // Nothing chosen yet: High. (Auto is still there to choose; High keeps
+  // its look and only lowers its resolution when frames run slow.)
+  const DEFAULT_CHOICE = "high";
   function parseChoice(value) {
-    return CHOICES.includes(value) ? value : "auto";
+    return CHOICES.includes(value) ? value : DEFAULT_CHOICE;
   }
 
   function effectiveTier(choice, autoTier) {

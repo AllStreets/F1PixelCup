@@ -33,8 +33,8 @@ test("the player's choice wins over the automatic tier; anything unknown reads a
   assert.equal(Quality.effectiveTier("low", "high"), "low");
   assert.equal(Quality.effectiveTier("nonsense", "high"), "high");
   assert.equal(Quality.parseChoice("medium"), "medium");
-  assert.equal(Quality.parseChoice(null), "auto");
-  assert.equal(Quality.parseChoice("ultra"), "auto");
+  assert.equal(Quality.parseChoice(null), "high");   // nothing chosen yet: High (user, 2026-10-11)
+  assert.equal(Quality.parseChoice("ultra"), "high");
 });
 
 test("what each tier draws", () => {
