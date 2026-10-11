@@ -249,7 +249,8 @@ async (page) => {
     const thumbs = block ? [...block.querySelectorAll(".feature-strip button img")] : [];
     const anthem = thumbs.find((img) => (img.getAttribute("src") || "").includes("podium-anthem"));
     if (anthem && !anthem.complete) await new Promise((r) => { anthem.addEventListener("load", r, { once: true }); setTimeout(r, 4000); });
-    return (/national anthem/.test(text) && /cork/.test(text) && /13 countries/.test(text) && Boolean(anthem) && anthem.naturalWidth > 0 && /anthem/i.test(anthem.alt + (anthem.closest("button").textContent || "")))
+    return (/national anthem/.test(text) && /cork/.test(text) && /13 countries/.test(text) && /presenter/.test(text) && /bronze/.test(text) && /silver/.test(text) && /gold/.test(text)
+      && thumbs.some((img) => (img.getAttribute("src") || "").includes("podium-handover")) && Boolean(anthem) && anthem.naturalWidth > 0 && /anthem/i.test(anthem.alt + (anthem.closest("button").textContent || "")))
       || JSON.stringify({ hasText: /national anthem/.test(text), thumbs: thumbs.map((i) => i.getAttribute("src")) });
   });
 

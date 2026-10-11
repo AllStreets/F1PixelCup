@@ -386,6 +386,10 @@ test("the presenter: on from the side, to the table and each driver in turn, off
     walked += d;
   }
   assert.ok(walked > 12 && walked < 26, `walks ${walked} m`);
-  // The table: in front of the podium, clear of every step's number (between two steps' middles).
-  assert.ok(C.TABLE.z > 1.8 && Math.abs(C.TABLE.x) > 0.4 && Math.abs(Math.abs(C.TABLE.x) - 1.6) > 0.4);
+  // The table: in front of the podium, beside the first step's number (it
+  // does not span the middle of any step), and not where a presenter stands.
+  const T = C.TABLE;
+  assert.ok(T.z > 1.8);
+  [1, 2, 3].forEach((p) => assert.ok(Math.abs(T.x - C.stepFor(p).x) > T.width / 2 - 0.1, `the table over step ${p}'s number`));
+  C.HANDOVERS.forEach((h) => assert.ok(Math.abs(C.presenterAt(h.contact).x - T.x) > T.width / 2 + 0.3, `the presenter behind the table for ${h.place}`));
 });

@@ -454,7 +454,9 @@ async (page) => {
     await p.addStyleTag({ content: "#podium-screen .podium-head, #podium-screen .podium-foot { visibility: hidden !important; }" });
     // Each at a moment after one of the ceremony's beats (they move with the
     // winner's anthem: ceremony.js, withAnthem).
-    const BEATS = [["podium-arms", "armsDown", -0.4], ["podium-anthem", "anthemEnd", -3], ["podium-trophy", "trophy", 2.3], ["podium-spray", "spray", 4]];
+    // (podium-handover: the presenter giving the winner the gold trophy, a
+    // moment before the lift.)
+    const BEATS = [["podium-anthem", "anthemEnd", -3], ["podium-handover", "trophy", -0.25], ["podium-trophy", "trophy", 2.3], ["podium-spray", "spray", 4]];
     for (const [name, beat, after] of BEATS.filter(([n]) => !names || names.includes(n))) {
       await p.waitForFunction(([b, plus]) => {
         const st = Render3D.podium.inspect();

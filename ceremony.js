@@ -18,10 +18,11 @@
   // The winner's lift (its fanfare sting has ended, echo and all, within it).
   const TROPHY_TIME = 4.6;
   // The presentation: the table the trophies wait on (in front of the
-  // podium, between the first and third steps, clear of their numbers; the
+  // podium, beside the first step's number and clear of where the presenter
+  // stands for each handover; the
   // presenter stands `stand` m on the podium's side of it, `on` is where each
   // trophy sits along it), and how long each part of a handover takes (s).
-  const TABLE = { x: 0.8, z: 2.3, width: 0.74, depth: 0.42, height: 0.78, stand: 0.38, on: { 1: 0, 2: -0.2, 3: 0.2 } };
+  const TABLE = { x: 0.32, z: 2.3, width: 0.74, depth: 0.42, height: 0.78, stand: 0.38, on: { 1: 0, 2: -0.2, 3: 0.2 } };
   const WALK_SPEED = 2.3;
   const PRESENT = { gap: 0.5, pick: 0.55, lift: 0.3, give: 1.0, contact: 0.7, nod: 0.35, turn: 0.5, liftFor: 1.7, pass: 0.55, spotZ: 0.74, spotSide: -0.5, offX: 5.6, offZ: 1.9 };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
@@ -281,8 +282,8 @@
       const anthem = u < ramp ? (speed * u * u) / (2 * ramp)
         : u < span - ramp ? speed * (u - ramp / 2)
           : 1 - (speed * (span - u) * (span - u)) / (2 * ramp);
-      // The presentation's medium shot: out a little from the anthem's
-      // close, lower, looking at the hands' height.
+      // The presentation's shot: back out from the anthem's close far enough
+      // to hold the presenter (on the floor) and the drivers together.
       const medium = smooth(BEATS.present - 0.2, BEATS.present + 1.8, t);
       const push = smooth(BEATS.trophy - 0.3, BEATS.trophy + 3.2, t);
       const back = smooth(BEATS.spray, BEATS.spray + 2.6, t);
@@ -291,17 +292,17 @@
       // Distance to what it looks at, its height, and where it looks.
       // (Framed with room above the wall's title for the page's own title.)
       const radius = 17 + (10.4 - 17) * sweep + (9.9 - 10.4) * smooth(BEATS.sweepEnd, BEATS.armsDown, t)
-        + (7.4 - 9.9) * anthem + (7.9 - 7.4) * medium + (6.4 - 7.9) * push + (10.2 - 6.4) * back;
-      const lookY = 2.1 + (p1Head - 0.1 - 2.1) * anthem + (1.75 - p1Head + 0.1) * medium + (p1Head + 0.3 - 1.75) * push + (2.15 - p1Head - 0.3) * back;
-      const height = 6.8 + (2.5 - 6.8) * sweep + 0.1 * anthem - 0.3 * medium + (p1Head + 0.1 - 2.3) * push + (2.7 - p1Head - 0.1) * back;
-      const lookZ = 0.0 + 0.5 * medium + (0.1 - 0.5) * push - 0.1 * back;
+        + (7.4 - 9.9) * anthem + (9.3 - 7.4) * medium + (6.4 - 9.3) * push + (10.2 - 6.4) * back;
+      const lookY = 2.1 + (p1Head - 0.1 - 2.1) * anthem + (2.0 - p1Head + 0.1) * medium + (p1Head + 0.3 - 2.0) * push + (2.15 - p1Head - 0.3) * back;
+      const height = 6.8 + (2.5 - 6.8) * sweep + 0.1 * anthem - 0.1 * medium + (p1Head + 0.1 - 2.5) * push + (2.7 - p1Head - 0.1) * back;
+      const lookZ = 0.0 + 0.3 * medium + (0.1 - 0.3) * push - 0.1 * back;
       const lookX = followX(t) * (1 - smooth(BEATS.trophy - 0.4, BEATS.trophy + 1.2, t));
       const orbit = ORBIT_SWING * Math.sin(((t - BEATS.spray) * 2 * Math.PI) / ORBIT_PERIOD) * orbitIn;
       const angle = 0.5 * (1 - sweep) + orbit;
       return {
         // (The shot moves out to the side of what it follows, so each
         // handover is seen a little from its own side, past the table.)
-        x: lookX * 1.5 + Math.sin(angle) * radius,
+        x: lookX * 1.7 + Math.sin(angle) * radius,
         y: height,
         z: lookZ + Math.cos(angle) * radius,
         lookX,

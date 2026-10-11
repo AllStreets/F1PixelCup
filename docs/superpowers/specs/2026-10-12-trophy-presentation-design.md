@@ -23,7 +23,7 @@ Made in the podium's own scene (lathed, compiled with it), each in its own metal
 - **Second:** a bigger cup of its own shape: a tall goblet with a knop in the stem, in silver. 50 cm.
 - **First:** a grand one: a dark plinth, a wide urn with two big handles and a lid with a finial, in gold. 72 cm.
 
-They wait on a small clothed table in front of the podium, between the first and third steps (clear of the steps' numbers).
+They wait on a small clothed table in front of the podium, beside the first step's number and clear of where the presenter stands for each handover.
 
 ## The presenter (`r3d/presenter.js`)
 
