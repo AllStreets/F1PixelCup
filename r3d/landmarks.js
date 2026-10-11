@@ -12,6 +12,9 @@ import { tracksideModel, LANDMARK_SCALE } from "./models.js";
 import { buildYachts, harbourSide } from "./yachts.js";
 import { buildVegasStrip } from "./vegas.js";
 
+// Placement maths, pure and tested in Node (siting.js).
+const Siting = window.Siting;
+
 // ---------------------------------------------------------------------------
 // Venue settings
 // ---------------------------------------------------------------------------
@@ -132,6 +135,10 @@ export const VENUES = {
     hills: { tint: "#8f9a62", count: 16, height: [160, 360] },
     extras: ["siteLandmarks"],
     landmarks: ["barcelonaGrandstand"],
+    // Its main grandstand stands across the straight from the pits, at the
+    // barrier: placed before the circuit data's stands, which move along the
+    // straight round it (buildMainStand, r3d/track.js slideStand).
+    mainStand: "barcelonaGrandstand",
   },
   montreal: {
     // An island in the St Lawrence: the river to the east, the rowing basin
@@ -152,7 +159,7 @@ export const VENUES = {
     extras: ["siteLandmarks"],
     // The main grandstand in its bank across from the pits, the bank at the
     // first corner; the hills all round.
-    landmarks: ["spielbergGrandstand", "hillside"],
+    landmarks: ["hillside", "spielbergGrandstand"],
     hillside: { corner: "NIKI LAUDA KURVE" },
   },
   hungaroring: {
@@ -251,8 +258,11 @@ export const VENUES = {
     ground: "grass", groundTint: "#6f9a52", standColor: "#1e1e1e", stand: "covered",
     trees: [{ kind: "conifer", count: 1500, tint: "#2c5232" }, { kind: "broadleaf", count: 300, tint: "#3f6e36", near: 120, seed: 3 }],
     hills: { tint: "#5a7a4c", count: 8, height: [50, 110], flat: true },
-    extras: [],
+    // The Motodrom's great stand across the straight from the pits, before
+    // the circuit data's stands (they move round it).
+    extras: ["siteLandmarks"],
     landmarks: ["motodrom"],
+    mainStand: "motodrom",
   },
   nurburgring: {
     // High in the Eifel: dark forest on rolling hills, often grey.
@@ -260,8 +270,11 @@ export const VENUES = {
     trees: [{ kind: "conifer", count: 1700, tint: "#244a2c" }, { kind: "broadleaf", count: 260, tint: "#3a6634", near: 110, seed: 5 }],
     hills: { tint: "#4a6e44", count: 20, height: [260, 520] },
     fogNear: 800, fogFar: 3600,
-    extras: [],
+    // The Nürburg on its hill to the north-north-east.
+    extras: ["siteLandmarks"],
     landmarks: ["nurburgCastle"],
+    // The Eifel's farms and villages: white walls, slate roofs.
+    farm: { wall: "#ecebe4", roof: "#34383f" },
   },
   estoril: {
     // Pines on the hills behind Cascais, the Atlantic to the south.
@@ -269,8 +282,11 @@ export const VENUES = {
     trees: [{ kind: "conifer", count: 800, tint: "#4a6a3a" }, { kind: "broadleaf", count: 200, tint: "#6a7c46", near: 120, seed: 2 }],
     hills: { tint: "#8a9658", count: 14, height: [140, 300] },
     coast: { bearing: Math.PI / 2, tint: "#2f6f96", sand: "#d8c8a0" },
-    extras: ["coast"],
-    landmarks: ["estorilCoast"],
+    // The main grandstand across from the pits; the Serra de Sintra to the
+    // north, the Pena Palace on its summit.
+    extras: ["coast", "siteLandmarks"],
+    landmarks: ["estorilGrandstand", "sintraHills"],
+    mainStand: "estorilGrandstand",
   },
   kyalami: {
     // The Highveld north of Johannesburg: dry grass, acacias, a big sky.
@@ -279,8 +295,13 @@ export const VENUES = {
     hills: { tint: "#a49a62", count: 12, height: [70, 160], flat: true },
     // Johannesburg and Sandton to the south.
     skyline: { arc: [Math.PI * 0.35, Math.PI * 0.65], count: 40, height: [60, 200] },
-    extras: ["skylineArc"],
-    landmarks: ["highveld"],
+    // Johannesburg's towers claim their bearing before the generic skyline;
+    // the crowd's bank at Crowthorne, the first corner.
+    extras: ["siteLandmarks", "skylineArc"],
+    landmarks: ["joburgSkyline", "hillside"],
+    hillside: { corner: "CROWTHORNE" },
+    // Highveld farmsteads: whitewashed, red tin roofs.
+    farm: { wall: "#e9e3d3", roof: "#8e3a2a" },
   },
   sepang: {
     // Oil-palm country outside Kuala Lumpur: palms everywhere, rain often.
@@ -288,32 +309,52 @@ export const VENUES = {
     trees: [{ kind: "palm", count: 900, tint: "#3f7a34" }, { kind: "broadleaf", count: 300, tint: "#2f6a30", near: 140, seed: 6 }],
     hills: { tint: "#4a8040", count: 10, height: [100, 220] },
     fogNear: 900, fogFar: 3800,
-    extras: [],
-    landmarks: ["leafGrandstand"],
+    // The double-fronted grandstand (in life between the main and back
+    // straights: see SITES), before the circuit data's stands.
+    extras: ["siteLandmarks"],
+    landmarks: ["sepangGrandstand"],
+    mainStand: "sepangGrandstand",
   },
   istanbul: {
     // Dry hills on the Asian side, scrub and few trees.
     ground: "grass", groundTint: "#b2aa6a", standColor: "#e30a17", stand: "covered", runoffTint: "#c6b896", gravelTint: "#d8c69c",
     trees: [{ kind: "broadleaf", count: 260, tint: "#6a7a44", near: 200 }],
     hills: { tint: "#a8986a", count: 16, height: [120, 260] },
-    extras: [],
-    landmarks: ["towerGrandstand"],
+    // The main grandstand across from the pits, the natural bank outside
+    // Turn 8 (its four-apex left-hander, a little under half a lap).
+    extras: ["siteLandmarks"],
+    landmarks: ["istanbulGrandstand", "hillside"],
+    mainStand: "istanbulGrandstand",
+    hillside: { share: 0.455 },
+    // Village houses in the dry hills: pale render, tiled roofs.
+    farm: { wall: "#ddd0b4", roof: "#a4542f" },
   },
   mugello: {
     // A Tuscan valley: cypresses, olive groves and green hills all round.
     ground: "grass", groundTint: "#80a858", standColor: "#d40000", stand: "open",
     trees: [{ kind: "conifer", count: 600, tint: "#2c4e30" }, { kind: "broadleaf", count: 600, tint: "#6a8a50", seed: 4 }],
     hills: { tint: "#668a50", count: 22, height: [260, 560] },
-    extras: [],
-    landmarks: ["tuscanVilla"],
+    // A terraced Tuscan hill with its farmhouse; the grass banks fans fill
+    // at Arrabbiata.
+    extras: ["siteLandmarks"],
+    landmarks: ["hillside", "tuscanHill"],
+    // (Back from the fence far enough for the marshals' posts in front.)
+    hillside: { corner: "ARRABBIATA", minGap: 26 },
+    // Tuscan farmhouses: stone, terracotta, cypresses.
+    farm: { wall: "#cdb68e", roof: "#a9542f", cypress: true },
   },
   watkinsglen: {
     // The Finger Lakes' hills in the autumn: maples turning, the glen's woods.
     ground: "grass", groundTint: "#7c9a52", standColor: "#1d3f8a", stand: "open",
     trees: [{ kind: "broadleaf", count: 900, tint: "#b8642c" }, { kind: "broadleaf", count: 600, tint: "#c8952c", seed: 2 }, { kind: "conifer", count: 300, tint: "#2c4e30", seed: 8 }],
     hills: { tint: "#7a7a48", count: 16, height: [180, 360] },
-    extras: [],
-    landmarks: ["theBoot"],
+    // Seneca Lake's valley to the north-east between its wooded ridges; the
+    // bank at the Esses.
+    extras: ["siteLandmarks"],
+    landmarks: ["hillside", "fingerLakes"],
+    hillside: { corner: "THE ESSES" },
+    // Finger Lakes farms: red barns under grey roofs.
+    farm: { wall: "#8c2f24", roof: "#4b4c50" },
   },
 };
 
@@ -546,6 +587,16 @@ function hills(course, group, { tint, count, height, flat }, rand) {
     // The icosahedron's footprint is at most its larger horizontal radius.
     const spot = pushClear(course, cx + Math.cos(a) * rx * d, cz + Math.sin(a) * rz * d, Math.max(w, depth));
     if (!spot || wet(course, spot.x, spot.z, Math.max(w, depth))) continue;
+    // Never over a landscape landmark (a castle on its hill, a ridge, a
+    // lake): the hill moves further out, behind it, or is left out.
+    const r = Math.max(w, depth);
+    const over = () => (course.landscapes || []).some((f) => Siting.touchesRects(f, spot.x, spot.z, r * 0.85));
+    for (let k = 0; k < 60 && over(); k += 1) {
+      const len = Math.hypot(spot.x - cx, spot.z - cz) || 1;
+      spot.x += ((spot.x - cx) / len) * 80;
+      spot.z += ((spot.z - cz) / len) * 80;
+    }
+    if (over() || course.clearance(spot.x, spot.z, r + 160) < r + 40 || wet(course, spot.x, spot.z, r)) continue;
     hill.position.set(spot.x, -h * 0.15, spot.z);
     hill.rotation.y = rand() * Math.PI;
     hill.receiveShadow = true;
@@ -966,6 +1017,10 @@ export function dressLandmark(model, venue, extra = null) {
       if (src.name === "mist") Object.assign(out, { transparent: true, opacity: 0.16, depthWrite: false, roughness: 0.6, metalness: 0, emissive: color("#dfeaff"), emissiveIntensity: night ? 0.22 : 0.05 });
       // The Yas gridshell's lights at night.
       if (src.name === "gridshell") Object.assign(out, { emissive: color("#8f86ff"), emissiveIntensity: night ? 0.75 : 0 });
+      // Sepang's leaf canopies: white fabric, matt (no glare off it).
+      if (src.name === "canopy") Object.assign(out, { roughness: 1, metalness: 0, color: color("#cfcfc8") });
+      // A lake (Watkins Glen's): the water's own shine.
+      if (src.name === "water") Object.assign(out, { roughness: 0.08, metalness: 0.2, color: color("#2f6a8a") });
       if (src.name === "dark_glass") Object.assign(out, { roughness: 0.1, metalness: 0.6, emissive: color("#3c3290"), emissiveIntensity: night ? 0.12 : 0 });
     }
     out.name = src.name;
@@ -1018,13 +1073,14 @@ function rectPoints(rect, scale, x, z, yaw, step) {
 // With `gapFirst`, nearest the barrier wins: each gap is tried at every
 // anchor before the next gap; otherwise the nearest anchor wins. With `dry`,
 // nothing is claimed: it only says where the model would go.
-function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14, forecourt = false, gapFirst = false, dry = false, faceTrack = false }) {
+function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 14, forecourt = false, gapFirst = false, dry = false, faceTrack = false, between = null }) {
   const total = course.track.totalLength;
   const front = Math.min(...rects.map((r) => r.z0)) * scale;
   const tries = gapFirst
     ? gaps.flatMap((gap) => anchors.map((a) => ({ ...a, gap })))
     : anchors.flatMap((a) => gaps.map((gap) => ({ ...a, gap })));
   for (const { d, side, gap } of tries) {
+    let spotBehind;
     const p = course.sampleAt(((d % total) + total) % total);
     const off = side * ((side > 0 ? p.outerR : p.outerL) + 2 + gap - front);
     const x = p.x + p.nx * off;
@@ -1049,9 +1105,27 @@ function placeModel(course, { rects, scale, anchors, gaps, margin = 12, step = 1
       });
       if (!faces) continue;
     }
+    // A stand that faces both ways (Sepang's, between two straights): the
+    // middle of its back within `between` of another stretch's barrier
+    // (nearer than the one its front watches, which is its depth away).
+    if (between !== null) {
+      const back = Math.max(...rects.map((r) => r.z1)) * scale;
+      const mx = ((Math.min(...rects.map((r) => r.x0)) + Math.max(...rects.map((r) => r.x1))) / 2) * scale;
+      const bx = x + mx * Math.cos(yaw) + back * Math.sin(yaw);
+      const bz = z - mx * Math.sin(yaw) + back * Math.cos(yaw);
+      const behind = course.clearance(bx, bz, 600);
+      if (behind > between || behind >= back - front) continue;
+      // Another stretch, not the same one coming back round a hairpin: the
+      // road nearest its back far round the lap from the one in front.
+      const q = course.samples.reduce((a, s) => (Math.hypot(s.x - bx, s.y - bz) < Math.hypot(a.x - bx, a.y - bz) ? s : a));
+      const total = course.track.totalLength;
+      const apart = Math.abs(((q.d - p.d) % total + total * 1.5) % total - total / 2);
+      if (apart < 600) continue;
+      spotBehind = Math.round(behind);
+    }
     // (A dry run only looks.)
     if (!dry) pts.forEach(([px, pz]) => course.occupied.add(px, pz, step * 0.75));
-    return { x, z, yaw, p, side, gap, d, claimed: [...rects, ...court] };
+    return { x, z, yaw, p, side, gap, d, claimed: [...rects, ...court], behind: spotBehind };
   }
   return null;
 }
@@ -1074,7 +1148,11 @@ function anchorsAround(course, share, spread, sides) {
 // A landmark from its model, placed with placeModel (its whole footprint,
 // or the named parts' rectangles), dressed for the venue. Returns it, or
 // null (no model, or no room: the caller falls back to its stand-in).
-function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps, margin, forecourt = false, gapFirst = false, step, faceTrack = false }) {
+// `scales`: the scales to try in turn (a landmark that only fits drawn
+// smaller, down to the circuit map's own 1.3 units a metre: its true size
+// against the track); by default the city's alone.
+// `landscape`: it is a landscape of its own (the generic hills keep off it).
+function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps, margin, forecourt = false, gapFirst = false, step, faceTrack = false, between = null, scales = [LANDMARK_SCALE], landscape = false }) {
   const template = tracksideModel(model);
   if (!template) return null;
   let rects;
@@ -1084,15 +1162,28 @@ function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps
     const box = new THREE.Box3().setFromObject(template);
     rects = [{ x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z }];
   }
-  const spot = placeModel(course, { rects, scale: LANDMARK_SCALE, gaps, anchors, margin, forecourt, gapFirst, step, faceTrack });
+  let spot = null;
+  let scale = LANDMARK_SCALE;
+  for (const k of scales) {
+    scale = k;
+    spot = placeModel(course, { rects, scale, gaps, anchors, margin, forecourt, gapFirst, step, faceTrack, between });
+    if (spot) break;
+  }
   if (!spot) return null;
   const made = template.clone(true);
   dressLandmark(made, venue);
-  made.scale.setScalar(LANDMARK_SCALE);
+  made.scale.setScalar(scale);
   made.position.set(spot.x, 0, spot.z);
   made.rotation.y = spot.yaw;
   made.name = `landmark:${name}`;
-  made.userData.landmark = { name, fromModel: true, yaw: spot.yaw, side: spot.side, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
+  // A landscape of its own (a hill, a ridge, a lake, a far skyline): the
+  // venue's generic hills keep off its ground, and it casts no shadow (it
+  // stands beyond the shadows' reach, and would only cost the frame).
+  if (landscape) {
+    (course.landscapes = course.landscapes || []).push({ x: spot.x, z: spot.z, yaw: spot.yaw, scale, rects });
+    made.traverse((m) => { if (m.isMesh) m.castShadow = false; });
+  }
+  made.userData.landmark = { name, fromModel: true, yaw: spot.yaw, side: spot.side, gap: spot.gap, scale, behind: spot.behind, mainStand: name === venue.mainStand, trackAt: { x: Math.round(spot.p.x), z: Math.round(spot.p.y), d: Math.round(spot.p.d) } };
   group.add(made);
   return made;
 }
@@ -1101,8 +1192,8 @@ function modelLandmark(course, group, venue, { name, model, parts, anchors, gaps
 function pitMiddle(course) {
   const lane = course.pitLane;
   if (!lane) return null;
-  const inZone = course.samples.filter((p) => lane.outerAt(p.d) !== null);
-  return inZone.length ? inZone[Math.floor(inZone.length / 2)].d : null;
+  // (A zone across the line wraps round the lap.)
+  return Siting.zoneMiddle(course.samples.filter((p) => lane.outerAt(p.d) !== null).map((p) => p.d), course.track.totalLength);
 }
 
 // The Casino de Monte-Carlo and the Hôtel de Paris, at Casino Square: about
@@ -1232,11 +1323,17 @@ function cornerAnchors(course, board, share = 0.3, spread = 25) {
   return anchorsAround(course, k.d / course.track.totalLength, spread, () => [out, -out]);
 }
 
+// The whole lap from a lap distance, `spread` apart, nearest first; the side
+// away from the pits before the pits' side.
+function lapFrom(course, d0, spread) {
+  return Siting.lapFrom(course.track.totalLength, d0, spread, course.pitLane ? -course.pitLane.side : 1);
+}
+
 // Where each model stands: anchors along the lap and the gaps to try.
 const SITES = {
   melbourneSkyline: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [800, 1100, 1400, 1800], step: 40 }),
   shanghaiGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220, 280, 360], step: 20, gapFirst: true, faceTrack: true }),
-  hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
+  hillside: (c, v) => ({ anchors: v.hillside && v.hillside.corner ? cornerAnchors(c, v.hillside.corner) : anchorsAround(c, (v.hillside && v.hillside.share) ?? 0.5, 50, outsideFirst), gaps: [6, 14, 26, 45, 70, 110].filter((g) => g >= ((v.hillside && v.hillside.minGap) || 0)), step: 18, gapFirst: true, faceTrack: true }),
   barcelonaGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110, 160, 220], step: 18, gapFirst: true, faceTrack: true }),
   biosphere: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [120, 200, 320, 480], step: 24 }),
   spielbergGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70, 110], step: 18, gapFirst: true, faceTrack: true }),
@@ -1251,6 +1348,28 @@ const SITES = {
   // places it where it stands otherwise.)
   vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
+  // The historic venues (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+  motodrom: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160, 220], step: 18, gapFirst: true, faceTrack: true }),
+  // North-north-east of the GP circuit, as the Nürburg is.
+  // Nearer than in life (it is some way off) so it reads as a castle from
+  // the track.
+  nurburgCastle: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.6), gaps: [120, 200, 300, 450, 650], step: 40, gapFirst: true, landscape: true }),
+  estorilGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160], step: 18, gapFirst: true, faceTrack: true }),
+  // North of the circuit, as the Pena Palace is.
+  sintraHills: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.5), gaps: [900, 1200, 1500, 1900], step: 60, landscape: true }),
+  joburgSkyline: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [900, 1200, 1500, 1900], step: 40, landscape: true }),
+  // It faces both straights: not faceTrack (its back watches the other one).
+  // The double-fronted stand: in life between the main straight and the
+  // back straight, across from the pits; there the game's wide roads leave
+  // no room between their run-offs, so it stands at the nearest place round
+  // the lap from there where it watches two stretches, one from each front
+  // (`between`), drawn smaller if it must be, down to the circuit map's own
+  // scale (its true size against the track).
+  sepangGrandstand: (c) => ({ anchors: lapFrom(c, pitMiddle(c) ?? 0, 60), gaps: [16, 24, 32, 45, 70], step: 16, between: 220, scales: [LANDMARK_SCALE, 2.0, 1.6, 1.3] }),
+  istanbulGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160], step: 18, gapFirst: true, faceTrack: true }),
+  tuscanHill: (c) => ({ anchors: anchorsAround(c, 0.35, 120, outsideFirst), gaps: [80, 140, 220, 320, 450], step: 30, landscape: true }),
+  // Its lake's near end close to the barrier, so the water is seen from the track.
+  fingerLakes: (c) => ({ anchors: anchorsFacing(c, Math.PI * 1.75), gaps: [30, 60, 100, 160, 240, 360, 500], step: 50, gapFirst: true, landscape: true }),
 };
 
 // King Fahd's Fountain: out at sea past the shore, to the south of the
@@ -1394,6 +1513,8 @@ function stadiumInside(course, group, venue) {
 // Each listed landmark from its model (r3d/models.js), where SITES puts it.
 function siteLandmarks(course, group, venue) {
   for (const name of venue.landmarks || []) {
+    // (The main stand, if built, was placed before the decor.)
+    if (name === venue.mainStand && course.mainStandTried) continue;
     if (name === "jeddahFountain") fountainAtSea(course, group, venue);
     else if (name === "yasHotel") yasHotelHalves(course, group, venue);
     else if (name === "miamiStadium") stadiumInside(course, group, venue);
@@ -1426,7 +1547,7 @@ const EXTRAS = {
     const mid = pitMiddle(course);
     const side = course.pitLane ? course.pitLane.side : 1;
     modelLandmark(course, group, venue, {
-      name: "silverstoneWing", model: "silverstoneWing", gaps: [10, 30, 60, 100, 160, 240], step: 20,
+      name: "silverstoneWing", model: "silverstoneWing", gaps: [10, 30, 60, 100, 160, 240], step: 20, gapFirst: true,
       anchors: anchorsAround(course, (mid ?? 0) / course.track.totalLength, 40, () => [side, -side]),
     });
   },
@@ -1779,6 +1900,28 @@ const EXTRAS = {
 
 // ---------------------------------------------------------------------------
 
+// A venue's main grandstand (venue.mainStand), placed before the circuit
+// data's decor so it takes the ground across the straight from the pits, at
+// the barrier, where it stands in life; the decor's stands move round it
+// (r3d/track.js slideStand). Returns its group (for buildLandmarks), or null.
+export function buildMainStand(course, venue) {
+  const name = venue.mainStand;
+  if (!name || !SITES[name]) return null;
+  const group = new THREE.Group();
+  // (Tried once: siteLandmarks does not search again if it found no room.)
+  course.mainStandTried = true;
+  const made = modelLandmark(course, group, venue, { name, model: name, ...SITES[name](course, venue) });
+  if (!made) return null;
+  course.mainStandBuilt = true;
+  // Its ground, for the decor it displaces (r3d/track.js buildDecor).
+  const { yaw } = made.userData.landmark;
+  const template = tracksideModel(name);
+  template.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(template);
+  course.mainStandClaim = { x: made.position.x, z: made.position.z, yaw, scale: made.scale.x, rects: [{ x0: box.min.x, x1: box.max.x, z0: box.min.z, z1: box.max.z }] };
+  return group;
+}
+
 // A venue's city, built before anything else claims its ground (the track
 // data's grandstands fill in round it): Las Vegas's Strip. Or null.
 export function buildCity(course, venue) {
@@ -1786,9 +1929,11 @@ export function buildCity(course, venue) {
   return null;
 }
 
-export function buildLandmarks(course, venue0, city = null) {
+// `early`: what was placed before the decor (buildMainStand), joined in.
+export function buildLandmarks(course, venue0, city = null, early = null) {
   const group = new THREE.Group();
   if (city) group.add(city);
+  if (early) [...early.children].forEach((o) => group.add(o));
   // A city that couldn't be built: its venue's fallback instead.
   const venue = venue0.city && !city && venue0.cityFallback
     ? { ...venue0, ...venue0.cityFallback, extras: [...venue0.cityFallback.extras, ...venue0.extras] }

@@ -23,7 +23,7 @@ import { buildCourse, buildCircuit, buildDecor, buildItemBox, upgradeItemBox, TU
 import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
-import { VENUES, buildLandmarks, buildCity, waterMaterial } from "./r3d/landmarks.js";
+import { VENUES, buildLandmarks, buildCity, buildMainStand, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { buildEntrances, updateEntrances, inspectEntrances } from "./r3d/entrances.js";
@@ -670,12 +670,15 @@ function inspect() {
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
   // The trackside models and people (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
   const landmarks = [];
-  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ x: Math.round(o.position.x), z: Math.round(o.position.z), ...o.userData.landmark }); });
-  const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3) })) : [];
+  if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
+  const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3), d: o.userData.d })) : [];
   // What the GPU holds (for the checks: a circuit change must not leak).
   const memory = { geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures };
   const stats = { calls: frameStats.calls, triangles: frameStats.triangles, cpuMs: +frameStats.cpuMs.toFixed(2) };
-  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
+  // What the track data's scenery became (stands, boards, towers, farmhouses).
+  const decorKinds = {};
+  if (current) current.decor.children.forEach((o) => { const k = o.userData.kind; if (k) decorKinds[k] = (decorKinds[k] || 0) + 1; });
+  const trackside = { memory, stats, models: tracksideModelsState(), landmarks, modelStands: stands.length, standSpots: stands, decorKinds, people: current ? inspectPeople(current.people, lastPlayers) : null, yachts: current ? inspectYachts(current.yachts) : null };
   // Where each car was drawn (game x, y), and whether it was.
   const drawn = {};
   if (current) current.cars.forEach((car, id) => { drawn[id] = { x: car.root.position.x, y: car.root.position.z, visible: car.root.visible }; });
@@ -936,17 +939,29 @@ function buildWorld(track) {
   group.add(circuit);
   // A venue's city first (Las Vegas's Strip, where it really stands), then
   // the Safety Car's service entrances (r3d/entrances.js: part of the
-  // circuit, claiming their ground before any other scenery), then the decor
-  // from the track data (laid out with the circuit), then the landmarks and
-  // trees fill round them. Everything claims its footprint.
+  // circuit), then a venue's main grandstand (venue.mainStand) where it
+  // stands in life (Barcelona's across the straight from the pits), then the
+  // decor from the track data (laid out with the circuit; its stands move
+  // round the main one), then the landmarks and trees fill round them.
+  // Everything claims its footprint.
   const city = buildCity(course, venue);
   const entrances = buildEntrances(course, venue);
   group.add(entrances);
+  const mainStand = buildMainStand(course, venue);
   const decor = buildDecor(course, venue);
   group.add(decor);
-  const landmarks = buildLandmarks(course, venue, city);
+  const landmarks = buildLandmarks(course, venue, city, mainStand);
   group.add(landmarks);
   const yachts = landmarks.getObjectByName("yachts");
+  // The crowd is heard, and the fireworks burst, where the stands were built
+  // (a stand moved round a main stand, or dropped, is not where the track
+  // data put it), the main stand among them (game.js venue sound,
+  // r3d/trackside.js fireworks).
+  if (Array.isArray(track.crowdStands)) {
+    const built = decor.children.filter((o) => o.userData.stand && o.userData.d !== undefined).map((o) => ({ d: o.userData.d, x: o.position.x, y: o.position.z }));
+    landmarks.children.forEach((o) => { const L = o.userData.landmark; if (L && L.mainStand) built.push({ d: L.trackAt.d, x: o.position.x, y: o.position.z }); });
+    track.crowdStands = built;
+  }
   // Trackside life: the marshal posts (after everything else has claimed its
   // ground) and the starter by the line.
   // The marshals are figures when the people model has the one they wear.
@@ -968,6 +983,7 @@ function buildWorld(track) {
     return mesh;
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
+  if (decor.userData.moved) console.info(`${track.id}: ${decor.userData.moved} scenery pieces moved round the main stand`);
   return { trackId: track.id, course, venue, group, circuit, entrances, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 

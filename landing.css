@@ -49,6 +49,7 @@ body.landing { overflow-x: hidden; }
 .historic-head h3 { margin: 0; font-size: clamp(1.5rem, 3vw, 2.2rem); text-transform: uppercase; }
 .historic-head p { margin: 0; }
 .is-historic .cup-number { color: var(--gold); }
+.historic-sights { margin-top: 18px; }
 .circuit-round { position: absolute; top: 8px; left: 8px; padding: 3px 8px; background: rgba(8, 8, 12, 0.78); border-left: 3px solid var(--red); font: italic 900 0.85rem/1 var(--font); color: #fff; }
 .season-card { background: linear-gradient(120deg, #1d0706, var(--panel) 55%); border: 1px solid var(--line); border-left: 4px solid var(--red); padding: 26px 28px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 28px; align-items: center; }
 .season-copy { display: grid; gap: 12px; }

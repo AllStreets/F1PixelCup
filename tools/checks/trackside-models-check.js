@@ -1,7 +1,10 @@
 // Browser check: the trackside's final look, every venue
 // (docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 8).
 // Every venue's landmark built from its Blender model (the 2025 venues'
-// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md), the
+// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md, and the
+// historic ones': 2026-10-05-historic-landmarks-design.md), the main
+// grandstands across the straight from the pits, the crowd heard where the
+// stands are, the
 // yachts on the water at Monaco, Singapore and the 2025 harbours, nothing
 // over the track, nobody on the road,
 // and the frame time holding on every circuit on all three tiers. Run with
@@ -64,6 +67,9 @@ async (page) => {
     imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergGrandstand", "hillside"],
     hungaroring: ["hillside"], zandvoort: ["hugenholtz"], baku: ["bakuOldCity", "flameTowers"], cota: ["cotaTower", "hillside"],
     mexico: ["foroSol"], lasvegas: ["vegasSphere", "vegasStrip"], losail: ["losailGrandstand", "lusailTowers"], yasmarina: ["yasHotel"],
+    // The historic circuits (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+    hockenheim: ["motodrom"], nurburgring: ["nurburgCastle"], estoril: ["estorilGrandstand", "sintraHills"], kyalami: ["joburgSkyline", "hillside"],
+    sepang: ["sepangGrandstand"], istanbul: ["istanbulGrandstand", "hillside"], mugello: ["tuscanHill", "hillside"], watkinsglen: ["fingerLakes", "hillside"],
   };
   results.everyLandmarkFromItsModel = await step((WANT) => {
     const bad = [];
@@ -76,6 +82,48 @@ async (page) => {
     });
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   }, WANT);
+
+  // The venues' main grandstands where the real ones stand (docs/superpowers/
+  // specs/2026-10-05-historic-landmarks-design.md): across the straight from
+  // the pits' middle, at the barrier (the smallest gaps). At Barcelona the
+  // circuit data's three stands rearranged round it along the straight, none
+  // dropped. Sepang's double-fronted stand watches two stretches: another
+  // stretch's barrier nearer its back than its own depth.
+  results.mainStandsWhereTheyStand = await step(() => {
+    const bad = [];
+    const along = (a, b, total) => Math.abs(((a - b + total * 1.5) % total) - total / 2);
+    ["barcelona", "hockenheim", "estoril", "istanbul"].forEach((id) => {
+      const track = TRACKS.find((t) => t.id === id);
+      const hits = Render3D.auditScenery(track, { step: 50, lanes: 1 });
+      const ts = Render3D.inspect().trackside;
+      const L = ts.landmarks.find((l) => l.mainStand);
+      const pit = track.pitLane;
+      const total = track.totalLength;
+      const mid = ((((pit.entry + pit.exit) / 2) % total) + total) % total;
+      const ok = L && L.gap <= 16 && L.side === -pit.side && along(L.trackAt.d, mid, total) <= (pit.exit - pit.entry) / 4 && hits.length === 0
+        && (id !== "barcelona" || (ts.modelStands === 3 && ts.standSpots.every((st) => along(st.d, mid, total) <= 900)));
+      if (!ok) bad.push({ id, L, mid, stands: ts.standSpots, hits: hits.length });
+    });
+    const sepang = TRACKS.find((t) => t.id === "sepang");
+    Render3D.auditScenery(sepang, { step: 50, lanes: 1 });
+    const S = Render3D.inspect().trackside.landmarks.find((l) => l.name === "sepangGrandstand");
+    // (Its depth: 82 m at its scale.)
+    if (!S || !S.mainStand || !(S.behind < 82 * S.scale)) bad.push({ id: "sepang", S });
+    return bad.length === 0 || JSON.stringify(bad).slice(0, 600);
+  });
+
+  // The countryside venues have no city towers: the track data's towers are
+  // farmhouses there (Mugello's Tuscan hills, the Eifel, the Highveld, the
+  // dry hills of Istanbul, the Finger Lakes).
+  results.countrysideHasNoTowers = await step(() => {
+    const bad = [];
+    ["mugello", "nurburgring", "kyalami", "istanbul", "watkinsglen"].forEach((id) => {
+      Render3D.auditScenery(TRACKS.find((t) => t.id === id), { step: 80, lanes: 1 });
+      const k = Render3D.inspect().trackside.decorKinds;
+      if (k.tower || !k.farmhouse) bad.push({ id, k });
+    });
+    return bad.length === 0 || JSON.stringify(bad);
+  });
 
   // Miami's stadium inside the circuit's loop, as in life (the track runs
   // round it), at no more than the city's scale and no less than the map's.
@@ -171,6 +219,7 @@ async (page) => {
     requestAnimationFrame(tick);
   }));
   const frames = {};
+  const crowdHeard = {};
   for (const c of await step(() => CIRCUITS.filter((x) => !CHECK_ONLY.length || CHECK_ONLY.includes(x.id)).map((x) => x.id))) {
     await race(c);
     await step(() => {
@@ -182,6 +231,15 @@ async (page) => {
       const pl = getPlayer();
       pl.x = by.x; pl.y = by.y; pl.speed = 0;
     });
+    // The crowd is heard (and the fireworks burst) where the stands stand:
+    // every crowd source a built stand or the venue's main stand.
+    const heard = await step(() => {
+      const t = Render3D.inspect().trackside;
+      const spots = [...t.standSpots.map((st) => ({ x: st.x, z: st.z })), ...t.landmarks.filter((l) => l.mainStand)];
+      const lost = state.track.crowdStands.filter((c) => !spots.some((st) => Math.hypot(st.x - c.x, st.z - c.y) < 3));
+      return lost.length === 0 && state.track.crowdStands.length === spots.length ? true : { lost: lost.length, sources: state.track.crowdStands.length, spots: spots.length };
+    });
+    if (heard !== true) crowdHeard[c] = heard;
     const got = { high: [], medium: [], low: [] };
     const crowd = {};
     for (const tier of ["high", "medium", "low", "low", "medium", "high"]) {
@@ -194,6 +252,7 @@ async (page) => {
     }]));
   }
   await step(() => Render3D.setGraphics("auto"));
+  results.crowdWhereTheStandsAre = Object.keys(crowdHeard).length === 0 || JSON.stringify(crowdHeard).slice(0, 400);
   // Smooth (under 5 % of frames long), the drawing well inside a frame (under
   // 8 ms on the main thread), the triangles within budget: 2.5 million on
   // High, 1.8 on Medium, 1.2 on Low; on High the near stand's crowd drawn in

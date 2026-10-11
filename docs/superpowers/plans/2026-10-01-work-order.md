@@ -95,6 +95,7 @@ Scope grew on 2026-10-01: not only landmarks but buildings, stands and people.
   - [x] Monaco: remove the buildings between the harbour and the track so the yachts back right up to the fence, as in photos of the real race.
   - [x] Calm Marina Bay Sands' windows; Spa's pits and the São Paulo towers to the Wing's level; the Singapore Flyer visible from the track; faster first load.
   - [x] The 16 new venues' landmarks, stands and yachts (branch landmarks-2025).
+  - [x] The eight historic circuits' landmarks, and Barcelona's main grandstand back across the straight from the pits (branch historic-landmarks; `docs/superpowers/specs/2026-10-05-historic-landmarks-design.md`).
 - [x] **[REVIEW] final look** across all eight circuits. A fresh reviewer, then fix every finding. Merge and push.
 
 ## 2. Stage K: the 3D podium ceremony **[REVIEW]**

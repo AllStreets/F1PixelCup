@@ -51,6 +51,43 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
   });
 });
 
+// The historic circuits' landmarks (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+// (The settings only; that each is built from its model, where it should
+// stand, is tools/checks/trackside-models-check.js's.)
+// The track data (tracks-data.js), for the corners' boards.
+const SHAPES = (() => {
+  const w = {};
+  new Function("window", `${fs.readFileSync(path.join(ROOT, "tracks-data.js"), "utf8")};window.SHAPES = TRACK_SHAPES;`)(w);
+  return w.SHAPES;
+})();
+const HISTORIC = {
+  hockenheim: ["motodrom"], nurburgring: ["nurburgCastle"], estoril: ["estorilGrandstand", "sintraHills"], kyalami: ["joburgSkyline", "hillside"],
+  sepang: ["sepangGrandstand"], istanbul: ["istanbulGrandstand", "hillside"], mugello: ["tuscanHill", "hillside"], watkinsglen: ["fingerLakes", "hillside"],
+};
+
+test("every historic venue builds its landmarks, from models it loads", () => {
+  Object.entries(HISTORIC).forEach(([id, want]) => {
+    const v = VENUES[id];
+    assert.deepEqual([...v.landmarks].sort(), [...want].sort(), `${id}'s landmarks`);
+    want.forEach((n) => assert.ok((VENUE_MODELS[id] || []).includes(n), `${id} doesn't load ${n}`));
+    assert.ok(v.extras.includes("siteLandmarks"), `${id} doesn't build its landmarks`);
+    // A bank at a named corner names one the track data has (else it would
+    // silently stand at a share of the lap).
+    if (v.landmarks.includes("hillside")) {
+      assert.ok(v.hillside && (v.hillside.corner || v.hillside.share), `${id}: where its bank stands`);
+      if (v.hillside.corner) assert.ok((SHAPES[id].corners || []).some((k) => k.board === v.hillside.corner), `${id} has no corner ${v.hillside.corner}`);
+    }
+  });
+});
+
+test("a venue's main stand is one of its landmarks, from a model it loads", () => {
+  Object.entries(VENUES).filter(([, v]) => v.mainStand).forEach(([id, v]) => {
+    assert.ok(v.landmarks.includes(v.mainStand), `${id}: ${v.mainStand} is not among its landmarks`);
+    assert.ok(VENUE_MODELS[id].includes(v.mainStand), `${id} doesn't load ${v.mainStand}`);
+  });
+  assert.equal(VENUES.barcelona.mainStand, "barcelonaGrandstand");
+});
+
 test("no brand's emblem among the models (the bull at Spielberg is one)", () => {
   Object.entries(FILES).forEach(([name, f]) => assert.ok(!/bull/i.test(name) && !/bull/i.test(path.basename(f)), `${name}: ${f}`));
   assert.ok(!fs.readdirSync(path.join(ROOT, "assets", "landmarks")).some((f) => /bull/i.test(f)), "a bull model is still in the assets");

@@ -21,6 +21,8 @@ import { inEntranceGap } from "./entrances.js";
 
 // (A UMD module: imported for its side effect, it defines self.Runoff.)
 import "../runoff.js";
+// Placement maths, pure and tested in Node (siting.js).
+const Siting = window.Siting;
 
 const Runoff = self.Runoff;
 export const SAMPLE_STEP = Runoff.SAMPLE_STEP;
@@ -763,21 +765,59 @@ export function buildDecor(course, venue) {
   const { track } = course;
   const bg = track.bg || {};
   let dropped = 0;
-  track.decor.forEach((d, i) => {
+  let moved = 0;
+  const movedTo = [];
+  track.decor.forEach((d0, i) => {
+    let d = d0;
     const fp = FOOTPRINT[d.type];
     if (!fp) return;
     const [hl, hd] = fp;
     if (!footprintClear(course, d.x, d.y, d.angle, hl, hd, 6)) { dropped += 1; return; }
+    // A piece whose ground a venue's main stand took (placed first:
+    // r3d/landmarks.js buildMainStand) moves along the lap round it.
+    const claim = course.mainStandClaim;
+    // (Its claim reaches a little past its rectangles: the grid it claimed
+    // them by.) So does one whose ground a piece moved round it took.
+    const r = Math.max(hl, hd);
+    const displaced = claim && d.d !== undefined && (Siting.touchesRects(claim, d.x, d.y, r + 24)
+      || movedTo.some((m) => Math.hypot(m.x - d.x, m.y - d.y) < m.r + r));
+    if (displaced) {
+      d = slideAround(course, d, hl, hd);
+      if (!d) { dropped += 1; return; }
+      moved += 1;
+      movedTo.push({ x: d.x, y: d.y, r });
+    }
     if (course.occupied.blocked(d.x, d.y, Math.max(hl, hd))) { dropped += 1; return; }
     course.occupied.add(d.x, d.y, Math.max(hl, hd));
     const obj = buildDecorPiece(d, bg, venue, i);
     obj.position.set(d.x, 0, d.y);
     // Local -Z faces the circuit.
     obj.rotation.y = -d.face - Math.PI / 2;
+    // Where it stands round the lap (a stand's crowd is heard there).
+    obj.userData.d = d.d;
+    obj.userData.kind = obj.name === "farmhouse" ? "farmhouse" : d.type;
     group.add(obj);
   });
   group.userData.dropped = dropped;
+  group.userData.moved = moved;
   return group;
+}
+
+// A piece moved along the lap from where the track data put it (siting.js
+// slidePiece: its own side, as far past the barrier as it was, up to 1200
+// along the lap either way), to the nearest place where its whole footprint
+// is clear of the circuit and of everything placed and it still faces the
+// stretch it watches (no other stretch nearer its back than its front).
+// Returns the moved piece, or null.
+export function slideAround(course, piece, hl, hd) {
+  return Siting.slidePiece(course, piece, (x, y, angle, q) => {
+    if (!footprintClear(course, x, y, angle, hl, hd, 6) || course.occupied.blocked(x, y, Math.max(hl, hd))) return false;
+    const ux = (q.x - x) / (Math.hypot(q.x - x, q.y - y) || 1);
+    const uy = (q.y - y) / (Math.hypot(q.x - x, q.y - y) || 1);
+    const front = course.clearance(x + ux * hd, y + uy * hd, 600);
+    const back = course.clearance(x - ux * hd, y - uy * hd, 600);
+    return back >= front + hd;
+  });
 }
 
 function buildDecorPiece(d, bg, venue, i) {
@@ -812,6 +852,31 @@ function buildDecorPiece(d, bg, venue, i) {
       face.rotation.y = Math.PI;
       g.add(face);
     }
+    return g;
+  }
+  // In the countryside (venue.farm) the track data's towers are farmhouses:
+  // a long house under a pitched roof in the place's own colours, a lower
+  // barn beside it, and (Tuscany) its cypresses.
+  if (d.type === "tower" && venue.farm) {
+    const f = venue.farm;
+    const wall = std(color(f.wall), { roughness: 0.9 });
+    const roofMat = std(color(f.roof), { roughness: 0.75 });
+    const gable = (w, dp, h, x, z, turn = 0) => {
+      const shape = new THREE.Shape([new THREE.Vector2(-dp / 2 - 1, 0), new THREE.Vector2(dp / 2 + 1, 0), new THREE.Vector2(0, dp * 0.42)]);
+      const roof = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: w + 2, bevelEnabled: false }).translate(0, 0, -(w + 2) / 2).rotateY(Math.PI / 2 + turn), roofMat);
+      roof.position.set(x, h, z);
+      roof.castShadow = true;
+      roof.receiveShadow = true;
+      g.add(roof);
+      add(new THREE.BoxGeometry(w, h, dp), wall, x, h / 2, z).rotation.y = turn;
+    };
+    gable(30, 14, 15, -4, 4);
+    gable(16, 11, 10, 14, -8, Math.PI / 2);
+    if (f.cypress) {
+      const dark = std(color("#24432a"), { roughness: 0.9, flatShading: true });
+      [[-22, -12], [-26, 2], [-24, 16], [20, 14]].forEach(([x, z]) => add(new THREE.ConeGeometry(3.4, 34, 7), dark, x, 17, z));
+    }
+    g.name = "farmhouse";
     return g;
   }
   if (d.type === "tower") {
