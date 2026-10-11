@@ -82,7 +82,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   const trophies = {};
   [3, 2, 1].forEach((place) => {
     const trophy = buildTrophy(place, { geo, mat });
-    trophy.table = new THREE.Vector3(T.x + T.on[place], T.height - trophy.foot, T.z);
+    // (Toward the presenter's side of the table.)
+    trophy.table = new THREE.Vector3(T.x + T.on[place], T.height - trophy.foot, T.z - 0.05);
     trophy.group.position.copy(trophy.table);
     scene.add(trophy.group);
     trophies[place] = trophy;
@@ -100,7 +101,9 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   const drivers = figures.map((f) => ({ ...f, rig: rigOf(f.fig.model), place: f.entry.place }));
   const grips = gripsOf(drivers[0].rig);
 
-  const gaps = { reach: {}, carry: 0, hold: {} };
+  const gaps = { reach: {}, carry: 0, carryAt: null, hold: {} };
+  // Where each trophy was as the driver's hand closed on it.
+  const given = { 1: new THREE.Vector3(), 2: new THREE.Vector3(), 3: new THREE.Vector3() };
   const state = { where: {}, presenter: null };
   const v1 = new THREE.Vector3();
   const v2 = new THREE.Vector3();
@@ -114,13 +117,14 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   const forwardOf = (heading, out) => out.set(Math.sin(heading), 0, Math.cos(heading));
   const rightOf = (heading, out) => out.set(-Math.cos(heading), 0, Math.sin(heading));
 
-  // Where a driver takes their trophy: out in front of the right shoulder
-  // and down, where the presenter (on the floor, below) can hold it up to.
-  function handoverPoint(d, out) {
-    d.rig.arms.R.upper.getWorldPosition(out);
-    // (Toward the side the presenter stands on.)
-    const side = Math.sign(Ceremony.PRESENT.spotSide[d.place]);
-    return out.set(out.x + (side < 0 ? -0.1 : 0.26), d.step.height + 1.4 - 0.4, d.fig.root.position.z + 0.44);
+  // Where a trophy is handed over (its stem): out from the presenter's
+  // chest toward the driver's taking shoulder, at the height the driver's
+  // hand comes down to. Within both their reaches by where the presenter
+  // stands (ceremony.js: PRESENT.spotSide, spotZ).
+  function handoverPoint(d, P, out) {
+    d.rig.arms.R.upper.getWorldPosition(v3);
+    out.set(v3.x - P.x, 0, v3.z - P.z).normalize().multiplyScalar(0.4);
+    return out.set(P.x + out.x, d.step.height + 1.4 - 0.52, P.z + out.z);
   }
 
   // Where a presenter carries one: in front of the waist, its base at about a metre.
@@ -153,7 +157,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
     if (P.on) {
       walk(presenter.rig, P.stride, P.walking, pr, { arms: !busy || t < busy.pick - 0.3 });
       // A slight bow to the table as the trophy is taken; a nod once it is given.
-      if (P.take > 0) { turn(presenter.rig.bones.spine, pr, -0.3 * P.take); turn(presenter.rig.bones.chest, pr, -0.2 * P.take); }
+      if (P.take > 0) { turn(presenter.rig.bones.spine, pr, -0.4 * P.take); turn(presenter.rig.bones.chest, pr, -0.22 * P.take); }
       if (P.nod > 0) { turn(presenter.rig.bones.head, pr, -0.34 * P.nod); turn(presenter.rig.bones.chest, pr, -0.1 * P.nod); }
     }
 
@@ -179,14 +183,15 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
         carryPoint(P, trophy, v1);
         v1.lerp(trophy.table, 1 - smooth(h.lifted, h.carried, t));
         if (t < h.carried) v1.y += 0.05 * Math.sin(Math.PI * smooth(h.lifted, h.carried, t));
-        g.position.copy(v1).lerp(handoverPoint(d, v2), P.raise);
+        g.position.copy(v1).lerp(handoverPoint(d, P, v2), P.raise);
         g.quaternion.copy(upright);
       }
       // The driver's right hand: out to the trophy's stem as it is held up.
       if (d.reach > 0) {
-        const target = where === "presenter" ? v3.copy(g.position) : handoverPoint(d, v3);
+        const target = where === "presenter" ? v3.copy(g.position) : given[place];
         pole.set(-0.5, -1, -0.2);
         const gap = reach(d.rig, "R", target, { weight: d.reach, grip: grips.R.at, pole });
+        if (where === "presenter") given[place].copy(g.position);
         if (where === "presenter" && t > h.contact - 0.12) gaps.reach[place] = gap;
       }
       if (where === "right" || where === "left") {
@@ -229,7 +234,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           pole.set(0, -1, 0).addScaledVector(pr, sign * 0.6);
           worst = Math.max(worst, reach(presenter.rig, s, v1, { weight: w, grip: grips[s].at, pole }));
         });
-        if (w >= 1) gaps.carry = Math.max(gaps.carry, worst);
+        if (w >= 1 && worst > gaps.carry) { gaps.carry = worst; gaps.carryAt = [busy.place, +(t - busy.pick).toFixed(2)]; }
       }
     }
   }
@@ -253,7 +258,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           leftGrip: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p),
         };
       }),
-      gaps: { reach: { ...gaps.reach }, carry: gaps.carry, hold: { ...gaps.hold } },
+      gaps: { reach: { ...gaps.reach }, carry: gaps.carry, carryAt: gaps.carryAt, hold: { ...gaps.hold } },
     };
   }
 

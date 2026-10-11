@@ -21,9 +21,9 @@
   // podium, between the first and third steps, clear of their numbers; the
   // presenter stands `stand` m on the podium's side of it, `on` is where each
   // trophy sits along it), and how long each part of a handover takes (s).
-  const TABLE = { x: 0.8, z: 2.3, width: 0.74, depth: 0.42, height: 0.78, stand: 0.44, on: { 1: 0, 2: -0.24, 3: 0.24 } };
+  const TABLE = { x: 0.8, z: 2.3, width: 0.74, depth: 0.42, height: 0.78, stand: 0.38, on: { 1: 0, 2: -0.2, 3: 0.2 } };
   const WALK_SPEED = 2.3;
-  const PRESENT = { gap: 0.5, pick: 0.55, lift: 0.3, give: 1.0, contact: 0.7, nod: 0.35, turn: 0.5, liftFor: 1.7, pass: 0.55, spotZ: 1.0, spotSide: { 1: -0.6, 2: -0.6, 3: 0.6 }, offX: 5.6, offZ: 1.9 };
+  const PRESENT = { gap: 0.5, pick: 0.55, lift: 0.3, give: 1.0, contact: 0.7, nod: 0.35, turn: 0.5, liftFor: 1.7, pass: 0.55, spotZ: 0.74, spotSide: -0.5, offX: 5.6, offZ: 1.9 };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
     if (!(anthemSeconds >= 0) || !Number.isFinite(anthemSeconds)) throw new Error(`anthem length ${anthemSeconds}`);
     // Seconds from the start of the ceremony.
@@ -63,12 +63,12 @@
     // legs: [{ from, to, a: [x, z], b: [x, z] }] walks; stops: [{ from, to,
     // at: [x, z], heading, h: the handover in progress }].
     const tableSpot = [TABLE.x, TABLE.z - TABLE.stand];
-    // At the foot of a driver's step, to one side of them (the outside for
-    // second and third, clear of the table for the winner), turned to face
-    // them: driver and presenter both stay in view.
-    const spotFor = (place) => [STEPS[place].x + PRESENT.spotSide[place], PRESENT.spotZ];
+    // At the foot of a driver's step, to the driver's right (the hand that
+    // takes it; the viewer's left), turned to face them: close enough for
+    // the two to reach each other, and both in view.
+    const spotFor = (place) => [STEPS[place].x + PRESENT.spotSide, PRESENT.spotZ];
     const FACE_TABLE = 0;
-    const faceDriver = (place) => Math.atan2(-PRESENT.spotSide[place], STEPS[place].standZ + STEP_FORWARD - PRESENT.spotZ);
+    const faceDriver = (place) => Math.atan2(-PRESENT.spotSide, STEPS[place].standZ + STEP_FORWARD - PRESENT.spotZ);
     const HANDOVERS = [];
     const path = [];
     let clock = BEATS.present;
@@ -299,8 +299,9 @@
       const orbit = ORBIT_SWING * Math.sin(((t - BEATS.spray) * 2 * Math.PI) / ORBIT_PERIOD) * orbitIn;
       const angle = 0.5 * (1 - sweep) + orbit;
       return {
-        // (The shot slides along with what it follows, a little less than it does.)
-        x: lookX * 0.8 + Math.sin(angle) * radius,
+        // (The shot moves out to the side of what it follows, so each
+        // handover is seen a little from its own side, past the table.)
+        x: lookX * 1.5 + Math.sin(angle) * radius,
         y: height,
         z: lookZ + Math.cos(angle) * radius,
         lookX,

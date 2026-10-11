@@ -353,9 +353,10 @@ test("the presenter: on from the side, to the table and each driver in turn, off
   C.HANDOVERS.forEach((h) => {
     const p = C.presenterAt((h.raise + h.contact) / 2);
     const step = C.stepFor(h.place);
-    // (To one side of the driver, so both stay in view; never behind the table.)
-    assert.ok(Math.abs(step.x - p.x) > 0.4 && Math.abs(step.x - p.x) < 0.8 && p.z > step.depth / 2 + 0.2 && p.z < step.depth / 2 + 0.8, JSON.stringify(p));
-    assert.ok(Math.abs(p.x - C.TABLE.x) > C.TABLE.width / 2 + 0.6, "clear of the table");
+    // (To the driver's right, the viewer's left, so both stay in view; at
+    // the foot of the step, well short of the table.)
+    assert.ok(step.x - p.x > 0.35 && step.x - p.x < 0.7 && p.z > step.depth / 2 + 0.05 && p.z < step.depth / 2 + 0.5, JSON.stringify(p));
+    assert.ok(p.z < C.TABLE.z - 1, "well short of the table");
     const toDriver = Math.atan2(step.x - p.x, step.standZ + C.STEP_FORWARD - p.z);
     assert.ok(Math.abs(Math.sin(p.heading - toDriver)) < 0.02 && Math.cos(p.heading - toDriver) > 0.9, "faces the driver");
     assert.equal(p.carrying, h.place);

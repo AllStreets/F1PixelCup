@@ -252,13 +252,73 @@ async (page) => {
     const stand = await at(["anthem", 1.2]);
     results.standForTheAnthem = (stand.beat === "anthem" && pose(stand) === "stand,stand,stand" && Math.abs(stand.anthemSeconds - 3) < 1e-9
       && !stand.confetti.visible && stand.drivers.every((d) => !d.props.trophy && !d.props.bottle)
-      && stand.beats.armsDown < stand.beats.anthem && stand.beats.anthemEnd < stand.beats.trophy && stand.beats.trophy < stand.beats.spray)
+      && stand.beats.armsDown < stand.beats.anthem && stand.beats.anthemEnd <= stand.beats.present && stand.beats.present < stand.beats.trophy && stand.beats.trophy < stand.beats.spray)
       || `${stand.beat} ${pose(stand)} ${stand.anthemSeconds}`;
+
+    // ---- The trophy presentation (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md) ----
+    // Before it: three trophies on the table in three metals and three
+    // sizes (third's the smallest), nobody holding one, no presenter yet.
+    const onTable = stand.trophies.every((tr) => tr.where === "table" && Math.abs(tr.foot - stand.table.height) < 1e-6
+      && Math.abs(tr.x - stand.table.x) < 0.4 && Math.abs(tr.z - stand.table.z) < 0.2);
+    const byPlace = Object.fromEntries(stand.trophies.map((tr) => [tr.place, tr]));
+    results.threeTrophiesOnTheTable = (stand.trophies.length === 3 && onTable && !stand.presenter.on
+      && [byPlace[3].metal, byPlace[2].metal, byPlace[1].metal].join() === "bronze,silver,gold"
+      && byPlace[2].height > byPlace[3].height * 1.3 && byPlace[1].height > byPlace[2].height * 1.3
+      && new Set(stand.trophies.map((tr) => tr.color)).size === 3)
+      || JSON.stringify(stand.trophies.map((tr) => [tr.place, tr.metal, tr.height, tr.where, tr.foot]));
+    // The presenter is nobody on the grid, in formal wear, with a face of their own.
+    const who = stand.presenter;
+    const grid = await p.evaluate(() => ({ ids: DRIVERS.map((d) => d.id), suits: TEAMS.map((t) => t.body.toLowerCase()), skins: DRIVERS.map((d) => JSON.stringify(d.look.shape)) }));
+    results.presenterIsNoDriver = (["man", "woman"].includes(who.kind) && !grid.ids.includes(who.looks.driverId) && /^presenter-/.test(who.looks.driverId)
+      && who.looks.headwear === "none" && who.looks.marks && /suit/.test(who.looks.marks.formal || "") && !grid.suits.includes(who.looks.suit)
+      && who.looks.face.shown.includes("hair") && Object.keys(who.looks.face.keys).length > 5)
+      || JSON.stringify({ kind: who.kind, id: who.looks.driverId, marks: who.looks.marks, suit: who.looks.suit });
+    // Every frame of it: each trophy where the timeline says (table, the
+    // presenter's hands, the driver's right hand, the left), the presenter on
+    // stage only while it lasts, nobody's own model trophy ever shown, and no
+    // trophy below what it stands on.
+    const scene = await p.evaluate(() => new Promise((done) => {
+      const C = Ceremony.withAnthem(Render3D.podium.inspect().anthemSeconds);
+      const frames = [];
+      const bad = [];
+      const tick = () => {
+        const st = Render3D.podium.inspect();
+        const P = C.presenterAt(st.t);
+        const row = { t: st.t, on: st.presenter.on, where: {}, pose: st.drivers.map((d) => d.pose) };
+        if (st.presenter.on !== P.on) bad.push(`presenter on ${st.presenter.on} at ${st.t.toFixed(2)}`);
+        if (P.on && Math.hypot(st.presenter.x - P.x, st.presenter.z - P.z) > 1e-6) bad.push(`presenter off its path at ${st.t.toFixed(2)}`);
+        st.trophies.forEach((tr) => {
+          row.where[tr.place] = tr.where;
+          if (tr.where !== C.trophyAt(tr.place, st.t).where) bad.push(`trophy ${tr.place} ${tr.where} at ${st.t.toFixed(2)}`);
+          const floor = tr.where === "table" ? st.table.height : tr.where === "presenter" ? st.table.height - 0.02 : C.stepFor(tr.place).height + 0.5;
+          if (tr.foot < floor - 1e-6) bad.push(`trophy ${tr.place} sinks to ${tr.foot.toFixed(2)} at ${st.t.toFixed(2)}`);
+        });
+        if (st.drivers.some((d) => d.props.trophy)) bad.push(`a model trophy shown at ${st.t.toFixed(2)}`);
+        frames.push(row);
+        if (st.t < C.BEATS.trophy + 0.6) requestAnimationFrame(tick);
+        else done({ frames: frames.length, bad: bad.slice(0, 5), order: [...new Set(frames.flatMap((f) => Object.entries(f.where).filter(([, w]) => w === "right").map(([k]) => k)))].join(),
+          gaps: st.gaps, handovers: C.HANDOVERS, present: C.BEATS.present, trophy: C.BEATS.trophy,
+          lifted: [3, 2].map((place) => frames.some((f) => f.pose[place - 1] === "trophy")) });
+      };
+      requestAnimationFrame(tick);
+    }));
+    results.presentationFollowsTheTimeline = (scene.frames > 300 && scene.bad.length === 0 && scene.order === "3,2,1" && scene.lifted.every(Boolean))
+      || JSON.stringify({ frames: scene.frames, bad: scene.bad, order: scene.order, lifted: scene.lifted });
+    results.presentationIsShort = (scene.trophy - scene.present >= 11 && scene.trophy - scene.present <= 16) || `${scene.trophy - scene.present} s`;
+    // Hands on the trophies: each driver's hand within 3 cm of the stem as it
+    // closes on it; the presenter's two hands within 3 cm of its base all the
+    // while it is carried and held up.
+    results.handsMeetTheTrophies = ([3, 2, 1].every((place) => scene.gaps.reach[place] < 0.03) && scene.gaps.carry < 0.03)
+      || JSON.stringify(scene.gaps);
 
     const trophy = await at(["trophy", 1.4]);
     results.trophyBeat = pose(trophy) === "trophy,wave,wave" || pose(trophy);
-    results.trophyOnlyWithP1 = trophy.drivers[0].props.trophy === true && !trophy.drivers[1].props.trophy && !trophy.drivers[2].props.trophy
-      && [first, arms, stand].every((s) => s.drivers.every((d) => !d.props.trophy));
+    // The winner's lift: the gold one in the right hand, up over the head; the
+    // other two hold theirs in the left; the presenter is leaving.
+    const gold = trophy.trophies.find((tr) => tr.place === 1);
+    results.winnerLiftsTheGold = (gold.where === "right" && gold.rightGrip < 1e-3 && gold.y > trophy.drivers[0].y + 1.75
+      && trophy.trophies.filter((tr) => tr.place !== 1).every((tr) => tr.where === "left" && tr.leftGrip < 0.03 && tr.clear > 0.02))
+      || JSON.stringify(trophy.trophies.map((tr) => [tr.place, tr.where, tr.y, tr.rightGrip, tr.leftGrip, tr.clear]));
     results.confettiBurst = trophy.confetti.visible && trophy.confetti.airborne > trophy.confetti.count * 0.5
       && trophy.confetti.count === { high: 600, medium: 300, low: 120 }[trophy.tier];
     const later = await at(["trophy", 2.6]);
@@ -268,7 +328,9 @@ async (page) => {
     // Just into the spray: the poses crossfade, so the trophy is still up for
     // the first moment and the bottles come in as the hands meet.
     const swap = await at(["spray", 0]);
-    results.propsSwapMidFade = (swap.drivers[0].props.trophy === swap.want[0].trophy && swap.drivers.every((d, i) => d.props.bottle === swap.want[i].bottle)) || JSON.stringify({ t: swap.t, props: swap.drivers.map((d) => d.props) });
+    results.propsSwapMidFade = (swap.drivers.every((d, i) => d.props.bottle === swap.want[i].bottle && !d.props.trophy)) || JSON.stringify({ t: swap.t, props: swap.drivers.map((d) => d.props) });
+    // The presenter has gone before the champagne.
+    results.presenterGoneBeforeTheChampagne = swap.presenter.on === false || `still on at ${swap.t}`;
     // A cork for each bottle: no drop leaves a bottle before its own cork
     // goes, and each is spraying a moment after (Low has no spray).
     const pops = await p.evaluate(() => new Promise((done) => {
@@ -302,8 +364,16 @@ async (page) => {
     });
     results.stillRunning = shots[1].t > shots[0].t + 1 && shots[1].confetti.airborne > 0;
 
+    // With the bottles out: every trophy is in a left hand (within 3 cm of
+    // it), clear of the body, and no right hand is on one: never a trophy
+    // and a bottle in the same hand.
+    const both = await at(["spray", 2.4]);
+    results.noTrophyInTheBottleHand = (both.drivers.every((d) => d.props.bottle) && both.trophies.every((tr) => tr.where === "left" && tr.leftGrip < 0.03 && tr.rightGrip > 0.15 && tr.clear > 0.02)
+      && [1, 2, 3].every((place) => both.gaps.hold[place] < 0.03))
+      || JSON.stringify({ trophies: both.trophies.map((tr) => [tr.place, tr.where, tr.leftGrip, tr.rightGrip, tr.clear]), hold: both.gaps.hold });
+
     results.followsTimeline = timeline.every((st) => st.drivers.every((d, i) => d.pose === st.want[i].pose && Math.abs(d.z - st.want[i].z) < 1e-6
-      && Boolean(d.props.trophy) === st.want[i].trophy && Boolean(d.props.bottle) === st.want[i].bottle))
+      && !d.props.trophy && Boolean(d.props.bottle) === st.want[i].bottle))
       || JSON.stringify(timeline.map((st) => [st.t, st.drivers.map((d) => [d.pose, d.props])])).slice(0, 400);
 
     // The plates: one per driver, in the drivers' order on screen, on screen.
@@ -405,20 +475,41 @@ async (page) => {
       const frames = (n) => new Promise((r) => { const go = () => (n-- > 0 ? requestAnimationFrame(go) : r()); go(); });
       await frames(30);
       const mem = () => ({ ...Render3D.podium.inspect().memory });
-      const before = mem();
       const top = ids.map((driverId, i) => ({ place: i + 1, driverId, points: 100 - i * 20 }));
-      Render3D.podium.begin({ cup: { id: "trophyCup", name: "Trophy Cup" }, podium: top });
-      const t0 = performance.now();
-      while (performance.now() - t0 < 20000) {
-        const f = Render3D.podium.frame(performance.now());
-        if (f.drawing && Render3D.podium.inspect().spray.emitted > 200) break;
-        await frames(1);
-      }
-      const drew = Render3D.podium.inspect().t;
-      Render3D.podium.end();
-      await frames(30);
+      // (Run through the presentation's middle and into the spray; the
+      // waits between are skipped.)
+      const cycle = async () => {
+        Render3D.podium.begin({ cup: { id: "trophyCup", name: "Trophy Cup" }, podium: top });
+        const t0 = performance.now();
+        let who = null;
+        let skipped = 0;
+        while (performance.now() - t0 < 30000) {
+          const f = Render3D.podium.frame(performance.now());
+          if (f.drawing) {
+            const st = Render3D.podium.inspect();
+            who = st.presenter.kind;
+            const C = Ceremony.withAnthem(st.anthemSeconds);
+            if (skipped === 0 && f.t > 1) { Render3D.podium.seek(C.HANDOVERS[0].pick - 0.2); skipped = 1; }
+            if (skipped === 1 && f.t > C.HANDOVERS[0].release + 1) { Render3D.podium.seek(C.BEATS.spray - 0.3); skipped = 2; }
+            if (st.spray.emitted > 200) break;
+          }
+          await frames(1);
+        }
+        const drew = Render3D.podium.inspect().spray.emitted;
+        Render3D.podium.end();
+        await frames(30);
+        return { drew, who };
+      };
+      // Once to fill what is kept between ceremonies (a look's strands are
+      // drawn once); then the same again must leave nothing more behind.
+      const first = await cycle();
+      const before = mem();
+      const second = await cycle();
       const after = mem();
-      return (drew > 5 && after.textures <= before.textures && after.geometries <= before.geometries) || JSON.stringify({ drew, before, after });
+      return (second.drew > 200 && after.textures <= before.textures && after.geometries <= before.geometries && after.programs <= before.programs
+        // And the same podium has the same presenter.
+        && first.who === second.who && Boolean(first.who))
+        || JSON.stringify({ first, second, before, after });
     }, cup.top);
     results.racePostfxBack = (await p.evaluate(() => Render3D.podium.inspect().racePostfx)) !== null || "still released";
 
