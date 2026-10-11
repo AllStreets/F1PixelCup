@@ -808,42 +808,91 @@ export function buildDecor(course, venue) {
 }
 
 // A venue's own grandstands (venue.stands): tried every `step` round the lap
-// on both sides (every other place first, so they spread), each with its
+// on both sides (every other place first, so they spread; a place that will
+// not take one is tried a little either way along the lap), each with its
 // front as near the barrier as it fits (`gaps`), wherever its whole
 // footprint is clear of the circuit and of everything already placed (the
-// city, the Safety Car's entrances, the pits, the track data's stands); at
-// most `max`. Built as the track data's stands are, with their crowds.
+// city, the Safety Car's entrances, the pits, the track data's stands), it
+// faces the stretch it stands beside (no other stretch nearer its back than
+// its front) and it leaves the marshals' posts and the starter's stand
+// their ground; at most `max`. Built as the track data's stands are, with
+// their crowds; lit along the roof's edge at night; their seats in a few
+// colours. Returns how many.
 function venueStands(course, venue, bg, group) {
-  const { step = 180, max = 24, gaps = [6, 14, 24, 36] } = venue.stands;
+  const { step = 180, max = 24, gaps = [6, 14, 24, 36, 50], seats = [] } = venue.stands;
   const [hl, hd] = FOOTPRINT.grandstand;
   const total = course.track.totalLength;
+  // Where the marshals' posts will stand (r3d/trackside.js: 14 past the
+  // barrier, either side) and the starter's by the line: kept free.
+  const kept = [];
+  [...(course.track.marshalPosts || []).map((m) => m.d), 0].forEach((d) => {
+    const p = course.sampleAt(d);
+    [-1, 1].forEach((side) => kept.push([p.x + p.nx * side * ((side > 0 ? p.outerR : p.outerL) + 14), p.y + p.ny * side * ((side > 0 ? p.outerR : p.outerL) + 14)]));
+  });
   const places = [];
   for (let d = step / 2; d < total; d += step) places.push(d);
   const order = [...places.filter((_, k) => k % 2 === 0), ...places.filter((_, k) => k % 2 === 1)];
+  const fits = (site, gap) => {
+    if (!footprintClear(course, site.x, site.y, site.angle, hl, hd, 6)) return null;
+    const fx = Math.cos(site.face); const fy = Math.sin(site.face);
+    // (Its front toward the stretch it is beside: nothing nearer its back.)
+    if (course.clearance(site.x - fx * hd, site.y - fy * hd, 600) < course.clearance(site.x + fx * hd, site.y + fy * hd, 600) + hd) return null;
+    const ca = Math.cos(site.angle); const sa = Math.sin(site.angle);
+    const taken = kept.some(([x, z]) => {
+      const u = (x - site.x) * ca + (z - site.y) * sa; const v = (x - site.x) * fx + (z - site.y) * fy;
+      return Math.abs(u) < hl + 10 && v > -hd - 10 && v < hd + gap + 22;
+    });
+    if (taken) return null;
+    // Its ground, and the strip before it down to the barrier (nothing is planted in its view).
+    const ground = [...rectPoints(site.x, site.y, site.angle, hl + 4, hd + 4, 16), ...rectPoints(site.x + fx * (hd + gap / 2), site.y + fy * (hd + gap / 2), site.angle, hl, gap / 2, 16)];
+    return ground.some(([x, z]) => course.occupied.blocked(x, z, 9)) ? null : ground;
+  };
   let built = 0;
-  order.forEach((d) => {
+  order.forEach((d0) => {
     [-1, 1].forEach((side) => {
       if (built >= max) return;
-      const p = course.sampleAt(d);
-      for (const gap of gaps) {
-        const site = standSite(p, side, gap, hd);
-        if (!footprintClear(course, site.x, site.y, site.angle, hl, hd, 6)) continue;
-        const ground = rectPoints(site.x, site.y, site.angle, hl + 4, hd + 4, 16);
-        if (ground.some(([x, z]) => course.occupied.blocked(x, z, 9))) continue;
-        ground.forEach(([x, z]) => course.occupied.add(x, z, 12));
-        const obj = buildDecorPiece({ type: "grandstand", ...site, d }, bg, venue, 100 + built);
-        obj.position.set(site.x, 0, site.y);
-        obj.rotation.y = -site.face - Math.PI / 2;
-        obj.userData.d = d;
-        obj.userData.kind = "grandstand";
-        obj.userData.venueStand = true;
-        group.add(obj);
-        built += 1;
-        break;
+      for (const shift of [0, 45, -45, 90, -90]) {
+        const d = ((d0 + shift) % total + total) % total;
+        const p = course.sampleAt(d);
+        for (const gap of gaps) {
+          const site = standSite(p, side, gap, hd);
+          const ground = fits(site, gap);
+          if (!ground) continue;
+          ground.forEach(([x, z]) => course.occupied.add(x, z, 12));
+          const colour = seats.length ? seats[built % seats.length] : venue.standColor;
+          const obj = buildDecorPiece({ type: "grandstand", ...site, d }, bg, { ...venue, standColor: colour }, 100 + built);
+          if (venue.night) obj.add(standLights());
+          obj.position.set(site.x, 0, site.y);
+          obj.rotation.y = -site.face - Math.PI / 2;
+          obj.userData.d = d;
+          obj.userData.kind = "grandstand";
+          obj.userData.venueStand = true;
+          group.add(obj);
+          built += 1;
+          return;
+        }
       }
     });
   });
   return built;
+}
+
+// A stand's lights at night: a line of lamps under its roof's front edge and
+// a lit truss on each gable (a stand's local -Z faces the circuit).
+function standLights() {
+  const g = new THREE.Group();
+  g.name = "stand_lights";
+  const mat = new THREE.MeshBasicMaterial({ color: 0xfff1d6, toneMapped: false });
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(146, 1.1, 1.4), mat);
+  bar.position.set(0, 43, -24);
+  g.add(bar);
+  [-1, 1].forEach((e) => {
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.9, 30, 0.9), mat);
+    post.position.set(e * 77.4, 15, -30);
+    g.add(post);
+  });
+  g.traverse((o) => { o.castShadow = false; });
+  return g;
 }
 
 // A piece moved along the lap from where the track data put it (siting.js

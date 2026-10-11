@@ -285,7 +285,7 @@ function beamMaterial(night) {
 // their edges' middles and points across its large faces, dropped to the
 // ground (an edge across the margin counts, not only its ends; a piece
 // standing on another counts too), at most `cap` of them, evenly through.
-function groundPoints(node, cap = 260) {
+function groundPoints(node, cap = 1200) {
   const pts = [];
   node.updateMatrixWorld(true);
   const a = new THREE.Vector3();
@@ -310,7 +310,7 @@ function groundPoints(node, cap = 260) {
       b.fromBufferAttribute(pos, at(k + 1)).applyMatrix4(m.matrixWorld);
       c.fromBufferAttribute(pos, at(k + 2)).applyMatrix4(m.matrixWorld);
       const area = Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
-      const n = Math.min(12, Math.floor(Math.sqrt(area) / 15));
+      const n = Math.min(40, Math.floor(Math.sqrt(area) / 12));
       for (let i = 1; i < n; i += 1) {
         for (let j = 1; i + j < n; j += 1) {
           const u = i / n;
@@ -378,7 +378,9 @@ function placeGroups(course, nodes, scale, moved, dropped, maxShift = MAX_SHIFT)
       });
       moved.push({ name: key, shift: Math.round(r.shift), ...(touches ? { touches } : {}) });
     }
-    pts.forEach(([x, z], k) => { if (k % 2 === 0) course.occupied.add(x + r.dx, z + r.dz, 6); });
+    // (Every point of its ground, each wide enough to meet its neighbours:
+    // nothing placed later slips between two claims into a hall.)
+    pts.forEach(([x, z]) => course.occupied.add(x + r.dx, z + r.dz, 9));
   });
 }
 

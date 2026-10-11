@@ -56,6 +56,12 @@ test("a stand's place: beside the track, its front a gap past the barrier, facin
   assert.ok(Math.abs(left.y + (30 + 2 + 10 + 34)) < 1e-9 && Math.sin(left.face) > 0.99);
   // As the track data's own stands are written: angle = face + a quarter turn.
   assert.ok(Math.abs(right.angle - right.face - Math.PI / 2) < 1e-9);
+  // On a stretch running diagonally: out along its own normal, facing back down it.
+  const k = Math.SQRT1_2;
+  const q = { x: 0, y: 0, nx: k, ny: -k, outerL: 20, outerR: 20 };
+  const s = place.standSite(q, 1, 8, 34);
+  assert.ok(Math.abs(s.x - k * 64) < 1e-9 && Math.abs(s.y + k * 64) < 1e-9, JSON.stringify(s));
+  assert.ok(Math.abs(Math.cos(s.face) + k) < 1e-9 && Math.abs(Math.sin(s.face) - k) < 1e-9, "it faces the track");
 });
 
 test("a footprint's points cover it closely, corners and all", () => {
