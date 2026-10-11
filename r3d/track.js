@@ -743,6 +743,8 @@ function buildGantry(start, right, left, angle) {
 // Footprints in local units: half-length along the track, half-depth away.
 const FOOTPRINT = {
   grandstand: [78, 34],
+  // A small open bleacher (venue.stands.bleachers).
+  bleacher: [80, 15],
   billboard: [32, 4],
   tower: [20, 20],
 };
@@ -815,11 +817,12 @@ export function buildDecor(course, venue) {
 // city, the Safety Car's entrances, the pits, the track data's stands), it
 // faces the stretch it stands beside (no other stretch nearer its back than
 // its front) and it leaves the marshals' posts and the starter's stand
-// their ground; at most `max`. Built as the track data's stands are, with
+// their ground; at most `max`. Where none fits, a small open bleacher if
+// one does (at most `bleachers` of them). Built as the track data's stands are, with
 // their crowds; lit along the roof's edge at night; their seats in a few
 // colours. Returns how many.
 function venueStands(course, venue, bg, group) {
-  const { step = 180, max = 24, gaps = [6, 14, 24, 36, 50], seats = [] } = venue.stands;
+  const { step = 180, max = 24, gaps = [6, 14, 24, 36, 50], seats = [], bleachers = 0 } = venue.stands;
   const [hl, hd] = FOOTPRINT.grandstand;
   const total = course.track.totalLength;
   // Where the marshals' posts will stand (r3d/trackside.js: 14 past the
@@ -832,7 +835,7 @@ function venueStands(course, venue, bg, group) {
   const places = [];
   for (let d = step / 2; d < total; d += step) places.push(d);
   const order = [...places.filter((_, k) => k % 2 === 0), ...places.filter((_, k) => k % 2 === 1)];
-  const fits = (site, gap) => {
+  const fits = (site, gap, hl = FOOTPRINT.grandstand[0], hd = FOOTPRINT.grandstand[1]) => {
     if (!footprintClear(course, site.x, site.y, site.angle, hl, hd, 6)) return null;
     const fx = Math.cos(site.face); const fy = Math.sin(site.face);
     // (Its front toward the stretch it is beside: nothing nearer its back.)
@@ -840,7 +843,7 @@ function venueStands(course, venue, bg, group) {
     const ca = Math.cos(site.angle); const sa = Math.sin(site.angle);
     const taken = kept.some(([x, z]) => {
       const u = (x - site.x) * ca + (z - site.y) * sa; const v = (x - site.x) * fx + (z - site.y) * fy;
-      return Math.abs(u) < hl + 10 && v > -hd - 10 && v < hd + gap + 22;
+      return Math.abs(u) < hl + 30 && v > -hd - 10 && v < hd + gap + 40;
     });
     if (taken) return null;
     // Its ground, and the strip before it down to the barrier (nothing is planted in its view).
@@ -848,9 +851,35 @@ function venueStands(course, venue, bg, group) {
     return ground.some(([x, z]) => course.occupied.blocked(x, z, 9)) ? null : ground;
   };
   let built = 0;
+  let small = 0;
+  // Where no full stand fits (the Strip's straight, the resorts close by):
+  // a small open bleacher, as the temporary ones a street race puts up.
+  const bleacherAt = (d0, side) => {
+    const [bl, bd] = FOOTPRINT.bleacher;
+    for (const shift of [0, 60, -60]) {
+      const d = ((d0 + shift) % total + total) % total;
+      const p = course.sampleAt(d);
+      for (const gap of [5, 10, 16]) {
+        const site = standSite(p, side, gap, bd);
+        const ground = fits(site, gap, bl, bd);
+        if (!ground) continue;
+        ground.forEach(([x, z]) => course.occupied.add(x, z, 12));
+        const obj = bleacher(bg, { ...venue, standColor: seats.length ? seats[(built + small) % seats.length] : venue.standColor }, 200 + small);
+        obj.position.set(site.x, 0, site.y);
+        obj.rotation.y = -site.face - Math.PI / 2;
+        obj.userData.d = d;
+        obj.userData.kind = "grandstand";
+        obj.userData.venueStand = true;
+        group.add(obj);
+        small += 1;
+        return true;
+      }
+    }
+    return false;
+  };
   order.forEach((d0) => {
     [-1, 1].forEach((side) => {
-      if (built >= max) return;
+      if (built >= max) { if (small < bleachers) bleacherAt(d0, side); return; }
       for (const shift of [0, 45, -45, 90, -90]) {
         const d = ((d0 + shift) % total + total) % total;
         const p = course.sampleAt(d);
@@ -872,9 +901,71 @@ function venueStands(course, venue, bg, group) {
           return;
         }
       }
+      if (small < bleachers) bleacherAt(d0, side);
     });
   });
-  return built;
+  return built + small;
+}
+
+// A small open bleacher (26 m by 5 rows on scaffold, no roof): its rows and
+// its painted crowd as a model stand's (r3d/people.js seats the crowd on
+// them), two lamp posts behind it at night. Local -Z faces the circuit.
+function bleacher(bg, venue, i) {
+  const g = new THREE.Group();
+  const std = (col, extra = {}) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.7, ...extra });
+  const add = (geo, mat, x, y, z) => {
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    g.add(m);
+    return m;
+  };
+  const U = STAND_SCALE;
+  const len = 13 * 2 * U;
+  const seat = std(color(venue.standColor || bg.curbA, "#dc0000"), { roughness: 0.55 });
+  const steel = std(0x6a6d74, { metalness: 0.4 });
+  seat.userData.worldOwned = true;
+  steel.userData.worldOwned = true;
+  // The frame the crowd's rows are measured in (metres, as a model's).
+  const model = new THREE.Group();
+  model.scale.setScalar(U);
+  g.add(model);
+  const rows = [];
+  for (let k = 0; k < 5; k += 1) {
+    const y = 0.05 + k * 0.42;
+    const z = -1.6 + k * 0.8;
+    const seats = [];
+    for (let x = -12.4; x <= 12.4; x += 0.56) seats.push(+x.toFixed(2));
+    rows.push({ y, z, seats });
+    // Its tread (a plank on the scaffold) and the bench before it.
+    add(new THREE.BoxGeometry(len, 0.5, 0.8 * U), steel, 0, y * U - 0.25, z * U);
+    add(new THREE.BoxGeometry(len, 0.4, 0.3 * U), seat, 0, (y + 0.42) * U, (z + 0.25) * U);
+  }
+  // The scaffold under it, a rail behind.
+  for (let x = -12; x <= 12; x += 4) {
+    add(new THREE.BoxGeometry(0.6, 2.1 * U, 0.6), steel, x * U, 1.05 * U, 2.1 * U);
+    add(new THREE.BoxGeometry(0.6, 1.0 * U, 0.6), steel, x * U, 0.5 * U, 0.4 * U);
+  }
+  add(new THREE.BoxGeometry(len, 0.5, 0.5), steel, 0, 3.0 * U, 2.1 * U);
+  if (venue.night) {
+    const lamp = new THREE.MeshBasicMaterial({ color: 0xfff1d6, toneMapped: false });
+    lamp.userData.worldOwned = true;
+    [-9, 9].forEach((x) => {
+      add(new THREE.BoxGeometry(0.7, 6.4 * U, 0.7), steel, x * U, 3.2 * U, 2.4 * U);
+      const head = add(new THREE.BoxGeometry(1.6 * U, 0.3 * U, 0.6 * U), lamp, x * U, 6.4 * U, 2.1 * U);
+      head.castShadow = false;
+    });
+  }
+  const texture = makeCrowdTexture(i + 99);
+  texture.userData.worldOwned = true;
+  const crowd = crowdMaterial(texture);
+  crowd.userData.worldOwned = true;
+  const planes = new THREE.Mesh(mergeGeometries(rows.map((row) => new THREE.PlaneGeometry(len, 7).rotateY(Math.PI).translate(0, (row.y + 0.75) * U, (row.z + 0.4) * U))), crowd);
+  planes.name = "standCrowd";
+  g.add(planes);
+  g.userData.stand = { model, rows, planes };
+  return g;
 }
 
 // A stand's lights at night: a line of lamps under its roof's front edge and

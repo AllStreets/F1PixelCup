@@ -536,15 +536,15 @@ function emptyGround(course, cx, cz, rand, mapped, free) {
 // lap on each side wherever one fits (`open`): the largest kind that fits
 // there and is not the kind before it. Hospitality marquees (white, lit
 // within), paddock-club suites (two glazed storeys facing the track),
-// broadcast compounds (cabins, a mast, a dish), floodlight towers, blank
-// signage frames (lit, no lettering) and short rows of palms. None taller
+// broadcast compounds (cabins, a mast, a dish), floodlight towers, signage
+// frames (a soft abstract picture, no lettering) and short rows of palms. None taller
 // than a stand but the towers' slim masts. Returns how many of each
 // (`made`) and the ground they took (`placed`: circles, in the map's metres).
 const TRACKSIDE = 6;
 // How far outside the barriers the race weekend's own pieces keep (they are
 // low, and the fence stands between).
 const NEAR_FENCE = 9;
-function raceWeekend(course, soup, lights, open, rand, palm) {
+function raceWeekend(course, soup, lights, screens, open, rand, palm) {
   const made = { marquees: 0, suites: 0, compounds: 0, towers: 0, frames: 0, palmRows: 0 };
   // Each kind: its name, half its length along the track and half its depth (metres at the trackside's scale).
   const KINDS = [["suites", 7, 2.2], ["marquees", 5.5, 2.6], ["compounds", 5, 2.2], ["palmRows", 5, 1.2], ["frames", 4, 0.5], ["towers", 0.8, 0.8]];
@@ -581,8 +581,9 @@ function raceWeekend(course, soup, lights, open, rand, palm) {
         const box = (q, hlm, hwm, y0, y1, col, v = 20) => soup.box(q[0], q[1], d, hlm * K, hwm * K, y0 * K, y1 * K, col, v);
         const lamp = (q, hlm, hwm, y0, y1, col) => lights.box(q[0], q[1], d, hlm * K, hwm * K, y0 * K, y1 * K, col, 0);
         if (kind === "marquees") {
-          // A marquee: white walls lit from within (the shader's lit bays), a ridged roof.
-          box(at(0, 0), hl0, hd0, 0, 2.6, white, 3);
+          // A marquee: canvas walls, a warm glow through its open front, a ridged roof.
+          box(at(0, 0), hl0, hd0, 0, 2.6, white);
+          lamp(at(0, -hd0 - 0.03), hl0 - 0.5, 0.03, 0.4, 2.0, [0.5, 0.38, 0.22, 1]);
           const tile = soup.at(wx(x), wz(y));
           const P = (a, b, h) => { const q = at(a, b); return [wx(q[0]), h * TRACKSIDE, wz(q[1])]; };
           [-1, 1].forEach((e) => {
@@ -592,9 +593,15 @@ function raceWeekend(course, soup, lights, open, rand, palm) {
         } else if (kind === "suites") {
           // A paddock-club suite: two glazed storeys to the track, a lit rail on its roof.
           box(at(0, 0), hl0, hd0, 0, 6, dark);
-          lamp(at(0, -hd0 - 0.04), hl0 - 0.4, 0.05, 0.5, 2.7, [0.92, 0.78, 0.52, 1]);
-          lamp(at(0, -hd0 - 0.04), hl0 - 0.4, 0.05, 3.4, 5.6, [0.95, 0.84, 0.62, 1]);
-          lamp(at(0, -hd0), hl0, 0.04, 6.9, 7.0, [0.7, 0.75, 0.9, 1]);
+          // (Windows between piers, each its own warm tone: no one white slab.)
+          for (let w = 0; w < 6; w += 1) {
+            const a = -hl0 + (w + 0.5) * (hl0 / 3);
+            [[0.5, 2.6], [3.4, 5.5]].forEach(([y0, y1], floor) => {
+              const tone = 0.34 + 0.2 * rand();
+              lamp(at(a, -hd0 - 0.04), hl0 / 6 - 0.22, 0.05, y0, y1, [tone * 1.5, tone * 1.12, tone * (0.6 + 0.1 * floor), 1]);
+            });
+          }
+          lamp(at(0, -hd0), hl0, 0.04, 6.9, 7.0, [0.4, 0.44, 0.56, 1]);
         } else if (kind === "compounds") {
           // A broadcast compound: cabins with a lit strip, a mast with its lamp, a dish.
           [-3.3, 0, 3.3].forEach((a) => box(at(a, 0.7), 1.5, 1.1, 0, 2.5, rgba("#b9bbc0", WALL.plain)));
@@ -610,8 +617,14 @@ function raceWeekend(course, soup, lights, open, rand, palm) {
         } else if (kind === "frames") {
           // A signage frame: a blank board on two posts, lit (no lettering).
           [-1, 1].forEach((e) => box(at(e * (hl0 - 0.3), 0), 0.14, 0.14, 0, 5.4, steel));
-          box(at(0, 0), hl0, 0.14, 2.9, 5.3, rgba("#8f8d88", WALL.plain));
-          lamp(at(0, 0), hl0, 0.16, 2.75, 2.85, [0.9, 0.92, 1.0, 1]);
+          box(at(0, 0), hl0, 0.14, 2.9, 5.3, rgba("#22232a", WALL.plain));
+          // A soft abstract picture on both faces, in the Strip's colours (no lettering).
+          const tile = screens.at(wx(x), wz(y));
+          const id = [(150 + (made.frames % 50)) / 255, 0, 0, 1];
+          [-1, 1].forEach((e) => {
+            const P = (a, h) => { const q = at(a, e * 0.16); return [wx(q[0]), h * TRACKSIDE, wz(q[1])]; };
+            screens.face(tile, [P(-hl0 + 0.1, 3.0), P(hl0 - 0.1, 3.0), P(hl0 - 0.1, 5.2), P(-hl0 + 0.1, 5.2)], [o[0] * e, 0, -o[1] * e], [[0, 9], [hl0 * 6, 9], [hl0 * 6, 16], [0, 16]], id);
+          });
         } else {
           // A row of palms (if none will stand here, another kind is tried).
           let any = false;
@@ -699,7 +712,7 @@ export function buildVegasFill(course, venue, { tier = "high", landmarks = null 
   // The race weekend's own furniture just outside the barriers first: the
   // city's low buildings then stand round it.
   const palmSpots = [];
-  const raceWeek = raceWeekend(course, soup, lights, (x, y, margin, r) => clearAt(course, x, y, margin, r) && dry(x, y), rand, (x, y, scale) => {
+  const raceWeek = raceWeekend(course, soup, lights, screens, (x, y, margin, r) => clearAt(course, x, y, margin, r) && dry(x, y), rand, (x, y, scale) => {
     if (!clearAt(course, x, y, 14 * scale + 5, 10) || !dry(x, y)) return false;
     palmSpots.push({ x, y, yaw: rand() * 6.28, scale });
     return true;
@@ -845,7 +858,7 @@ export function buildVegasFill(course, venue, { tier = "high", landmarks = null 
   const neon = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
   neon.userData.worldOwned = true;
   lights.meshes(neon, "fill_lights").forEach((m) => group.add(m));
-  const video = videoMaterial(clock);
+  const video = videoMaterial(clock, 0.5);
   video.userData.worldOwned = true;
   screens.meshes(video, "fill_screens").forEach((m) => group.add(m));
 

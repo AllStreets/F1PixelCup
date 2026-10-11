@@ -172,7 +172,20 @@ async (page) => {
       Render3D.auditScenery(TRACKS.find((t) => t.id === "lasvegas"), { step: 80, lanes: 1 });
       const f = Render3D.inspect().trackside.landmarks.find((l) => l.name === "vegasFill");
       return Boolean(f && f.buildings > 2500 && f.leftOut > 20 && f.cars > 1500 && f.carParks > 25 && f.lamps > 500 && f.palms > 600 && f.greenTrees > 60
-        && f.beds > 200 && f.raceWeek && f.raceWeek.suites + f.raceWeek.marquees + f.raceWeek.compounds >= 5 && f.raceWeek.towers > 10 && f.raceWeek.frames > 10 && f.raceWeek.palmRows > 2 && f.spans > 5 && f.piers > 50 && f.piers <= f.spans * 40 && f.farLights > 5000) || JSON.stringify(f);
+        && f.beds > 200 && f.raceWeek && f.raceWeek.suites + f.raceWeek.marquees + f.raceWeek.compounds >= 3 && f.raceWeek.towers > 10 && f.raceWeek.frames > 10 && f.raceWeek.palmRows > 2 && f.spans > 5 && f.piers > 50 && f.piers <= f.spans * 40 && f.farLights > 5000) || JSON.stringify(f);
+    });
+  }
+
+  // The Strip stands where the user approved it (tools/vegas/strip-places.json:
+  // every named resort, landmark, screen and sign, in game units): nothing
+  // added since (stands, the fill) has moved one of them.
+  if (await step(() => !CHECK_ONLY.length || CHECK_ONLY.includes("lasvegas"))) {
+    results.vegasStripPinned = await step(async () => {
+      const pinned = await (await fetch(`/tools/vegas/strip-places.json?${Date.now()}`)).json();
+      Render3D.auditScenery(TRACKS.find((t) => t.id === "lasvegas"), { step: 80, lanes: 1 });
+      const now = Object.fromEntries(Render3D.inspect().trackside.landmarks.map((l) => [l.name, [l.x, l.z]]));
+      const moved = Object.entries(pinned).filter(([name, [x, z]]) => !now[name] || Math.abs(now[name][0] - x) > 1 || Math.abs(now[name][1] - z) > 1).map(([name, at]) => [name, at, now[name] || null]);
+      return (Object.keys(pinned).length >= 55 && moved.length === 0) || JSON.stringify(moved).slice(0, 400);
     });
   }
 

@@ -83,3 +83,22 @@ test("Las Vegas has its race-weekend stands, and the check counts them", () => {
   const check = fs.readFileSync(path.join(__dirname, "..", "tools", "checks", "trackside-models-check.js"), "utf8");
   assert.ok(check.includes("results.vegasStands"), "the browser check does not count the stands");
 });
+
+test("the Strip's places are pinned, and the browser check holds every later change to them", () => {
+  const fs = require("node:fs");
+  const root = path.join(__dirname, "..");
+  const pinned = JSON.parse(fs.readFileSync(path.join(root, "tools", "vegas", "strip-places.json"), "utf8"));
+  const names = Object.keys(pinned);
+  assert.ok(names.length >= 55, `${names.length} pinned`);
+  ["resort_caesars", "resort_bellagio", "resort_wynn", "resort_venetian", "resort_mgm", "resort_paris", "eiffel", "bellagio_lake", "vegasSphere", "luxor", "high_roller"].forEach((n) => {
+    assert.ok(Array.isArray(pinned[n]) && pinned[n].length === 2 && pinned[n].every(Number.isFinite), `${n} is not pinned`);
+  });
+  const check = fs.readFileSync(path.join(root, "tools", "checks", "trackside-models-check.js"), "utf8");
+  assert.ok(check.includes("results.vegasStripPinned") && check.includes("strip-places.json"), "the browser check does not hold the Strip's places");
+  // Where a piece of the Strip stands is decided by the same ground points as
+  // when it was approved: 260 a piece at most, the coarse grid; the close
+  // claims come after (r3d/vegas.js).
+  const src = fs.readFileSync(path.join(root, "r3d", "vegas.js"), "utf8");
+  assert.ok(src.includes("function groundPoints(node, cap = 260, dense = false)"), "the placement's ground points changed");
+  assert.ok(/const plans = \[\.\.\.groups\.entries\(\)\]\.map\(\(\[key, list\]\) => \{\s*const pts = list\.flatMap\(\(n\) => groundPoints\(n\)\);/.test(src), "the placement no longer uses the approved points");
+});
