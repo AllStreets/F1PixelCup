@@ -248,7 +248,7 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] ~~Three anthems on the fanfare for now (the user's call):~~ decided above.
 
 - [x] **Champagne pop and fizz** (branch `stage-k-podium`; user, 2026-10-12): a real bottle pop and effervescent fizz.
-- [ ] **Race suits** (branch `driver-faces`; user, 2026-10-12) **[REVIEW]**: no logos and no invented crests (the user: real logos or none; real ones are trademarks, and a non-commercial project is not exempt). Race-suit detail, the race number, the driver's code and national flag.
+- [x] **Race suits** (branch `driver-faces`; user, 2026-10-12) **[REVIEW]**: no logos and no invented crests (the user: real logos or none; real ones are trademarks, and a non-commercial project is not exempt). Race-suit detail, the race number, the driver's code and national flag.
 
 ## 9. Stop before Supabase
 
