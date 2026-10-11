@@ -216,6 +216,8 @@ async (page) => {
   if (drawn) {
     const first = await at(0.3);
     results.noShaderCompileOnFirstFrame = first.newProgramsOnFirstFrame === 0 || `new programs: ${first.newProgramsOnFirstFrame}`;
+    // The suits' sheets of marks were uploaded behind the results screen too.
+    results.suitSheetsUploadedAhead = first.suitSheetsUploadedAhead === true || String(first.suitSheetsUploadedAhead);
     const ids = first.drivers.map((d) => d.driverId);
     results.realTopThreeInOrder = JSON.stringify(ids) === JSON.stringify(cup.top) || `${ids} vs ${cup.top}`;
     const [d1, d2, d3] = first.drivers;

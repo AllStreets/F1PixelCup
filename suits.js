@@ -14,26 +14,34 @@
     return {
       number: String(driver.number),
       code: driver.code,
-      surname: driver.name.split(" ").pop().toLocaleUpperCase(),
+      // (toUpperCase, not the reader's locale's: an I stays an I everywhere.)
+      surname: driver.name.split(" ").pop().toUpperCase(),
       country: driver.country,
     };
   }
 
-  // The torso's front and back, each a square panel about the body's middle
-  // from the belt up to the collar (metres, the figure's own heights). A
-  // mark: x toward the figure's left, y its middle's height, w and h its box.
-  // `reach`: how far from the middle the marks may lie (beyond it the sides
-  // of the torso turn away and the shader fades them out).
+  // The suit's seams (r3d/suit.js draws them): one down each side of the
+  // chest and the back, `panel` from the middle; a yoke seam across the
+  // chest and a higher one across the shoulder blades; quilting every
+  // `quilt`. No mark's box touches the panel or yoke seams (tested).
+  const SEAMS = { panel: 0.118, yokeFront: 1.372, yokeBack: 1.405, quilt: 0.055 };
+
+  // The torso's front and back, each a panel about the body's middle from
+  // the belt up to the collar (metres, the figure's own heights), as wide as
+  // the marks may reach (beyond `reach` the sides of the torso turn away and
+  // the shader fades them out). A mark: x toward the figure's left, y its
+  // middle's height, w and h its box (capitals fill a box's height; an
+  // accent, as on HÜLKENBERG, rises a little above it).
   const LAYOUT = {
-    panel: { width: 0.48, bottom: 0.96, height: 0.48 },
+    panel: { width: 0.34, bottom: 0.96, height: 0.48 },
     reach: 0.15,
     front: {
-      number: { x: 0.068, y: 1.315, w: 0.1, h: 0.078 },
+      number: { x: 0.059, y: 1.315, w: 0.1, h: 0.078 },
       flag: { x: 0, y: 1.405, w: 0.042, h: 0.028 },
       code: { x: 0, y: 1.0075, w: 0.09, h: 0.03 },
     },
     back: {
-      surname: { x: 0, y: 1.365, w: 0.26, h: 0.046 },
+      surname: { x: 0, y: 1.365, w: 0.22, h: 0.046 },
       number: { x: 0, y: 1.235, w: 0.2, h: 0.15 },
     },
   };
@@ -59,13 +67,19 @@
     return { x: u * size[0] - w / 2, y: (1 - v) * size[1] - h / 2, w, h };
   }
 
-  // The ink that reads on a suit's colour: white on dark, near black on light.
-  function ink(hex) {
+  // A colour's relative luminance, and the contrast of two (WCAG's).
+  function luminance(hex) {
     const n = parseInt(hex.slice(1), 16);
     const lin = (c) => { const s = c / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; };
-    const lum = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
-    return lum > 0.4 ? "#14161a" : "#ffffff";
+    return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
   }
+  function contrast(a, b) {
+    const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+  // The ink that reads better on a suit's colour: white or near black.
+  const INKS = ["#ffffff", "#14161a"];
+  const ink = (hex) => (contrast(INKS[0], hex) >= contrast(INKS[1], hex) ? INKS[0] : INKS[1]);
 
-  return { marks, LAYOUT, sheetSize, sheetUV, sheetBox, ink };
+  return { marks, LAYOUT, SEAMS, sheetSize, sheetUV, sheetBox, ink, contrast };
 }));

@@ -42,7 +42,7 @@
   <script type="module">
     import * as THREE from "three";
     import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
-    import { loadDriver, buildDriver, POSES } from "../../r3d/driver.js";
+    import { loadDriver, buildDriver, suitFonts, POSES } from "../../r3d/driver.js";
 
     const q = new URLSearchParams(location.search);
     // grid=1: every driver's head, five by four. grid=suits: one driver of
@@ -171,7 +171,7 @@
     addEventListener("resize", resize);
     resize();
 
-    window.preview = { ready: false, figures, looks: () => figures.map((f) => f.looks()), redraw: () => draw() };
+    window.preview = { ready: false, figures, camera, renderer, looks: () => figures.map((f) => f.looks()), redraw: () => draw() };
 
     // One frame: the whole view, or in the grid, each head in its own cell.
     function draw() {
@@ -192,7 +192,7 @@
     }
 
     // (The suits' marks are drawn in the game's typeface: wait for it.)
-    await Promise.all(["italic 900 40px 'Titillium Web'", "700 40px 'Titillium Web'"].map((f) => document.fonts.load(f))).catch(() => {});
+    await suitFonts();
     loadDriver(() => {
       ids.forEach((id, i) => {
         const driver = DRIVERS.find((d) => d.id === id);

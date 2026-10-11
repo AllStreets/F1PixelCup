@@ -5,6 +5,8 @@
 // by the suit's shader from the body's rest position, so it stays on the
 // cloth in every pose. The same shader draws a race suit's detail: the zip,
 // the quilted seams, the ankle cuffs. No team logos, crests or wordmarks.
+// The sheet is drawn once, in the game's typeface: whoever builds a figure
+// waits for suitFonts() first (the podium and the studio do).
 
 import * as THREE from "three";
 import "../suits.js";
@@ -13,15 +15,23 @@ import { drawFlag } from "./flags.js";
 const Suits = globalThis.Suits;
 const FONT = "'Titillium Web', 'Trebuchet MS', system-ui, sans-serif";
 
+// The two faces the marks are drawn in, loaded (resolves either way).
+export function suitFonts() {
+  if (!document.fonts || !document.fonts.load) return Promise.resolve();
+  return Promise.all([`italic 900 40px ${FONT}`, `700 40px ${FONT}`].map((face) => document.fonts.load(face))).then(() => {}, () => {});
+}
+
 // Text fitted to a box: as tall as the box, squeezed if it is too wide.
-function fitText(g, text, box, weight, spacing = 0) {
+// `wide`: how many of the sheet's pixels across make one pixel up on the
+// cloth (the sheet's pixels are not square there).
+function fitText(g, text, box, weight, spacing = 0, wide = 1) {
   const size = box.h * 1.18;
   g.font = `${weight} ${Math.round(size)}px ${FONT}`;
   if ("letterSpacing" in g) g.letterSpacing = `${(spacing * size).toFixed(1)}px`;
   g.textAlign = "center";
   g.textBaseline = "alphabetic";
   const m = g.measureText(text);
-  const squeeze = Math.min(1, box.w / Math.max(1, m.width));
+  const squeeze = wide * Math.min(1, box.w / Math.max(1, m.width * wide));
   g.save();
   // (Half the trailing letter space back, so the word sits centred.)
   g.translate(box.x + box.w / 2 + (spacing * size * squeeze) / 2, box.y + box.h * 0.94);
@@ -39,11 +49,12 @@ export function suitSheet(driver, { suit, trim }, tier = "high") {
   const ink = Suits.ink(suit);
   const L = Suits.LAYOUT;
   const box = (side, key) => Suits.sheetBox(side, L[side][key], size);
-  // A number: heavy italics in the ink, a keyline in the trim's colour where
-  // that reads against the suit.
+  const wide = (size[0] / 2 / L.panel.width) / (size[1] / L.panel.height);
+  // A number: heavy italics in the ink, with a keyline in the trim's colour
+  // where that stands apart from both the ink and the suit.
   const number = (b) => {
-    const done = fitText(g, marks.number, b, "italic 900");
-    if (Suits.ink(trim) !== ink || trim.toLowerCase() !== suit.toLowerCase()) {
+    const done = fitText(g, marks.number, b, "italic 900", 0, wide);
+    if (Suits.contrast(trim, ink) >= 1.25 && Suits.contrast(trim, suit) >= 1.5) {
       g.lineJoin = "round";
       g.lineWidth = Math.max(2, b.h * 0.09);
       g.strokeStyle = trim;
@@ -64,17 +75,20 @@ export function suitSheet(driver, { suit, trim }, tier = "high") {
   }
   // The code on the belt (the trim's colour: its own ink), the surname
   // across the shoulders.
-  let done = fitText(g, marks.code, box("front", "code"), "italic 900", 0.12);
+  let done = fitText(g, marks.code, box("front", "code"), "italic 900", 0.12, wide);
   g.fillStyle = Suits.ink(trim);
   g.fillText(marks.code, 0, 0);
   done();
-  done = fitText(g, marks.surname, box("back", "surname"), "700", 0.1);
+  done = fitText(g, marks.surname, box("back", "surname"), "700", 0.1, wide);
   g.fillStyle = ink;
   g.fillText(marks.surname, 0, 0);
   done();
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
+  // (Premultiplied: the clear ground round each glyph must not grey its
+  // edges when the sheet is filtered small.)
+  tex.premultiplyAlpha = true;
   tex.anisotropy = 4;
   tex.userData = { marks, size };
   return tex;
@@ -84,6 +98,8 @@ export function suitSheet(driver, { suit, trim }, tier = "high") {
 // and on the suit itself (`detail`) a race suit's seams and cuffs.
 export function wearSuit(material, sheet, { detail, trim }) {
   const { panel, reach } = Suits.LAYOUT;
+  const SEAMS = Suits.SEAMS;
+  const f = (n) => n.toFixed(4);
   const uniforms = {
     suitSheet: { value: sheet },
     suitPanel: { value: new THREE.Vector3(panel.width, panel.bottom, panel.height) },
@@ -106,10 +122,10 @@ export function wearSuit(material, sheet, { detail, trim }) {
         uniform vec3 suitTrim;
         varying vec3 vRest;
         varying vec3 vRestN;
-        // A seam: a fine dark line where a coordinate (metres) crosses zero.
-        float suitSeam(float d) {
-          float w = max(fwidth(d), 0.0001);
-          return 1.0 - smoothstep(0.0007, 0.0007 + w * 1.5, abs(d));
+        // A seam: a fine dark line where a coordinate (metres) crosses zero;
+        // w, how much of it a pixel spans.
+        float suitSeam(float d, float w) {
+          return 1.0 - smoothstep(0.0007, 0.0007 + max(w, 0.0001) * 1.5, abs(d));
         }`)
       .replace("#include <color_fragment>", `#include <color_fragment>
         {
@@ -118,18 +134,23 @@ export function wearSuit(material, sheet, { detail, trim }) {
           vec3 rn = normalize(vRestN);
           #ifdef SUIT_DETAIL
             // Quilting: seam lines every 5.5 cm, across the torso and legs
-            // and across the arms (which hang at 45 degrees at rest).
+            // and across the arms (which hang at 45 degrees at rest). (Each
+            // width is taken from its own smooth coordinate, before the
+            // choice and the wrap: across those a pixel's span would jump.)
+            float armAlong = (abs(lx) + (1.4 - vRest.y)) * 0.7071;
+            float wArm = fwidth(armAlong), wUp = fwidth(vRest.y), wAcross = fwidth(lx);
             bool arm = abs(lx) > 0.2 && vRest.y > 0.8;
-            float along = arm ? (abs(lx) + (1.4 - vRest.y)) * 0.7071 : vRest.y;
-            float quilt = suitSeam((fract(along / 0.055) - 0.5) * 0.055);
+            float along = arm ? armAlong : vRest.y;
+            float quilt = suitSeam((fract(along / ${f(SEAMS.quilt)}) - 0.5) * ${f(SEAMS.quilt)}, arm ? wArm : wUp);
             // A seam down each side of the chest, and the zip down the front.
             float torso = step(1.03, vRest.y) * step(vRest.y, 1.44) * step(abs(lx), 0.2);
-            float panelSeam = suitSeam(abs(lx) - 0.118) * torso * step(vRest.y, 1.37);
             float front = smoothstep(0.2, 0.5, rn.x);
+            float yokeY = rn.x > 0.0 ? ${f(SEAMS.yokeFront)} : ${f(SEAMS.yokeBack)};
+            float panelSeam = suitSeam(abs(lx) - ${f(SEAMS.panel)}, wAcross) * torso * step(vRest.y, yokeY);
             float zip = (1.0 - smoothstep(0.0022, 0.0034, abs(lx))) * front * step(1.03, vRest.y) * step(vRest.y, 1.45);
             // A yoke seam across the chest and the shoulder blades, and the
             // zip's placket, a shade darker either side of it.
-            float yoke = suitSeam(vRest.y - 1.372) * step(abs(lx), 0.2) * smoothstep(0.2, 0.5, abs(rn.x));
+            float yoke = suitSeam(vRest.y - yokeY, wUp) * step(abs(lx), 0.2) * smoothstep(0.2, 0.5, abs(rn.x));
             float placket = (1.0 - smoothstep(0.011, 0.013, abs(lx))) * front * step(1.03, vRest.y) * step(vRest.y, 1.45);
             diffuseColor.rgb *= 1.0 - 0.3 * max(max(quilt * 0.42, panelSeam), yoke) - 0.07 * placket;
             diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.3, zip);
@@ -142,10 +163,11 @@ export function wearSuit(material, sheet, { detail, trim }) {
           float facing = smoothstep(0.2, 0.5, abs(rn.x)) * (1.0 - smoothstep(suitReach - 0.01, suitReach, abs(lx)));
           float across = 0.5 + (rn.x > 0.0 ? lx : -lx) / suitPanel.x;
           float up = (vRest.y - suitPanel.y) / suitPanel.z;
-          if (facing > 0.0 && across > 0.0 && across < 1.0 && up > 0.0 && up < 1.0) {
-            vec4 mark = texture2D(suitSheet, vec2((rn.x > 0.0 ? 0.0 : 0.5) + across * 0.5, up));
-            diffuseColor.rgb = mix(diffuseColor.rgb, mark.rgb, mark.a * facing);
-          }
+          // (Sampled everywhere, then masked: a lookup inside a branch has
+          // no defined footprint. The sheet is premultiplied.)
+          vec4 mark = texture2D(suitSheet, vec2((rn.x > 0.0 ? 0.0 : 0.5) + clamp(across, 0.0, 1.0) * 0.5, clamp(up, 0.0, 1.0)));
+          float on = facing * step(0.0, across) * step(across, 1.0) * step(0.0, up) * step(up, 1.0);
+          diffuseColor.rgb = diffuseColor.rgb * (1.0 - mark.a * on) + mark.rgb * on;
         }`);
   };
   material.customProgramCacheKey = () => (detail ? "driver-suit-detail" : "driver-suit");

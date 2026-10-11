@@ -14,10 +14,11 @@ test("suits: every driver's own marks: number, code, surname, country", () => {
     assert.equal(m.code, d.code);
     assert.match(m.code, /^[A-Z]{3}$/);
     assert.equal(m.country, d.country);
-    assert.equal(m.surname, m.surname.toLocaleUpperCase());
-    assert.ok(d.name.toLocaleUpperCase().endsWith(m.surname) && !m.surname.includes(" "), `${d.name}: ${m.surname}`);
+    assert.ok(!m.surname.includes(" ") && m.surname.length >= 4, `${d.name}: ${m.surname}`);
   });
-  assert.equal(Suits.marks(DRIVERS.find((d) => d.id === "hulkenberg")).surname, "HÜLKENBERG");
+  // Spelt out (the same in every reader's locale: a Turkish one would dot the I).
+  const surname = (id) => Suits.marks(DRIVERS.find((d) => d.id === id)).surname;
+  assert.deepEqual(["hamilton", "leclerc", "hulkenberg", "piastri", "antonelli"].map(surname), ["HAMILTON", "LECLERC", "HÜLKENBERG", "PIASTRI", "ANTONELLI"]);
   // A flag the game can draw for every country raced under.
   const flags = fs.readFileSync(path.join(__dirname, "..", "r3d", "flags.js"), "utf8");
   new Set(DRIVERS.map((d) => d.country)).forEach((c) => assert.ok(flags.includes(`"${c}"`) || new RegExp(`\\b${c}:`).test(flags), `a flag for ${c}`));
@@ -52,6 +53,16 @@ test("suits: the marks sit on the chest, the belt and the back, each in its plac
     assert.ok(d.y - d.h / 2 > 1.05 && d.y + d.h / 2 < 1.44, JSON.stringify(d));
   });
   [...Object.values(L.front), ...Object.values(L.back)].forEach((d) => assert.ok(Math.abs(d.x) + d.w / 2 <= L.reach, JSON.stringify(d)));
+  // No mark touches a seam: the one down each side of the chest and back,
+  // or the yoke seam across its own side.
+  const S = Suits.SEAMS;
+  [...Object.values(L.front), ...Object.values(L.back)].forEach((d) => {
+    const left = Math.abs(d.x) - d.w / 2, right = Math.abs(d.x) + d.w / 2;
+    assert.ok(right < S.panel - 0.004 || left > S.panel + 0.004, `${JSON.stringify(d)} on the panel seam`);
+  });
+  [[L.front, S.yokeFront], [L.back, S.yokeBack]].forEach(([side, y]) => Object.values(side).forEach((d) => {
+    assert.ok(Math.abs(d.y - y) > d.h / 2 + 0.004, `${JSON.stringify(d)} on the yoke seam`);
+  }));
   // None over another.
   const clear = (a, b) => Math.abs(a.x - b.x) >= (a.w + b.w) / 2 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2;
   [L.front, L.back].forEach((side) => {
@@ -74,12 +85,31 @@ test("suits: the sheet: front on its left half as it is seen, back on its right,
   const box = Suits.sheetBox("back", L.back.number, [2048, 1024]);
   assert.ok(box.x >= 1024 && box.x + box.w <= 2048 && box.y >= 0 && box.y + box.h <= 1024);
   assert.equal(Math.round(box.w), Math.round(L.back.number.w / L.panel.width * 1024));
+  // The panel is no wider than the marks may reach: none of the sheet is
+  // spent on the sides of the torso, where nothing is ever drawn.
+  assert.ok(Math.abs(L.panel.width / 2 - (L.reach + 0.02)) < 1e-9);
 });
 
-test("suits: the ink reads on every team's suit", () => {
+test("suits: the ink reads on every team's suit and belt", () => {
   assert.equal(Suits.ink("#ffffff"), "#14161a");
   assert.equal(Suits.ink("#17191c"), "#ffffff");
   assert.equal(Suits.ink("#d40000"), "#ffffff");
   assert.equal(Suits.ink("#ffe000"), "#14161a");
-  TEAMS.forEach((t) => assert.match(Suits.ink(t.body), /^#(ffffff|14161a)$/));
+  assert.ok(Math.abs(Suits.contrast("#ffffff", "#000000") - 21) < 1e-9);
+  // Every colour a suit or its trim (the belt) may be: the cars' liveries
+  // (r3d/car.js), the suits that differ from them (r3d/driver.js), and the
+  // teams' own colours where there is no livery.
+  const hexes = (file, from, to) => {
+    const src = fs.readFileSync(path.join(__dirname, "..", "r3d", file), "utf8");
+    const part = src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+    return [...part.matchAll(/(?:base|trim|suit): "(#[0-9a-f]{6})"/gi)].map((m) => m[1]);
+  };
+  const colours = [...hexes("car.js", "const LIVERIES", "\n};"), ...hexes("driver.js", "const SUITS", "\n};"), ...TEAMS.flatMap((t) => [t.body, t.trim])];
+  assert.ok(colours.length >= 30, `${colours.length} colours`);
+  colours.forEach((c) => {
+    const k = Suits.contrast(Suits.ink(c), c);
+    assert.ok(k >= 4.5, `ink on ${c}: ${k.toFixed(1)} to 1`);
+    // And it is the better of the two inks.
+    assert.ok(k >= Math.max(Suits.contrast("#ffffff", c), Suits.contrast("#14161a", c)) - 1e-9);
+  });
 });
