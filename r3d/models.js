@@ -53,6 +53,8 @@ export const FILES = {
   foroSol: "./assets/landmarks/foro_sol.glb",
   vegasSphere: "./assets/landmarks/vegas_sphere.glb",
   vegasStrip: "./assets/landmarks/vegas_strip.glb",
+  // (The Sphere's Earth: NASA's Blue Marble and its clouds as two materials' maps, tools/sphere/fetch_earth.py.)
+  vegasEarth: "./assets/landmarks/vegas_earth.glb",
   // (No geometry: the map's data for the ground between the towers, r3d/vegas-fill.js.)
   vegasFill: "./assets/landmarks/vegas_fill.glb",
   losailGrandstand: "./assets/landmarks/losail_grandstand.glb",
@@ -100,7 +102,7 @@ export const VENUE_MODELS = {
   baku: ["flameTowers", "bakuOldCity", "yachts"],
   cota: ["cotaTower", "hillside"],
   mexico: ["foroSol"],
-  lasvegas: ["vegasSphere", "vegasStrip", "vegasFill"],
+  lasvegas: ["vegasSphere", "vegasEarth", "vegasStrip", "vegasFill"],
   losail: ["losailGrandstand", "lusailTowers"],
   yasmarina: ["yasHotel", "yachts"],
   hockenheim: ["motodrom"],
@@ -248,7 +250,11 @@ export function releaseOtherVenues(venueId, extra = []) {
   const released = [];
   Object.keys(templates).forEach((name) => {
     if (keep.has(name)) return;
-    templates[name].traverse((n) => { if (n.geometry) n.geometry.dispose(); });
+    // (And a model's own pictures: the Sphere's Earth.)
+    templates[name].traverse((n) => {
+      if (n.geometry) n.geometry.dispose();
+      [].concat(n.material || []).forEach((m) => { if (m.map) m.map.dispose(); });
+    });
     delete templates[name];
     delete loading[name];
     released.push(name);

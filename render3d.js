@@ -987,7 +987,7 @@ function buildWorld(track) {
     landmarks.add(fill);
     if (fill.userData.replacesGround) ground.visible = false;
     const animate = landmarks.userData.animate;
-    landmarks.userData.animate = (dt) => { animate?.(dt); fill.userData.animate(dt); };
+    landmarks.userData.animate = (dt, now) => { animate?.(dt, now); fill.userData.animate(dt); };
   }
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
@@ -1425,7 +1425,9 @@ function drawFrame(frame) {
       u.box.rotation.set(now / 900 + i, now / 700 + i, 0);
       b.position.y = u.baseY + Math.sin(now / 260 + i) * 1.5;
     });
-    world.landmarks.userData.animate?.(dt);
+    // (With the race's own clock in seconds: what turns by it, the Sphere's
+    // Earth, is the same in every view, still in a pause, the same in a replay.)
+    world.landmarks.userData.animate?.(dt, now / 1000);
   }
 
   // Speed: the field of view opens up and the camera drops and pushes its

@@ -24,6 +24,8 @@ export const PERSON_SCALE = CAR_SCALE;
 // How near the camera a stand's crowd is drawn in 3D, per tier (Low draws
 // only the painted crowd).
 export const CROWD_NEAR = { high: 1500, medium: 800, low: 0 };
+// At most this many stands' crowds in 3D at once, the nearest.
+export const CROWD_MOST = { high: 14, medium: 8, low: 0 };
 // The crowd stands up within CHEER_NEAR of the player, and is seated again
 // past CHEER_FAR (each spectator's own distances vary about these). The
 // stands' nearest seats are some 140 units from the racing line, so a car
@@ -576,8 +578,14 @@ export function updatePeople(group, { players, racers, t, dt }) {
 export function showCrowdFor(group, camera, tier) {
   if (!group || !group.userData.stands) return;
   const reach = CROWD_NEAR[tier] ?? CROWD_NEAR.high;
-  group.userData.stands.forEach((st) => {
-    const near = camera.position.distanceTo(st.centre) < reach;
+  // (Where stands line the whole lap, Las Vegas's thirty, only the nearest
+  // few are in 3D at once: the triangles stay within the tier's budget.)
+  const most = CROWD_MOST[tier] ?? CROWD_MOST.high;
+  const stands = group.userData.stands;
+  const far = stands.map((st) => camera.position.distanceTo(st.centre));
+  const cut = stands.length > most ? [...far].sort((a, b) => a - b)[most - 1] ?? -1 : Infinity;
+  stands.forEach((st, i) => {
+    const near = far[i] < reach && far[i] <= cut;
     st.meshes.forEach((m) => { m.visible = near; });
     if (st.planes) st.planes.visible = !near;
   });

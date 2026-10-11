@@ -429,7 +429,8 @@ function mergeBuildings(parent) {
 const NAMED = ["eiffel", "balloon", "arc", "campanile", "doges", "rialto", "colosseum", "high_roller", "liberty", "luxor", "strat", "bellagio_lake", "caesars_fountains", "led_planethollywood", "led_cosmopolitan", "led_resortsworld"];
 // (The resorts' signs are named too: sign_<resort>.)
 
-export function buildVegasStrip(course, venue, { dress }) {
+// `earth`: how the Sphere's Earth turns ({ turn: seconds a turn, tilt: degrees }: r3d/landmarks.js).
+export function buildVegasStrip(course, venue, { dress, earth = {} }) {
   const template = tracksideModel("vegasStrip");
   if (!template) return null;
   const night = Boolean(venue.night);
@@ -479,6 +480,7 @@ export function buildVegasStrip(course, venue, { dress }) {
   group.add(model);
   // The Sphere where it stands, at the same scale (its own model).
   const screens = [];
+  const earthClocks = [];
   const sphereAt = model.getObjectByName("anchor_sphere");
   const sphere = tracksideModel("vegasSphere");
   if (sphere && sphereAt) {
@@ -499,8 +501,12 @@ export function buildVegasStrip(course, venue, { dress }) {
       const near = course.nearestSample(q.x, q.z) || course.samples[0];
       s.name = "landmark:vegasSphere";
       s.userData.landmark = { name: "vegasSphere", fromModel: true, x: Math.round(q.x), z: Math.round(q.z), trackAt: { x: Math.round(near.x), z: Math.round(near.y), d: Math.round(near.d) } };
-      // Its image turns: its clock with the Strip's.
-      s.traverse((m) => { if (m.material && m.material.userData.time) screens.push(m.material.userData.time); });
+      // Its Earth turns by the race's own clock (seconds), not the Strip's.
+      s.traverse((m) => {
+        if (!m.material || !m.material.userData.time) return;
+        earthClocks.push(m.material.userData.time);
+        Object.assign(s.userData.landmark, { earth: Boolean(m.material.userData.earth), turnSeconds: earth.turn, tilt: earth.tilt, clock: m.material.userData.time });
+      });
     }
   }
   floor.forEach(([x, z]) => course.occupied.add(x, z, 9));
@@ -531,9 +537,10 @@ export function buildVegasStrip(course, venue, { dress }) {
   });
   Object.entries(resorts).forEach(([name, r]) => mark(`resort_${name}`, r.x, r.z, r.top));
   group.userData.landmark = { name: "vegasStrip", fromModel: true, x: Math.round(VEGAS_ORIGIN.x), z: Math.round(VEGAS_ORIGIN.z), buildings: kept, moved, dropped };
-  group.userData.animate = (dt) => {
+  group.userData.animate = (dt, now) => {
     clock.value += dt;
     screens.forEach((t) => { t.value += dt; });
+    earthClocks.forEach((t) => { t.value = now === undefined ? t.value + dt : now; });
   };
   return group;
 }

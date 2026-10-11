@@ -97,11 +97,11 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td><em><b>Night races.</b> Singapore under the lights, the Flyer lit up over the start line. Russell's Mercedes and Alonso's Aston Martin.</em></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/readme/sphere.jpg" alt="Piastri's McLaren passing the Sphere in Las Vegas at night" width="100%"/></td>
+<td width="50%"><img src="docs/readme/sphere.jpg" alt="The Sphere in Las Vegas showing the Earth at night, seen from the track" width="100%"/></td>
 <td width="50%"><img src="docs/readme/pitlane.jpg" alt="The pit lane: race choices, Charles Leclerc's card and his Ferrari on a turntable" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>Landmarks.</b> Piastri past the Sphere on the Las Vegas Strip, with Antonelli and Sainz behind. Every venue has its own set piece, from the Sphere to Suzuka's Ferris wheel and the Nürburg on its hill.</em></td>
+<td><em><b>Landmarks.</b> The Sphere beside the Las Vegas circuit, its skin showing the Earth (NASA's Blue Marble) turning as you drive by. Every venue has its own set piece, from the Sphere to Suzuka's Ferris wheel and the Nürburg on its hill.</em></td>
 <td><em><b>The pit lane.</b> Pick the race, the difficulty, the grid and the weather; pick your driver; their car turns on the showroom floor.</em></td>
 </tr>
 <tr>
@@ -454,6 +454,7 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names, the Las Vegas Strip's buildings | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
 | The website's race data (the drivers' and teams' pages) | [F1DB](https://github.com/f1db/f1db) by Marcel Overdijk | CC BY 4.0 |
 | Ground textures | [Poly Haven](https://polyhaven.com) | CC0 |
+| The Earth on the Las Vegas Sphere (Blue Marble and its clouds) | [NASA Earth Observatory / Visible Earth](https://visibleearth.nasa.gov/images/73909) | Public domain |
 | The drivers' heads (base mesh and shape targets, data only) | [MakeHuman](https://github.com/makehumancommunity/makehuman) | CC0 |
 | 3D engine | [three.js](https://github.com/mrdoob/three.js) | MIT |
 | Model decompression | [meshoptimizer](https://github.com/zeux/meshoptimizer)'s decoder, shipped with three.js | MIT |
