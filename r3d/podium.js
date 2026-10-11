@@ -810,6 +810,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     const live = spray.drops.filter((d) => d.age < SPRAY_LIFE);
     return {
       drawing: compiled && startedAt > 0,
+      startedAt,
       t,
       beat: t >= 0 ? Ceremony.beatAt(t) : null,
       anthemSeconds: Ceremony.anthemSeconds,

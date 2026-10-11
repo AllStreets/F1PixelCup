@@ -464,7 +464,7 @@ async (page) => {
       const want = PodiumSound.cues(C, { tier: st.tier });
       const first = s.log.find((l) => l.id === "welcome");
       return {
-        ...s, tier: st.tier, t: st.t, sceneAnthemSeconds: st.anthemSeconds, beats: C.BEATS, corks: [1, 2, 3].map((place) => C.corkAt(place)),
+        ...s, tier: st.tier, t: st.t, pictureStartedAt: st.startedAt, sceneAnthemSeconds: st.anthemSeconds, beats: C.BEATS, corks: [1, 2, 3].map((place) => C.corkAt(place)),
         wantSeconds: PodiumSound.anthemSeconds(s.anthem), wantCues: want.map((c) => [c.id, c.at]),
         // Each started sound's place on the audio clock, from the ceremony's start.
         played: s.log.map((l) => [l.id, l.startAt - s.zero]),
@@ -472,7 +472,9 @@ async (page) => {
         sounds: new Set(want.map((c) => c.sound)).size, audio: audio.ctx ? audio.ctx.state : "none",
       };
     });
-    const same = (a, b) => a.length === b.length && a.every(([id, at], i) => id === b[i][0] && Math.abs(at - b[i][1]) < 1e-6);
+    // (The crowd's first sound, due at 0, starts whole as the first frame
+    // ends: late by that frame's own time, never early. Every other at its moment exactly.)
+    const same = (a, b) => a.length === b.length && a.every(([id, at], i) => id === b[i][0] && (b[i][1] === 0 ? at >= 0 && at < 0.5 : Math.abs(at - b[i][1]) < 1e-6));
 
     // Gasly wins: La Marseillaise. Every sound is rendered while the results
     // are up, and starts at its beat; the audio clock runs with the picture.
@@ -494,7 +496,13 @@ async (page) => {
     results.cuesOnTheTimeline = (cueAt("anthem") === fr.beats.anthem && [1, 2, 3].every((place) => cueAt(`cork${place}`) === fr.corks[place - 1])
       && Math.abs(cueAt("sting") - fr.beats.trophy) < 0.3 && cueAt("cannon1") >= fr.beats.trophy && cueAt("cannon1") < fr.beats.trophy + 0.1)
       || JSON.stringify(fr.wantCues);
-    results.soundClockWithPicture = Math.abs(fr.now - fr.t) < 0.1 || `${fr.now} against ${fr.t}`;
+    // One start for both clocks, whatever the frames did: the sound's zero is
+    // the picture's own start (the very number, in the page's clock), and
+    // that same instant on the audio clock, by the browser's own pairing of
+    // the two clocks (read together, so not a matter of when this looked).
+    const zeroInPage = fr.clock ? fr.clock.performanceTime + (fr.zero - fr.clock.contextTime) * 1000 : null;
+    results.soundClockWithPicture = (fr.startedPerf === fr.pictureStartedAt && zeroInPage !== null && Math.abs(zeroInPage - fr.pictureStartedAt) < 60 + fr.baseLatency * 1000)
+      || `picture started at ${fr.pictureStartedAt}, the sound's zero ${fr.startedPerf} (on the audio clock: ${zeroInPage})`;
     // Heard, not only scheduled: through the anthem the level is up, and at
     // one of its long notes the sound really is that note (stronger at its
     // pitch than a tone either side), on the trumpets' octave or the horns'.
