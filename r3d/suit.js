@@ -40,9 +40,9 @@ function fitText(g, text, box, weight, spacing = 0, wide = 1) {
 }
 
 // The sheet for a driver in a suit of these colours.
-export function suitSheet(driver, { suit, trim }, tier = "high") {
+export function suitSheet(driver, { suit, trim, team = null }, tier = "high") {
   const size = Suits.sheetSize(tier);
-  const marks = Suits.marks(driver);
+  const marks = Suits.marks(driver, globalThis.SUIT_TEAM_NAME ? team : null);
   const canvas = document.createElement("canvas");
   [canvas.width, canvas.height] = size;
   const g = canvas.getContext("2d");
@@ -83,6 +83,16 @@ export function suitSheet(driver, { suit, trim }, tier = "high") {
   g.fillStyle = ink;
   g.fillText(marks.surname, 0, 0);
   done();
+  // The team's name in plain capitals, across the chest and under the
+  // back's number (a preview option: globalThis.SUIT_TEAM_NAME).
+  if (marks.team) {
+    for (const side of ["front", "back"]) {
+      done = fitText(g, marks.team, box(side, "team"), "700", 0.14, wide);
+      g.fillStyle = ink;
+      g.fillText(marks.team, 0, 0);
+      done();
+    }
+  }
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;

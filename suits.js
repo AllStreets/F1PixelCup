@@ -10,8 +10,11 @@
   else root.Suits = api;
 }(typeof globalThis !== "undefined" ? globalThis : this, () => {
   // What a driver's suit says.
-  function marks(driver) {
+  // (teamName: the team's short name in plain capitals, when the suit is to
+  // say it: a preview option, off unless asked for.)
+  function marks(driver, teamName = null) {
     return {
+      team: teamName ? String(teamName).toUpperCase() : null,
       number: String(driver.number),
       code: driver.code,
       // (toUpperCase, not the reader's locale's: an I stays an I everywhere.)
@@ -39,10 +42,12 @@
       number: { x: 0.059, y: 1.315, w: 0.1, h: 0.078 },
       flag: { x: 0, y: 1.405, w: 0.042, h: 0.028 },
       code: { x: 0, y: 1.0075, w: 0.09, h: 0.03 },
+      team: { x: 0, y: 1.215, w: 0.2, h: 0.03 },
     },
     back: {
       surname: { x: 0, y: 1.365, w: 0.22, h: 0.046 },
       number: { x: 0, y: 1.235, w: 0.2, h: 0.15 },
+      team: { x: 0, y: 1.105, w: 0.2, h: 0.028 },
     },
   };
 

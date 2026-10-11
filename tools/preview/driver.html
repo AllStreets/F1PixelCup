@@ -45,6 +45,8 @@
     import { loadDriver, buildDriver, suitFonts, POSES } from "../../r3d/driver.js";
 
     const q = new URLSearchParams(location.search);
+    // (teamname=1: the suits say their team's name in plain capitals; a preview.)
+    if (q.get("teamname") === "1") globalThis.SUIT_TEAM_NAME = true;
     // grid=1: every driver's head, five by four. grid=suits: one driver of
     // each team from the chest (&cam=rear: from the back), five by two.
     const suitsGrid = q.get("grid") === "suits";
