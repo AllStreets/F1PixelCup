@@ -250,6 +250,9 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Champagne pop and fizz** (branch `stage-k-podium`; user, 2026-10-12): a real bottle pop and effervescent fizz.
 - [x] **Race suits** (branch `driver-faces`; user, 2026-10-12) **[REVIEW]**: no logos and no invented crests (the user: real logos or none; real ones are trademarks, and a non-commercial project is not exempt). Race-suit detail, the race number, the driver's code and national flag.
 
+- [x] **The team's name on the suits** (user, 2026-10-12): plain capitals across the chest, front only, approved from a local preview.
+- [ ] **Retake the site's four podium pictures** so they show the team names on the suits (`tools/capture-shots.js`, part `podium`).
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
