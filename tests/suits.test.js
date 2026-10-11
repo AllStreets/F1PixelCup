@@ -24,13 +24,22 @@ test("suits: every driver's own marks: number, code, surname, country", () => {
   new Set(DRIVERS.map((d) => d.country)).forEach((c) => assert.ok(flags.includes(`"${c}"`) || new RegExp(`\\b${c}:`).test(flags), `a flag for ${c}`));
 });
 
-test("suits: no team marks: nothing on the suit names or pictures a team", () => {
+test("suits: the team in plain words on the chest, never a logo or crest (user, 2026-10-12)", () => {
   const all = Object.keys(Suits.LAYOUT.front).concat(Object.keys(Suits.LAYOUT.back));
-  assert.deepEqual([...new Set(all)].sort(), ["code", "flag", "number", "surname"]);
+  assert.deepEqual([...new Set(all)].sort(), ["code", "flag", "number", "surname", "team"]);
+  // On the front only: the back is the surname over the number.
+  assert.ok(Suits.LAYOUT.front.team && !Suits.LAYOUT.back.team);
   DRIVERS.forEach((d) => {
-    const text = Object.values(Suits.marks(d)).join(" ").toLowerCase();
-    TEAMS.forEach((t) => assert.ok(!text.includes(t.short.toLowerCase()), `${d.id}'s suit says ${t.short}`));
+    const team = TEAMS.find((t) => t.id === d.teamId);
+    const m = Suits.marks(d, team.short);
+    // Its own team's short name, in capitals, and no other team's anywhere.
+    assert.equal(m.team, team.short.toUpperCase(), d.id);
+    const rest = [m.number, m.code, m.surname].join(" ").toLowerCase();
+    TEAMS.forEach((t) => assert.ok(!rest.includes(t.short.toLowerCase()), `${d.id}'s other marks say ${t.short}`));
   });
+  // Words only: the suit's painter loads no image and draws no emblem.
+  const painter = fs.readFileSync(path.join(__dirname, "..", "r3d", "suit.js"), "utf8");
+  assert.ok(!/new Image\(|drawImage\(|\.svg|logo|crest/i.test(painter.replace(/\/\/.*$/gm, "")), "the suit's painter draws words, numbers and flags only");
 });
 
 test("suits: the marks sit on the chest, the belt and the back, each in its place", () => {

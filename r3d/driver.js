@@ -565,7 +565,7 @@ function dress(model, driver, team, look, tier) {
   const { suit, trim } = suitColours(team);
   const made = new Map();
   // The driver's marks (number, flag, code, surname), on the body's cloth.
-  const sheet = suitSheet(driver, { suit, trim }, tier);
+  const sheet = suitSheet(driver, { suit, trim, team: team && team.short }, tier);
   // (`onBody`: the body's own suit and trim wear the marks; the collar band,
   // a mesh in its own space, wears the plain trim.)
   const dressed = (m, onBody) => {
