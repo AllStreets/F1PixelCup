@@ -74,7 +74,7 @@ test("rendering is deterministic, and every anthem and the fanfare render", () =
   assert.equal(PodiumSound.anthemFor({ country: "constructor" }), null);
   // A winner without an anthem here gets the fanfare: the game's own tune, the same every time.
   assert.deepEqual(PodiumSound.renderPiece(null, 4000), PodiumSound.renderPiece("fanfare", 4000));
-  assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - 1.6) < 1e-9);
+  assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - PodiumSound.TAIL) < 1e-9);
 });
 
 test("the cues: each sound at its beat on the ceremony's timeline, whatever the anthem's length", () => {
@@ -259,6 +259,18 @@ test("no sound overlaps the next scene: every cue ends before the scene after it
     // The music, one piece at a time: anthem, then the processional, then the sting, then the corks.
     assert.ok(end("anthem") <= cue("procession").at, "the anthem's last echo before the processional");
     assert.ok(end("procession") <= cue("sting").at, "the processional before the winner's sting");
+    assert.ok(end("procession") <= B.trophy + 1e-6, `the processional has died away as the winner takes the trophy: ${end("procession") - B.trophy}`);
+    // No dead air: the processional starts within half a second of the
+    // anthem's last echo, plays until the winner has the trophy in reach
+    // (its last note as it is raised to them), and the sting follows at once.
+    assert.ok(cue("procession").at - end("anthem") <= 0.5, `${cue("procession").at - end("anthem")} s of nothing after the anthem`);
+    assert.ok(cue("sting").at - end("procession") <= 0.3);
+    const gold = C.HANDOVERS.find((h) => h.place === 1);
+    const tune = PodiumSound.processional(C);
+    const last = tune.melody[tune.melody.length - 1];
+    assert.ok(Math.abs(cue("procession").at + (last[1] * 60) / tune.bpm - gold.raise) < 0.02, "its last note as the gold is raised");
+    assert.ok(cue("procession").at + ((last[1] + last[2]) * 60) / tune.bpm > gold.contact - 0.2, "held until the winner's hand is on it");
+    assert.ok(tune.bpm >= 92 && tune.bpm <= 120, `a stately ${tune.bpm} to the minute`);
     assert.ok(end("sting") <= Math.min(...[1, 2, 3].map((p) => cue(`cork${p}`).at)), "the sting before the first cork");
     // The arrival's crowd is quiet by the anthem's first note; nothing of the champagne before the spray.
     assert.ok(end("welcome") <= cue("anthem").at);
@@ -277,9 +289,24 @@ test("the presentation's sounds: a processional that is no anthem, a ring for ea
   // Its own tune: not the fanfare, not the sting, not any anthem's opening.
   const opening = (piece) => piece.melody.slice(0, 6).map((n) => n[0] - piece.melody[0][0]).join(",");
   [PodiumSound.FANFARE, PodiumSound.STING, ...Object.values(PodiumSound.ANTHEMS)].forEach((other) => assert.notEqual(opening(P), opening(other)));
-  assert.ok((P.beats * 60) / P.bpm >= 8 && (P.beats * 60) / P.bpm <= 14);
-  const music = PodiumSound.renderPiece("procession", 8000);
-  assert.ok(rms(music, 1, 3) > 0.05);
+  const C = Ceremony.withAnthem(20);
+  const tune = PodiumSound.processional(C);
+  assert.deepEqual(tune.melody.slice(0, P.melody.length), P.melody);
+  const music = PodiumSound.renderPiece(tune, 8000);
+  assert.ok(Math.abs(music.length / 8000 - (C.BEATS.trophy - C.BEATS.present)) < 0.01, "as long as the presentation, to the winner's taking it");
+  assert.ok(rms(music, 1, 3, 8000) > 0.05);
+  // Its end is no click: the last few milliseconds are all but silent.
+  assert.ok(rms(music, music.length / 8000 - 0.01, music.length / 8000, 8000) < 0.01);
+  // The crowd: applause held until the winner has the trophy (no hush
+  // before it), and the roar held through the lift (no quiet at its end).
+  const made = PodiumSound.sounds(C, null, 8000);
+  const ovation = PodiumSound.run(made.ovation());
+  const L = ovation.length / 8000;
+  const walk = C.HANDOVERS[2].arrive - 1 - C.BEATS.present;
+  assert.ok(rms(ovation, L - 0.9, L - 0.3, 8000) > rms(ovation, walk - 0.4, walk + 0.4, 8000) * 1.25, `the applause rises to the winner's handover: ${rms(ovation, L - 0.9, L - 0.3, 8000) / rms(ovation, walk - 0.4, walk + 0.4, 8000)}`);
+  const roar = PodiumSound.run(made.roar());
+  const R8 = roar.length / 8000;
+  assert.ok(rms(roar, R8 - 1.6, R8 - 0.6, 8000) > rms(roar, 0.6, 1.6, 8000) * 0.45, "the roar holds through the lift");
   // A ring: a struck metal sound, sharp at the start, dying over about a second, with partials that are not harmonics.
   const rings = [3, 2, 1].map((place) => PodiumSound.renderRing(place, R));
   rings.forEach((ring) => {

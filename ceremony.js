@@ -33,13 +33,13 @@
   // gap: the anthem's last echo to the presenter's first move; take, pick:
   // hands onto the trophy, then it is up and carried; raise, contact, give:
   // held up to the driver, the driver's hand closes on it, the presenter
-  // lets go; nod; liftFor: how long third and second hold theirs up; pass:
+  // lets go (gold: the winner's, a little slower); nod; liftFor: how long third and second hold theirs up; pass:
   // from the right hand to the left. spotSide, spotZ: where the presenter
   // stands for a handover, from the step's middle (to the driver's right,
   // clear of the step's front). handOut, handUp: where the trophy's stem is
   // as it changes hands, from the driver toward the presenter and above the
   // step. exit: where the presenter walks off to (out of any frame).
-  const PRESENT = { gap: 0.2, take: 0.35, pick: 0.7, raise: 0.45, contact: 0.6, give: 0.85, nod: 0.3, liftFor: 2.0, pass: 0.9,
+  const PRESENT = { gap: 0.2, take: 0.35, pick: 0.7, raise: 0.45, contact: 0.6, give: 0.85, gold: { contact: 0.9, give: 1.25 }, nod: 0.3, liftFor: 2.0, pass: 0.9,
     spotZ: 0.9, spotSide: -0.5, handOut: 0.55, handUp: 1.08, exit: [-9.5, 5.8] };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
     if (!(anthemSeconds >= 0) || !Number.isFinite(anthemSeconds)) throw new Error(`anthem length ${anthemSeconds}`);
@@ -140,9 +140,10 @@
       turnTo(toward(here, driverAt(place)));
       // At the step: hold it up; the driver's hand closes on it; let go, nod.
       h.raise = clock;
-      h.contact = h.raise + PRESENT.contact;
-      h.release = h.raise + PRESENT.give;
-      stop(PRESENT.give + PRESENT.nod, place);
+      const { contact, give } = place === 1 ? PRESENT.gold : PRESENT;
+      h.contact = h.raise + contact;
+      h.release = h.raise + give;
+      stop(give + PRESENT.nod, place);
       h.stands = [here[0], here[1], facing];
       // The driver lifts it, then brings it down to the left hand (the
       // winner at the end of the big lift, in time for the bottle).
@@ -339,9 +340,9 @@
     const SIDE = 3.2;
     const AT_TABLE = -1.5;
     const atStep = (place) => STEPS[place].x * 0.55 - 0.25;
-    const follow = [[BEATS.present, 0], [BEATS.present + 1.8, AT_TABLE]];
+    const follow = [[BEATS.present, 0], [BEATS.present + 2.4, AT_TABLE]];
     HANDOVERS.forEach((h) => {
-      follow.push([h.carried, AT_TABLE]);
+      if (h.carried > follow[follow.length - 1][0]) follow.push([h.carried, AT_TABLE]);
       follow.push([h.raise, atStep(h.place)]);
       if (h.place !== 1) follow.push([h.release + 0.9, atStep(h.place)]);
     });
@@ -375,7 +376,7 @@
       const lookY = 2.1 + (p1Head - 0.1 - 2.1) * anthem + (2.0 - p1Head + 0.1) * medium + (p1Head + 0.3 - 2.0) * push + (2.15 - p1Head - 0.3) * back;
       const height = 6.8 + (2.5 - 6.8) * sweep + 0.1 * anthem - 0.1 * medium + (p1Head + 0.1 - 2.5) * push + (2.7 - p1Head - 0.1) * back;
       const lookZ = 0.0 + 0.3 * medium + (0.1 - 0.3) * push - 0.1 * back;
-      const toWinner = smooth(BEATS.trophy - 0.2, BEATS.trophy + 1.6, t);
+      const toWinner = smooth(BEATS.trophy - 0.2, BEATS.trophy + 2.2, t);
       const lookX = followX(t) * (1 - toWinner);
       const side = SIDE * medium * (1 - toWinner);
       const orbit = ORBIT_SWING * Math.sin(((t - BEATS.spray) * 2 * Math.PI) / ORBIT_PERIOD) * orbitIn;
@@ -475,7 +476,7 @@
     }
 
     return {
-      BEATS, SCENES, HANDOVERS, TABLE, PRESENT, PASS, WALK_SPEED, STEP_FORWARD, handPoint, ORBIT_PERIOD, PROP_SWAP, anthemSeconds, stepFor, sceneAt, beatAt, poseAt, forwardAt,
+      BEATS, SCENES, HANDOVERS, TABLE, PRESENT, PASS, WALK_SPEED, RAMP, TURN_STEP, STEP_FORWARD, handPoint, ORBIT_PERIOD, PROP_SWAP, anthemSeconds, stepFor, sceneAt, beatAt, poseAt, forwardAt,
       presenterAt, trophyAt, reachAt, trophyShown, bottleShown, confettiOn, sprayOn, corkAt, platesShown,
       counts, cameraAt, fitFov, cupColour, stepConfetti, sprayDrop, stepDrop,
     };
