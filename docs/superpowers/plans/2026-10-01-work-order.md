@@ -244,7 +244,7 @@ Stage R comes last because its screenshots should show the finished game. If a R
 
 - [ ] **Re-run the headed perf check on a quiet machine** (`node tools/perf/check-headed.js 8770`): `ratioClimbsBack` failed 3 of 3 on 2026-10-12 with the load average near 9 (an agent's browser and the user's Chrome busy); the other ten results passed. If it still fails when quiet, High has lost its headroom since the Las Vegas stands and the Sphere.
 
-- [ ] **Crowd roar and anthems, round 2** (branch `stage-k-podium`; user, 2026-10-12): the roar sounds like splashing water: make it voices; find Italy's anthem again (and Brazil's); include Thailand's (the user accepts it).
+- [x] **Crowd roar and anthems, round 2** (branch `stage-k-podium`; user, 2026-10-12): the roar sounds like splashing water: make it voices; find Italy's anthem again (and Brazil's); include Thailand's (the user accepts it).
 - [x] ~~Three anthems on the fanfare for now (the user's call):~~ decided above.
 
 ## 9. Stop before Supabase
