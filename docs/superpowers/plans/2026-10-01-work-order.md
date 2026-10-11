@@ -251,10 +251,10 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Race suits** (branch `driver-faces`; user, 2026-10-12) **[REVIEW]**: no logos and no invented crests (the user: real logos or none; real ones are trademarks, and a non-commercial project is not exempt). Race-suit detail, the race number, the driver's code and national flag.
 
 - [x] **The team's name on the suits** (user, 2026-10-12): plain capitals across the chest, front only, approved from a local preview.
-- [ ] **Retake the site's four podium pictures** so they show the team names on the suits (`tools/capture-shots.js`, part `podium`).
+- [x] **Retake the site's four podium pictures** (retaken with the trophy presentation) so they show the team names on the suits (`tools/capture-shots.js`, part `podium`).
 
 - [x] **F for the full screen** (user, 2026-10-12): on main.
-- [ ] **Trophy presentation** (branch `stage-k-podium`; user, 2026-10-12) **[REVIEW]**: bronze, silver and gold trophies in rising size, a well-dressed presenter handing them over between the anthem and the champagne, its own music and applause, no scene overlapping another.
+- [x] **Trophy presentation** (branch `stage-k-podium`; user, 2026-10-12) **[REVIEW]**: bronze, silver and gold trophies in rising size, a well-dressed presenter handing them over between the anthem and the champagne, its own music and applause, no scene overlapping another.
 
 ## 9. Stop before Supabase
 
