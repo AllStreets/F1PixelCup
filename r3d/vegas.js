@@ -189,7 +189,9 @@ export function stripFacade(night) {
 
 // The LED walls: abstract colour flowing across them (no image, no mark),
 // read off their UVs in metres.
-export function videoMaterial(clock) {
+// `gain`: how bright (a screen beside the track is dimmer than a resort's
+// wall, so it never clips to white under the bloom).
+export function videoMaterial(clock, gain = 1) {
   const m = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uVideoTime = clock;
@@ -219,10 +221,10 @@ export function videoMaterial(clock) {
         // The screen's pixels: a fine grid.
         vec2 px = fract(vVideo / 0.6);
         float pix = smoothstep(0.0, 0.15, px.x) * smoothstep(0.0, 0.15, px.y);
-        diffuseColor.rgb = c * mix(0.55, 1.0, pix) * 1.1;`);
+        diffuseColor.rgb = c * mix(0.55, 1.0, pix) * ${(1.1 * gain).toFixed(3)};`);
   };
   m.vertexColors = true;
-  m.customProgramCacheKey = () => "vegas-video-v3";
+  m.customProgramCacheKey = () => `vegas-video-v3-${gain}`;
   return m;
 }
 
@@ -285,7 +287,7 @@ function beamMaterial(night) {
 // their edges' middles and points across its large faces, dropped to the
 // ground (an edge across the margin counts, not only its ends; a piece
 // standing on another counts too), at most `cap` of them, evenly through.
-function groundPoints(node, cap = 260) {
+function groundPoints(node, cap = 260, dense = false) {
   const pts = [];
   node.updateMatrixWorld(true);
   const a = new THREE.Vector3();
@@ -310,7 +312,8 @@ function groundPoints(node, cap = 260) {
       b.fromBufferAttribute(pos, at(k + 1)).applyMatrix4(m.matrixWorld);
       c.fromBufferAttribute(pos, at(k + 2)).applyMatrix4(m.matrixWorld);
       const area = Math.abs((b.x - a.x) * (c.z - a.z) - (c.x - a.x) * (b.z - a.z)) / 2;
-      const n = Math.min(12, Math.floor(Math.sqrt(area) / 15));
+      // (`dense`: closer, for claiming a hall's whole floor once it is placed.)
+      const n = dense ? Math.min(40, Math.floor(Math.sqrt(area) / 12)) : Math.min(12, Math.floor(Math.sqrt(area) / 15));
       for (let i = 1; i < n; i += 1) {
         for (let j = 1; i + j < n; j += 1) {
           const u = i / n;
@@ -444,6 +447,12 @@ export function buildVegasStrip(course, venue, { dress }) {
   // together, then claimed.
   const pieces = [...model.getObjectByName("buildings").children, ...model.getObjectByName("landmarks").children];
   placeGroups(course, pieces, VEGAS_SCALE, moved, dropped);
+  // Every placed piece's whole ground, closely (claimed once the Strip and
+  // the Sphere have their places, below: where they stand is decided by the
+  // points above alone, as it was when the Strip was approved, and what is
+  // placed later, stands and the fill, cannot slip between two claims into
+  // a hall).
+  const floor = pieces.filter((n) => n.parent).flatMap((n) => groundPoints(n, 1200, true));
   const resorts = {};
   model.getObjectByName("buildings").children.forEach((node) => {
     const resort = node.userData.resort;
@@ -494,6 +503,7 @@ export function buildVegasStrip(course, venue, { dress }) {
       s.traverse((m) => { if (m.material && m.material.userData.time) screens.push(m.material.userData.time); });
     }
   }
+  floor.forEach(([x, z]) => course.occupied.add(x, z, 9));
   // The named landmarks, each with its nearest point of the track.
   const nearest = (x, z) => course.nearestSample(x, z) || course.samples.reduce((a, q) => (Math.hypot(q.x - x, q.y - z) < Math.hypot(a.x - x, a.y - z) ? q : a));
   const named = (name, x, z, extra = {}) => {

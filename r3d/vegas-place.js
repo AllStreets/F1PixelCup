@@ -47,3 +47,31 @@ export function shiftClear(points, course, { margin = 10, maxShift = 70, blocked
 export function tileKey(x, z, size = 600) {
   return `${Math.floor(x / size)},${Math.floor(z / size)}`;
 }
+
+// A stand's place beside the track: at the lap's point p ({ x, y, nx, ny,
+// outerL, outerR }: its normal points to its right), on `side` (1 right, -1
+// left), its front `gap` past the barrier, its footprint `hd` deep (half).
+// Returns its centre, the angle of its length and the way it faces (back at
+// the track), as the track data's own stands have them.
+export function standSite(p, side, gap, hd) {
+  const reach = (side > 0 ? p.outerR : p.outerL) + 2 + gap + hd;
+  const face = Math.atan2(-p.ny * side, -p.nx * side);
+  return { x: p.x + p.nx * side * reach, y: p.y + p.ny * side * reach, face, angle: face + Math.PI / 2 };
+}
+
+// Points over a footprint (centre x, y; half-length hl along `angle`,
+// half-depth hd), no more than `step` apart, its edges and corners among them.
+export function rectPoints(x, y, angle, hl, hd, step) {
+  const ca = Math.cos(angle);
+  const sa = Math.sin(angle);
+  const nu = Math.max(1, Math.ceil((hl * 2) / step));
+  const nv = Math.max(1, Math.ceil((hd * 2) / step));
+  const out = [];
+  for (let i = 0; i <= nu; i += 1) {
+    for (let j = 0; j <= nv; j += 1) {
+      const u = -hl + (2 * hl * i) / nu; const v = -hd + (2 * hd * j) / nv;
+      out.push([x + u * ca - v * sa, y + u * sa + v * ca]);
+    }
+  }
+  return out;
+}

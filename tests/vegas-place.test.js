@@ -43,3 +43,62 @@ test("tiles: points in the same 600-unit cell share a key", () => {
   assert.equal(place.tileKey(10, 10), place.tileKey(590, 599));
   assert.notEqual(place.tileKey(10, 10), place.tileKey(610, 10));
 });
+
+test("a stand's place: beside the track, its front a gap past the barrier, facing it", () => {
+  // The track runs along +x here; its right is +y (the game's z), its barrier 40 out.
+  const p = { x: 100, y: 0, nx: 0, ny: 1, outerL: 30, outerR: 40 };
+  const right = place.standSite(p, 1, 10, 34);
+  assert.ok(Math.abs(right.x - 100) < 1e-9 && Math.abs(right.y - (40 + 2 + 10 + 34)) < 1e-9, JSON.stringify(right));
+  // It faces back at the track (-y), its length along the track.
+  assert.ok(Math.abs(Math.cos(right.face)) < 1e-9 && Math.sin(right.face) < -0.99);
+  assert.ok(Math.abs(Math.abs(Math.cos(right.angle)) - 1) < 1e-9, "its length lies along the track");
+  const left = place.standSite(p, -1, 10, 34);
+  assert.ok(Math.abs(left.y + (30 + 2 + 10 + 34)) < 1e-9 && Math.sin(left.face) > 0.99);
+  // As the track data's own stands are written: angle = face + a quarter turn.
+  assert.ok(Math.abs(right.angle - right.face - Math.PI / 2) < 1e-9);
+  // On a stretch running diagonally: out along its own normal, facing back down it.
+  const k = Math.SQRT1_2;
+  const q = { x: 0, y: 0, nx: k, ny: -k, outerL: 20, outerR: 20 };
+  const s = place.standSite(q, 1, 8, 34);
+  assert.ok(Math.abs(s.x - k * 64) < 1e-9 && Math.abs(s.y + k * 64) < 1e-9, JSON.stringify(s));
+  assert.ok(Math.abs(Math.cos(s.face) + k) < 1e-9 && Math.abs(Math.sin(s.face) - k) < 1e-9, "it faces the track");
+});
+
+test("a footprint's points cover it closely, corners and all", () => {
+  const pts = place.rectPoints(0, 0, 0, 78, 34, 20);
+  [[-78, -34], [78, -34], [78, 34], [-78, 34], [0, 0]].forEach(([x, y]) => assert.ok(pts.some((q) => Math.abs(q[0] - x) < 1e-9 && Math.abs(q[1] - y) < 1e-9), `no ${x}, ${y}`));
+  pts.forEach(([x, y]) => assert.ok(Math.abs(x) <= 78 + 1e-9 && Math.abs(y) <= 34 + 1e-9));
+  assert.ok(pts.length >= 9 * 5);
+  // Turned a quarter: its length along y.
+  assert.ok(place.rectPoints(0, 0, Math.PI / 2, 78, 34, 20).some((q) => Math.abs(q[1] - 78) < 1e-6));
+});
+
+test("Las Vegas has its race-weekend stands, and the check counts them", () => {
+  const fs = require("node:fs");
+  const src = fs.readFileSync(path.join(__dirname, "..", "r3d", "landmarks.js"), "utf8");
+  const vegas = src.slice(src.indexOf("  lasvegas: {"), src.indexOf("\n  },", src.indexOf("  lasvegas: {")));
+  assert.ok(/stands: \{/.test(vegas), "Las Vegas lists no stands of its own");
+  const track = fs.readFileSync(path.join(__dirname, "..", "r3d", "track.js"), "utf8");
+  assert.ok(track.includes("venueStands(course, venue, bg, group)"), "the venue's stands are not built with the decor");
+  const check = fs.readFileSync(path.join(__dirname, "..", "tools", "checks", "trackside-models-check.js"), "utf8");
+  assert.ok(check.includes("results.vegasStands"), "the browser check does not count the stands");
+});
+
+test("the Strip's places are pinned, and the browser check holds every later change to them", () => {
+  const fs = require("node:fs");
+  const root = path.join(__dirname, "..");
+  const pinned = JSON.parse(fs.readFileSync(path.join(root, "tools", "vegas", "strip-places.json"), "utf8"));
+  const names = Object.keys(pinned);
+  assert.ok(names.length >= 55, `${names.length} pinned`);
+  ["resort_caesars", "resort_bellagio", "resort_wynn", "resort_venetian", "resort_mgm", "resort_paris", "eiffel", "bellagio_lake", "vegasSphere", "luxor", "high_roller"].forEach((n) => {
+    assert.ok(Array.isArray(pinned[n]) && pinned[n].length === 2 && pinned[n].every(Number.isFinite), `${n} is not pinned`);
+  });
+  const check = fs.readFileSync(path.join(root, "tools", "checks", "trackside-models-check.js"), "utf8");
+  assert.ok(check.includes("results.vegasStripPinned") && check.includes("strip-places.json"), "the browser check does not hold the Strip's places");
+  // Where a piece of the Strip stands is decided by the same ground points as
+  // when it was approved: 260 a piece at most, the coarse grid; the close
+  // claims come after (r3d/vegas.js).
+  const src = fs.readFileSync(path.join(root, "r3d", "vegas.js"), "utf8");
+  assert.ok(src.includes("function groundPoints(node, cap = 260, dense = false)"), "the placement's ground points changed");
+  assert.ok(/const plans = \[\.\.\.groups\.entries\(\)\]\.map\(\(\[key, list\]\) => \{\s*const pts = list\.flatMap\(\(n\) => groundPoints\(n\)\);/.test(src), "the placement no longer uses the approved points");
+});

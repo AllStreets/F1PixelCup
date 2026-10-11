@@ -221,6 +221,9 @@ export const VENUES = {
     ground: "city", night: true, standColor: "#7a3cff", stand: "covered", runoffTint: "#8c8896",
     trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
     city: "vegasStrip",
+    // Its race-weekend grandstands (r3d/track.js venueStands): wherever one
+    // fits beside the streets, between the resorts.
+    stands: { step: 180, max: 34, bleachers: 10, seats: ["#7a3cff", "#e03a4a", "#2a7fd6", "#f0a020"] },
     // The ground between and behind its towers, from the map (r3d/vegas-fill.js).
     fill: "vegasFill",
     fogNear: 1800, fogFar: 7000,
