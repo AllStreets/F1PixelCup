@@ -229,6 +229,9 @@ Stage R comes last because its screenshots should show the finished game. If a R
 
 - [x] **Night sky** (user, 2026-10-10): the moon and stars in place of the sun at night races.
 
+- [ ] **Las Vegas, the ground between** (branch `landmarks-2025`; user, 2026-10-11) **[REVIEW]**: no dead grey or brown ground: podiums, garages, pools, low-rise blocks, car parks, streets, the monorail and the far city, without touching the Strip's buildings.
+- [ ] **Site and README refresh** (branch `site-showcase`): the Strip, replay sound, the engine, the Safety Car's gates, racing feel, the night sky, performance; every count true.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
