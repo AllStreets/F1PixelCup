@@ -62,3 +62,21 @@ test("the two signal sounds: their own recipes, unlike each other, each audible 
   assert.ok(STEWARD_HIT.some((n) => n.frequency > 2000) && STEWARD_HIT.some((n) => n.frequency < 200));
   assert.ok(STEWARD_HIT.every((n) => !notes.includes(n.frequency)));
 });
+
+test("a replay hears them too: the Safety Car's sound when it appears, the Steward's at the penalty's blast", () => {
+  const Replay = require("../replay.js");
+  const sample = (sc) => ({ objects: [], boxes: [], cars: [], safetyCar: sc });
+  const samples = [sample(null), sample(null), sample({ d: 1, lat: 0 }), sample({ d: 2, lat: 0 })];
+  const rec = {
+    count: samples.length, chequerAt: 0, contacts: [],
+    // (The penalty's blast is the big flash; a shot's bounce a small one.)
+    flashes: [{ at: 150, x: 1, y: 2, size: 40 }, { at: 160, x: 1, y: 2, size: 5 }],
+    indexAt: (t) => Math.max(0, Math.min(samples.length - 1, Math.floor(t / 100))),
+    sampleAt: (k) => samples[k],
+  };
+  const types = (a, b) => Replay.eventsBetween(rec, a, b).map((e) => e.type).sort();
+  assert.deepEqual(types(100, 199), ["impact", "steward"]);
+  assert.deepEqual(types(150, 250), ["impact", "safetyCar"]);
+  // Once out, no more of it.
+  assert.deepEqual(types(250, 350), []);
+});

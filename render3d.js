@@ -882,7 +882,7 @@ function updateTrackside(world, track, life, now, dt, { players, racers } = {}) 
   updateHelicopter(helicopter, world, life && life.helicopter, dt);
   world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
   // The official's chequered flag: the last lap, until the winner has it.
-  world.life.starter = updateStarter(world.starter, Boolean(life && life.chequer), t, paused ? 0 : wallDt / 1000, Boolean(life && life.showMs !== undefined && !life.playing));
+  world.life.starter = updateStarter(world.starter, Boolean(life && life.chequer), t, paused ? 0 : wallDt / 1000, Boolean(life && life.showMs !== undefined && life.paused));
   setFlagger(world.starter ? world.starter.userData.wave : 0);
   updatePeople(world.people, { players, racers, t, dt: paused ? 0 : dt });
   updateYachts(world.yachts, t);

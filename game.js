@@ -6171,6 +6171,7 @@ function playNoise({ duration = 0.2, volume = 0.35, frequency = 900, type = "low
 }
 
 const sfxLastPlayed = {};
+const signalsPlayed = { safetyCar: 0, stewardHit: 0 };
 
 // Rate limit for sounds that can be triggered many times in a single frame.
 function sfxAllowed(key, minimumGapMs) {
@@ -6207,8 +6208,9 @@ const sfx = {
   },
   // The race's signals (signal-sounds.js): the Safety Car coming out, for
   // everyone; the Steward Penalty landing on a player.
-  safetyCar: () => SignalSounds.SAFETY_CAR.forEach((n) => playTone(n.frequency, n)),
-  stewardHit: () => SignalSounds.STEWARD_HIT.forEach((n) => playTone(n.frequency, n)),
+  // (Counted, for the checks: how many times each has been played.)
+  safetyCar: () => { signalsPlayed.safetyCar += 1; SignalSounds.SAFETY_CAR.forEach((n) => playTone(n.frequency, n)); },
+  stewardHit: () => { signalsPlayed.stewardHit += 1; SignalSounds.STEWARD_HIT.forEach((n) => playTone(n.frequency, n)); },
   finalLap: () => {
     playTone(980, { duration: 0.14, volume: 0.3 });
     playTone(980, { duration: 0.14, volume: 0.3, delay: 0.18 });
