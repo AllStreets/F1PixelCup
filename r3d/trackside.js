@@ -296,9 +296,10 @@ export function buildStarter(course) {
     const off = across * (base + out);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
-    // (The stand's deck is 8 by 7, the flag's reach a little more.)
-    if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 5, 5, 3) || course.occupied.blocked(x, z, 7)) continue;
-    course.occupied.add(x, z, 7);
+    // (The stand's deck is 8 by 7: its half-footprint, as the old rostrum's;
+    // wider, the tightest circuits have no room for it by the line.)
+    if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;
+    course.occupied.add(x, z, 5);
     spot = { p, x, z };
     break;
   }

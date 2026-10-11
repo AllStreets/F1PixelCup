@@ -389,6 +389,8 @@ async (page) => {
   results.stewardHitSound = await run(() => {
     const hit = (victim, protect) => {
       const before = signalsPlayed.stewardHit;
+      // (Each a blast of its own: the sound's once-a-blast limit starts afresh.)
+      sfxLastPlayed.stewardHit = 0;
       const now = raceNow();
       state.racers.forEach((r) => { r.spinUntil = 0; r.spinImmuneUntil = 0; r.protectedUntil = 0; r.formationUntil = 0; });
       if (protect) victim.protectedUntil = now + 5000;
@@ -416,7 +418,13 @@ async (page) => {
     cpu.isPlayer = true;
     const onSecond = hit(cpu, false);
     cpu.isPlayer = false;
-    return (onPlayer === 1 && shrugged === 0 && onCpu === 0 && onSecond === 1) || JSON.stringify({ onPlayer, shrugged, onCpu, onSecond });
+    // Two players in one blast: once, not twice over.
+    const beside = state.racers.find((r) => !r.isPlayer && r !== cpu);
+    beside.isPlayer = true; cpu.isPlayer = true;
+    beside.trackDistance = cpu.trackDistance; beside.lap = cpu.lap; beside.lat = cpu.lat + 20;
+    const onBoth = hit(cpu, false);
+    beside.isPlayer = false; cpu.isPlayer = false;
+    return (onPlayer === 1 && shrugged === 0 && onCpu === 0 && onSecond === 1 && onBoth === 1) || JSON.stringify({ onPlayer, shrugged, onCpu, onSecond, onBoth });
   });
 
   // The safety car is solid: even the car that called it can't drive through it.
