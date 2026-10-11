@@ -240,6 +240,8 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Las Vegas: grandstands, crowds and the last empty spots** (branch `landmarks-2025`; user, 2026-10-11) **[REVIEW]**.
 - [ ] **Podium sounds** (branch `stage-k-podium`; user, 2026-10-11): the crowd, corks, spray and a fanfare; the winner's national anthem, instrumental, synthesized from public-domain scores (sources and licences recorded); the ceremony in a real podium's order.
 
+- [ ] **The Sphere's Earth** (branch `landmarks-2025`; user, 2026-10-12): a photoreal Earth from NASA's Blue Marble (public domain, credited), turning on its tilted axis as the real one's globe does.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
