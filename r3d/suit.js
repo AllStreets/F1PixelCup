@@ -4,7 +4,7 @@
 // surname and number for the back; suits.js says where), laid on the torso
 // by the suit's shader from the body's rest position, so it stays on the
 // cloth in every pose. The same shader draws a race suit's detail: the zip,
-// the quilted seams, the ankle cuffs. No team logos, crests or wordmarks.
+// the quilted seams, the ankle cuffs. The team's name in plain words; no logos or crests.
 // The sheet is drawn once, in the game's typeface: whoever builds a figure
 // waits for suitFonts() first (the podium and the studio do).
 
@@ -42,7 +42,7 @@ function fitText(g, text, box, weight, spacing = 0, wide = 1) {
 // The sheet for a driver in a suit of these colours.
 export function suitSheet(driver, { suit, trim, team = null }, tier = "high") {
   const size = Suits.sheetSize(tier);
-  const marks = Suits.marks(driver, globalThis.SUIT_TEAM_NAME ? team : null);
+  const marks = Suits.marks(driver, team);
   const canvas = document.createElement("canvas");
   [canvas.width, canvas.height] = size;
   const g = canvas.getContext("2d");
@@ -83,15 +83,13 @@ export function suitSheet(driver, { suit, trim, team = null }, tier = "high") {
   g.fillStyle = ink;
   g.fillText(marks.surname, 0, 0);
   done();
-  // The team's name in plain capitals, across the chest and under the
-  // back's number (a preview option: globalThis.SUIT_TEAM_NAME).
+  // The team's name in plain capitals across the chest (the zip runs through
+  // it, as a real suit's does). Words only.
   if (marks.team) {
-    for (const side of ["front", "back"]) {
-      done = fitText(g, marks.team, box(side, "team"), "700", 0.14, wide);
-      g.fillStyle = ink;
-      g.fillText(marks.team, 0, 0);
-      done();
-    }
+    done = fitText(g, marks.team, box("front", "team"), "700", 0.14, wide);
+    g.fillStyle = ink;
+    g.fillText(marks.team, 0, 0);
+    done();
   }
 
   const tex = new THREE.CanvasTexture(canvas);

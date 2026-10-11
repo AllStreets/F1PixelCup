@@ -211,14 +211,14 @@ async (page) => {
   });
 
   // The suits' marks (docs/superpowers/specs/2026-10-12-race-suits-design.md):
-  // each figure's sheet is drawn with its own driver's number, code, surname
-  // and country, and really has paint where each mark sits and none between
+  // each figure's sheet is drawn with its own driver's number, code, surname,
+  // country and team's name, and really has paint where each mark sits and none between
   // them (the sheet's pixels read back).
   results.suitsCarryOwnMarks = await p.evaluate(() => {
     const out = window.preview.figures.map((f) => {
       const l = f.looks();
       const d = DRIVERS.find((x) => x.id === l.driverId);
-      const want = window.Suits.marks(d);
+      const want = window.Suits.marks(d, TEAMS.find((t) => t.id === d.teamId).short);
       let body = null, collar = null, belt = null;
       f.model.traverse((n) => {
         if (n.isMesh && n.material.name === "suit" && n.material.userData.uniforms) body = n.material;
@@ -240,6 +240,7 @@ async (page) => {
       const L = window.Suits.LAYOUT;
       const shares = {
         number: painted("front", L.front.number), flag: painted("front", L.front.flag), code: painted("front", L.front.code),
+        team: painted("front", L.front.team),
         surname: painted("back", L.back.surname), backNumber: painted("back", L.back.number),
         // Between the marks: the right chest, bare.
         bare: painted("front", { ...L.front.number, x: -L.front.number.x }),
@@ -249,7 +250,7 @@ async (page) => {
         own: JSON.stringify(l.marks) === JSON.stringify(want),
         size: JSON.stringify(l.sheet) === JSON.stringify(window.Suits.sheetSize("high")),
         shares,
-        ok: shares.number > 0.08 && shares.flag > 0.9 && shares.code > 0.1 && shares.surname > 0.1 && shares.backNumber > 0.1 && shares.bare === 0,
+        ok: shares.number > 0.08 && shares.flag > 0.9 && shares.team > 0.1 && shares.code > 0.1 && shares.surname > 0.1 && shares.backNumber > 0.1 && shares.bare === 0,
         collarPlain: Boolean(collar) && !collar.userData.uniforms,
         // The body's trim (the belt, where the code is) wears the same sheet.
         beltWears: Boolean(belt && belt.userData.uniforms && belt.userData.uniforms.suitSheet.value === sheet),

@@ -26,3 +26,7 @@ The body has no UVs (it is remeshed) and needs none: the suit's shader projects 
 
 - **Node** (`tests/suits.test.js`): every driver's marks (number, code, surname, a flag the game can draw); the layout keeps every mark on its panel, between the belt and the collar's yoke except the code on the belt, none over another, the number on the left chest; the sheet's mapping and sizes; the ink reads on every team's suit colour.
 - **Browser** (`tools/checks/driver-check.js`): each figure's sheet is drawn with its own driver's marks; the sheet really has paint where the number, flag, code and surname are and none between them (pixels read back); the body's suit and trim (the belt) carry the sheet and the collar does not; the typeface is loaded; smaller sheets on the lower tiers; and on the figure as drawn from behind, the number reads the right way round in the suit's ink with bare cloth beside it. `tools/checks/podium-check.js`: the sheets are uploaded before the ceremony's first frame.
+
+## The team's name (user, 2026-10-12)
+
+After seeing a preview, the user chose the team's short name in plain capitals across the chest, under the race number (`LAYOUT.front.team`), in the suit's own lettering and ink. The zip runs through it, which the user accepted. Front only: the back stays the surname over the number. It is words, never a logo or crest; `tests/suits.test.js` holds the painter to drawing words, numbers and flags only.

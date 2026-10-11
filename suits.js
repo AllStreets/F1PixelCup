@@ -1,7 +1,8 @@
 // The marks on a driver's race suit and where they sit
 // (docs/superpowers/specs/2026-10-12-race-suits-design.md): the race number,
-// the three-letter code, the surname and the national flag. No team logos,
-// crests or wordmarks. r3d/suit.js paints them on a sheet the suit's shader
+// the three-letter code, the surname, the national flag and the team's name
+// in plain words. No team logos,
+// or crests. r3d/suit.js paints them on a sheet the suit's shader
 // lays on the torso. Pure; in the page it defines window.Suits, in Node it is
 // require()-able.
 (function attach(root, factory) {
@@ -10,8 +11,8 @@
   else root.Suits = api;
 }(typeof globalThis !== "undefined" ? globalThis : this, () => {
   // What a driver's suit says.
-  // (teamName: the team's short name in plain capitals, when the suit is to
-  // say it: a preview option, off unless asked for.)
+  // (teamName: the team's short name, in plain capitals across the chest.
+  // Words only: no logo, crest or emblem, ever.)
   function marks(driver, teamName = null) {
     return {
       team: teamName ? String(teamName).toUpperCase() : null,
@@ -47,7 +48,6 @@
     back: {
       surname: { x: 0, y: 1.365, w: 0.22, h: 0.046 },
       number: { x: 0, y: 1.235, w: 0.2, h: 0.15 },
-      team: { x: 0, y: 1.105, w: 0.2, h: 0.028 },
     },
   };
 
