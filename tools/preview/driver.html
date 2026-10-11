@@ -10,6 +10,7 @@
        ?drivers=leclerc,hamilton&pose=trophy&t=0.6&cam=front|three|close|back|podium|face|face3|side
        &head=none|helmet (bareheaded by default, docs/superpowers/specs/2026-10-01-driver-faces-design.md)
        &focus=<n> (the face cameras look at the nth driver) &grid=1 (every driver's head, five by four, named) -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap">
   <style>
     html, body { margin: 0; height: 100%; background: #121316; overflow: hidden; font-family: "Trebuchet MS", system-ui, sans-serif; }
     canvas { display: block; width: 100%; height: 100%; }
@@ -44,8 +45,13 @@
     import { loadDriver, buildDriver, POSES } from "../../r3d/driver.js";
 
     const q = new URLSearchParams(location.search);
-    const grid = q.get("grid") === "1";
-    const ids = grid ? DRIVERS.map((d) => d.id) : (q.get("drivers") || "leclerc,hamilton").split(",");
+    // grid=1: every driver's head, five by four. grid=suits: one driver of
+    // each team from the chest (&cam=rear: from the back), five by two.
+    const suitsGrid = q.get("grid") === "suits";
+    const grid = q.get("grid") === "1" || suitsGrid;
+    const ROWS = suitsGrid ? 2 : 4;
+    const ids = suitsGrid ? TEAMS.map((t) => DRIVERS.find((d) => d.teamId === t.id).id)
+      : grid ? DRIVERS.map((d) => d.id) : (q.get("drivers") || "leclerc,hamilton").split(",");
     const headwear = q.get("head") || "none";
     const focus = Number(q.get("focus") || 0);
     const still = q.has("t");
@@ -99,6 +105,9 @@
       three: { pos: [4.1, 1.5, 2.9], at: [0, 0.98, 0] },
       close: { pos: [2.2, 1.62, 0.6], at: [0, 1.42, 0] },
       back: { pos: [-3.9, 1.6, 2.6], at: [0, 1.0, 0] },
+      // The suit's chest and its back, square on.
+      chest: { pos: [1.9, 1.2, 0], at: [0, 1.2, 0] },
+      rear: { pos: [-1.9, 1.2, 0], at: [0, 1.2, 0] },
       // The whole figure with its arms up, as on the podium.
       podium: { pos: [4.5, 1.6, 2.8], at: [0, 1.2, 0] },
       // Close on one face: straight on, and from three quarters.
@@ -107,10 +116,12 @@
       side: { pos: [0.02, 1.6, 1.25], at: [0.02, 1.58, 0], fov: 22 },
       // The grid's cells: each head turned a little, its name below the chin.
       grid: { pos: [1.08, 1.68, 0.24], at: [0.02, 1.655, 0], fov: 21 },
+      // The suits' grid: the chest and the head, a little from one side.
+      suit: { pos: [2.0, 1.36, 0.35], at: [0, 1.3, 0] },
     };
     // (&pos=x,y,z&at=x,y,z&fov=n sets a camera of one's own.)
     if (q.has("pos")) CAMS.own = { pos: q.get("pos").split(",").map(Number), at: (q.get("at") || "0,1.6,0").split(",").map(Number), fov: Number(q.get("fov") || 22) };
-    const cam = CAMS[q.has("pos") ? "own" : q.get("cam")] || (grid ? CAMS.grid : CAMS.front);
+    const cam = CAMS[q.has("pos") ? "own" : q.get("cam")] || (suitsGrid ? CAMS.suit : grid ? CAMS.grid : CAMS.front);
     // (In the grid every figure stands on the same spot, drawn one at a time.)
     const slot = (i) => (grid ? 0 : (i - (ids.length - 1) / 2) * -0.95);
     // The face cameras follow the figure they look at.
@@ -141,7 +152,7 @@
       if (grid) {
         figures.forEach((f, i) => {
           f.plate.style.left = `${((i % 5) + 0.5) * 20}%`;
-          f.plate.style.top = `${(Math.floor(i / 5) + 1) * 25 - 5.6}%`;
+          f.plate.style.top = `${(Math.floor(i / 5) + 1) * (100 / ROWS) - (suitsGrid ? 7 : 5.6)}%`;
         });
         return;
       }
@@ -153,7 +164,7 @@
     function resize() {
       const w = innerWidth, h = innerHeight;
       renderer.setSize(w, h, false);
-      camera.aspect = grid ? (w / 5) / (h / 4) : w / h;
+      camera.aspect = grid ? (w / 5) / (h / ROWS) : w / h;
       camera.updateProjectionMatrix();
       placePlates();
     }
@@ -171,15 +182,17 @@
       const w = innerWidth, h = innerHeight;
       renderer.setScissorTest(true);
       figures.forEach((f, i) => {
-        const x = (i % 5) * w / 5, y = h - (Math.floor(i / 5) + 1) * h / 4;
-        renderer.setViewport(x, y, w / 5, h / 4);
-        renderer.setScissor(x, y, w / 5, h / 4);
+        const x = (i % 5) * w / 5, y = h - (Math.floor(i / 5) + 1) * h / ROWS;
+        renderer.setViewport(x, y, w / 5, h / ROWS);
+        renderer.setScissor(x, y, w / 5, h / ROWS);
         figures.forEach((g) => { g.root.visible = g === f; });
         renderer.render(scene, camera);
       });
       renderer.setScissorTest(false);
     }
 
+    // (The suits' marks are drawn in the game's typeface: wait for it.)
+    await Promise.all(["italic 900 40px 'Titillium Web'", "700 40px 'Titillium Web'"].map((f) => document.fonts.load(f))).catch(() => {});
     loadDriver(() => {
       ids.forEach((id, i) => {
         const driver = DRIVERS.find((d) => d.id === id);

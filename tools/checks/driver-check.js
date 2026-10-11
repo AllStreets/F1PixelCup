@@ -210,6 +210,65 @@ async (page) => {
     return (out.high.layers > out.medium.layers && out.medium.layers > out.low.layers && !out.high.lite && out.medium.lite && out.low.lite) || JSON.stringify(out);
   });
 
+  // The suits' marks (docs/superpowers/specs/2026-10-12-race-suits-design.md):
+  // each figure's sheet is drawn with its own driver's number, code, surname
+  // and country, and really has paint where each mark sits and none between
+  // them (the sheet's pixels read back).
+  results.suitsCarryOwnMarks = await p.evaluate(() => {
+    const out = window.preview.figures.map((f) => {
+      const l = f.looks();
+      const d = DRIVERS.find((x) => x.id === l.driverId);
+      const want = window.Suits.marks(d);
+      let body = null, collar = null;
+      f.model.traverse((n) => {
+        if (n.isMesh && n.material.name === "suit" && n.material.userData.uniforms) body = n.material;
+        if (n.isMesh && n.name === "collar") collar = n.material;
+      });
+      const sheet = body && body.userData.uniforms.suitSheet.value;
+      if (!sheet) return { id: d.id, sheet: false };
+      const g = sheet.image.getContext("2d");
+      const size = [sheet.image.width, sheet.image.height];
+      // The share of a box of the sheet that is painted.
+      const painted = (side, mark) => {
+        const b = window.Suits.sheetBox(side, mark, size);
+        const px = g.getImageData(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h)).data;
+        let n = 0;
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 128) n += 1;
+        return n / (px.length / 4);
+      };
+      const L = window.Suits.LAYOUT;
+      const shares = {
+        number: painted("front", L.front.number), flag: painted("front", L.front.flag), code: painted("front", L.front.code),
+        surname: painted("back", L.back.surname), backNumber: painted("back", L.back.number),
+        // Between the marks: the right chest, bare.
+        bare: painted("front", { ...L.front.number, x: -L.front.number.x }),
+      };
+      return {
+        id: d.id,
+        own: JSON.stringify(l.marks) === JSON.stringify(want),
+        size: JSON.stringify(l.sheet) === JSON.stringify(window.Suits.sheetSize("high")),
+        shares,
+        ok: shares.number > 0.08 && shares.flag > 0.9 && shares.code > 0.1 && shares.surname > 0.1 && shares.backNumber > 0.1 && shares.bare === 0,
+        collarPlain: Boolean(collar) && !collar.userData.uniforms,
+      };
+    });
+    // Different drivers, different sheets.
+    const distinct = new Set(out.map((o) => JSON.stringify(o.shares))).size === out.length;
+    return (out.every((o) => o.own && o.size && o.ok && o.collarPlain) && distinct) || JSON.stringify(out);
+  });
+  results.smallerSheetsOnLowerTiers = await p.evaluate(async () => {
+    const { buildDriver } = await import("../../r3d/driver.js");
+    const d = DRIVERS.find((x) => x.id === "leclerc");
+    const sizes = ["high", "medium", "low"].map((tier) => {
+      const fig = buildDriver(d, getTeamForDriver(d), { tier, headwear: "helmet" });
+      const size = fig.looks().sheet;
+      const marks = fig.looks().marks;
+      fig.dispose();
+      return [size, marks.number];
+    });
+    return JSON.stringify(sizes) === JSON.stringify([[[2048, 1024], "16"], [[1024, 512], "16"], [[512, 256], "16"]]) || JSON.stringify(sizes);
+  });
+
   // Every driver's head, in the studio's grid: twenty figures, no errors.
   await p.goto(`http://localhost:8765/tools/preview/driver.html?grid=1&t=0.5&${Date.now()}`);
   await p.waitForFunction(() => window.preview && (window.preview.ready || window.preview.error), null, { timeout: 60000 });
