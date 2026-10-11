@@ -54,6 +54,16 @@ const ANTHEMS = {
     score: "es.txt",
     source: { author: "Alberto Betancourt (piano transcription)", licence: "Public domain" },
   },
+  mc: {
+    country: "Monaco", title: "Hymne Monégasque", composer: "Théophile Bellando de Castro (1841), arranged by Charles Albrecht (1867)",
+    score: "mc.txt",
+    source: { author: "nationalanthems.info (score set by Jo Hyo-roe)", licence: "CC BY 4.0" },
+  },
+  nz: {
+    country: "New Zealand", title: "God Defend New Zealand", composer: "John Joseph Woods (1876)",
+    score: "nz.txt",
+    source: { author: "nationalanthems.info (the New Zealand Gazette's setting)", licence: "CC BY 4.0" },
+  },
   th: {
     country: "Thailand", title: "Phleng Chat Thai", composer: "Phra Chenduriyang (1932)",
     score: "th.txt",
