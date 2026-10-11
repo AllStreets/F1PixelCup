@@ -131,40 +131,46 @@ names matched to the game's teams. The game itself does not use it.
 The podium's national anthems (anthem-data.js, built by tools/anthems/build.js
 from the files kept in tools/anthems/). Only the notes are taken: an excerpt
 of each melody, with a bass line, as a list of pitches and lengths that the
-game's own synthesizer plays (podium-sound.js). No recording is used. Every
-composition used is in the public domain: its composer died more than 70
-years ago, or is unknown and centuries old. Each source and its licence:
+game's own synthesizer plays (podium-sound.js). No recording is used. Each
+source and its licence:
 
 - Hymne Monégasque (Monaco; Théophile Bellando de Castro (1841), arranged by Charles Albrecht (1867)): https://nationalanthems.info/mc~.jpg by nationalanthems.info (score set by Jo Hyo-roe), CC BY 4.0, read by hand from its score.
 - God Save the King (United Kingdom; Anonymous (18th century)): https://commons.wikimedia.org/wiki/File:British_Royal_Anthem.mid by Rabanus Flavus (Peter Gerloff), CC BY 4.0, read mechanically from its MIDI file.
 - Wilhelmus (Netherlands; Anonymous (16th century; Valerius, 1626)): https://commons.wikimedia.org/wiki/File:Wilhelmus_bladmuziek.jpg by Wilhelmus~commonswiki (Wikimedia Commons), Public domain, read by hand from its score.
 - Advance Australia Fair (Australia; Peter Dodds McCormick (1878)): https://commons.wikimedia.org/wiki/File:Advance_Australia_Fair.mid by Brian Yap, from the 1907 first edition, Public domain, read mechanically from its MIDI file.
+- Il Canto degli Italiani (Italy; Michele Novaro (1847)): https://imslp.org/wiki/Special:ReverseLookup/847136 by Maurizio Benedetti's critical edition (IMSLP), Public domain, read by hand from its score.
 - Marcha Real (Spain; Anonymous (Marcha Granadera, 1761)): https://commons.wikimedia.org/wiki/File:Marcha_Real_de_Espa%C3%B1a.pdf by Alberto Betancourt (piano transcription), Public domain, read by hand from its score.
 - O Canada (Canada; Calixa Lavallée (1880)): https://commons.wikimedia.org/wiki/File:O_Canada.mid by Denelson83, Public domain, read mechanically from its MIDI file.
 - La Marseillaise (France; Claude Joseph Rouget de Lisle (1792)): https://commons.wikimedia.org/wiki/File:Allons,_enfants_de_la_patrie.mid by Rabanus Flavus (Peter Gerloff), CC0 1.0, read mechanically from its MIDI file.
+- Phleng Chat Thai (Thailand; Phra Chenduriyang (1932)): https://commons.wikimedia.org/wiki/File:Phleng_Chat_Thai_Sheet_Music_(official).jpg by Royal Thai Government Gazette, 1939, Public domain, read by hand from its score.
 - Das Lied der Deutschen (Germany; Joseph Haydn (1797)): https://commons.wikimedia.org/wiki/File:Einigkeit_und_Recht.mid by Rabanus Flavus (Peter Gerloff), CC0 1.0, read mechanically from its MIDI file.
 - Kimigayo (Japan; Hayashi Hiromori and Oku Yoshiisa (1880)): https://commons.wikimedia.org/wiki/File:Kimigayo_MIDI.mid by www.nationalanthems.info, CC BY 4.0, read mechanically from its MIDI file.
 - God Defend New Zealand (New Zealand; John Joseph Woods (1876)): https://nationalanthems.info/nz~.jpg by John Joseph Woods's melody, as printed in the New Zealand Gazette (1978), hosted by nationalanthems.info, Public domain, read by hand from its score.
+- Hino Nacional Brasileiro (Brazil; Francisco Manuel da Silva (1831)): https://nationalanthems.info/br~1.tif by nationalanthems.info (piano score), CC BY 4.0, read by hand from its score.
 
+The compositions: every composer died more than 70 years ago, or is unknown
+and centuries old, with one exception. Thailand's Phleng Chat Thai is by Phra
+Chenduriyang, who died in 1968: it is in the public domain in Thailand
+(whose term is the author's life and 50 years), and its score was published
+there as a state announcement (the Royal Thai Government Gazette, 1939), but
+by the life-plus-70 rule of other countries it is not yet. It is included at
+the project owner's decision.
 CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/
 CC BY 4.0: https://creativecommons.org/licenses/by/4.0/ (the works so marked
 are credited above and were adapted: reduced to one melody line and one bass
 line and cut to an excerpt).
 What was changed, for every anthem: one melody line and one bass line, an
 excerpt. Where a score gave no bass that could be taken, a plain one was
-written for this game (the Netherlands, New Zealand), as each file in
-tools/anthems/transcribed/ says. Spain's bass is the left hand of Alberto
-Betancourt's piano transcription (its lowest notes); Monaco's the left hand
-of nationalanthems.info's score.
+written for this game (the Netherlands, New Zealand, Italy, Brazil,
+Thailand), as each file in tools/anthems/transcribed/ says. Spain's bass is
+the left hand of Alberto Betancourt's piano transcription (its lowest
+notes); Monaco's the left hand of nationalanthems.info's score.
+Italy: the Canto line of Maurizio Benedetti's critical edition, which its
+editor dedicated to the public domain (IMSLP file 847136).
 New Zealand: only John Joseph Woods's melody (he died in 1934) is taken. It
 was read from the New Zealand Gazette's 1978 setting as nationalanthems.info
 hosts it; that page is linked above and is not kept in this repository.
 The MIDI files are kept unchanged in tools/anthems/sources/, and the other
 scores that were read by hand in tools/anthems/scores/.
-There is no anthem for Italy, Brazil or Thailand; the game's own fanfare (an
-original tune) plays for their winners instead. For Italy and Brazil no score
-free to use here was found that could be read reliably. Thailand's Phleng
-Chat Thai was transcribed (tools/anthems/transcribed/th.txt, from the Royal
-Thai Government Gazette's score of 1939) but is held back and not in the
-game: its composer, Phra Chenduriyang, died in 1968, so it is in the public
-domain in Thailand but not clearly so in every country.
+A winner from a country with no anthem here (none of the 20 drivers today)
+gets the game's own fanfare, an original tune.

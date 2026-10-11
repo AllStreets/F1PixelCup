@@ -21,18 +21,19 @@ test("the committed note lists are exactly what the sources build to (nothing ed
 test("every driver races under a country, and each maps to its anthem or to the fanfare", () => {
   assert.equal(DRIVERS.length, 20);
   const want = {
-    verstappen: "nl", lawson: "nz", leclerc: "mc", hamilton: "gb", norris: "gb", piastri: "au", russell: "gb", antonelli: null,
-    alonso: "es", stroll: "ca", gasly: "fr", doohan: "au", albon: null, sainz: "es", bearman: "gb", ocon: "fr", tsunoda: "jp",
-    hadjar: "fr", hulkenberg: "de", bortoleto: null,
+    verstappen: "nl", lawson: "nz", leclerc: "mc", hamilton: "gb", norris: "gb", piastri: "au", russell: "gb", antonelli: "it",
+    alonso: "es", stroll: "ca", gasly: "fr", doohan: "au", albon: "th", sainz: "es", bearman: "gb", ocon: "fr", tsunoda: "jp",
+    hadjar: "fr", hulkenberg: "de", bortoleto: "br",
   };
   DRIVERS.forEach((d) => {
     assert.ok(typeof d.country === "string" && d.country.length > 2, d.id);
     assert.equal(PodiumSound.anthemFor(d), want[d.id], d.id);
   });
-  // The three without an anthem here (no score free to use for Italy and
-  // Brazil; Thailand's not clearly free everywhere), no others.
-  assert.deepEqual(DRIVERS.filter((d) => !PodiumSound.anthemFor(d)).map((d) => d.country).sort(), ["Brazil", "Italy", "Thailand"]);
-  assert.equal(Object.keys(AnthemData).length, 10);
+  // Every one of the 20 has an anthem: 13 countries. The fanfare is only for
+  // a driver from somewhere else (none today).
+  assert.deepEqual(DRIVERS.filter((d) => !PodiumSound.anthemFor(d)), []);
+  assert.equal(Object.keys(AnthemData).length, 13);
+  assert.equal(new Set(DRIVERS.map((d) => d.country)).size, 13);
   assert.equal(PodiumSound.anthemFor(null), null);
   assert.equal(PodiumSound.anthemFor({ country: "Atlantis" }), null);
   // Every anthem here is some driver's.
@@ -45,7 +46,7 @@ test("each anthem: a sane excerpt (length, range, notes in order, the bass under
     const secs = (a.beats * 60) / a.bpm;
     assert.ok(secs >= 14 && secs <= 40, `${key}: ${secs.toFixed(1)} s`);
     assert.ok(a.bpm >= 60 && a.bpm <= 200, `${key}: bpm ${a.bpm}`);
-    assert.ok(a.melody.length >= 25 && a.melody.length <= 90, `${key}: ${a.melody.length} notes`);
+    assert.ok(a.melody.length >= 25 && a.melody.length <= 110, `${key}: ${a.melody.length} notes`);
     assert.ok(a.bass.length >= 8, `${key}: bass`);
     [a.melody, a.bass].forEach((line) => {
       let end = 0;
@@ -67,7 +68,7 @@ test("each anthem: a sane excerpt (length, range, notes in order, the bass under
     assert.ok(a.country && a.title && a.composer, key);
     // Whole bars where the anthem starts on a downbeat or was pieced together.
     if (["ca", "es", "mc", "nz", "jp", "au", "de"].includes(key)) assert.equal(a.beats % 4, 0, `${key}: ${a.beats} beats`);
-    assert.match(a.source.url, /^https:\/\/(commons\.wikimedia\.org\/wiki\/File:|nationalanthems\.info\/)/, key);
+    assert.match(a.source.url, /^https:\/\/(commons\.wikimedia\.org\/wiki\/File:|nationalanthems\.info\/|imslp\.org\/wiki\/)/, key);
     assert.ok(free.includes(a.source.licence), `${key}: ${a.source.licence}`);
     assert.ok(a.source.author.length > 3 && ["midi", "score"].includes(a.source.kind), key);
   });
@@ -83,10 +84,8 @@ test("the notices and the README credit every anthem's source and licence", () =
     assert.ok(readme.includes(a.title), `README: ${a.title}`);
   });
   assert.ok(!/—/.test(notices));
-  // What is not there is said, and why.
-  assert.match(notices, /Italy/);
-  assert.match(notices, /Brazil/);
-  assert.match(notices, /Thailand/);
+  // Thailand's term is said plainly (its composer died in 1968).
+  assert.match(notices, /1968/);
 });
 
 test("well-known openings, as a guard against a slip in the build (intervals in semitones from the first note)", () => {
@@ -95,6 +94,10 @@ test("well-known openings, as a guard against a slip in the build (intervals in 
   assert.deepEqual(opening("gb", 6), [0, 0, 2, -1, 0, 2]);
   // La Marseillaise: three upbeat notes, then up a fourth.
   assert.deepEqual(opening("fr", 6), [0, 0, 0, 5, 5, 7]);
+  // Fratelli d'Italia: the same note, up a tone and back, then up a sixth.
+  assert.deepEqual(opening("it", 5), [0, 0, 2, 0, 9]);
+  // Brazil's introduction: three upbeat notes round the dominant, then up a fourth to the tonic.
+  assert.deepEqual(opening("br", 5), [0, 0, -1, 0, 5]);
   // Haydn's hymn: up by step, back, up.
   assert.deepEqual(opening("de", 6), [0, 2, 4, 2, 5, 4]);
   // The melody and bass of each MIDI anthem really are different lines.
@@ -104,7 +107,7 @@ test("well-known openings, as a guard against a slip in the build (intervals in 
   // this game wrote, no bass note sits a major seventh or a minor ninth
   // below a tune note held with it (a source's own harmony is left as it is).
   assert.ok(AnthemData.fr.bass.every((n) => n[2] === 2));
-  Object.entries(AnthemData).filter(([key]) => ["fr", "nl", "nz"].includes(key)).forEach(([key, a]) => a.bass.forEach(([low, at, length]) => a.melody.forEach(([high, start, held]) => {
+  Object.entries(AnthemData).filter(([key]) => ["fr", "nl", "nz", "it", "br", "th"].includes(key)).forEach(([key, a]) => a.bass.forEach(([low, at, length]) => a.melody.forEach(([high, start, held]) => {
     if (Math.min(start + held, at + length) - Math.max(start, at) >= 0.75) {
       assert.notEqual((high - low) % 12, 11, `${key}: a major seventh at beat ${Math.max(start, at)}`);
       assert.notEqual((high - low) % 12, 1, `${key}: a minor ninth at beat ${Math.max(start, at)}`);

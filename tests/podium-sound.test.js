@@ -159,8 +159,6 @@ test("the celebration's sounds are what they say: a cork is short and falls in p
   const tone = PodiumSound.renderCork(1, R).map((v, i, all) => (i ? (v + all[i - 1]) / 2 : v));
   assert.ok(zero(tone, 0, 0.01) > zero(tone, 0.02, 0.04), `cork ${zero(tone, 0, 0.01)} then ${zero(tone, 0.02, 0.04)}`);
   assert.ok(rms(fizz, 0.2, 0.8, R) > rms(fizz, 2.4, 3, R) * 1.5, "the bottle empties");
-  const applause = PodiumSound.renderApplause(3, 5, R);
-  assert.ok(rms(applause, 0.2, 1, R) > rms(applause, 2.2, 3, R) * 1.5);
   // Different seeds, different bottles; the same seed, the same sound.
   assert.notDeepEqual(PodiumSound.renderCork(1, R), PodiumSound.renderCork(2, R));
   assert.deepEqual(PodiumSound.renderCork(1, R), cork);

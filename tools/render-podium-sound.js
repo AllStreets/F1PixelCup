@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const Ceremony = require("../ceremony.js");
 const PodiumSound = require("../podium-sound.js");
+const CrowdSound = require("../crowd-sound.js");
 
 const RATE = PodiumSound.RATE;
 const dir = process.argv[2] || path.join(__dirname, "..", "docs", "review", "2026-10-12");
@@ -39,3 +40,13 @@ write("podium-celebration.wav", PodiumSound.mix(Ceremony.withAnthem(PodiumSound.
 const SMALL = 16000;
 Object.entries(PodiumSound.ANTHEMS).forEach(([key, a]) => write(`anthem-${slug(a.country)}.wav`, PodiumSound.renderPiece(key, SMALL), SMALL));
 write("anthem-fallback-fanfare.wav", PodiumSound.renderPiece(null, SMALL), SMALL);
+// The crowd on its own (crowd-sound.js): the trophy's roar, and the
+// grandstands' crowd as a race loops it (twice round, to hear the join).
+// crowd-roar-before.wav, beside them, is the roar as it was (shaped noise,
+// rendered from commit 8c1b209) and is not made again here.
+write("crowd-roar-after.wav", PodiumSound.run(PodiumSound.sounds(Ceremony.withAnthem(PodiumSound.anthemSeconds(winner)), winner).roar()));
+const stands = PodiumSound.run(CrowdSound.standsSteps(RATE));
+const twice = new Float32Array(stands.length * 2);
+twice.set(stands, 0);
+twice.set(stands, stands.length);
+write("grandstand-crowd.wav", twice);

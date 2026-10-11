@@ -1,0 +1,45 @@
+# Hino Nacional Brasileiro (Brazil). Melody (the right hand's top notes) read
+# from the piano score below, in F major: the anthem's instrumental
+# introduction, the upbeat to bar 2 through to its close on the first beat
+# of bar 16. An accidental holds to the end of its bar (the F sharp in bar
+# 11, the G sharp in bar 12). 120 quarter notes a minute is the tempo
+# Brazil's law gives (Lei 5.700 of 1971). The bass line is this game's own
+# (plain roots under the tune).
+source: https://nationalanthems.info/br~1.tif
+bpm: 120
+# The upbeat and bars 2 to 4
+melody: C4/0.5 C4/0.5 B3/0.25 C4/0.25
+melody: F4/0.75 F4/0.25 F4/0.5 E4/0.25 F4/0.25 A4/0.75 A4/0.25 A4/0.5 G#4/0.25 A4/0.25
+melody: C5/1 F5/1 r/1 C4/0.75 C4/0.25
+melody: F4/0.75 E4/0.25 G4/0.75 F4/0.25 A4/0.75 G4/0.25 Bb4/0.75 A4/0.25
+# Bars 5 to 8
+melody: F#4/1 G4/1 r/0.5 D4/0.5 D4/0.5 C#4/0.25 D4/0.25
+melody: G4/0.75 G4/0.25 G4/0.5 F#4/0.25 G4/0.25 Bb4/0.75 Bb4/0.25 Bb4/0.5 A4/0.25 Bb4/0.25
+melody: D5/1 G5/1 r/1 G5/0.75 F5/0.25
+melody: F5/0.75 E5/0.25 E5/0.75 D5/0.25 D5/0.75 C5/0.25 C5/0.75 Bb4/0.25
+# Bars 9 to 12
+melody: G#4/1 A4/1 r/0.5 C4/0.5 C4/0.5 B3/0.25 C4/0.25
+melody: F4/0.75 F4/0.25 F4/0.5 E4/0.25 F4/0.25 A4/0.75 F4/0.25 F4/0.5 E4/0.25 F4/0.25
+melody: D4/0.75 G4/0.25 G4/0.5 F#4/0.25 G4/0.25 Bb4/0.75 G4/0.25 G4/0.5 F#4/0.25 G4/0.25
+melody: E4/0.75 A4/0.25 A4/0.5 G#4/0.25 A4/0.25 C5/0.75 A4/0.25 A4/0.5 G#4/0.25 A4/0.25
+# Bars 13 to 16
+melody: F4/0.75 Bb4/0.25 Bb4/0.5 A4/0.25 Bb4/0.25 G4/0.75 C5/0.25 C5/0.5 B4/0.25 C5/0.25
+melody: A4/1 F5/1 r/1 E5/0.75 D5/0.25
+melody: C5/1 r/1 E4/1 r/1
+melody: F4/1
+bass: r/1.5
+bass: F2/4
+bass: F2/4
+bass: F2/4
+bass: D3/1 G2/3
+bass: G2/4
+bass: G2/4
+bass: C3/4
+bass: C3/1 F2/3
+bass: F2/4
+bass: G2/4
+bass: A2/4
+bass: Bb2/2 C3/2
+bass: F2/1 B2/1 r/1 C3/1
+bass: C3/2 C3/2
+bass: F2/1
