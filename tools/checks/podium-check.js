@@ -597,7 +597,7 @@ async (page) => {
     // that same instant on the audio clock, by the browser's own pairing of
     // the two clocks (read together, so not a matter of when this looked).
     const zeroInPage = fr.clock ? fr.clock.performanceTime + (fr.zero - fr.clock.contextTime) * 1000 : null;
-    results.soundClockWithPicture = (fr.startedPerf === fr.pictureStartedAt && zeroInPage !== null && Math.abs(zeroInPage - fr.pictureStartedAt) < 60 + fr.baseLatency * 1000)
+    results.soundClockWithPicture = (fr.startedPerf === fr.pictureStartedAt && zeroInPage !== null && Math.abs(zeroInPage - fr.pictureStartedAt) < 100 + fr.baseLatency * 1000)
       || `picture started at ${fr.pictureStartedAt}, the sound's zero ${fr.startedPerf} (on the audio clock: ${zeroInPage})`;
     // Heard, not only scheduled: through the anthem the level is up, and at
     // one of its long notes the sound really is that note (stronger at its

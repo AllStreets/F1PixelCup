@@ -112,6 +112,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   const q2 = new THREE.Quaternion();
   const upright = new THREE.Quaternion();
   const pole = new THREE.Vector3();
+  const ahead = new THREE.Vector3();
 
   // A figure's own directions in the world, from the way it faces (0: +z).
   const forwardOf = (heading, out) => out.set(Math.sin(heading), 0, Math.cos(heading));
@@ -129,8 +130,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
 
   // Where a presenter carries one: in front of the waist, its base at about a metre.
   function carryPoint(P, trophy, out) {
-    forwardOf(P.heading, v1);
-    return out.set(P.x, 1.0 - trophy.foot - 0.035, P.z).addScaledVector(v1, 0.36);
+    forwardOf(P.heading, ahead);
+    return out.set(P.x, 1.0 - trophy.foot - 0.035, P.z).addScaledVector(ahead, 0.34);
   }
 
   // The world point of a hand's grip.
@@ -196,11 +197,11 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
       }
       if (where === "right" || where === "left") {
         // In the right hand, standing as the hand holds it (eased from upright
-        // as the presenter lets go).
+        // once the presenter has let go).
         const hand = d.rig.arms.R.hand;
         gripPoint(d.rig, "R", v1);
         hand.getWorldQuaternion(q1).multiply(grips.R.quat);
-        q2.copy(upright).slerp(q1, smooth(h.contact, h.release + 0.25, t));
+        q2.copy(upright).slerp(q1, smooth(h.release, h.release + 0.4, t));
         if (pass > 0) {
           // To the left hand: the left comes to the stem, then the trophy
           // goes with it to where it is held, upright, beside the chest.
@@ -226,7 +227,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
     // or given, one each side; let go a moment after the driver has it.
     if (P.on && busy) {
       const trophy = trophies[busy.place];
-      const w = t < busy.lifted ? P.take : 1 - smooth(busy.release, busy.release + 0.3, t);
+      // (Both hold it for a moment; the presenter's hands are off by the release.)
+      const w = t < busy.lifted ? P.take : 1 - smooth(busy.contact + 0.08, busy.release, t);
       if (w > 0) {
         let worst = 0;
         [["R", 1], ["L", -1]].forEach(([s, sign]) => {
@@ -234,6 +236,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           pole.set(0, -1, 0).addScaledVector(pr, sign * 0.6);
           worst = Math.max(worst, reach(presenter.rig, s, v1, { weight: w, grip: grips[s].at, pole }));
         });
+        gaps.now = worst;
         if (w >= 1 && worst > gaps.carry) { gaps.carry = worst; gaps.carryAt = [busy.place, +(t - busy.pick).toFixed(2)]; }
       }
     }
@@ -258,7 +261,7 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           leftGrip: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p),
         };
       }),
-      gaps: { reach: { ...gaps.reach }, carry: gaps.carry, carryAt: gaps.carryAt, hold: { ...gaps.hold } },
+      gaps: { reach: { ...gaps.reach }, carry: gaps.carry, carryAt: gaps.carryAt, now: gaps.now, hold: { ...gaps.hold } },
     };
   }
 
