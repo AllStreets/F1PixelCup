@@ -5,6 +5,7 @@
 //   DIFFS=0,1,2 START=back SEEDS=1-10 OUT=back.json \
 //     node <runner>/run.js <port> code tools/balance/measure.js
 // DIFFS: difficulty indexes (0 Rookie, 1 Pro, 2 Legend). START: back or pole.
+// SOLID=1: with the setting "Spinning cars block the road" on.
 // TRACKS: circuit ids (default the eight in the spec). SEEDS: a range.
 // Several runs (split by circuit or difficulty) can go side by side and be
 // summarized together.
@@ -26,7 +27,7 @@ module.exports = async (page, port) => {
   for (const diff of diffs) {
     for (const trackId of tracks) {
       for (let seed = from; seed <= to; seed += 1) {
-        const result = await page.evaluate((opts) => Comeback.race(opts), { diff, trackId, seed, start });
+        const result = await page.evaluate((opts) => Comeback.race(opts), { diff, trackId, seed, start, solidSpins: process.env.SOLID === "1" });
         out.push(result);
         process.stderr.write(`${diff} ${trackId} ${seed} ${start}: P${result.finish}\n`);
       }

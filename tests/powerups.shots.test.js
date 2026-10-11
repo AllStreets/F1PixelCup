@@ -313,3 +313,17 @@ test("the shells hunt harder: an Undercut catches a car 300 ahead at full speed 
   assert.ok(P.SHOT_SPEEDS.debris >= 1.4 && P.TIMINGS.lifeMs.debris >= 8000);
   assert.ok(P.LAT_HOMING >= 120);
 });
+
+test("a spinning car: passed through by default, solid with the setting on", () => {
+  // Neither car stricken: they touch, whatever the setting.
+  assert.equal(P.carsCollide(false, false, false), true);
+  assert.equal(P.carsCollide(false, false, true), true);
+  // One (or both) spinning or shaken off a wall: off, the field slips through it...
+  assert.equal(P.carsCollide(true, false, false), false);
+  assert.equal(P.carsCollide(false, true, false), false);
+  assert.equal(P.carsCollide(true, true, false), false);
+  // ...on, it is as solid as any car.
+  assert.equal(P.carsCollide(true, false, true), true);
+  assert.equal(P.carsCollide(false, true, true), true);
+  assert.equal(P.carsCollide(true, true, true), true);
+});

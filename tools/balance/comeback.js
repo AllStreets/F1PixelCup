@@ -20,13 +20,13 @@
     };
   }
 
-  function race({ diff, trackId, seed, start = "back", driverId = "leclerc", steer = true, laps = 0, solo = false }) {
+  function race({ diff, trackId, seed, start = "back", driverId = "leclerc", steer = true, laps = 0, solo = false, solidSpins = false }) {
     const realRandom = Math.random;
     const realControls = window.controlsFor;
     const realUse = window.useItem;
     const realSpin = window.spinRacer;
     Math.random = seeded(seed);
-    const was = { headless: state.headless, difficulty: state.difficulty, cupDifficulty: state.cupDifficulty, selectedDriver: state.selectedDriver };
+    const was = { solidSpins: state.solidSpins, headless: state.headless, difficulty: state.difficulty, cupDifficulty: state.cupDifficulty, selectedDriver: state.selectedDriver };
     let lapsTrack = null;
     let lapsWere = 0;
     try {
@@ -40,6 +40,8 @@
       state.difficulty = diff;
       state.cupDifficulty = diff;
       state.cupWeatherMode = "dry";
+      // (The setting "Spinning cars block the road", for this race.)
+      state.solidSpins = solidSpins;
       buildCupEntries();
       state.qualifying = null;
       if (start === "pole") {

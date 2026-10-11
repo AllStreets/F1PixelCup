@@ -301,6 +301,13 @@
     return deepAcross < deepAlong ? "side" : "rear";
   }
 
+  // Whether two cars can touch at all. A car that is spinning, or shaken off
+  // a wall (`stricken`), is passed through by the field unless the player has
+  // made spinning cars solid in the settings: then it blocks like any car.
+  function carsCollide(aStricken, bStricken, solidSpins) {
+    return Boolean(solidSpins) || !(aStricken || bStricken);
+  }
+
   // Whether a car can come off a Formation Lap here: no other car on top of
   // it or right in front of or behind it in its lane.
   function formationClear(body, others, lapLength) {
@@ -325,6 +332,6 @@
     ITEM_ORDER, COLUMNS, ODDS, LIMITS, columnFor, isBlocked, rollItem, overallShares, rarityFor,
     CAR_LENGTH, CAR_WIDTH, SHOT_EDGE, LAT_HOMING, TRAIL_GAP, DROP_GAP, SHOT_SPEEDS, FACTORS, SPIN_MS, SPIN_KEEP, TIMINGS,
     makeRoute, wrapDelta, isStraight, advanceShot, shotHits, firstHit, stewardVictims, holdStationSpeed, nearestGaps,
-    contactKind, formationClear,
+    contactKind, formationClear, carsCollide,
   };
 }));

@@ -170,6 +170,10 @@
           <h2 class="it-title overlay-title">Settings</h2>
           <div class="setting-row"><span id="sound-label">Sound</span><button id="sound-toggle" class="pill" data-action="sound" type="button" aria-labelledby="sound-label sound-toggle"></button></div>
           <div class="setting-row"><span id="fullscreen-label">Full screen</span><button id="fullscreen-toggle" class="pill" data-action="fullscreen" type="button" aria-labelledby="fullscreen-label fullscreen-toggle"></button></div>
+          <div id="spins-setting">
+            <div class="setting-row"><span id="spins-label">Spinning cars block the road</span><button id="spins-toggle" class="pill" data-action="spins" type="button" aria-labelledby="spins-label spins-toggle" aria-describedby="spins-note"></button></div>
+            <p id="spins-note" class="choice-hint"></p>
+          </div>
           <div id="graphics-setting">
             <div class="setting-row"><span id="graphics-label">Graphics</span><button id="graphics-toggle" class="pill" data-action="graphics" type="button" aria-labelledby="graphics-label graphics-toggle" aria-describedby="graphics-note"></button></div>
             <p id="graphics-note" class="choice-hint"></p>
@@ -293,6 +297,7 @@
       else if (action === "sound") { Game.setSound(!Game.isSoundOn()); refreshSettings(); }
       else if (action === "fullscreen") { Game.toggleFullscreen(); setTimeout(refreshSettings, 200); }
       else if (action === "graphics") { cycleGraphics(); refreshSettings(); }
+      else if (action === "spins") { Game.setSolidSpins(!Game.isSolidSpins()); refreshSettings(); }
     }
   }
 
@@ -1188,6 +1193,12 @@
     $("sound-toggle").classList.toggle("is-on", sound);
     $("fullscreen-toggle").textContent = full ? "On" : "Off";
     $("fullscreen-toggle").classList.toggle("is-on", full);
+    const solid = Game.isSolidSpins();
+    $("spins-toggle").textContent = solid ? "On" : "Off";
+    $("spins-toggle").classList.toggle("is-on", solid);
+    $("spins-note").textContent = solid
+      ? "The F1 way: a car that is spinning or has hit the wall is solid. Go round it, or lose your speed against it. From the next race."
+      : "The Mario Kart way: you drive straight through a car that is spinning or has hit the wall. From the next race.";
     // Graphics: the player's choice, and with Auto, what it picked.
     const r3d = window.Render3D;
     const g = r3d && r3d.graphics ? r3d.graphics() : null;

@@ -417,6 +417,10 @@ const state = {
   lastTick: null,
   // Starting grid: "back" (Mario Kart style, the default) or "qualifying".
   gridMode: "back",
+  // Settings: whether a spinning (or wall-shaken) car blocks the road. Off,
+  // the field passes through it. raceSolidSpins is the race's own copy.
+  solidSpins: false,
+  raceSolidSpins: false,
   cupGridMode: "back",
   // The weather: the pit-lane choice, the cup's (fixed once it starts), and
   // the current race's ("dry" or "wet"; weather.js).
@@ -768,7 +772,8 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
     const pressure = forwardWeight * sideWeight * (stricken ? 2 : 1);
     const steerAway = side >= 0 ? -1 : 1;
     steerAdjust += steerAway * pressure * 0.88;
-    if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0) && !isRecovering(other, now)) {
+    // (It doesn't lift behind a stricken car it can drive through.)
+    if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0) && (state.raceSolidSpins || !stricken)) {
       throttleScale = Math.min(throttleScale, 0.86 - pressure * 0.10);
       brakeBoost = Math.max(brakeBoost, pressure * 0.16);
     }
@@ -1435,6 +1440,7 @@ function startQualifying(index) {
   state.raceIndex = index;
   state.track = cup.tracks[index];
   getRunoff(state.track);
+  state.raceSolidSpins = state.solidSpins;
   setRaceWeather(index);
   freshEngines("qualifying");
   Object.assign(WORLD, state.track.world);
@@ -1905,6 +1911,8 @@ function startRace(index) {
   state.track = activeCup.tracks[index];
   // The barriers, worked out now rather than on the race's first step.
   getRunoff(state.track);
+  // Spinning cars solid or not: as the setting stands when the race starts.
+  state.raceSolidSpins = state.solidSpins;
   // Its Safety Car's entrances placed now, before the start, never mid-race
   // (the 2D view builds no world to place them).
   void state.track.entrances;
@@ -3203,7 +3211,7 @@ function updateRacer(racer, dt, now) {
   // clear of the cars it was let through, so it never lands on top of one;
   // after RECOVER_GRACE_MS it rejoins wherever it is.
   const recoveringTo = Math.max(racer.spinUntil || 0, racer.recoverUntil || 0);
-  if (recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
+  if (!state.raceSolidSpins && recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
     && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
     racer.recoverUntil = now + PHYSICS_STEP_MS * 2.5;
   }
@@ -3457,7 +3465,7 @@ function handleRacerContacts(now) {
       if (a.finished || b.finished) continue;
       // A car spinning, or shaken off a wall, is out of the fight for a
       // moment: the cars round it slip by.
-      if (isRecovering(a, now) || isRecovering(b, now)) continue;
+      if (!PowerUps.carsCollide(isRecovering(a, now), isRecovering(b, now), state.raceSolidSpins)) continue;
       if (!onSameStretch(a, b)) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
@@ -3645,6 +3653,8 @@ function startRecording(from) {
     trackName: track.name,
     laps: track.laps,
     weather: state.weather,
+    // Whether spinning cars were solid in this race (the setting).
+    solidSpins: Boolean(state.raceSolidSpins),
     lapLength: track.totalLength,
     t0: from,
     stepMs: PHYSICS_STEP_MS,
@@ -5864,6 +5874,25 @@ function loadAudioPreference() {
   }
 }
 
+// Spinning cars solid (the setting): kept like the sound's. It takes effect
+// from the next race or qualifying session.
+function loadSolidSpinsPreference() {
+  try {
+    state.solidSpins = window.localStorage.getItem("f1pixelcup.solidSpins") === "on";
+  } catch (err) {
+    // Keep the default.
+  }
+}
+
+function setSolidSpins(on) {
+  state.solidSpins = Boolean(on);
+  try {
+    window.localStorage.setItem("f1pixelcup.solidSpins", state.solidSpins ? "on" : "off");
+  } catch (err) {
+    // Preference just will not persist.
+  }
+}
+
 function saveAudioPreference() {
   try {
     window.localStorage.setItem("f1pixelcup.sound", audio.enabled ? "on" : "off");
@@ -7854,6 +7883,8 @@ window.Game = {
     setAudioEnabled(on);
   },
   isSoundOn: () => audio.enabled,
+  setSolidSpins,
+  isSolidSpins: () => state.solidSpins,
   toggleFullscreen,
   isFullscreen: isFullscreenActive,
   replay: {
@@ -7872,6 +7903,7 @@ window.Game = {
 };
 
 loadAudioPreference();
+loadSolidSpinsPreference();
 loadCupPreference();
 loadDifficultyPreference();
 loadDriverPreference();
