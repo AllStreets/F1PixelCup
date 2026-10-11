@@ -85,17 +85,11 @@ test("each steps forward as the arms go up, and stays there", () => {
   });
 });
 
-test("the trophy only while P1 lifts it; confetti from the trophy, spray after it (none on Low)", () => {
-  // The props change hands halfway through the poses' crossfade, not as it starts.
+test("the bottles after the lift; confetti from the winner's trophy, spray after it (none on Low)", () => {
+  // The bottles come into the hand halfway through the poses' crossfade, not as it starts.
   const half = Ceremony.PROP_SWAP;
   const { trophy, spray } = Ceremony.BEATS;
   assert.ok(half > 0.1 && half < 0.3);
-  assert.equal(Ceremony.trophyShown(1, trophy - 0.1), false);
-  assert.equal(Ceremony.trophyShown(1, trophy + half - 0.05), false);
-  assert.equal(Ceremony.trophyShown(1, trophy + half + 0.05), true);
-  assert.equal(Ceremony.trophyShown(1, spray + 0.05), true);
-  assert.equal(Ceremony.trophyShown(1, spray + half + 0.05), false);
-  assert.equal(Ceremony.trophyShown(2, trophy + 1), false);
   [1, 2, 3].forEach((p) => {
     assert.equal(Ceremony.bottleShown(p, spray - 1), false);
     assert.equal(Ceremony.bottleShown(p, spray + half - 0.05), false);
@@ -236,4 +230,158 @@ test("the name plates: in once the camera settles, out for the trophy close-up, 
   assert.equal(Ceremony.platesShown(spray + 300), true);
   // With reduced motion the camera holds still: there is no close-up to clear.
   [0, 1, 4.5, 7, 10.5].forEach((t) => assert.equal(Ceremony.platesShown(t, true), true));
+});
+
+test("four scenes, each over before the next begins: arrival, anthem, presentation, champagne", () => {
+  [3, 24, 38.3].forEach((anthem) => {
+    const C = Ceremony.withAnthem(anthem);
+    const B = C.BEATS;
+    assert.deepEqual(C.SCENES.map((s) => s.name), ["arrival", "anthem", "presentation", "champagne"]);
+    C.SCENES.forEach((s, i) => {
+      assert.ok(s.end > s.start, s.name);
+      if (i) assert.equal(s.start, C.SCENES[i - 1].end, `${s.name} starts where ${C.SCENES[i - 1].name} ends`);
+    });
+    assert.equal(C.SCENES[0].start, 0);
+    assert.equal(C.SCENES[1].start, B.anthem);
+    // The presentation starts after the anthem's time is over, and the champagne after the winner's lift.
+    assert.ok(B.present >= B.anthemEnd && B.present - B.anthemEnd <= 1);
+    assert.equal(C.SCENES[2].start, B.present);
+    assert.equal(C.SCENES[3].start, B.spray);
+    assert.equal(C.SCENES[3].end, Infinity);
+    assert.equal(C.sceneAt(B.present - 0.01), "anthem");
+    assert.equal(C.sceneAt(B.present), "presentation");
+    assert.equal(C.sceneAt(B.trophy + 1), "presentation");
+    assert.equal(C.sceneAt(B.spray), "champagne");
+    assert.equal(C.beatAt(B.present + 1), "presentation");
+    assert.equal(C.beatAt(B.trophy + 1), "trophy");
+  });
+});
+
+test("the presentation: third, second, then the winner; each trophy from the table to the presenter to the driver", () => {
+  const C = Ceremony.withAnthem(20);
+  const B = C.BEATS;
+  const H = C.HANDOVERS;
+  assert.deepEqual(H.map((h) => h.place), [3, 2, 1]);
+  H.forEach((h, i) => {
+    // In order, each finished before the next is picked up.
+    assert.ok(h.pick < h.lifted && h.lifted < h.carried && h.carried <= h.arrive && h.arrive <= h.raise && h.raise < h.contact && h.contact < h.release, JSON.stringify(h));
+    if (i) assert.ok(h.pick >= H[i - 1].release + 0.3, "one trophy at a time");
+    assert.ok(h.pick >= B.present + 1.5, "after the walk on");
+    const where = (t) => C.trophyAt(h.place, t).where;
+    assert.equal(where(B.present), "table");
+    assert.equal(where(h.pick), "table");
+    assert.equal(where(h.lifted + 0.01), "presenter");
+    assert.equal(where(h.arrive), "presenter");
+    assert.equal(where(h.contact - 0.01), "presenter");
+    // From the moment the driver's hand closes on it, it is the driver's (the presenter lets go a moment later).
+    assert.equal(where(h.contact + 0.01), "right");
+    assert.equal(where(h.release + 0.2), "right");
+    // And it ends in the left hand, before the champagne, and stays there.
+    assert.ok(h.leftBy <= B.spray - 0.05, `left hand by ${h.leftBy}, spray at ${B.spray}`);
+    assert.equal(where(h.leftBy + 0.01), "left");
+    assert.equal(where(B.spray + 100), "left");
+    // The pass from right hand to left is a short blend, 0 to 1.
+    assert.equal(C.trophyAt(h.place, h.leftFrom).pass, 0);
+    assert.ok(C.trophyAt(h.place, (h.leftFrom + h.leftBy) / 2).pass > 0.2 && C.trophyAt(h.place, (h.leftFrom + h.leftBy) / 2).pass < 0.8);
+    assert.equal(C.trophyAt(h.place, h.leftBy).pass, 1);
+    // The driver reaches for it only round its own handover.
+    assert.equal(C.reachAt(h.place, h.raise - 0.01), 0);
+    assert.equal(C.reachAt(h.place, h.contact), 1);
+    assert.equal(C.reachAt(h.place, h.release), 1);
+    assert.equal(C.reachAt(h.place, h.release + 1), 0);
+    assert.equal(C.reachAt(h.place, B.anthem + 1), 0);
+  });
+  // All three are given within about 12 to 16 seconds, and the winner's is last: it starts the big lift.
+  assert.equal(H[2].place, 1);
+  assert.equal(H[2].release, B.trophy);
+  assert.ok(B.trophy - B.present >= 11 && B.trophy - B.present <= 16, `${B.trophy - B.present} s`);
+  // No trophy and bottle in one hand: every trophy is in the left before any bottle is in the right.
+  [1, 2, 3].forEach((p) => {
+    for (let t = B.present; t < B.spray + 20; t += 0.05) {
+      if (C.bottleShown(p, t)) assert.equal(C.trophyAt(p, t).where, "left", `place ${p} at ${t}`);
+    }
+  });
+});
+
+test("the lifts: third and second lift theirs as they get it; the one big lift is the winner's, once", () => {
+  const C = Ceremony.withAnthem(20);
+  const B = C.BEATS;
+  const H = Object.fromEntries(C.HANDOVERS.map((h) => [h.place, h]));
+  // Every stretch each driver spends in the "trophy" pose.
+  const lifts = (place) => {
+    const out = [];
+    let from = null;
+    for (let t = 0; t < B.spray + 30; t += 0.01) {
+      const up = C.poseAt(place, t) === "trophy";
+      if (up && from === null) from = t;
+      if (!up && from !== null) { out.push([from, t]); from = null; }
+    }
+    return out;
+  };
+  [3, 2].forEach((p) => {
+    const l = lifts(p);
+    assert.equal(l.length, 1, `place ${p} lifts once`);
+    assert.ok(Math.abs(l[0][0] - H[p].release) < 0.02 && l[0][1] - l[0][0] > 1 && l[0][1] - l[0][0] < 2.5);
+  });
+  const big = lifts(1);
+  assert.equal(big.length, 1, "the winner's lift is played once");
+  assert.ok(Math.abs(big[0][0] - B.trophy) < 0.02 && Math.abs(big[0][1] - B.spray) < 0.02);
+  // Nobody has a trophy up before being given one (the old moment, a trophy from nowhere, is gone).
+  [1, 2, 3].forEach((p) => {
+    for (let t = 0; t < H[p].release; t += 0.05) assert.notEqual(C.poseAt(p, t), "trophy");
+    assert.equal(C.trophyShown(p, H[p].contact - 0.01), false);
+    assert.equal(C.trophyShown(p, H[p].contact + 0.01), true);
+    assert.equal(C.trophyShown(p, B.spray + 50), true);
+  });
+  // While the winner lifts, the other two wave (with the free hand), then all spray.
+  assert.equal(C.poseAt(2, B.trophy + 2), "wave");
+  assert.equal(C.poseAt(3, B.trophy + 2), "wave");
+  // Confetti and the lift's length: 4.6 s, as the sting needs.
+  assert.equal(C.confettiOn(B.trophy - 0.01), false);
+  assert.equal(C.confettiOn(B.trophy), true);
+  assert.ok(Math.abs(B.spray - B.trophy - Ceremony.TROPHY_TIME) < 1e-9 && Ceremony.TROPHY_TIME >= 4.5);
+});
+
+test("the presenter: on from the side, to the table and each driver in turn, off before the champagne; never jumps", () => {
+  const C = Ceremony.withAnthem(20);
+  const B = C.BEATS;
+  assert.equal(C.presenterAt(B.present - 0.1).on, false);
+  assert.equal(C.presenterAt(B.anthem + 3).on, false);
+  const first = C.presenterAt(B.present + 0.01);
+  assert.ok(first.on && Math.abs(first.x) > 4.5, "starts off to the side");
+  // At each handover: at the foot of that driver's step, facing the podium, the trophy in hand.
+  C.HANDOVERS.forEach((h) => {
+    const p = C.presenterAt((h.raise + h.contact) / 2);
+    const step = C.stepFor(h.place);
+    assert.ok(Math.abs(p.x - step.x) < 0.05 && p.z > step.depth / 2 + 0.2 && p.z < step.depth / 2 + 0.8, JSON.stringify(p));
+    assert.ok(Math.abs(Math.cos(p.heading) + 1) < 0.02, "faces the podium (-z)");
+    assert.equal(p.carrying, h.place);
+    assert.ok(p.raise > 0.5);
+    assert.equal(C.presenterAt(h.release + 0.01).carrying, null);
+    assert.ok(C.presenterAt(h.release + 0.2).nod > 0.3, "a nod");
+    // At the table to take it: by the table, facing it (+z).
+    const t = C.presenterAt(h.pick + 0.01);
+    assert.ok(Math.hypot(t.x - C.TABLE.x, t.z - (C.TABLE.z - C.TABLE.stand)) < 0.05 && Math.cos(t.heading) > 0.98, JSON.stringify(t));
+  });
+  // Gone before the first bottle: off stage, and no longer in the scene.
+  assert.equal(C.presenterAt(B.spray - 0.01).on, false);
+  assert.equal(C.presenterAt(B.spray + 5).on, false);
+  assert.ok(B.presenterGone <= B.spray - 0.5);
+  // Never jumps: 10 ms apart it moves under 4 cm (2 m/s is 2 cm) and turns under 0.12 rad; the legs move only when it does.
+  let walked = 0;
+  for (let t = B.present; t < B.presenterGone; t += 0.01) {
+    const a = C.presenterAt(t);
+    const b = C.presenterAt(t + 0.01);
+    if (!b.on) break;
+    const d = Math.hypot(a.x - b.x, a.z - b.z);
+    assert.ok(d < 0.04, `moves ${d} at ${t}`);
+    let turn = Math.abs(a.heading - b.heading) % (2 * Math.PI);
+    if (turn > Math.PI) turn = 2 * Math.PI - turn;
+    assert.ok(turn < 0.12, `turns ${turn} at ${t}`);
+    assert.ok(Math.abs((b.stride - a.stride) - d) < 1e-6, "the stride is the distance walked");
+    walked += d;
+  }
+  assert.ok(walked > 12 && walked < 22, `walks ${walked} m`);
+  // The table: in front of the podium, clear of every step's number (between two steps' middles).
+  assert.ok(C.TABLE.z > 1.8 && Math.abs(C.TABLE.x) > 0.4 && Math.abs(Math.abs(C.TABLE.x) - 1.6) > 0.4);
 });
