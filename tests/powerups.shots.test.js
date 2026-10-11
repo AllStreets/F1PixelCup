@@ -244,3 +244,72 @@ test("the road's half-width follows the track data where the road narrows", () =
   const plain = P.makeRoute([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }], 50);
   assert.equal(plain.halfWidthAt(70), 50);
 });
+
+test("contacts are between car-shaped footprints: wheel to wheel or nose to tail", () => {
+  const L = P.CAR_LENGTH;
+  const W = P.CAR_WIDTH;
+  // Clear either way: no contact. Side by side a car's width apart is not a touch.
+  assert.equal(P.contactKind(L + 1, 0), null);
+  assert.equal(P.contactKind(0, W + 0.5), null);
+  // Pushed apart to exactly touching, they no longer touch, whichever way the
+  // rounding falls (the next pass must not see a contact one run and not another).
+  assert.equal(P.contactKind(0, W - 1e-9), null);
+  assert.equal(P.contactKind(L - 1e-9, 0), null);
+  assert.equal(P.contactKind(0, W - 0.1), "side");
+  // Alongside, overlapping a little across: wheel to wheel.
+  assert.equal(P.contactKind(4, W - 2), "side");
+  assert.equal(P.contactKind(-4, -(W - 2)), "side");
+  // In line, nose into a gearbox.
+  assert.equal(P.contactKind(L - 3, 2), "rear");
+  assert.equal(P.contactKind(-(L - 3), -2), "rear");
+});
+
+test("a Formation Lap only drops a car where it is clear of every other car", () => {
+  const lap = 4000;
+  const me = { id: "me", d: 100, lat: 0 };
+  assert.equal(P.formationClear(me, [me], lap), true);
+  // A car right on top of it, or just ahead in its lane: not clear.
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 110, lat: 4 }], lap), false);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 + P.CAR_LENGTH, lat: 0 }], lap), false);
+  // Across the start line too.
+  assert.equal(P.formationClear({ id: "me", d: 5, lat: 0 }, [{ id: "a", d: lap - 10, lat: 0 }], lap), false);
+  // Well ahead, well behind or well across the road: clear.
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 + P.CAR_LENGTH * 2, lat: 0 }], lap), true);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 100 - P.CAR_LENGTH * 2, lat: 0 }], lap), true);
+  assert.equal(P.formationClear(me, [me, { id: "a", d: 104, lat: P.CAR_WIDTH * 2 }], lap), true);
+});
+
+test("the fast items: Formation Lap and Overtake Mode outrun DRS and last longer", () => {
+  const F = P.FACTORS;
+  const T = P.TIMINGS;
+  assert.ok(F.formationLap > F.boost && F.boost > F.overtakeMode && F.overtakeMode > 1.1);
+  assert.ok(T.formationLapMs >= 6000 && T.overtakeModeMs >= 8000 && T.drsStraightMs > T.drsMs);
+  // However long the drop takes, a Formation Lap always ends.
+  assert.ok(T.formationGraceMs > 0 && T.formationGraceMs <= 3000);
+  // A broken box is soon back (it was three seconds), so the cars at the back get theirs too.
+  assert.ok(T.boxHiddenMs <= 2000);
+});
+
+test("the Steward Penalty is the heaviest hit in the game; the Oil Slick is a short spin", () => {
+  const ms = P.SPIN_MS;
+  const keep = P.SPIN_KEEP;
+  Object.keys(ms).forEach((k) => assert.ok(keep[k] > 0 && keep[k] < 1, `${k} keeps part of its speed`));
+  // The leader it lands on all but stops, and spins longest of all.
+  Object.keys(ms).filter((k) => k !== "stewardLeader").forEach((k) => {
+    assert.ok(ms.stewardLeader > ms[k], `longer than ${k}`);
+    assert.ok(keep.stewardLeader < keep[k], `harder than ${k}`);
+  });
+  assert.ok(ms.stewardLeader >= 2 * ms.oilSlick && keep.stewardLeader <= 0.15);
+  // The banana: the shortest, lightest spin of the shots and slicks.
+  ["debris", "undercut", "stewardSplash"].forEach((k) => {
+    assert.ok(ms.oilSlick <= ms[k] && keep.oilSlick >= keep[k], k);
+  });
+});
+
+test("the shells hunt harder: an Undercut catches a car 300 ahead at full speed in under 3 s", () => {
+  const TOP_SPEED = 238; // the fastest car's (game.js derivedPhysics)
+  const relative = (P.SHOT_SPEEDS.undercut - 1) * TOP_SPEED;
+  assert.ok(300 / relative < 3, `${300 / relative}`);
+  assert.ok(P.SHOT_SPEEDS.debris >= 1.4 && P.TIMINGS.lifeMs.debris >= 8000);
+  assert.ok(P.LAT_HOMING >= 120);
+});

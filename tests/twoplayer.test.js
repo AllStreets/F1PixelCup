@@ -190,12 +190,13 @@ test("player 2's driver: Hamilton, or Leclerc when player 1 is Hamilton; never t
   assert.equal(TwoPlayer.stepDriver(ids, "hamilton", -1, "leclerc"), "verstappen");
 });
 
-test("the CPU catch-up measures against the nearest human", () => {
+test("the CPU rubber band measures how far ahead of the leading human a car is", () => {
   // Progress round the race: the CPU car at 1000; humans at 1300 and 900.
-  assert.equal(TwoPlayer.nearestGap([1300, 900], 1000), -100);
-  assert.equal(TwoPlayer.nearestGap([1300, 400], 1000), 300);
-  assert.equal(TwoPlayer.nearestGap([1300], 1000), 300);
-  assert.equal(TwoPlayer.nearestGap([], 1000), 0);
+  assert.equal(TwoPlayer.aheadOfHumans([1300, 900], 1000), -300);
+  assert.equal(TwoPlayer.aheadOfHumans([400, 900], 1000), 100);
+  assert.equal(TwoPlayer.aheadOfHumans([900], 1000), 100);
+  // No humans: nobody to ease off for.
+  assert.equal(TwoPlayer.aheadOfHumans([], 1000), null);
 });
 
 test("a pad without the standard layout reads as nothing (its buttons mean something else)", () => {

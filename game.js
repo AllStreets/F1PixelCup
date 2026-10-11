@@ -406,6 +406,7 @@ const state = {
   hazards: [],
   safetyCar: null,
   lastSafetyCarAt: null,
+  lastStewardAt: null,
   boxHiddenUntil: [],
   fxFlashes: [],
   simOffset: 0,
@@ -736,34 +737,38 @@ function onSameStretch(a, b, within = SAME_STRETCH) {
   return Math.abs(PowerUps.wrapDelta(a.trackDistance || 0, b.d ?? b.trackDistance ?? 0, state.track.totalLength)) <= within;
 }
 
-function applyTrafficAvoidance(racer, throttle, brake, steerInput) {
+function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
   const cos = Math.cos(racer.heading);
   const sin = Math.sin(racer.heading);
   let throttleScale = 1;
   let brakeBoost = 0;
   let steerAdjust = 0;
 
-  // Two players qualify as ghosts to each other: neither holds the other up.
-  const ghosts = state.phase === "qualifying" && isHuman(racer);
+  // A car on a Formation Lap is on rails: it ploughs through the field.
+  // Avoidance is the AI's substitute for a human's hands, so it stays
+  // AI-only: it steers round a car ahead, and lifts and brakes only when it
+  // is about to run into a slower one. A car close behind another isn't
+  // slowed by it (it gains, from the tow; updateRacer).
+  if (racer.formationUntil > now || racer.isPlayer) return { throttle, brake, steerInput };
   state.racers.forEach((other) => {
     if (other.id === racer.id || other.finished || !onSameStretch(racer, other)) return;
-    if (ghosts && isHuman(other)) return;
     const dx = other.x - racer.x;
     const dy = other.y - racer.y;
     const forward = dx * cos + dy * sin;
     const side = -dx * sin + dy * cos;
-    if (forward < -16 || forward > 90 || Math.abs(side) > 42) return;
+    // A car spinning or shaken off a wall is seen from further away and given
+    // a wider berth: the field goes round it where it can (and through it
+    // where it can't; handleRacerContacts).
+    const stricken = isRecovering(other, now);
+    const reach = stricken ? 200 : 90;
+    if (forward < -16 || forward > reach || Math.abs(side) > 42) return;
 
-    const forwardWeight = 1 - clamp((forward + 16) / 106, 0, 1);
+    const forwardWeight = 1 - clamp((forward + 16) / (reach + 16), 0, 1);
     const sideWeight = 1 - clamp(Math.abs(side) / 42, 0, 1);
-    const pressure = forwardWeight * sideWeight;
+    const pressure = forwardWeight * sideWeight * (stricken ? 2 : 1);
     const steerAway = side >= 0 ? -1 : 1;
-    // Steering avoidance is the AI's substitute for a human's hands, so it
-    // stays AI-only. The throttle and brake penalty is machinery, so it is
-    // identical for everyone.
-    if (!racer.isPlayer) steerAdjust += steerAway * pressure * 0.88;
-
-    if (forward > 8) {
+    steerAdjust += steerAway * pressure * 0.88;
+    if (forward > 8 && forward < 44 && racer.speed > (other.speed || 0) && !isRecovering(other, now)) {
       throttleScale = Math.min(throttleScale, 0.86 - pressure * 0.10);
       brakeBoost = Math.max(brakeBoost, pressure * 0.16);
     }
@@ -837,6 +842,13 @@ function createRacer(driver, kart, isPlayer, slot) {
     drsUntil: 0,
     protectedUntil: 0,
     formationUntil: 0,
+    formationEndsBy: 0,
+    towShare: 0,
+    wobble: 0,
+    wobbleAt: 0,
+    recoverUntil: 0,
+    recoverCapAt: 0,
+    wallHits: 0,
     trailingOil: false,
     trailSince: 0,
     oilHoldStart: 0,
@@ -1422,11 +1434,12 @@ function startQualifying(index) {
   const cup = getActiveCup();
   state.raceIndex = index;
   state.track = cup.tracks[index];
+  getRunoff(state.track);
   setRaceWeather(index);
   freshEngines("qualifying");
   Object.assign(WORLD, state.track.world);
   Object.assign(state, {
-    shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, fxFlashes: [], finishQueue: [], particles: [],
+    shots: [], hazards: [], safetyCar: null, lastSafetyCarAt: null, lastStewardAt: null, fxFlashes: [], finishQueue: [], particles: [],
     simOffset: 0, stepAccum: 0, lastTick: null, flagOutAt: 0, resultsQueued: false, resultTimeoutAt: 0, finalLapAt: 0,
     paused: false, pausedAt: 0, camPos: null, camRoll: 0, hudLastPlace: 0, hudPlaceFlashUntil: 0,
   });
@@ -1890,6 +1903,8 @@ function startRace(index) {
   state.phase = "countdown";
   if (window.Screens) window.Screens.showRace();
   state.track = activeCup.tracks[index];
+  // The barriers, worked out now rather than on the race's first step.
+  getRunoff(state.track);
   // Its Safety Car's entrances placed now, before the start, never mid-race
   // (the 2D view builds no world to place them).
   void state.track.entrances;
@@ -1900,6 +1915,7 @@ function startRace(index) {
   state.hazards = [];
   state.safetyCar = null;
   state.lastSafetyCarAt = null;
+  state.lastStewardAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
@@ -2192,9 +2208,12 @@ function finishRoulette(racer, now) {
   racer.currentItem = PowerUps.rollItem({
     gapFraction,
     isLeader: leader.id === racer.id,
+    place: getSortedRacers().indexOf(racer) + 1,
+    field: state.racers.length,
     raceTime: raceSeconds(now),
     lastSafetyCarAt: state.lastSafetyCarAt,
     stewardInFlight: state.shots.some((shot) => shot.type === "stewardPenalty"),
+    lastStewardAt: state.lastStewardAt,
   });
   racer.rouletteUntil = 0;
   racer.itemHeldSince = now;
@@ -2250,11 +2269,15 @@ function useItem(racer, now, { trail = false } = {}) {
   if (item === "drs") {
     racer.drsUntil = now + (PowerUps.isStraight(getItemRoute(state.track), d) ? T.drsStraightMs : T.drsMs);
     racer.boostUntil = Math.max(racer.boostUntil, racer.drsUntil);
+    // The mushroom's kick: a burst of speed at once, up to the boost's top speed.
+    racer.speed = Math.max(racer.speed, Math.min(racer.speed + racer.physics.maxSpeed * PowerUps.FACTORS.drsKick,
+      racer.physics.maxSpeed * PowerUps.FACTORS.boost));
   } else if (item === "overtakeMode") {
-    racer.protectedUntil = now + T.overtakeModeMs;
+    racer.protectedUntil = now + T.overtakeModeMs + HALF_STEP_MS;
     emitFx("overtakeMode", racer);
   } else if (item === "formationLap") {
-    racer.formationUntil = now + T.formationLapMs;
+    racer.formationUntil = now + T.formationLapMs + HALF_STEP_MS;
+    racer.formationEndsBy = racer.formationUntil + T.formationGraceMs;
   } else if (item === "oilSlick") {
     dropOil(racer, now, PowerUps.DROP_GAP);
   } else if (item === "undercut" || item === "debris" || item === "stewardPenalty") {
@@ -2325,20 +2348,26 @@ function fireShot(racer, requested, now) {
     expiresAt: now + T.lifeMs[type],
     age: 0,
   });
+  if (type === "stewardPenalty") state.lastStewardAt = raceSeconds(now);
   if (type === "stewardPenalty" && target) addFeed(`Steward Penalty on ${target.driver.code}.`);
 }
 
-function spinRacer(racer, duration = 900, now = raceNow()) {
+// keep: the share of its speed the car keeps (powerups.js SPIN_KEEP).
+function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
   if (!racer || isProtected(racer, now)) return false;
   // Brief grace period after recovering, so overlapping hits cannot pin a car.
   if (now < (racer.spinImmuneUntil || 0)) return false;
-  racer.spinUntil = Math.max(racer.spinUntil, now + duration);
-  racer.spinImmuneUntil = now + duration + 1400;
+  // (Timers end half a step off the physics' own ticks: a timer ending exactly
+  // on a tick would fall either side of it with the clock's rounding, and a
+  // slow machine's race would then differ from a fast one's.)
+  racer.spinUntil = Math.max(racer.spinUntil, now + duration + HALF_STEP_MS);
+  racer.spinImmuneUntil = now + duration + PowerUps.TIMINGS.spinGraceMs;
+  racer.recoverCapAt = racer.spinUntil + RECOVER_GRACE_MS;
   if (racer.isPlayer) {
     addScreenShake(10, 420, racer);
     sfx.spin();
   }
-  racer.speed *= 0.55;
+  racer.speed *= keep;
   emitFx("hitTaken", racer);
   return true;
 }
@@ -2392,6 +2421,16 @@ function deploySafetyCar(racer, now) {
   const was = state.safetyCar;
   const fieldSpeed = safetyCarFieldSpeed();
   state.lastSafetyCarAt = raceSeconds(now);
+  // Like the lightning it stands for, it costs every rival the power-up they
+  // hold (or are rolling for).
+  state.racers.forEach((r) => {
+    if (r === racer || r.finished) return;
+    r.currentItem = "none";
+    r.rouletteUntil = 0;
+    r.trailingOil = false;
+    r.oilHoldStart = 0;
+  });
+  addFeed("Every rival's power-up is gone.");
   if (was && !was.parked && was.leaving && was.inLane && lane) {
     was.callBack = true;
     was.ownerId = racer.id;
@@ -2541,20 +2580,132 @@ function updateSafetyCar(dt, now) {
   }
 }
 
-function applyTrackBarrier(racer, surface) {
-  const kartClearance = 12;
-  const roadClamp = Math.max(6, surface.segmentWidth - kartClearance);
-  if (surface.distance <= roadClamp) return;
+// The barriers (runoff.js): the same lines the renderer draws, past the
+// run-off. A car stops at the wall with its side against it (half its width
+// in from the face) and glances off: the part of its velocity into the wall
+// bounces back at a fraction of its speed, the wall's friction scrubs some of
+// the rest, and the car's nose is knocked away from the wall into a brief
+// wobble (updateRacer). A hard hit throws sparks and a puff of dust, and for a
+// moment the car is shaken out of the race: cars behind slip past it
+// (handleRacerContacts).
+const HALF_STEP_MS = 1000 / 120;
+const WALL_RESTITUTION = 0.35;
+const WOBBLE_SECONDS = 0.8;
+const PLAYER_STEER_ASSIST = 0.08;
+// Off the road, on the run-off: more drag than the road (and a lower top
+// speed, the car's offroadFactor).
+const RUNOFF_DRAG = 0.985;
+const KERB_WIDTH = 8;
+const WALL_FRICTION = 0.45;
+const WALL_RECOVERY_MS = 900;
+const WALL_MAX_ANGLE = 0.35;
+const RECOVER_GRACE_MS = 1500;
+const WALL_WOBBLE_FROM = 6;
+const WALL_HARD_HIT = 30;
+function getRunoff(track) {
+  if (!track.runoff) track.runoff = Runoff.profile(track);
+  return track.runoff;
+}
+
+function applyTrackBarrier(racer, surface, now = raceNow()) {
+  // (Shortcuts are switched off; their surfaces have no run-off of their own.)
+  if (surface.isShortcut) return;
+  const track = state.track;
   const fallbackDx = racer.x - surface.point.x;
   const fallbackDy = racer.y - surface.point.y;
   const fallbackLength = Math.hypot(fallbackDx, fallbackDy) || 1;
   const normalX = surface.normalX || fallbackDx / fallbackLength;
   const normalY = surface.normalY || fallbackDy / fallbackLength;
-  const targetDistance = roadClamp;
-  racer.x = surface.point.x + normalX * targetDistance;
-  racer.y = surface.point.y + normalY * targetDistance;
-  racer.speed = Math.min(racer.speed, racer.physics.maxSpeed * 0.48);
-  alignRacerToSurface(racer, surface, 0.45, 0.82);
+  // Which side of the road, and the lap distance there.
+  const side = normalX * -surface.tangentY + normalY * surface.tangentX >= 0 ? 1 : -1;
+  const segment = track.segments[surface.segmentIndex] || { length: 0 };
+  const d = (track.cumulativeStarts[surface.segmentIndex] || 0) + surface.t * segment.length;
+  const half = PowerUps.CAR_WIDTH / 2;
+  const walls = Runoff.wallLimits(getRunoff(track), track.pitLane, d, side, surface.distance);
+  const outer = Math.max(6, walls.outer - half);
+  const inner = walls.inner === null ? null : walls.inner + half;
+  // Into the outer wall the wall's normal points out (away from the road);
+  // into the pit wall from the lane it points back in.
+  let limit;
+  let wallX;
+  let wallY;
+  if (surface.distance > outer) {
+    limit = outer;
+    wallX = normalX;
+    wallY = normalY;
+  } else if (inner !== null && surface.distance < inner) {
+    limit = inner;
+    wallX = -normalX;
+    wallY = -normalY;
+  } else {
+    return;
+  }
+  racer.x = surface.point.x + normalX * limit;
+  racer.y = surface.point.y + normalY * limit;
+  // The velocity into the wall and along it.
+  const vx = Math.cos(racer.heading) * racer.speed;
+  const vy = Math.sin(racer.heading) * racer.speed;
+  const into = vx * wallX + vy * wallY;
+  if (into <= 0) return;
+  const alongX = vx - into * wallX;
+  const alongY = vy - into * wallY;
+  const along = Math.hypot(alongX, alongY);
+  const keep = along > 0 ? Math.max(0, along - WALL_FRICTION * into) / along : 0;
+  const outX = alongX * keep - into * WALL_RESTITUTION * wallX;
+  const outY = alongY * keep - into * WALL_RESTITUTION * wallY;
+  const out = Math.hypot(outX, outY);
+  // The car leaves the way it now moves: along the wall, angled away from it
+  // by the bounce (never more than WALL_MAX_ANGLE). Reversing, its nose
+  // points the other way from its motion; a car that has all but stopped
+  // is pointed round the lap.
+  const reversing = racer.speed < 0;
+  let moving;
+  if (out < 1) {
+    moving = lapForwardAngle(surface);
+  } else {
+    const alongAngle = along > 0 ? Math.atan2(alongY, alongX) : Math.atan2(outY, outX);
+    moving = alongAngle + clamp(normalizeAngle(Math.atan2(outY, outX) - alongAngle), -WALL_MAX_ANGLE, WALL_MAX_ANGLE);
+  }
+  racer.heading = normalizeAngle(reversing ? moving + Math.PI : moving);
+  racer.speed = reversing ? -out : out;
+  // Knocked away from the wall: a wobble, more for a harder hit. A scrape
+  // along the wall, or a touch while one is still dying out, starts none.
+  const wobbling = racer.wobble && (now - racer.wobbleAt) / 1000 < WOBBLE_SECONDS;
+  if (into > WALL_WOBBLE_FROM && !wobbling) {
+    const away = Math.cos(moving) * -wallY + Math.sin(moving) * wallX;
+    racer.wobble = clamp(into / 120, 0.05, 0.6) * (Math.sign(-away) || 1);
+    racer.wobbleAt = now;
+  }
+  if (into >= WALL_HARD_HIT) {
+    racer.recoverUntil = Math.max(racer.recoverUntil || 0, now + WALL_RECOVERY_MS + HALF_STEP_MS);
+    racer.recoverCapAt = racer.recoverUntil + RECOVER_GRACE_MS;
+    racer.wallHits = (racer.wallHits || 0) + 1;
+    wallSparks(racer, wallX, wallY, into);
+    // (The replay hears it too.)
+    if (state.recording) state.recording.addContact({ x: racer.x, y: racer.y, at: now });
+    if (racer.isPlayer) {
+      addScreenShake(clamp(into * 0.12, 3, 10), 260, racer);
+      sfx.impact();
+    }
+  }
+}
+
+// Sparks where the car's side meets the wall, and a puff of dust.
+function wallSparks(racer, normalX, normalY, into) {
+  if (state.headless) return;
+  const x = racer.x + normalX * PowerUps.CAR_WIDTH / 2;
+  const y = racer.y + normalY * PowerUps.CAR_WIDTH / 2;
+  const count = Math.round(clamp(into / 10, 4, 14));
+  for (let i = 0; i < count; i += 1) {
+    const a = racer.heading + (visualRandom() - 0.5) * 1.6;
+    const v = 40 + visualRandom() * 90;
+    spawnParticle({
+      x, y, vx: Math.cos(a) * v - normalX * 30, vy: Math.sin(a) * v - normalY * 30,
+      life: 0.28, maxLife: 0.28, size: 1.6 + visualRandom() * 1.6,
+      color: visualRandom() < 0.5 ? "#ffd166" : "#ffae3c", height: 4,
+    });
+  }
+  spawnParticle({ x, y, vx: -normalX * 12, vy: -normalY * 12, life: 0.8, maxLife: 0.8, size: 7, color: "#b9b2a6", height: 3 });
 }
 
 function getSurfaceForwardAngle(surface, heading) {
@@ -2565,8 +2716,16 @@ function getSurfaceForwardAngle(surface, heading) {
     : reverseTangentAngle;
 }
 
+// The way round the lap at a surface (its segments run in racing order).
+function lapForwardAngle(surface) {
+  return Math.atan2(surface.tangentY, surface.tangentX);
+}
+
+// The car settles a little towards the way round the lap: always forwards,
+// so a car turned round in a hairpin is brought back the right way rather
+// than sent round the lap backwards.
 function alignRacerToSurface(racer, surface, turnBlend = 0.32) {
-  const chosenAngle = getSurfaceForwardAngle(surface, racer.heading);
+  const chosenAngle = lapForwardAngle(surface);
   racer.heading = lerpAngle(racer.heading, chosenAngle, turnBlend);
 }
 
@@ -2701,6 +2860,24 @@ function mustBrakeForCorners(racer, difficulty) {
   return Racecraft.mustBrake(speed, corners, decel);
 }
 
+// How far into another car's tow this one is (racecraft.js towShare): the
+// strongest of the cars ahead of it on this stretch.
+function towShareFor(racer, now) {
+  // (In qualifying the cars on track are ghosts to each other.)
+  if (state.phase === "qualifying") return 0;
+  const L = state.track.totalLength;
+  let best = 0;
+  state.racers.forEach((other) => {
+    if (other === racer || other.finished || other.formationUntil > now) return;
+    const gap = PowerUps.wrapDelta(other.trackDistance || 0, racer.trackDistance || 0, L);
+    best = Math.max(best, Racecraft.towShare(gap, (other.lat || 0) - (racer.lat || 0)));
+  });
+  return best;
+}
+
+// An open DRS wing: this much less drag a step (game.js drag is 0.992).
+const DRS_LESS_DRAG = 0.004;
+
 function updateRacer(racer, dt, now) {
   if (racer.finished) {
     racer.drawFrom = null;
@@ -2736,7 +2913,9 @@ function updateRacer(racer, dt, now) {
     targetAngle = Math.atan2(aimY - racer.y, aimX - racer.x);
   }
   const surface = getActiveSurfaceInfo(racer, state.track, now);
-  const offroad = !surface.onRoad;
+  // Off the road means past the kerb: a car with a wheel on the kerb is still
+  // on it (the car's centre up to KERB_WIDTH past the road's edge).
+  const offroad = surface.distance > surface.segmentWidth + KERB_WIDTH;
 
   let throttle = 0;
   let brake = 0;
@@ -2802,7 +2981,7 @@ function updateRacer(racer, dt, now) {
     steerInput = clamp(angleDiff * 2.2, -1, 1);
   }
 
-  ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput));
+  ({ throttle, brake, steerInput } = applyTrafficAvoidance(racer, throttle, brake, steerInput, now));
   // The controls as applied this step: the front wheels turn with the
   // steering, and the replay's input trace reads them.
   racer.steer = clamp(steerInput, -1, 1);
@@ -2827,6 +3006,9 @@ function updateRacer(racer, dt, now) {
   if (racer.boostUntil > now) targetSpeed *= PowerUps.FACTORS.boost;
   if (racer.protectedUntil > now) targetSpeed *= PowerUps.FACTORS.overtakeMode;
   if (racer.formationUntil > now) targetSpeed = racer.physics.maxSpeed * PowerUps.FACTORS.formationLap;
+  // In another car's wake: a higher top speed, and less drag (below).
+  racer.towShare = racer.formationUntil > now ? 0 : towShareFor(racer, now);
+  targetSpeed *= 1 + Racecraft.TOW.speed * racer.towShare;
   const sc = state.safetyCar;
   // Held to its pace once it leads, or while it is coming up to this car
   // (entrances.js holds): never its caller.
@@ -2838,14 +3020,12 @@ function updateRacer(racer, dt, now) {
   if (!racer.isPlayer) {
     const difficulty = getDifficulty();
     targetSpeed *= difficulty.aiPace;
-    if (difficulty.catchUp) {
-      const people = humans();
-      if (people.length && !people.includes(racer)) {
-        // Positive when this car is behind the (nearest) player, negative when ahead.
-        const gap = TwoPlayer.nearestGap(people.map(getRaceProgress), getRaceProgress(racer));
-        const catchUp = clamp(gap / (state.track.totalLength * 0.5), -1, 1);
-        targetSpeed *= 1 + catchUp * difficulty.catchUp;
-      }
+    // Well ahead of every player (out of their sight), a CPU car eases off a
+    // little (racecraft.js). Cars near a player, and behind, race at full pace.
+    const people = humans();
+    if (difficulty.rubberBand && people.length && !people.includes(racer)) {
+      const ahead = TwoPlayer.aheadOfHumans(people.map(getRaceProgress), getRaceProgress(racer));
+      targetSpeed *= Racecraft.rubberBand(ahead, difficulty.rubberBand);
     }
   }
 
@@ -2877,7 +3057,9 @@ function updateRacer(racer, dt, now) {
     }
   }
 
-  racer.speed *= Math.pow(offroad ? racer.physics.driftGrip : 0.992, dt * 60);
+  // Drag. An open DRS wing, or a tow, takes some of it away.
+  const lessDrag = Math.max(racer.drsUntil > now ? DRS_LESS_DRAG : 0, (racer.towShare || 0) * Racecraft.TOW.drag);
+  racer.speed *= Math.pow(offroad ? RUNOFF_DRAG : 0.992 + lessDrag, dt * 60);
 
   // Behind the safety car nobody passes: rivals hold station behind the car
   // ahead. The safety car itself is solid for everyone, the car that called it
@@ -2925,6 +3107,12 @@ function updateRacer(racer, dt, now) {
   racer.latAccel = Math.abs(yaw * racer.speed);
   // A wet tyre near its limit slides, and scrubs speed.
   if (wet) racer.speed *= Weather.scrub(racer.latAccel, gripLimit, dt);
+  // Knocked off a wall: the nose swings away and back, dying out (applyTrackBarrier).
+  if (racer.wobble) {
+    const t = (now - racer.wobbleAt) / 1000;
+    if (t > WOBBLE_SECONDS + HALF_STEP_MS / 1000) racer.wobble = 0;
+    else yaw += racer.wobble * 6 * Math.exp(-t / 0.18) * Math.cos((2 * Math.PI * t) / 0.42);
+  }
   racer.heading += yaw * dt;
 
   racer.x += Math.cos(racer.heading) * racer.speed * dt;
@@ -2934,10 +3122,16 @@ function updateRacer(racer, dt, now) {
   racer.y = clamp(racer.y, 24, WORLD.height - 24);
 
   let barrierSurface = getActiveSurfaceInfo(racer, state.track, now);
-  applyTrackBarrier(racer, barrierSurface);
+  applyTrackBarrier(racer, barrierSurface, now);
   barrierSurface = getActiveSurfaceInfo(racer, state.track, now);
-  const surfaceBlend = racer.isPlayer && racer.speed < -8 ? 0.04 : 0.22;
-  alignRacerToSurface(racer, barrierSurface, surfaceBlend, 0.84);
+  // The car settles along the road a little every step. For a CPU driver
+  // that is part of its hands on the wheel; a player gets only a light
+  // assist, so a car nobody steers runs wide in a corner, off the road and
+  // into the wall.
+  // (The Formation Lap's autopilot holds the road as a CPU driver does.)
+  const assisted = racer.isPlayer && !(racer.formationUntil > now);
+  const surfaceBlend = assisted ? (racer.speed < -8 ? 0.04 : PLAYER_STEER_ASSIST) : 0.22;
+  alignRacerToSurface(racer, barrierSurface, surfaceBlend);
   updateLapProgress(racer, now, dt);
   recordTimingPoint(racer, now);
   // Side offset from the centreline, for shots and oil (track coordinates).
@@ -2978,6 +3172,23 @@ function updateRacer(racer, dt, now) {
       startRoulette(racer, now);
     }
   });
+
+  // A Formation Lap ends only where the car is clear of every other car, so
+  // it is never dropped on top of one (powerups.js formationClear); after its
+  // grace it ends wherever it is.
+  if (racer.formationUntil > now && racer.formationUntil <= now + PHYSICS_STEP_MS * 1.5 && now < racer.formationEndsBy
+    && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
+    racer.formationUntil = now + PHYSICS_STEP_MS * 2.5;
+  }
+
+  // Out of a spin (or off a wall) the car rejoins the fight only once it is
+  // clear of the cars it was let through, so it never lands on top of one;
+  // after RECOVER_GRACE_MS it rejoins wherever it is.
+  const recoveringTo = Math.max(racer.spinUntil || 0, racer.recoverUntil || 0);
+  if (recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
+    && !PowerUps.formationClear({ id: racer.id, d: racer.trackDistance || 0, lat: racer.lat }, itemBodies(), state.track.totalLength)) {
+    racer.recoverUntil = now + PHYSICS_STEP_MS * 2.5;
+  }
 
   const boosting = racer.boostUntil > now || racer.formationUntil > now;
   if (boosting !== racer.wasBoosting) {
@@ -3063,8 +3274,13 @@ function updateShots(dt, now) {
       if (!victims.length) return true;
       const leader = racerById(victims[0]);
       const shrugged = isProtected(leader, now);
-      victims.forEach((id, i) => spinRacer(racerById(id), i === 0 ? PowerUps.SPIN_MS.stewardLeader : PowerUps.SPIN_MS.stewardSplash, now));
-      addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 26, now, 500);
+      victims.forEach((id, i) => {
+        const kind = i === 0 ? "stewardLeader" : "stewardSplash";
+        spinRacer(racerById(id), PowerUps.SPIN_MS[kind], now, PowerUps.SPIN_KEEP[kind]);
+      });
+      // The blue shell's blast: a big flash, a burst of smoke and sparks.
+      addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 40, now, 700);
+      if (!shrugged) stewardBlast(leader);
       addFeed(!shrugged ? `Steward Penalty lands on ${leader.driver.code}.`
         : `${leader.driver.code}'s Overtake Mode shrugs off the Steward Penalty.`);
       return false;
@@ -3081,12 +3297,28 @@ function updateShots(dt, now) {
       addFeed(`${owner.driver.code}'s oil slick stopped a ${label}.`);
     } else {
       const victim = racerById(hit.id);
-      spinRacer(victim, PowerUps.SPIN_MS[shot.type], now);
+      spinRacer(victim, PowerUps.SPIN_MS[shot.type], now, PowerUps.SPIN_KEEP[shot.type]);
       addFeed(`${label} hit ${victim.driver.code}.`);
     }
     addFlash(shot.d, shot.lat, shot.type === "undercut" ? "#ff3b30" : "#00d2be", 12, now);
     return false;
   });
+}
+
+// The Steward Penalty's blast round the leader it lands on.
+function stewardBlast(racer) {
+  if (racer.isPlayer) addScreenShake(14, 600, racer);
+  if (state.headless) return;
+  for (let i = 0; i < 26; i += 1) {
+    const a = visualRandom() * Math.PI * 2;
+    const v = 30 + visualRandom() * 110;
+    const spark = i % 3 === 0;
+    spawnParticle({
+      x: racer.x, y: racer.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+      life: spark ? 0.4 : 1.1, maxLife: spark ? 0.4 : 1.1, size: spark ? 2 : 6 + visualRandom() * 5,
+      color: spark ? "#9fd4ff" : visualRandom() < 0.5 ? "#5b6b80" : "#c9d6e6", height: 5,
+    });
+  }
 }
 
 function becomeDebris(shot, now) {
@@ -3100,13 +3332,30 @@ function becomeDebris(shot, now) {
 function updateHazards(now) {
   const L = state.track.totalLength;
   const bodies = itemBodies();
+  // A trailed slick catches a car that runs up into it from behind (once it
+  // has been out long enough to arm, as a dropped one), and is used up. A car
+  // in Overtake Mode or on a Formation Lap goes through it untouched, and
+  // the slick is gone all the same.
+  trailBodies().forEach((trail) => {
+    const owner = racerById(trail.ownerId);
+    if (now - owner.trailSince < PowerUps.TIMINGS.oilArmMs) return;
+    const victim = bodies.find((b) => b.id !== trail.ownerId && b.speed > owner.speed && PowerUps.shotHits(trail, b, L));
+    if (!victim) return;
+    const spun = racerById(victim.id);
+    owner.trailingOil = false;
+    owner.currentItem = "none";
+    owner.oilHoldStart = 0;
+    const caught = spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && !spun.underRoof ? Weather.WET.oilSpin : 1), now, PowerUps.SPIN_KEEP.oilSlick);
+    addFeed(caught ? `${spun.driver.code} ran into ${owner.driver.code}'s trailed oil.`
+      : `${spun.driver.code} went straight through ${owner.driver.code}'s trailed oil.`);
+  });
   state.hazards = state.hazards.filter((hazard) => {
     if (now > hazard.expiresAt) return false;
     const victim = PowerUps.firstHit(hazard, bodies, L, now);
     if (!victim) return true;
     // Oil on a wet road: the spin lasts longer.
     const spun = racerById(victim.id);
-    spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && spun && !spun.underRoof ? Weather.WET.oilSpin : 1), now);
+    spinRacer(spun, PowerUps.SPIN_MS.oilSlick * (state.weather === "wet" && spun && !spun.underRoof ? Weather.WET.oilSpin : 1), now, PowerUps.SPIN_KEEP.oilSlick);
     return false;
   });
   state.fxFlashes = state.fxFlashes.filter((flash) => flash.until > now);
@@ -3166,88 +3415,113 @@ function powerUpFrame(now) {
   };
 }
 
+// Contacts (docs/superpowers/specs/2026-10-05-balance-design.md). Cars touch
+// when their car-shaped footprints overlap (powerups.js contactKind), and the
+// way they met decides what it costs:
+// - wheel to wheel, they are pushed apart across the road and each scrubs a
+//   little speed; neither is thrown back, so a pass alongside can stick;
+// - nose to tail, the car behind runs into the gearbox in front: it is pushed
+//   back and can go no faster than a little under that car's speed.
+// A car in Overtake Mode loses nothing and isn't moved; the car it touches
+// spins and is knocked aside; so does a car on a Formation Lap (the Bullet
+// Bill). A car spinning, or shaken off a wall, takes no part: the field slips
+// by it.
+const SIDE_SCRUB = 0.99;
+const REAR_LOSS = 0.9;
+const KNOCK_ASIDE = 14;
 function handleRacerContacts(now) {
   for (let i = 0; i < state.racers.length; i += 1) {
     for (let j = i + 1; j < state.racers.length; j += 1) {
       const a = state.racers[i];
       const b = state.racers[j];
       if (a.finished || b.finished) continue;
+      // A car spinning, or shaken off a wall, is out of the fight for a
+      // moment: the cars round it slip by.
+      if (isRecovering(a, now) || isRecovering(b, now)) continue;
       if (!onSameStretch(a, b)) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
-      const dist = Math.hypot(dx, dy) || 0.001;
-      const minDistance = 28;
-      if (dist < minDistance) {
-        const nx = dx / dist;
-        const ny = dy / dist;
-        const overlap = minDistance - dist;
-        const weightFactorA = clamp(1 - a.stats.weight * 0.45, 0.3, 0.7);
-        const weightFactorB = clamp(1 - b.stats.weight * 0.45, 0.3, 0.7);
-        const totalFactor = weightFactorA + weightFactorB;
-        const moveA = overlap * (weightFactorA / totalFactor);
-        const moveB = overlap * (weightFactorB / totalFactor);
+      if (dx * dx + dy * dy > PowerUps.CAR_LENGTH * PowerUps.CAR_LENGTH * 2) continue;
+      // The road's direction where they are, and b's offset from a along and across it.
+      const surfaceA = getActiveSurfaceInfo(a, state.track, now);
+      const surfaceB = getActiveSurfaceInfo(b, state.track, now);
+      const tangentX = (surfaceA.tangentX + surfaceB.tangentX) * 0.5 || surfaceA.tangentX || 1;
+      const tangentY = (surfaceA.tangentY + surfaceB.tangentY) * 0.5 || surfaceA.tangentY || 0;
+      const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+      const tx = tangentX / tangentLength;
+      const ty = tangentY / tangentLength;
+      const along = dx * tx + dy * ty;
+      const across = -dx * ty + dy * tx;
+      const kind = PowerUps.contactKind(along, across);
+      if (!kind) continue;
 
-        a.x -= nx * moveA;
-        a.y -= ny * moveA;
-        b.x += nx * moveB;
-        b.y += ny * moveB;
-
-        const progressDelta = getRaceProgress(b) - getRaceProgress(a);
-        const leaderIsB = progressDelta >= 0;
-        const surfaceA = getActiveSurfaceInfo(a, state.track, now);
-        const surfaceB = getActiveSurfaceInfo(b, state.track, now);
-        const tangentX = (surfaceA.tangentX + surfaceB.tangentX) * 0.5 || surfaceA.tangentX || 1;
-        const tangentY = (surfaceA.tangentY + surfaceB.tangentY) * 0.5 || surfaceA.tangentY || 0;
-        const tangentLength = Math.hypot(tangentX, tangentY) || 1;
-        const tx = tangentX / tangentLength;
-        const ty = tangentY / tangentLength;
-        const staggerPush = clamp(overlap * 1.5 + 6, 6, 22);
-        const lateralBias = clamp(overlap * 0.5, 1.5, 5);
-
-        if (leaderIsB) {
-          a.x -= tx * staggerPush * 0.55;
-          a.y -= ty * staggerPush * 0.55;
-          b.x += tx * staggerPush * 0.65;
-          b.y += ty * staggerPush * 0.65;
-          a.speed = Math.max(0, a.speed * 0.82);
-          b.speed = Math.min(b.physics.maxSpeed * 1.04, b.speed + 8);
-        } else {
-          b.x -= tx * staggerPush * 0.55;
-          b.y -= ty * staggerPush * 0.55;
-          a.x += tx * staggerPush * 0.65;
-          a.y += ty * staggerPush * 0.65;
-          b.speed = Math.max(0, b.speed * 0.82);
-          a.speed = Math.min(a.physics.maxSpeed * 1.04, a.speed + 8);
-        }
-
-        a.x -= ny * lateralBias;
-        a.y += nx * lateralBias;
-        b.x += ny * lateralBias;
-        b.y -= nx * lateralBias;
-
-        if (a.isPlayer || b.isPlayer) {
-          [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(overlap * 0.7, 2, 9), 220, r); });
-          if (overlap > 4) sfx.impact();
-        }
-        // The replay hears every knock, whoever's (it only notes it).
-        if (overlap > 4 && state.recording) state.recording.addContact({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, at: now });
-        if (isProtected(a, now)) spinRacer(b, PowerUps.SPIN_MS.contact, now);
-        if (isProtected(b, now)) spinRacer(a, PowerUps.SPIN_MS.contact, now);
-
-        a.x = clamp(a.x, 24, WORLD.width - 24);
-        a.y = clamp(a.y, 24, WORLD.height - 24);
-        b.x = clamp(b.x, 24, WORLD.width - 24);
-        b.y = clamp(b.y, 24, WORLD.height - 24);
-
-        const correctedSurfaceA = getActiveSurfaceInfo(a, state.track, now);
-        const correctedSurfaceB = getActiveSurfaceInfo(b, state.track, now);
-        applyTrackBarrier(a, correctedSurfaceA);
-        applyTrackBarrier(b, correctedSurfaceB);
-        alignRacerToSurface(a, getActiveSurfaceInfo(a, state.track, now), 0.18, 0.86);
-        alignRacerToSurface(b, getActiveSurfaceInfo(b, state.track, now), 0.18, 0.86);
+      // Each car gives way in proportion to how light it is; a car in
+      // Overtake Mode doesn't give way at all.
+      const protA = isProtected(a, now);
+      const protB = isProtected(b, now);
+      const giveA = clamp(1 - a.stats.weight * 0.45, 0.3, 0.7);
+      const giveB = clamp(1 - b.stats.weight * 0.45, 0.3, 0.7);
+      const shareA = protA === protB ? giveA / (giveA + giveB) : protA ? 0 : 1;
+      const shareB = 1 - shareA;
+      let depth;
+      if (kind === "side") {
+        depth = PowerUps.CAR_WIDTH - Math.abs(across);
+        // Across the road: the road's normal, pointing from a towards b.
+        const sx = -ty * Math.sign(across || 1);
+        const sy = tx * Math.sign(across || 1);
+        a.x -= sx * depth * shareA;
+        a.y -= sy * depth * shareA;
+        b.x += sx * depth * shareB;
+        b.y += sy * depth * shareB;
+        if (!protA) a.speed *= SIDE_SCRUB;
+        if (!protB) b.speed *= SIDE_SCRUB;
+      } else {
+        depth = PowerUps.CAR_LENGTH - Math.abs(along);
+        const [back, front] = along >= 0 ? [a, b] : [b, a];
+        const backShare = back === a ? shareA : shareB;
+        back.x -= tx * depth * backShare;
+        back.y -= ty * depth * backShare;
+        front.x += tx * depth * (1 - backShare);
+        front.y += ty * depth * (1 - backShare);
+        if (!isProtected(back, now)) back.speed = Math.min(back.speed, Math.max(0, front.speed * REAR_LOSS));
       }
+
+      if (a.isPlayer || b.isPlayer) {
+        [a, b].forEach((r) => { if (r.isPlayer) addScreenShake(clamp(depth * 0.7, 2, 9), 220, r); });
+        if (depth > 4) sfx.impact();
+      }
+      // The replay hears every knock, whoever's (it only notes it).
+      if (depth > 4 && state.recording) state.recording.addContact({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, at: now });
+      // (Knocked aside even when it can't be spun again just yet.)
+      if (protA && !protB) {
+        spinRacer(b, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact);
+        knockAside(b, a, tx, ty);
+      }
+      if (protB && !protA) {
+        spinRacer(a, PowerUps.SPIN_MS.contact, now, PowerUps.SPIN_KEEP.contact);
+        knockAside(a, b, tx, ty);
+      }
+
+      [a, b].forEach((r) => {
+        r.x = clamp(r.x, 24, WORLD.width - 24);
+        r.y = clamp(r.y, 24, WORLD.height - 24);
+        applyTrackBarrier(r, getActiveSurfaceInfo(r, state.track, now), now);
+        alignRacerToSurface(r, getActiveSurfaceInfo(r, state.track, now), 0.18);
+      });
     }
   }
+}
+
+function isRecovering(racer, now) {
+  return racer.spinUntil > now || racer.recoverUntil > now;
+}
+
+// A car spun by one in Overtake Mode (or on a Formation Lap) is knocked
+// across the road, away from it.
+function knockAside(victim, by, tx, ty) {
+  const side = (victim.x - by.x) * -ty + (victim.y - by.y) * tx >= 0 ? 1 : -1;
+  victim.x += -ty * side * KNOCK_ASIDE;
+  victim.y += tx * side * KNOCK_ASIDE;
 }
 
 const FLAG_FAST_FORWARD = 7;
@@ -4057,6 +4331,7 @@ function resetToGarage() {
   state.hazards = [];
   state.safetyCar = null;
   state.lastSafetyCarAt = null;
+  state.lastStewardAt = null;
   state.boxHiddenUntil = [];
   state.fxFlashes = [];
   state.simOffset = 0;
@@ -4936,6 +5211,18 @@ function updateCameraRig(player, track) {
     };
   }
 
+  // Off the road on the outside of a corner the car leaves the lap's line
+  // behind, and the camera with it: keep the car no further ahead than a
+  // little past its usual place, so a trip to the wall is seen from close by.
+  const ahead = (player.x - state.camPos.x) * cosH + (player.y - state.camPos.y) * sinH;
+  const maxAhead = CAMERA.back + 8;
+  if (ahead > maxAhead) {
+    state.camPos = {
+      x: state.camPos.x + cosH * (ahead - maxAhead),
+      y: state.camPos.y + sinH * (ahead - maxAhead),
+    };
+  }
+
   // Bank the horizon slightly into the corner.
   const turnRate = normalizeAngle(heading - (state.camLastHeading ?? heading));
   state.camLastHeading = heading;
@@ -5005,7 +5292,9 @@ function buildDriverRoadSamples(track, player, cameraHeading) {
       return halfCanvas + s * (CAMERA.focal / f);
     };
 
-    const shoulder = sample.width + 13;
+    // The run-off out to the barriers, where the physics has them (runoff.js).
+    const edge = getRunoff(track).sampleAt(((routeDistance % track.totalLength) + track.totalLength) % track.totalLength);
+    const kerb = sample.width + 6;
     samples.push({
       y: center.y,
       scale: center.scale,
@@ -5014,8 +5303,10 @@ function buildDriverRoadSamples(track, player, cameraHeading) {
       centerX: center.x,
       leftRoadX: edgeX(-sample.width),
       rightRoadX: edgeX(sample.width),
-      leftShoulderX: edgeX(-shoulder),
-      rightShoulderX: edgeX(shoulder),
+      leftKerbX: edgeX(-kerb),
+      rightKerbX: edgeX(kerb),
+      leftShoulderX: edgeX(-(edge.outerL + Runoff.BARRIER_GAP)),
+      rightShoulderX: edgeX(edge.outerR + Runoff.BARRIER_GAP),
       laneHalf: Math.max(1, sample.width * 0.045 * center.scale),
     });
   }
@@ -5049,13 +5340,13 @@ function drawDriverRoad(samples, track) {
       roadColor,
     );
     drawQuad(
-      near.leftShoulderX, near.y, near.leftRoadX, near.y,
-      far.leftRoadX, far.y, far.leftShoulderX, far.y,
+      near.leftKerbX, near.y, near.leftRoadX, near.y,
+      far.leftRoadX, far.y, far.leftKerbX, far.y,
       curbColor,
     );
     drawQuad(
-      near.rightRoadX, near.y, near.rightShoulderX, near.y,
-      far.rightShoulderX, far.y, far.rightRoadX, far.y,
+      near.rightRoadX, near.y, near.rightKerbX, near.y,
+      far.rightKerbX, far.y, far.rightRoadX, far.y,
       curbColor,
     );
 

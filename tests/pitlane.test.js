@@ -135,9 +135,9 @@ test("the pit wall leaves the mouths open and runs where the lane has cleared it
   assert.equal(lane.outerAt(0), W + Pit.WORK_OUT);
 });
 
-test("the renderer and the track builder agree on the street circuits", () => {
-  const track = fs.readFileSync(path.join(root, "r3d", "track.js"), "utf8").match(/^const STREET = new Set\((\[[^\]]*\])\);/m)[1];
-  assert.deepEqual([...new Set(JSON.parse(track))].sort(), [...STREET].sort());
+test("the renderer, the physics and the track builder agree on the street circuits", () => {
+  // (The renderer and the physics share runoff.js.)
+  assert.deepEqual([...require("../runoff.js").STREET].sort(), [...STREET].sort());
   assert.ok(STREET.has("monaco") && STREET.has("jeddah"));
 });
 

@@ -135,7 +135,7 @@ async (page) => {
       && card.querySelector(".pu-rarity").textContent === PowerUps.rarityFor(PowerUps.overallShares()[d.id]);
   }));
   out.puOddsRows = await p.locator("#power-ups table.pu-odds tbody tr").count();
-  out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "9%");
+  out.puOddsCell = await p.evaluate(() => document.querySelector('#power-ups table.pu-odds tr[data-id="safetyCar"] td[data-col="tail"]').textContent.trim() === "4%");
   out.navLink = await p.locator('nav a[href="#power-ups"]').count();
   // The promo shots show the whole grid: each alt text names its driver and
   // team (from SHOT_DRIVERS), Leclerc first and Hamilton second, and each set
@@ -161,6 +161,7 @@ async (page) => {
     return svg && svg.querySelector(`linearGradient#tile-${card.dataset.id}`) && svg.getAttribute("width") === "64";
   }));
   out.heroFromData = await p.evaluate(() => document.querySelector("#hero img").alt.startsWith(`${DRIVERS.find((d) => d.id === SHOT_DRIVERS.hero).name}'s Ferrari`));
+  out.racingHowTo = await p.evaluate(() => { const t = document.getElementById("racing-howto").textContent; return t.includes("tow") && t.includes("barriers"); });
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   // Race day: replays, the podium and two players, each a block with a main

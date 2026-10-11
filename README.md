@@ -262,18 +262,18 @@ Every driver keeps their own career, saved in the browser. **Career points** onl
 
 ### The power-ups
 
-The item you get depends on how far you are behind the leader, not your place, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare (and none of the three strongest in the first fifteen seconds).
+The item you get depends on your place, or on how far you are behind the leader if that puts you further back, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare, and the back of the field gets the fast ones most (none of the three strongest in the first fifteen seconds, and never two Steward Penalties within 60 seconds). A broken box is back in two seconds, so the cars at the back get theirs too.
 
 | Item | Mario Kart | What it does |
 |---|---|---|
-| **Oil Slick** | Banana | Drop it behind you, or hold `Space` to trail it, where it blocks one Undercut or Debris from behind. |
-| **Debris** | Green shell | Fired straight ahead; bounces off the track's edges for six seconds. |
-| **DRS** | Mushroom | The rear wing's flap really opens: two seconds of boost, three on a straight. |
-| **Undercut** | Red shell | Follows the track round the corners to the car ahead and spins it. |
-| **Overtake Mode** | Star | Five seconds faster and untouchable; cars you touch spin. |
-| **Steward Penalty** | Blue shell | Flies over the field to the leader: a long spin for them and anyone beside them. |
-| **Formation Lap** | Bullet Bill | Four seconds of autopilot at huge speed along the racing line. |
-| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for five seconds; every rival is slowed to its pace. You aren't. |
+| **DRS** | Mushroom | A burst of speed at once, then the rear wing's flap really opens: three seconds of boost, four and a half on a straight. |
+| **Oil Slick** | Banana | Drop it behind you for a short spin, or hold `Space` to trail it, where it blocks one Undercut or Debris from behind or spins the first car that runs into it. |
+| **Debris** | Green shell | Fired straight ahead, fast; bounces off the track's edges for eight seconds. |
+| **Undercut** | Red shell | Homes in on the car ahead, round every corner, and spins it. |
+| **Overtake Mode** | Star | Eight seconds faster and untouchable; cars you touch spin and are knocked aside. |
+| **Formation Lap** | Bullet Bill | Six seconds of autopilot at huge speed straight through the field, knocking cars aside; at the end it carries you on, for up to two seconds more, until you are clear of other cars. |
+| **Steward Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, for them and anyone beside them. |
+| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. |
 
 Shots, oil and the safety car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
 
@@ -348,7 +348,9 @@ It's an arcade game, and it says where.
 - **A fixed 60 Hz step.** The physics runs in steps of exactly 1/60 s (up to eight a frame), and drawing happens between them, so the game drives the same at 60 Hz and 144 Hz. The race clock is the physics' own time: it advances exactly as far as the physics does and stops while you're paused.
 - **Not identical cars.** Every car runs the same physics code, but its numbers come from its team and its driver (speed, handling, acceleration, traction), so a Red Bull is not a Sauber. The pit lane shows the bars.
 - **CPU drivers brake like drivers.** They look down the road, work out how fast their car can take what's coming and brake for it (`racecraft.js`). They also steer round traffic, which your own hands do for you.
-- **Difficulty, in numbers.** Rookie CPU cars run at 90% pace, Pro at 100%, Legend at 105%. There is catch-up, and it's in the open: on Rookie a CPU car's pace moves up to 12% with its gap to you (quicker behind, slower ahead), on Pro up to 5%, and on Legend not at all.
+- **Difficulty, in numbers.** Rookie CPU cars run at 90% pace, Pro at 100%, Legend at 103%. There is catch-up, and it's in the open: a CPU car more than 300 units (about a second and a half at top speed) ahead of you, or of the leading player in a two-player race, eases off, more the further ahead it is, by up to 8% on Rookie, 4% on Pro and 2% on Legend. Cars near you and behind you are never helped or held back.
+- **The tow, and fair contact.** Close behind another car you meet less drag and reach a higher top speed (up to 6%), so you can pull out and pass. Wheel to wheel, cars push each other apart and nobody is thrown back; run into the back of a car and you lose the speed.
+- **Steer, or meet the wall.** The barriers are where you see them, past the run-off, and the physics stops you at exactly that line. Your car only settles a little along the road on its own, so if you don't steer through a corner you run wide, off the road and into the wall. You glance off it with a wobble, sparks and dust, and the cars behind slip past while you gather it up.
 - **Rain is real grip.** In the wet a car has 72% of its dry cornering grip, 85% of its traction and 75% of its braking, oil spins last longer and sliding tyres scrub. Under Monaco's tunnel roof the road stays dry.
 - **Same scale everywhere,** so Spa is the longest lap and Monaco the shortest. But for the size of its cars the road is wider than a real one: corners tighter than it can turn are opened out, and stretches that would overlap once widened are nudged apart. Shanghai's snail is the exception: there the road narrows to half its width so the loops can come as close as the real ones.
 - **Suzuka really crosses itself,** on a bridge, and each car only looks for road near where it already is, so nobody snaps across the crossover or cuts between two stretches side by side.
@@ -376,7 +378,7 @@ tools/checks/      the browser checks          tests/      the Node tests
 - **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (shape sliders from a set of about forty, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
 - **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
 - **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one and stepping down if the first seconds run slow.
-- **Checked twice.** `npm test` runs 399 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 26 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
+- **Checked twice.** `npm test` runs 461 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
 
 ### Run it yourself
 

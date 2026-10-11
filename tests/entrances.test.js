@@ -55,9 +55,10 @@ const wrap = (d, L) => ((d % L) + L) % L;
 const inSpan = (d, a, b, L) => wrap(d - a, L) <= wrap(b - a, L);
 
 test("the renderer's street circuits, run-off and scenery footprints are the ones entrances.js assumes", () => {
-  const street = trackJs.match(/const STREET = new Set\(\[([^\]]*)\]\)/)[1].split(",").map((s) => s.trim().replace(/"/g, ""));
-  assert.deepEqual([...street].sort(), [...Entrances.STREET].sort());
-  assert.match(trackJs, new RegExp(`street \\? width \\+ ${Entrances.RUNOFF_STREET} : width \\+ ${Entrances.RUNOFF}`));
+  // (The street circuits and the run-off are runoff.js's, shared by the renderer and the physics.)
+  const runoffJs = fs.readFileSync(path.join(root, "runoff.js"), "utf8");
+  assert.deepEqual([...require("../runoff.js").STREET].sort(), [...Entrances.STREET].sort());
+  assert.match(runoffJs, new RegExp(`street \\? width \\+ ${Entrances.RUNOFF_STREET} : width \\+ ${Entrances.RUNOFF}`));
   Object.entries(Entrances.FOOTPRINT).forEach(([type, r]) => {
     const m = trackJs.match(new RegExp(`${type}: \\[(\\d+), (\\d+)\\]`));
     assert.ok(m, type);

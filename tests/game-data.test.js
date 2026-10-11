@@ -162,6 +162,38 @@ test("every power-up has a painted SVG icon", () => {
   });
 });
 
+test("card copy states the fast items' real numbers (powerups.js)", () => {
+  const words = { 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten" };
+  const secs = (ms) => (ms % 1000 ? `${words[Math.floor(ms / 1000)]} and a half` : words[ms / 1000]);
+  const copy = Object.fromEntries(Data.POWER_UPS.map((p) => [p.id, p.effect]));
+  const T = PowerUps.TIMINGS;
+  assert.match(copy.overtakeMode, new RegExp(`^${secs(T.overtakeModeMs)} seconds`, "i"));
+  assert.match(copy.formationLap, new RegExp(`^${secs(T.formationLapMs)} seconds`, "i"));
+  assert.match(copy.drs, new RegExp(`${secs(T.drsMs)}-second boost, or ${secs(T.drsStraightMs)} seconds`));
+  // The Formation Lap ploughs through the field like the Bullet Bill: the cars it touches spin aside.
+  assert.match(copy.formationLap, /through the field/);
+  assert.match(copy.formationLap, /aside/);
+  // Overtake Mode knocks aside the cars it touches.
+  assert.match(copy.overtakeMode, /aside/);
+  // DRS is a burst of speed at once, like the mushroom.
+  assert.match(copy.drs, /burst/);
+  // The Steward Penalty is the heaviest hit; the Oil Slick a short spin, and a trailed one catches a car behind.
+  assert.match(copy.stewardPenalty, /heaviest hit/);
+  assert.match(copy.oilSlick, /short spin/);
+  assert.match(copy.oilSlick, /runs into it/);
+  // The Safety Car: its real time out, and the rivals' power-ups gone.
+  assert.match(copy.safetyCar, new RegExp(`for ${secs(T.safetyCarMs)} seconds`));
+  assert.match(copy.safetyCar, /power-up/);
+});
+
+test("the CPU rubber band eases off most on Rookie and least on Legend, and is gentle", () => {
+  const band = Data.DIFFICULTIES.map((d) => d.rubberBand);
+  band.forEach((b) => assert.ok(b > 0 && b <= 0.2, `${b}`));
+  assert.ok(band[0] >= band[1] && band[1] >= band[2]);
+  // (The old two-way catch-up is gone: CPU cars behind the player are never sped up.)
+  Data.DIFFICULTIES.forEach((d) => assert.equal(d.catchUp, undefined, d.id));
+});
+
 test("difficulties match the career multipliers", () => {
   assert.deepEqual(Data.DIFFICULTIES.map((d) => d.id), ["rookie", "pro", "legend"]);
 });

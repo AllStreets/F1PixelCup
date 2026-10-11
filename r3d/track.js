@@ -19,13 +19,12 @@ import { wettable, WET_ROAD, WET_RUNOFF, WET_GRAVEL, WET_PAINT } from "./rain.js
 import { tracksideModel, STAND_MODELS } from "./models.js";
 import { inEntranceGap } from "./entrances.js";
 
-export const SAMPLE_STEP = 6;
-export const BRIDGE_HEIGHT = 26;
-const BRIDGE_FLAT = 110;   // half-length of the level bridge deck
-const BRIDGE_RAMP = 360;   // length of each ramp
-const STREET = new Set(["monaco", "singapore", "jeddah", "miami", "baku", "lasvegas"]);
+// (A UMD module: imported for its side effect, it defines self.Runoff.)
+import "../runoff.js";
 
-const smooth = (t) => t * t * (3 - 2 * t);
+const Runoff = self.Runoff;
+export const SAMPLE_STEP = Runoff.SAMPLE_STEP;
+export const BRIDGE_HEIGHT = Runoff.BRIDGE_HEIGHT;
 
 // ---------------------------------------------------------------------------
 // Spatial index over circles, for "is anything already here?" questions.
@@ -69,122 +68,12 @@ export class Occupancy {
 // ---------------------------------------------------------------------------
 
 export function buildCourse(track) {
-  const width = track.roadWidth;
-  const street = STREET.has(track.id);
-  const runoffBase = street ? width + 14 : width + 38;
-  const total = track.totalLength;
-  const segs = track.segments;
-  const starts = track.cumulativeStarts;
-
-  // Bridges: the later pass over a crossing climbs over the earlier one.
-  const bridgeDistances = (track.bridges || []).map((b) => starts[b.over % starts.length]);
-  const heightAt = (d) => {
-    let h = 0;
-    for (const bd of bridgeDistances) {
-      let dd = Math.abs(((d - bd) % total + total) % total);
-      dd = Math.min(dd, total - dd);
-      const t = 1 - Math.max(0, dd - BRIDGE_FLAT) / BRIDGE_RAMP;
-      if (t > 0) h = Math.max(h, BRIDGE_HEIGHT * smooth(Math.min(1, t)));
-    }
-    return h;
-  };
-
-  const count = Math.ceil(total / SAMPLE_STEP);
-  const samples = [];
-  let seg = 0;
-  for (let i = 0; i < count; i += 1) {
-    const d = (i / count) * total;
-    while (seg < segs.length - 1 && starts[seg] + segs[seg].length < d) seg += 1;
-    const s = segs[seg];
-    const t = s.length ? (d - starts[seg]) / s.length : 0;
-    // The road's half-width here: narrower where the track data says so
-    // (a point's `w`: Shanghai's snail).
-    const wid = width * ((s.a.w ?? 1) * (1 - t) + (s.b.w ?? 1) * t);
-    samples.push({ i, x: s.a.x + s.dx * t, y: s.a.y + s.dy * t, d, h: heightAt(d), wid });
-  }
+  // The samples, the run-off either side and the barrier lines are the
+  // physics' own (runoff.js): the cars hit the barriers drawn here.
+  // (Worked out once per circuit; game.js getRunoff keeps it on the track too.)
+  const { width, street, runoffBase, samples, heightAt, near, sampleAt } = track.runoff || (track.runoff = Runoff.profile(track));
   const n = samples.length;
-  const k = 3;
-  samples.forEach((p, i) => {
-    const a = samples[(i - k + n) % n];
-    const b = samples[(i + k) % n];
-    const tx = b.x - a.x;
-    const ty = b.y - a.y;
-    const len = Math.hypot(tx, ty) || 1;
-    p.tx = tx / len;
-    p.ty = ty / len;
-    p.nx = -p.ty;
-    p.ny = p.tx;
-  });
-  samples.forEach((p, i) => {
-    const q = samples[(i + 2) % n];
-    p.curve = (p.tx * q.ty - p.ty * q.tx) / (2 * SAMPLE_STEP);
-  });
-
-  // Grid of samples for neighbourhood queries.
-  const cell = 80;
-  const grid = new Map();
-  samples.forEach((p) => {
-    const key = `${Math.floor(p.x / cell)},${Math.floor(p.y / cell)}`;
-    if (!grid.has(key)) grid.set(key, []);
-    grid.get(key).push(p);
-  });
-  const near = (x, z, r, visit) => {
-    for (let ix = Math.floor((x - r) / cell); ix <= Math.floor((x + r) / cell); ix += 1) {
-      for (let iz = Math.floor((z - r) / cell); iz <= Math.floor((z + r) / cell); iz += 1) {
-        const list = grid.get(`${ix},${iz}`);
-        if (list) list.forEach(visit);
-      }
-    }
-  };
-
-  // Room either side before another stretch of the circuit (half the gap, so
-  // two neighbours share it). Beside a pit complex, all the room up to it: its
-  // garages may stand nearer another stretch than that stretch's usual
-  // run-off, where the track data puts a wall there (pitlane.js `clear`).
-  const minArc = Math.ceil(260 / SAMPLE_STEP);
-  const lane = track.pitLane || null;
-  const pitReach = samples.map((q) => {
-    if (!lane || !lane.inZone(q.d)) return null;
-    return lane.atGarage(q.d) ? lane.garages.outer : lane.outerAt(q.d);
-  });
-  const reachMax = Math.max(0, ...pitReach.filter((r) => r !== null));
-  samples.forEach((p) => {
-    let left = Infinity;
-    let right = Infinity;
-    near(p.x, p.y, Math.max(runoffBase * 2 + 20, reachMax + runoffBase + 10), (q) => {
-      let gap = Math.abs(q.i - p.i);
-      gap = Math.min(gap, n - gap);
-      if (gap < minArc || Math.abs(q.h - p.h) > 10) return;
-      const dx = q.x - p.x;
-      const dy = q.y - p.y;
-      const dist = Math.hypot(dx, dy);
-      const side = dx * p.nx + dy * p.ny;
-      // On q's pit side: up to its pit complex; otherwise half the gap.
-      const reach = pitReach[q.i];
-      const room = reach !== null && -(dx * q.nx + dy * q.ny) * lane.side > 0 ? dist - reach : dist / 2;
-      if (side >= 0) right = Math.min(right, room);
-      else left = Math.min(left, room);
-    });
-    // Offsets are measured along the normal: +n is "right", -n is "left".
-    // (Where the road narrows, its run-off is in proportion.)
-    const share = p.wid / width;
-    p.outerR = Math.max(p.wid + 10 * share, Math.min(p.wid + (runoffBase - width) * share, right - 3));
-    p.outerL = Math.max(p.wid + 10 * share, Math.min(p.wid + (runoffBase - width) * share, left - 3));
-  });
-
-  // The pit complex is part of the circuit: through its zone the pit side
-  // reaches out to the working lane, in front of the garages. So the run-off,
-  // the barrier line, clearance() -- and with it every piece of scenery and
-  // the scenery audit -- take it in. The track data made sure there is room.
   const pitLane = track.pitLane || null;
-  if (pitLane) {
-    samples.forEach((p) => {
-      const reach = pitLane.outerAt(p.d);
-      if (reach === null) return;
-      if (pitLane.side > 0) p.outerR = Math.max(p.outerR, reach);
-      else p.outerL = Math.max(p.outerL, reach);
-    });
-  }
 
   // Kerbs where the track bends, grown a little so they start before turn-in.
   const corner = samples.map((p) => Math.abs(p.curve) > 0.0022);
@@ -211,9 +100,6 @@ export function buildCourse(track) {
     return best;
   };
 
-  // The sample nearest a lap distance (they are total / n apart, a little
-  // under SAMPLE_STEP).
-  const sampleAt = (d) => samples[((Math.round((d * n) / total) % n) + n) % n];
   const nearestSample = (x, z) => {
     let best = null;
     let bestD = Infinity;
@@ -540,9 +426,14 @@ export function buildCircuit(course, venue) {
         const off = side > 0 ? p.outerR - 4 : -p.outerL + 4;
         const x = p.x + p.nx * off;
         const z = p.y + p.ny * off;
-        // Keep piers off the lower carriageway.
+        // Keep piers off the lower road and its run-off, out past its
+        // barrier: the cars can drive all the way out to it.
         const lower = course.nearestSample(x, z);
-        if (lower && lower.h < 0.5 && Math.hypot(lower.x - x, lower.y - z) < width + 14) return;
+        if (lower && lower.h < 0.5) {
+          const across = (x - lower.x) * lower.nx + (z - lower.y) * lower.ny;
+          const barrier = (across >= 0 ? lower.outerR : lower.outerL) + Runoff.BARRIER_GAP;
+          if (Math.hypot(lower.x - x, lower.y - z) < barrier + 4) return;
+        }
         const pier = new THREE.Mesh(new THREE.BoxGeometry(5, p.h, 5), concrete);
         pier.position.set(x, p.h / 2, z);
         pier.castShadow = true;

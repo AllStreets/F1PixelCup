@@ -36,7 +36,7 @@ async (page) => {
   }, circuit);
   const run = (fn, arg) => p.evaluate(fn, arg);
 
-  // Item boxes: taking one hides it for 3 s, only the first car gets a roll.
+  // Item boxes: taking one hides it for a moment, only the first car gets a roll.
   await setup();
   results.boxHidesAndReturns = await run(async () => {
     const pl = getPlayer();
@@ -65,14 +65,18 @@ async (page) => {
     return tailish > 180;
   });
 
-  // DRS: boost, longer on a straight.
+  // DRS: a burst of speed at once, then the boost, longer on a straight.
   await setup();
   results.drs = await run(() => {
     const pl = getPlayer(); const now = performance.now();
+    const T = PowerUps.TIMINGS;
+    pl.speed = pl.physics.maxSpeed * 0.5;
     pl.currentItem = "drs"; useItem(pl, now);
     const len = pl.drsUntil - now;
     const straight = PowerUps.isStraight(getItemRoute(state.track), pl.trackDistance);
-    return pl.currentItem === "none" && pl.boostUntil >= pl.drsUntil && len === (straight ? 3000 : 2000);
+    const burst = Math.abs(pl.speed - pl.physics.maxSpeed * (0.5 + PowerUps.FACTORS.drsKick)) < 0.01;
+    return (pl.currentItem === "none" && pl.boostUntil >= pl.drsUntil && len === (straight ? T.drsStraightMs : T.drsMs) && burst)
+      || JSON.stringify({ len, speed: pl.speed });
   });
 
   // Overtake Mode: faster and truly untouchable.
@@ -80,7 +84,111 @@ async (page) => {
     const pl = getPlayer(); const now = performance.now();
     pl.currentItem = "overtakeMode"; useItem(pl, now);
     const spun = spinRacer(pl, 850, now);
-    return pl.protectedUntil - now === 5000 && spun === false && pl.spinUntil <= now;
+    return Math.abs(pl.protectedUntil - now - PowerUps.TIMINGS.overtakeModeMs) < 10 && spun === false && pl.spinUntil <= now;
+  });
+
+  // A car in Overtake Mode, or on a Formation Lap, that runs into another
+  // spins it and knocks it aside, and loses nothing itself.
+  for (const item of ["overtakeMode", "formationLap"]) {
+    await setup();
+    results[`${item}KnocksAside`] = await run((id) => {
+      const route = getItemRoute(state.track);
+      const pl = getPlayer();
+      const victim = state.racers.find((r) => !r.isPlayer);
+      state.racers.forEach((r) => { if (r !== pl && r !== victim) r.finished = true; });
+      const d = 300;
+      [[pl, 0, 220], [victim, 20, 120]].forEach(([r, gap, speed]) => {
+        const w = route.toWorld(d + gap, 3);
+        Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d + gap, lat: 3, speed, segmentHint: null, spinUntil: 0, spinImmuneUntil: 0 });
+      });
+      const now = raceNow();
+      pl.currentItem = id; useItem(pl, now);
+      const latBefore = victim.lat;
+      handleRacerContacts(now);
+      const along = getItemRoute(state.track).sample(victim.trackDistance);
+      const latAfter = (victim.x - along.x) * along.nx + (victim.y - along.y) * along.ny;
+      return (victim.spinUntil > now && Math.abs(latAfter - latBefore) >= 10 && pl.speed === 220)
+        || JSON.stringify({ spun: victim.spinUntil > now, moved: latAfter - latBefore, speed: pl.speed });
+    }, item);
+  }
+
+  // The roll counts the place: last in a bunched field rolls the strong
+  // items, however close behind the leader it is.
+  await setup();
+  results.rollUsesPlace = await run(() => {
+    // A bunched field: the whole grid within a hundredth of a lap.
+    const sorted = getSortedRacers();
+    const L = state.track.totalLength;
+    const lead = sorted[0].trackDistance;
+    sorted.forEach((r, i) => { r.trackDistance = (lead - (i * L * 0.01) / sorted.length + L) % L; });
+    const last = getSortedRacers()[sorted.length - 1];
+    if (last !== sorted[sorted.length - 1]) return "order changed";
+    let strong = 0;
+    for (let i = 0; i < 400; i += 1) {
+      last.currentItem = "none"; last.rouletteUntil = 1;
+      finishRoulette(last, performance.now());
+      if (["overtakeMode", "formationLap", "stewardPenalty", "safetyCar"].includes(last.currentItem)) strong += 1;
+    }
+    return strong > 160 || strong;
+  });
+
+  // The Steward Penalty is the heaviest hit in the game, the Oil Slick a
+  // short spin: a car at full speed loses far more road to the first.
+  await setup();
+  results.stewardCostsMoreThanOil = await run(() => {
+    const route = getItemRoute(state.track);
+    const pl = getPlayer();
+    state.racers.forEach((r) => { if (r !== pl) r.finished = true; });
+    const L = state.track.totalLength;
+    const lost = (hit) => {
+      const w = route.toWorld(300, 0);
+      Object.assign(pl, { x: w.x, y: w.y, heading: w.heading, trackDistance: 300, lat: 0, speed: pl.physics.maxSpeed, segmentHint: null, spinUntil: 0, spinImmuneUntil: 0, wallHits: 0 });
+      input.throttle = true;
+      let t = raceNow();
+      if (hit === "oil") state.hazards = [{ type: "oilSlick", ownerId: "x", d: 330, lat: 0, armedAt: 0, expiresAt: t + 60000 }];
+      if (hit === "steward") {
+        state.hazards = [];
+        spinRacer(pl, PowerUps.SPIN_MS.stewardLeader, t, PowerUps.SPIN_KEEP.stewardLeader);
+      }
+      if (hit === "none") state.hazards = [];
+      for (let i = 0; i < 60 * 5; i += 1) { t += PHYSICS_STEP_MS; updateRacer(pl, PHYSICS_DT, t); updateHazards(t); }
+      input.throttle = false;
+      return PowerUps.wrapDelta(pl.trackDistance, 300, L);
+    };
+    const clean = lost("none");
+    const oil = clean - lost("oil");
+    const steward = clean - lost("steward");
+    return (oil > 20 && steward > oil * 2) || JSON.stringify({ oil, steward });
+  });
+
+  // A trailed slick spins the first car that runs into it, and is used up.
+  await setup();
+  results.trailedOilCatchesCar = await run(() => {
+    const route = getItemRoute(state.track);
+    const pl = getPlayer();
+    const behind = state.racers.find((r) => !r.isPlayer);
+    state.racers.forEach((r) => { if (r !== pl && r !== behind) r.finished = true; });
+    pl.currentItem = "oilSlick";
+    const now = raceNow();
+    useItem(pl, now, { trail: true });
+    const d = (pl.trackDistance - PowerUps.TRAIL_GAP + state.track.totalLength) % state.track.totalLength;
+    Object.assign(behind, { trackDistance: d, lat: pl.lat, spinUntil: 0, spinImmuneUntil: 0, protectedUntil: 0, formationUntil: 0, speed: pl.speed + 30 });
+    // Not before it is armed.
+    updateHazards(now + 10);
+    if (behind.spinUntil > now || !pl.trailingOil) return "caught before it was armed";
+    updateHazards(now + PowerUps.TIMINGS.oilArmMs + 10);
+    return (behind.spinUntil > now + PowerUps.TIMINGS.oilArmMs && !pl.trailingOil && pl.currentItem === "none") || "not caught";
+  });
+
+  // The Safety Car, like the lightning: every rival's power-up is gone; the
+  // caller keeps racing.
+  await setup();
+  results.safetyCarTakesItems = await run(() => {
+    const pl = getSortedRacers()[10];
+    state.racers.forEach((r) => { if (r !== pl) r.currentItem = "drs"; });
+    pl.currentItem = "safetyCar";
+    useItem(pl, performance.now());
+    return state.racers.every((r) => r === pl || r.currentItem === "none") || "rivals kept items";
   });
 
   // Undercut: fired at the car directly ahead, follows the track, spins it.
@@ -143,7 +251,7 @@ async (page) => {
     const away = (pl.trackDistance + state.track.totalLength / 2) % state.track.totalLength;
     state.racers.forEach((r) => { r.x = -9999; r.trackDistance = away; });
     let t = performance.now();
-    for (let i = 0; i < 400; i += 1) { t += 16.7; updateShots(1 / 60, t); }
+    for (let i = 0; i < Math.ceil(PowerUps.TIMINGS.lifeMs.debris / 16.7) + 20; i += 1) { t += 16.7; updateShots(1 / 60, t); }
     return s.bounces >= 1 && !state.shots.includes(s);
   });
 
@@ -165,7 +273,38 @@ async (page) => {
   results.formationLap = await run(() => {
     const pl = getPlayer(); const now = performance.now();
     pl.currentItem = "formationLap"; useItem(pl, now);
-    return pl.formationUntil - now === 4000 && isProtected(pl, now) && spinRacer(pl, 850, now) === false;
+    return Math.abs(pl.formationUntil - now - PowerUps.TIMINGS.formationLapMs) < 10 && isProtected(pl, now) && spinRacer(pl, 850, now) === false;
+  });
+
+  // It sets the car down only where it is clear of every other car: over a
+  // car at the moment its time runs out, it carries on until it is past.
+  await setup();
+  results.formationSetsDownClear = await run(() => {
+    const route = getItemRoute(state.track);
+    const pl = getPlayer();
+    const other = state.racers.find((r) => !r.isPlayer);
+    state.racers.forEach((r) => { if (r !== pl && r !== other) r.finished = true; });
+    let t = raceNow();
+    pl.currentItem = "formationLap"; useItem(pl, t);
+    // Its time nearly up, right alongside a car going the same way.
+    pl.formationUntil = t + PHYSICS_STEP_MS * 2;
+    const d = 300;
+    [[pl, 0], [other, 2]].forEach(([r, gap]) => {
+      const w = route.toWorld(d + gap, 0);
+      Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d + gap, lat: 0, speed: 150, segmentHint: null });
+    });
+    let endedClear = null;
+    for (let i = 0; i < 240 && endedClear === null; i += 1) {
+      t += PHYSICS_STEP_MS;
+      updateRacer(pl, PHYSICS_DT, t);
+      other.trackDistance += 150 * PHYSICS_DT;
+      const w = route.toWorld(other.trackDistance, 0);
+      other.x = w.x; other.y = w.y;
+      if (pl.formationUntil <= t) {
+        endedClear = PowerUps.formationClear({ id: pl.id, d: pl.trackDistance, lat: pl.lat }, itemBodies(), state.track.totalLength);
+      }
+    }
+    return endedClear === true || String(endedClear);
   });
 
   // Quit mid-race: nothing carries over.

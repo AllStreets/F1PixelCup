@@ -23,13 +23,15 @@ test("strong items are held back for the first 15 seconds", () => {
   });
 });
 
-test("a blocked roll moves to the next allowed item in that column, wrapping to the top", () => {
-  // safetyCar is last in the order, so a blocked one wraps to oilSlick (5% in tail).
-  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "safetyCar") }), "oilSlick");
-  // stewardPenalty blocked early -> formationLap blocked early -> safetyCar blocked -> oilSlick.
-  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "stewardPenalty") }), "oilSlick");
-  // In flight: stewardPenalty -> formationLap once the time gate has passed.
+test("a blocked roll moves to the next commoner allowed item in that column", () => {
+  // Early on the strong items are held back: a Safety Car moves down past the
+  // Steward Penalty and the Formation Lap (both held back too) to Overtake Mode.
+  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "safetyCar") }), "overtakeMode");
+  assert.equal(P.rollItem({ ...base, raceTime: 10, rng: rngFor("tail", "formationLap") }), "overtakeMode");
+  // A Steward Penalty with one in flight becomes a Formation Lap, never a Safety Car.
   assert.equal(P.rollItem({ ...base, raceTime: 60, stewardInFlight: true, rng: rngFor("tail", "stewardPenalty") }), "formationLap");
+  // A Safety Car on its cooldown becomes a Steward Penalty.
+  assert.equal(P.rollItem({ ...base, raceTime: 60, lastSafetyCarAt: 50, rng: rngFor("tail", "safetyCar") }), "stewardPenalty");
 });
 
 test("no safety car before 20 seconds or within 30 seconds of the last", () => {
@@ -38,6 +40,18 @@ test("no safety car before 20 seconds or within 30 seconds of the last", () => {
   assert.equal(P.rollItem({ ...base, raceTime: 20, rng: sc }), "safetyCar");
   assert.notEqual(P.rollItem({ ...base, raceTime: 49.9, lastSafetyCarAt: 20, rng: sc }), "safetyCar");
   assert.equal(P.rollItem({ ...base, raceTime: 50, lastSafetyCarAt: 20, rng: sc }), "safetyCar");
+});
+
+test("no steward penalty within 60 seconds of the last", () => {
+  const sp = rngFor("tail", "stewardPenalty");
+  assert.equal(P.LIMITS.stewardCooldown, 60);
+  assert.notEqual(P.rollItem({ ...base, raceTime: 119.9, lastStewardAt: 60, rng: sp }), "stewardPenalty");
+  assert.equal(P.rollItem({ ...base, raceTime: 120, lastStewardAt: 60, rng: sp }), "stewardPenalty");
+  assert.equal(P.rollItem({ ...base, raceTime: 61, lastStewardAt: null, rng: sp }), "stewardPenalty");
+});
+
+test("a car can't be spun again for a few seconds after a spin", () => {
+  assert.ok(P.TIMINGS.spinGraceMs >= 3000 && P.TIMINGS.spinGraceMs <= 5000);
 });
 
 test("only one steward penalty in flight", () => {

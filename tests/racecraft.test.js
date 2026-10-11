@@ -59,3 +59,37 @@ test("brake when a corner ahead can't be reached at its speed with the brakes th
   // Already slow enough: no.
   assert.equal(Racecraft.mustBrake(70, [{ at: 10, speed: 80 }], decel), false);
 });
+
+test("the tow: closest in a car's wake is the strongest, nothing out of it", () => {
+  const T = Racecraft.TOW;
+  // Right in the wake (as close as a car can follow): the full tow.
+  assert.equal(Racecraft.towShare(T.from, 0), 1);
+  // It fades with the gap and is gone at its reach.
+  const mid = Racecraft.towShare((T.from + T.reach) / 2, 0);
+  assert.ok(Math.abs(mid - 0.5) < 1e-9, `${mid}`);
+  assert.equal(Racecraft.towShare(T.reach, 0), 0);
+  assert.equal(Racecraft.towShare(T.reach + 1, 0), 0);
+  // Too close is a car you are touching, not a tow; behind it is no tow either.
+  assert.equal(Racecraft.towShare(T.from - 1, 0), 0);
+  assert.equal(Racecraft.towShare(-40, 0), 0);
+  // Out of the wake to either side: none.
+  assert.ok(Racecraft.towShare(40, T.width) > 0);
+  assert.equal(Racecraft.towShare(40, T.width + 0.5), 0);
+  assert.equal(Racecraft.towShare(40, -(T.width + 0.5)), 0);
+  // A tow is worth a few per cent of top speed, never a boost item's worth.
+  assert.ok(T.speed > 0.03 && T.speed < 0.12, `${T.speed}`);
+  assert.ok(T.drag > 0 && T.drag < 0.008, `${T.drag}`);
+});
+
+test("the rubber band only slows CPU cars well ahead of the player, never those near or behind", () => {
+  const R = Racecraft.RUBBER_BAND;
+  // Behind the player, beside them, or just ahead: untouched.
+  [-2000, -10, 0, R.near].forEach((ahead) => assert.equal(Racecraft.rubberBand(ahead, 0.12), 1, `${ahead}`));
+  // Further ahead it eases off gradually, up to the full strength.
+  const half = Racecraft.rubberBand(R.near + R.span / 2, 0.12);
+  assert.ok(Math.abs(half - 0.94) < 1e-9, `${half}`);
+  assert.ok(Math.abs(Racecraft.rubberBand(R.near + R.span, 0.12) - 0.88) < 1e-9);
+  assert.ok(Math.abs(Racecraft.rubberBand(R.near + R.span * 5, 0.12) - 0.88) < 1e-9);
+  // No strength, no band.
+  assert.equal(Racecraft.rubberBand(5000, 0), 1);
+});

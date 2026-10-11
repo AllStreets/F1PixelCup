@@ -1,36 +1,47 @@
 // Power-up rules: which item a box gives, and the limits on the strongest ones.
 // Pure logic, no drawing. In the page this defines window.PowerUps; in Node it
 // is require()-able for the tests. The odds follow Mario Kart 8 Deluxe: the
-// column you roll from is set by how far you are behind the leader, the weakest
-// items are the most common and the strongest are the rarest.
+// column you roll from is set by your place, or by how far you are behind the
+// leader if that is further back; the weakest items are the most common and
+// the strongest are the rarest
+// (docs/superpowers/specs/2026-10-05-balance-design.md).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.PowerUps = api;
 }(typeof self !== "undefined" ? self : this, function () {
-  // Common to rare. Also the order a blocked roll moves along, and the order
-  // the site shows the cards in.
-  const ITEM_ORDER = ["oilSlick", "debris", "drs", "undercut", "overtakeMode", "stewardPenalty", "formationLap", "safetyCar"];
+  // Common to rare. Also the order a blocked roll moves back down, and the
+  // order the site shows the cards in.
+  const ITEM_ORDER = ["drs", "oilSlick", "debris", "undercut", "overtakeMode", "formationLap", "stewardPenalty", "safetyCar"];
   const COLUMNS = ["lead", "front", "mid", "back", "tail"];
 
+  // The back of the field rolls the fast items (DRS, Overtake Mode, the
+  // Formation Lap) most: they are what gets a car past the others.
+  // The back of the field rolls the fast items (DRS, Overtake Mode, the
+  // Formation Lap) most: they are what gets a car past the others. The
+  // leader rolls mostly oil, to trail as a shield; the cars just behind get
+  // few shells; the Steward Penalty comes only from the back half.
   const table = {
-    oilSlick: [55, 35, 20, 10, 5],
-    debris: [35, 30, 20, 10, 5],
-    drs: [10, 15, 20, 20, 20],
-    undercut: [0, 20, 25, 15, 10],
-    overtakeMode: [0, 0, 10, 18, 20],
-    stewardPenalty: [0, 0, 5, 12, 13],
-    formationLap: [0, 0, 0, 10, 18],
-    safetyCar: [0, 0, 0, 5, 9],
+    drs: [10, 25, 30, 35, 36],
+    oilSlick: [70, 45, 25, 5, 0],
+    debris: [20, 20, 22, 8, 4],
+    undercut: [0, 10, 13, 18, 12],
+    overtakeMode: [0, 0, 8, 18, 24],
+    formationLap: [0, 0, 2, 10, 16],
+    stewardPenalty: [0, 0, 0, 3, 4],
+    safetyCar: [0, 0, 0, 3, 4],
   };
   const ODDS = Object.fromEntries(COLUMNS.map((col, c) => [col, Object.fromEntries(ITEM_ORDER.map((id) => [id, table[id][c]]))]));
 
   // Seconds of race time.
-  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30 };
+  const LIMITS = { strongItemsAfter: 15, safetyCarAfter: 20, safetyCarCooldown: 30, stewardCooldown: 60 };
   const STRONG = ["stewardPenalty", "formationLap", "safetyCar"];
 
-  function columnFor(gapFraction, isLeader) {
-    if (isLeader) return "lead";
+  // By place, the field is cut in quarters behind the leader (20 cars:
+  // P2-P5 front, P6-P10 mid, P11-P15 back, P16-P20 tail). By the gap, it is
+  // the share of a lap behind the leader. A bunched field and a strung-out one
+  // both give the cars at the back the back's odds.
+  function columnByGap(gapFraction) {
     const gap = Math.max(0, gapFraction || 0);
     if (gap < 0.06) return "front";
     if (gap < 0.16) return "mid";
@@ -38,18 +49,36 @@
     return "tail";
   }
 
-  function isBlocked(id, { raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false } = {}) {
+  function columnByPlace(place, field) {
+    if (!(place > 1 && field > 1)) return "front";
+    const share = place / field;
+    if (share <= 0.25) return "front";
+    if (share <= 0.5) return "mid";
+    if (share <= 0.75) return "back";
+    return "tail";
+  }
+
+  function columnFor(gapFraction, isLeader, place = 0, field = 0) {
+    if (isLeader) return "lead";
+    const byGap = columnByGap(gapFraction);
+    const byPlace = columnByPlace(place, field);
+    return COLUMNS.indexOf(byPlace) > COLUMNS.indexOf(byGap) ? byPlace : byGap;
+  }
+
+  function isBlocked(id, { raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, lastStewardAt = null } = {}) {
     if (STRONG.includes(id) && raceTime < LIMITS.strongItemsAfter) return true;
     if (id === "safetyCar") {
       if (raceTime < LIMITS.safetyCarAfter) return true;
       if (lastSafetyCarAt !== null && lastSafetyCarAt !== undefined && raceTime - lastSafetyCarAt < LIMITS.safetyCarCooldown) return true;
     }
     if (id === "stewardPenalty" && stewardInFlight) return true;
+    // The heaviest hit in the game comes rarely: none within stewardCooldown of the last.
+    if (id === "stewardPenalty" && lastStewardAt !== null && lastStewardAt !== undefined && raceTime - lastStewardAt < LIMITS.stewardCooldown) return true;
     return false;
   }
 
-  function rollItem({ gapFraction = 0, isLeader = false, raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, rng = Math.random } = {}) {
-    const odds = ODDS[columnFor(gapFraction, isLeader)];
+  function rollItem({ gapFraction = 0, isLeader = false, place = 0, field = 0, raceTime = 0, lastSafetyCarAt = null, stewardInFlight = false, lastStewardAt = null, rng = Math.random } = {}) {
+    const odds = ODDS[columnFor(gapFraction, isLeader, place, field)];
     const live = ITEM_ORDER.filter((id) => odds[id] > 0);
     let r = Math.min(Math.max(rng(), 0), 0.999999999) * 100;
     let pick = live[live.length - 1];
@@ -57,13 +86,14 @@
       r -= odds[id];
       if (r < 0) { pick = id; break; }
     }
-    const ctx = { raceTime, lastSafetyCarAt, stewardInFlight };
-    const start = ITEM_ORDER.indexOf(pick);
-    for (let k = 0; k < ITEM_ORDER.length; k += 1) {
-      const id = ITEM_ORDER[(start + k) % ITEM_ORDER.length];
+    const ctx = { raceTime, lastSafetyCarAt, stewardInFlight, lastStewardAt };
+    // Held back, it moves down to the next commoner item the column allows
+    // (never up to a rarer, stronger one).
+    for (let i = ITEM_ORDER.indexOf(pick); i >= 0; i -= 1) {
+      const id = ITEM_ORDER[i];
       if (odds[id] > 0 && !isBlocked(id, ctx)) return id;
     }
-    return "oilSlick";
+    return ITEM_ORDER[0];
   }
 
   function overallShares(spread = { lead: 1, front: 4, mid: 5, back: 5, tail: 5 }) {
@@ -89,18 +119,29 @@
   const CAR_LENGTH = 26;
   const CAR_WIDTH = 16;
   const SHOT_EDGE = 8;
-  const LAT_HOMING = 90;
+  const LAT_HOMING = 120;
   const TRAIL_GAP = 28;
   const DROP_GAP = 18;
-  const SHOT_SPEEDS = { undercut: 1.35, stewardPenalty: 1.6, debris: 1.2 };
-  const FACTORS = { boost: 1.22, overtakeMode: 1.10, formationLap: 1.42, safetyCar: 0.55 };
-  const SPIN_MS = { undercut: 850, debris: 850, oilSlick: 820, stewardLeader: 1600, stewardSplash: 1000, contact: 700 };
+  const SHOT_SPEEDS = { undercut: 1.6, stewardPenalty: 1.6, debris: 1.45 };
+  // drsKick: the share of top speed DRS adds at once (the mushroom's burst).
+  const FACTORS = { boost: 1.22, drsKick: 0.2, overtakeMode: 1.2, formationLap: 1.5, safetyCar: 0.55 };
+  // How long each hit spins a car, and the share of its speed it keeps. The
+  // Steward Penalty (the blue shell) is the heaviest of all: the leader all but
+  // stops. The Oil Slick (the banana) is a short spin.
+  const SPIN_MS = { undercut: 1100, debris: 1000, oilSlick: 850, stewardLeader: 2600, stewardSplash: 1200, contact: 650 };
+  const SPIN_KEEP = { undercut: 0.45, debris: 0.5, oilSlick: 0.65, stewardLeader: 0.08, stewardSplash: 0.4, contact: 0.7 };
   const TIMINGS = {
-    rouletteMs: 1100, boxHiddenMs: 3000, armMs: 300, oilArmMs: 1000, oilLifeMs: 20000,
-    drsMs: 2000, drsStraightMs: 3000, overtakeModeMs: 5000, formationLapMs: 4000,
-    safetyCarMs: 5000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
+    rouletteMs: 1100, boxHiddenMs: 2000, armMs: 300, oilArmMs: 1000, oilLifeMs: 15000,
+    drsMs: 3000, drsStraightMs: 4500, overtakeModeMs: 8000, formationLapMs: 6000,
+    // A Formation Lap ends only once the car is clear of every other car;
+    // this long at most past its time, it ends wherever it is.
+    formationGraceMs: 2000,
+    // After a spin a car can't be spun again for this long: hit after hit
+    // can't pin it down.
+    spinGraceMs: 4500,
+    safetyCarMs: 7000, safetyCarLeaveMs: 2000, trailHoldMs: 200, aiTrailMs: 6000, aiHoldMs: 8000,
     // A Steward Penalty has no time limit: it ends on the leader, or when nobody is left racing.
-    lifeMs: { undercut: 12000, debris: 6000, stewardPenalty: Infinity },
+    lifeMs: { undercut: 12000, debris: 8000, stewardPenalty: Infinity },
   };
   const STRAIGHT_SPAN = 120;
   const STRAIGHT_TURN = 0.12;
@@ -248,6 +289,26 @@
     return cap;
   }
 
+  // Two cars touch when their footprints overlap (along and across are the
+  // one's offset from the other, in track coordinates). The way they overlap
+  // least is the way they met: wheel to wheel ("side") or nose to tail ("rear").
+  const CONTACT_SLOP = 0.02;
+  function contactKind(along, across) {
+    const deepAlong = CAR_LENGTH - Math.abs(along);
+    const deepAcross = CAR_WIDTH - Math.abs(across);
+    // (Deeper than a hair: cars pushed apart to just touching are apart.)
+    if (deepAlong <= CONTACT_SLOP || deepAcross <= CONTACT_SLOP) return null;
+    return deepAcross < deepAlong ? "side" : "rear";
+  }
+
+  // Whether a car can come off a Formation Lap here: no other car on top of
+  // it or right in front of or behind it in its lane.
+  function formationClear(body, others, lapLength) {
+    return !others.some((o) => o.id !== body.id
+      && Math.abs(wrapDelta(o.d, body.d, lapLength)) < CAR_LENGTH * 1.25
+      && Math.abs((o.lat || 0) - (body.lat || 0)) < CAR_WIDTH * 1.25);
+  }
+
   function nearestGaps(body, bodies, lapLength) {
     let ahead = null;
     let behind = null;
@@ -262,7 +323,8 @@
 
   return {
     ITEM_ORDER, COLUMNS, ODDS, LIMITS, columnFor, isBlocked, rollItem, overallShares, rarityFor,
-    CAR_LENGTH, CAR_WIDTH, SHOT_EDGE, LAT_HOMING, TRAIL_GAP, DROP_GAP, SHOT_SPEEDS, FACTORS, SPIN_MS, TIMINGS,
+    CAR_LENGTH, CAR_WIDTH, SHOT_EDGE, LAT_HOMING, TRAIL_GAP, DROP_GAP, SHOT_SPEEDS, FACTORS, SPIN_MS, SPIN_KEEP, TIMINGS,
     makeRoute, wrapDelta, isStraight, advanceShot, shotHits, firstHit, stewardVictims, holdStationSpeed, nearestGaps,
+    contactKind, formationClear,
   };
 }));
