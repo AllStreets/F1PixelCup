@@ -123,6 +123,7 @@ async (page) => {
           || JSON.stringify({ waiting: w, phase: state.phase, active: pod.active, button: b.outerHTML });
       }, waiting);
     }
+    if (via === "hold") return before;
     if (via !== "instant") {
       await p.waitForTimeout(hold);
       if (via === "click") await p.click("#results-next");
@@ -260,7 +261,7 @@ async (page) => {
       && trophy.confetti.count === { high: 600, medium: 300, low: 120 }[trophy.tier];
     const later = await at(["trophy", 2.6]);
     results.confettiFalls = later.confetti.meanY < trophy.confetti.meanY - 0.4 && later.confetti.meanVy < -0.3 || `${trophy.confetti.meanY} -> ${later.confetti.meanY}`;
-    results.noSprayBeforeNine = later.spray.emitted === 0;
+    results.noSprayBeforeTheCorks = later.spray.emitted === 0;
 
     // Just into the spray: the poses crossfade, so the trophy is still up for
     // the first moment and the bottles come in as the hands meet.
@@ -466,7 +467,8 @@ async (page) => {
         ...s, tier: st.tier, t: st.t, sceneAnthemSeconds: st.anthemSeconds, beats: C.BEATS, corks: [1, 2, 3].map((place) => C.corkAt(place)),
         wantSeconds: PodiumSound.anthemSeconds(s.anthem), wantCues: want.map((c) => [c.id, c.at]),
         // Each started sound's place on the audio clock, from the ceremony's start.
-        played: first ? s.log.map((l) => [l.id, l.ctxAt - first.ctxAt]) : [],
+        played: s.log.map((l) => [l.id, l.startAt - s.zero]),
+        skipped: s.log.filter((l) => l.skip > 0 && !l.loop).map((l) => l.id),
         sounds: new Set(want.map((c) => c.sound)).size, audio: audio.ctx ? audio.ctx.state : "none",
       };
     });
@@ -478,10 +480,15 @@ async (page) => {
     const fr = await sound();
     results.anthemIsTheWinners = (fr && france.top[0] === "gasly" && fr.winner === "gasly" && fr.anthem === "fr" && fr.on === true
       && Math.abs(fr.anthemSeconds - fr.wantSeconds) < 1e-9 && Math.abs(fr.sceneAnthemSeconds - fr.wantSeconds) < 1e-9) || JSON.stringify(fr).slice(0, 300);
-    results.soundsRenderedAhead = (fr && fr.rendered === fr.sounds && fr.sounds >= 14) || `${fr && fr.rendered} of ${fr && fr.sounds}`;
+    // (Counted at the moment the ceremony started, before anything could be
+    // rendered late.)
+    results.soundsRenderedAhead = (fr && fr.readyAtStart === fr.sounds && fr.sounds >= 15 && fr.waiting === 0) || `${fr && fr.readyAtStart} of ${fr && fr.sounds} at the start`;
     results.audioRunning = (fr && fr.audio === "running" && fr.started === true) || `${fr && fr.audio}, started ${fr && fr.started}`;
-    results.everySoundAtItsBeat = (fr && fr.played.length === fr.wantCues.length && same([...fr.played].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])), fr.wantCues)
-      && ["welcome", "anthem", "applause", "roar", "sting", "cannon1", "cannon2", "cork1", "cork2", "cork3", "fizz1", "cheer"].every((id) => fr.tier === "low" && id === "fizz1" ? true : fr.played.some((c) => c[0] === id)))
+    // Where each sound was really put on the audio clock (the time handed to
+    // its source), from the ceremony's start, and none begun part-way through.
+    results.everySoundAtItsBeat = (fr && fr.played.length === fr.wantCues.length && fr.skipped.length === 0
+      && same([...fr.played].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])), fr.wantCues)
+      && ["welcome", "anthem", "applause", "roar", "sting", "cannon1", "cannon2", "cork1", "cork2", "cork3", "fizz1", "cheer", "murmur"].every((id) => fr.tier === "low" && id === "fizz1" ? true : fr.played.some((c) => c[0] === id)))
       || JSON.stringify({ played: fr && fr.played, want: fr && fr.wantCues }).slice(0, 600);
     const cueAt = (id) => fr.wantCues.find((c) => c[0] === id)[1];
     results.cuesOnTheTimeline = (cueAt("anthem") === fr.beats.anthem && [1, 2, 3].every((place) => cueAt(`cork${place}`) === fr.corks[place - 1])
@@ -518,7 +525,41 @@ async (page) => {
     // Leaving stops it.
     await p.click("#podium-screen [data-action='pitlane']");
     await p.waitForTimeout(700);
-    results.leavingStopsTheSound = await p.evaluate(() => Game.podiumSound() === null && state.phase === "garage");
+    results.leavingStopsTheSound = await p.evaluate(() => {
+      const last = Game.podiumSound({ last: true });
+      return (Game.podiumSound() === null && state.phase === "garage" && last && last.level < 1e-4) || JSON.stringify({ now: Game.podiumSound(), level: last && last.level });
+    });
+
+    // Pressed the moment the results appear, nothing rendered yet: the
+    // ceremony still opens at once, each sound joins as it is ready, and the
+    // anthem (5.8 s in) starts on its beat from its first note.
+    await runCup({ via: "instant", winner: "lawson" });
+    const early = await sound();
+    await p.waitForFunction(() => { const s = Game.podiumSound(); return s && s.waiting === 0 && s.now > 6.5; }, null, { timeout: 30000 });
+    const caught = await sound();
+    const anthemLog = caught.log.find((l) => l.id === "anthem");
+    results.soundCatchesUpAfterAnEarlyPress = (early.anthem === "nz" && early.started === true && early.readyAtStart < early.sounds
+      && caught.waiting === 0 && anthemLog && anthemLog.skip === 0 && Math.abs(anthemLog.startAt - caught.zero - caught.beats.anthem) < 1e-6)
+      || JSON.stringify({ readyAtStart: early.readyAtStart, sounds: early.sounds, waiting: caught.waiting, anthemLog });
+    await p.evaluate(() => resetToGarage());
+
+    // The sound switched off while the last results are up: the ceremony is
+    // laid out again without the anthem's wait, and plays nothing; on again, it is back.
+    await runCup({ via: "hold", winner: "gasly" });
+    const toggled = await p.evaluate(async () => {
+      const frames = (n) => new Promise((r) => { const go = () => (n-- > 0 ? requestAnimationFrame(go) : r()); go(); });
+      const read = () => ({ on: Game.podiumSound().on, seconds: Game.podiumSound().anthemSeconds, cues: Game.podiumSound().cues.length });
+      const a = read();
+      Game.setSound(false);
+      await frames(3);
+      const b = read();
+      Game.setSound(true);
+      await frames(3);
+      return [a, b, read()];
+    });
+    results.soundSettingRelaysTheCeremony = (toggled[0].on && toggled[0].seconds > 10 && !toggled[1].on && toggled[1].seconds === 3 && toggled[1].cues === 0
+      && toggled[2].on && toggled[2].seconds === toggled[0].seconds && toggled[2].cues === toggled[0].cues) || JSON.stringify(toggled);
+    await p.evaluate(() => resetToGarage());
 
     // Leclerc wins: Monaco's. Antonelli wins: no Italian score free to use
     // here, so the game's own fanfare stands in.
@@ -539,6 +580,8 @@ async (page) => {
   await flat.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await flat.waitForFunction(() => window.Render3D && Render3D.failed, null, { timeout: 30000 });
   const flatCup = await flat.evaluate(() => {
+    Game.setSound(true);
+    initAudio();
     state.gridMode = "back";
     startCup();
     for (let race = 0; race < 4; race += 1) {
@@ -557,6 +600,18 @@ async (page) => {
     return !screen.classList.contains("is-3d") && steps.length === 3 && steps.every((s) => s.getBoundingClientRect().height > 50)
       && [1, 0, 2].every((s, i) => steps[s].innerText.toLowerCase().includes(top[i].toLowerCase()));
   }, flatCup);
+  // Without the 3D ceremony the celebration is still heard, from the moment
+  // the podium opens: every sound started on the audio clock, the first at once.
+  await flat.waitForFunction(() => { const s = Game.podiumSound(); return s && s.waiting === 0 && s.log.length > 0; }, null, { timeout: 30000 }).catch(() => {});
+  results.fallback2dHasTheSound = await flat.evaluate(() => {
+    const s = Game.podiumSound();
+    if (!s) return "no sound planned";
+    const welcome = s.log.find((l) => l.id === "welcome");
+    const anthem = s.log.find((l) => l.id === "anthem");
+    return (s.on && s.started && s.log.length === s.cues.length && welcome && Math.abs(welcome.startAt - s.zero) < 0.5
+      && anthem && Math.abs(anthem.startAt - s.zero - Ceremony.withAnthem(s.anthemSeconds).BEATS.anthem) < 1e-6)
+      || JSON.stringify({ on: s.on, started: s.started, log: s.log.length, cues: s.cues.length });
+  });
   await context.close();
   return { results, errors };
 }

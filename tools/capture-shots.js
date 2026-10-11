@@ -427,6 +427,9 @@ async (page) => {
     await sizeTo(1600, 900);
     await freshGame();
     await p.evaluate((top) => {
+      // (With the sound on the ceremony stands for the whole anthem, which
+      // is when the anthem's picture is taken.)
+      Game.setSound(true);
       Game.selectDriver(DRIVERS.findIndex((d) => d.id === top[0]));
       Game.selectPlayers(1);
       Game.selectCup(0);

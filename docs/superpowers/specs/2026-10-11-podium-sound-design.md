@@ -12,9 +12,9 @@ As at a real podium (`ceremony.js`, `withAnthem(seconds)`; everything after the 
 | 2.5 to 5.2 s | Third, second, then first step forward, arms up | A cheer for each |
 | 5.8 s, for the anthem's length | All three stand still; the camera pushes slowly in on the winner, their flag on the banner behind | The winner's anthem, then applause |
 | 0.9 s after it, for 4 s | The winner lifts the trophy, the others wave, confetti | A fanfare sting, two confetti cannons, the roar |
-| then | The champagne; the camera orbits | A cork for each bottle at the moment its spray starts (first, second, third, a quarter of a second or so apart), the fizz, cheering that fades |
+| then | The champagne; the camera orbits | A cork for each bottle at the moment its spray starts (first, second, third, a quarter of a second or so apart), the fizz, cheering that settles to a quiet murmur for as long as the podium stays up |
 
-Back to pit lane works at any moment and stops the sound. Reduced motion keeps the sound. With the game's sound off nothing is played and the ceremony keeps only a 3 s pause where the anthem goes. Replays are not affected. Two-player and single-race podiums run the same.
+Back to pit lane works at any moment and stops the sound. Reduced motion keeps the sound (but not the fizz: no spray is drawn then). With the game's sound off nothing is played and the ceremony keeps only a 3 s pause where the anthem goes. Replays are not affected. Two-player and single-race podiums run the same.
 
 ## The anthems
 
@@ -35,16 +35,16 @@ Each driver in `game-data.js` has a `country`, the nationality they race under; 
 
 Pure, UMD, deterministic; the same code renders in the game, in the Node tests and in the WAVs (`tools/render-podium-sound.js`).
 
-- **Anthem and fanfares:** a small brass band in a hall. The tune on trumpets (additive, nine harmonics that open as the note swells, a soft 45 ms attack, a little vibrato), the same an octave down on horns, the bass on a tuba, through a Schroeder reverb.
+- **Anthem and fanfares:** a small brass band in a hall. The tune on trumpets (additive, nine harmonics that open as the note swells, a soft 45 ms attack, a little vibrato, each note tongued so a repeated note is heard twice), the same an octave down on horns, the bass on a tuba, through a Schroeder reverb. A tune written above the trumpets' top (Kimigayo's source) is played an octave down; a bass under the tuba's reach an octave up.
 - **Crowd:** three bands of noise, each swelling on its own, shaped by the beats (a cheer as each driver steps up, a roar with the trophy, cheering that fades after the champagne).
 - **Applause:** hundreds of claps, each a few milliseconds of bright noise, thinning out.
 - **Cork:** a short thump whose pitch falls, and the first hiss.
 - **Fizz:** bright noise pulsing as the bottle is shaken, dying away as it empties (none on Low, where there is no spray).
 - **Confetti cannon:** a low thump and a rush.
 
-`cues(ceremony, { tier })` places each sound on the timeline. The game renders the buffers one task at a time behind the cup's last results (the anthem in four steps), and on the ceremony's first frame schedules every cue on the audio clock, through the master gain (the sound setting).
+`cues(ceremony, { tier, spray })` places each sound on the timeline; the whole mix never clips. The game renders the buffers a small step per task behind the cup's last results (the anthem two notes at a time), in the order they are needed, and on the ceremony's first frame schedules every cue on the audio clock, through the master gain (the sound setting). Pressed before they are all rendered, the ceremony still opens at once and each sound joins as it is ready. Changing the sound setting on the results lays the ceremony out again.
 
 ## Checks
 
 - **Node:** the timeline's new order and that the anthem's length moves what follows; each driver maps to an anthem or the fallback; each excerpt's length, range and note order; the sources and licences recorded and credited; the note lists equal the build; the synth plays the right pitches at the right times; the cues sit on the beats.
-- **Browser (`podium-check`):** with the sound off, silent and short; with it on, the anthem is the winner's (Gasly: France; Leclerc: Monaco; Antonelli: the fanfare), every sound rendered ahead and started at its beat on the audio clock, the audio clock runs with the picture, the anthem is really heard (level, and one long note's pitch measured), a drop leaves no bottle before its own cork, and leaving stops it.
+- **Browser (`podium-check`):** with the sound off, silent and short; with it on, the anthem is the winner's (Gasly: France; Leclerc: Monaco; Antonelli: the fanfare), every sound rendered ahead and started at its beat on the audio clock (and caught up after an early press), the sound setting changed on the results, the 2D podium's sound, the audio clock runs with the picture, the anthem is really heard (level, and one long note's pitch measured), a drop leaves no bottle before its own cork, and leaving stops it.

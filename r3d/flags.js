@@ -3,7 +3,9 @@
 // Plain geometry in each flag's own colours; arms and fine emblems are left
 // off at this size (Spain's arms, Brazil's stars and motto).
 
-const star = (g, cx, cy, r, points, inner = 0.45) => {
+// (0.382: the inner radius of a regular five-pointed star; seven-pointed
+// stars, the Commonwealth Star's kind, are given theirs.)
+const star = (g, cx, cy, r, points, inner = 0.382) => {
   g.beginPath();
   for (let i = 0; i < points * 2; i += 1) {
     const a = (Math.PI * i) / points - Math.PI / 2;
@@ -27,28 +29,50 @@ const bands = (g, w, h, colours, vertical = false, weights = null) => {
   });
 };
 
-// The Union Flag in a w by h box at the origin.
-function unionFlag(g, w, h) {
+// The Union Flag in a w by h box at the origin: St Andrew's white saltire,
+// St Patrick's red one counterchanged on it (in each arm the red lies to
+// one side of the centre line, the same way round the flag), then St
+// George's cross in its white border.
+function unionFlag(g, w, h, red = "#c8102e") {
   g.save();
   g.beginPath();
   g.rect(0, 0, w, h);
   g.clip();
   g.fillStyle = "#012169";
   g.fillRect(0, 0, w, h);
-  const cross = (colour, width) => {
-    g.strokeStyle = colour;
-    g.lineWidth = width;
+  const len = Math.hypot(w, h);
+  // Unit vector along the falling diagonal and its normal.
+  const d = [w / len, h / len];
+  g.strokeStyle = "#ffffff";
+  g.lineWidth = h * 0.2;
+  g.beginPath();
+  g.moveTo(0, 0); g.lineTo(w, h);
+  g.moveTo(w, 0); g.lineTo(0, h);
+  g.stroke();
+  // Each arm from the centre outwards, a red strip a third of the white
+  // wide, shifted towards its anticlockwise edge.
+  const arm = (dx, dy) => {
+    const nx = dy;
+    const ny = -dx;
+    const off = h * 0.0333;
+    const half = h * 0.0333;
     g.beginPath();
-    g.moveTo(0, 0); g.lineTo(w, h);
-    g.moveTo(w, 0); g.lineTo(0, h);
-    g.stroke();
+    g.moveTo(w / 2 + nx * (off - half), h / 2 + ny * (off - half));
+    g.lineTo(w / 2 + nx * (off + half), h / 2 + ny * (off + half));
+    g.lineTo(w / 2 + nx * (off + half) + dx * len, h / 2 + ny * (off + half) + dy * len);
+    g.lineTo(w / 2 + nx * (off - half) + dx * len, h / 2 + ny * (off - half) + dy * len);
+    g.closePath();
+    g.fill();
   };
-  cross("#ffffff", h * 0.2);
-  cross("#c8102e", h * 0.07);
+  g.fillStyle = red;
+  arm(-d[0], -d[1]);
+  arm(d[0], -d[1]);
+  arm(d[0], d[1]);
+  arm(-d[0], d[1]);
   g.fillStyle = "#ffffff";
-  g.fillRect(w / 2 - h * 0.17, 0, h * 0.34, h);
-  g.fillRect(0, h / 2 - h * 0.17, w, h * 0.34);
-  g.fillStyle = "#c8102e";
+  g.fillRect(w / 2 - h * 0.1667, 0, h * 0.3333, h);
+  g.fillRect(0, h / 2 - h * 0.1667, w, h * 0.3333);
+  g.fillStyle = red;
   g.fillRect(w / 2 - h * 0.1, 0, h * 0.2, h);
   g.fillRect(0, h / 2 - h * 0.1, w, h * 0.2);
   g.restore();
@@ -76,8 +100,10 @@ const FLAGS = {
     const leaf = [[0, -0.42], [0.07, -0.27], [0.16, -0.31], [0.12, -0.08], [0.26, -0.18], [0.29, -0.09], [0.4, -0.07], [0.33, 0.06], [0.38, 0.1], [0.17, 0.25], [0.2, 0.32], [0.02, 0.29], [0.02, 0.44]];
     g.fillStyle = "#d80621";
     g.beginPath();
-    leaf.forEach(([x, y]) => g.lineTo(w / 2 + x * h, h / 2 + y * h));
-    [...leaf].reverse().forEach(([x, y]) => g.lineTo(w / 2 - x * h, h / 2 + y * h));
+    // (Sized to sit inside the white: the box is 3:2, the flag itself 2:1.)
+    const k = 0.8;
+    leaf.forEach(([x, y]) => g.lineTo(w / 2 + x * h * k, h / 2 + y * h * k));
+    [...leaf].reverse().forEach(([x, y]) => g.lineTo(w / 2 - x * h * k, h / 2 + y * h * k));
     g.closePath();
     g.fill();
   },
@@ -85,17 +111,18 @@ const FLAGS = {
   Australia: (g, w, h) => {
     g.fillStyle = "#012169";
     g.fillRect(0, 0, w, h);
-    unionFlag(g, w / 2, h / 2);
+    unionFlag(g, w / 2, h / 2, "#e4002b");
     g.fillStyle = "#ffffff";
-    star(g, w * 0.25, h * 0.75, h * 0.15, 7);
-    [[0.75, 0.83, 0.07], [0.75, 0.17, 0.07], [0.62, 0.45, 0.07], [0.87, 0.37, 0.07]].forEach(([x, y, r]) => star(g, w * x, h * y, h * r, 7));
+    star(g, w * 0.25, h * 0.75, h * 0.15, 7, 0.444);
+    [[0.75, 0.83, 0.07], [0.75, 0.17, 0.07], [0.62, 0.45, 0.07], [0.87, 0.37, 0.07]].forEach(([x, y, r]) => star(g, w * x, h * y, h * r, 7, 0.444));
     star(g, w * 0.8, h * 0.55, h * 0.04, 5);
   },
   "New Zealand": (g, w, h) => {
     g.fillStyle = "#012169";
     g.fillRect(0, 0, w, h);
     unionFlag(g, w / 2, h / 2);
-    [[0.75, 0.2, 0.075], [0.66, 0.44, 0.07], [0.84, 0.4, 0.065], [0.75, 0.78, 0.085]].forEach(([x, y, r]) => {
+    // The Southern Cross: four red stars edged in white, the lowest the largest.
+    [[0.75, 0.2, 0.055], [0.66, 0.44, 0.055], [0.84, 0.4, 0.048], [0.75, 0.78, 0.062]].forEach(([x, y, r]) => {
       g.fillStyle = "#ffffff";
       star(g, w * x, h * y, h * r * 1.3, 5);
       g.fillStyle = "#c8102e";
@@ -131,8 +158,10 @@ export function drawFlag(g, country, x, y, w, h) {
   g.clip();
   paint(g, w, h);
   g.restore();
+  g.save();
   g.strokeStyle = "rgba(0,0,0,0.35)";
   g.lineWidth = 2;
   g.strokeRect(x, y, w, h);
+  g.restore();
   return true;
 }

@@ -85,7 +85,7 @@ test("each steps forward as the arms go up, and stays there", () => {
   });
 });
 
-test("the trophy only while P1 lifts it; confetti from the trophy, spray from 9 s (none on Low)", () => {
+test("the trophy only while P1 lifts it; confetti from the trophy, spray after it (none on Low)", () => {
   // The props change hands halfway through the poses' crossfade, not as it starts.
   const half = Ceremony.PROP_SWAP;
   const { trophy, spray } = Ceremony.BEATS;
