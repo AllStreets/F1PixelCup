@@ -26,7 +26,9 @@ test("an anthem is played from its notes: the right pitches at the right times, 
   const a = PodiumSound.ANTHEMS[key];
   const samples = PodiumSound.renderPiece(key, RATE);
   assert.ok(Math.abs(samples.length / RATE - PodiumSound.seconds(key)) < 0.01);
-  assert.ok(PodiumSound.anthemSeconds(key) > (a.beats * 60) / a.bpm && PodiumSound.anthemSeconds(key) < PodiumSound.seconds(key));
+  // The ceremony stands for all of it, the hall's last echo included.
+  assert.equal(PodiumSound.anthemSeconds(key), PodiumSound.seconds(key));
+  assert.ok(PodiumSound.seconds(key) > (a.beats * 60) / a.bpm + 1);
   const spb = 60 / a.bpm;
   // Each of the first dozen notes: its own pitch is the strongest of the scale's around it.
   a.melody.slice(0, 12).forEach(([midi, start, length]) => {
@@ -72,7 +74,7 @@ test("rendering is deterministic, and every anthem and the fanfare render", () =
   assert.equal(PodiumSound.anthemFor({ country: "constructor" }), null);
   // A winner without an anthem here gets the fanfare: the game's own tune, the same every time.
   assert.deepEqual(PodiumSound.renderPiece(null, 4000), PodiumSound.renderPiece("fanfare", 4000));
-  assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - 0.6) < 1e-9);
+  assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - PodiumSound.TAIL) < 1e-9);
 });
 
 test("the cues: each sound at its beat on the ceremony's timeline, whatever the anthem's length", () => {
@@ -83,9 +85,12 @@ test("the cues: each sound at its beat on the ceremony's timeline, whatever the 
     const at = (id) => { const c = cues.find((x) => x.id === id); return c ? c.at : null; };
     assert.equal(at("welcome"), 0);
     assert.equal(at("anthem"), B.anthem);
-    // The anthem's last note is over before the trophy goes up; the applause meets its end.
-    assert.ok(B.anthem + (PodiumSound.seconds(winner) - 1.6) <= B.anthemEnd + 1e-9);
-    assert.ok(Math.abs(at("applause") - B.anthemEnd) < 0.5);
+    // The presentation: its own processional from the presenter's first
+    // steps, the crowd's ovation through it, a ring as each trophy is lifted.
+    assert.ok(at("procession") >= B.present && at("procession") < B.present + 0.5);
+    assert.equal(at("ovation"), B.present);
+    C.HANDOVERS.forEach((h) => assert.ok(at(`ring${h.place}`) > h.release && at(`ring${h.place}`) < h.release + 0.6, `ring ${h.place}`));
+    assert.equal(at("applause"), null, "the old applause over the anthem's end is gone");
     assert.ok(Math.abs(at("sting") - B.trophy) < 0.3 && Math.abs(at("roar") - B.trophy) < 0.3);
     assert.ok(at("cannon1") >= B.trophy && at("cannon1") < B.trophy + 0.1 && at("cannon2") > at("cannon1"));
     // A cork for each bottle, at the moment that driver's spray starts.
@@ -232,4 +237,84 @@ test("a cannon thumps", () => {
   const cannon = PodiumSound.renderCannon(3, R);
   assert.ok(zero(cannon, 0, 0.08) < 1500, `cannon ${zero(cannon, 0, 0.08)}`);
   assert.ok(rms(cannon, 0, 0.1, R) > rms(cannon, 0.6, 0.9, R) * 4);
+});
+
+test("no sound overlaps the next scene: every cue ends before the scene after its own begins", () => {
+  [["nz", "high"], ["jp", "high"], ["fr", "medium"], [null, "low"]].forEach(([winner, tier]) => {
+    const C = Ceremony.withAnthem(PodiumSound.anthemSeconds(winner));
+    const B = C.BEATS;
+    const cues = PodiumSound.cues(C, { tier, winner });
+    const made = PodiumSound.sounds(C, winner, 2000);
+    cues.forEach((c) => {
+      const scene = C.SCENES.find((s) => c.at >= s.start - 1e-9 && c.at < s.end);
+      assert.equal(c.scene, scene.name, `${c.id} is the ${scene.name}'s`);
+      if (c.loop) { assert.equal(scene.name, "champagne"); return; }
+      assert.ok(c.seconds > 0, c.id);
+      assert.ok(c.at + c.seconds <= scene.end + 1e-6, `${c.id} (${c.scene}) runs to ${(c.at + c.seconds).toFixed(2)}, past ${scene.end.toFixed(2)}`);
+      // And the length it says is the length it renders to.
+      assert.ok(Math.abs(PodiumSound.run(made[c.sound]()).length / 2000 - c.seconds) < 0.01, `${c.id}: ${c.seconds}`);
+    });
+    const cue = (id) => cues.find((c) => c.id === id);
+    const end = (id) => cue(id).at + cue(id).seconds;
+    // The music, one piece at a time: anthem, then the processional, then the sting, then the corks.
+    assert.ok(end("anthem") <= cue("procession").at, "the anthem's last echo before the processional");
+    assert.ok(end("procession") <= cue("sting").at, "the processional before the winner's sting");
+    assert.ok(end("procession") <= B.trophy + 1e-6, `the processional has died away as the winner takes the trophy: ${end("procession") - B.trophy}`);
+    // No dead air: the processional starts within half a second of the
+    // anthem's last echo, plays until the winner has the trophy in reach
+    // (its last note as it is raised to them), and the sting follows at once.
+    assert.ok(cue("procession").at - end("anthem") <= 0.5, `${cue("procession").at - end("anthem")} s of nothing after the anthem`);
+    assert.ok(cue("sting").at - end("procession") <= 0.3);
+    const gold = C.HANDOVERS.find((h) => h.place === 1);
+    const tune = PodiumSound.processional(C);
+    const last = tune.melody[tune.melody.length - 1];
+    assert.ok(Math.abs(cue("procession").at + (last[1] * 60) / tune.bpm - gold.raise) < 0.02, "its last note as the gold is raised");
+    assert.ok(cue("procession").at + ((last[1] + last[2]) * 60) / tune.bpm > gold.contact - 0.2, "held until the winner's hand is on it");
+    assert.ok(tune.bpm >= 92 && tune.bpm <= 120, `a stately ${tune.bpm} to the minute`);
+    assert.ok(end("sting") <= Math.min(...[1, 2, 3].map((p) => cue(`cork${p}`).at)), "the sting before the first cork");
+    // The arrival's crowd is quiet by the anthem's first note; nothing of the champagne before the spray.
+    assert.ok(end("welcome") <= cue("anthem").at);
+    cues.filter((c) => /^(cork|fizz|cheer|murmur)/.test(c.id)).forEach((c) => assert.ok(c.at >= B.spray, c.id));
+    // Each scene has its sound: none is silent.
+    C.SCENES.forEach((s) => assert.ok(cues.some((c) => c.scene === s.name), s.name));
+    // The sting, the cannons and the roar are played once: the winner's lift.
+    ["sting", "cannon1", "cannon2", "roar", "procession", "ovation", "anthem"].forEach((id) => assert.equal(cues.filter((c) => c.id === id).length, 1, id));
+    assert.ok(Math.abs(cue("sting").at - B.trophy) < 0.3 && Math.abs(cue("roar").at - B.trophy) < 0.3);
+  });
+});
+
+test("the presentation's sounds: a processional that is no anthem, a ring for each trophy (lower for the bigger)", () => {
+  const R = 24000;
+  const P = PodiumSound.PROCESSION;
+  // Its own tune: not the fanfare, not the sting, not any anthem's opening.
+  const opening = (piece) => piece.melody.slice(0, 6).map((n) => n[0] - piece.melody[0][0]).join(",");
+  [PodiumSound.FANFARE, PodiumSound.STING, ...Object.values(PodiumSound.ANTHEMS)].forEach((other) => assert.notEqual(opening(P), opening(other)));
+  const C = Ceremony.withAnthem(20);
+  const tune = PodiumSound.processional(C);
+  assert.deepEqual(tune.melody.slice(0, P.melody.length), P.melody);
+  const music = PodiumSound.renderPiece(tune, 8000);
+  assert.ok(Math.abs(music.length / 8000 - (C.BEATS.trophy - C.BEATS.present)) < 0.01, "as long as the presentation, to the winner's taking it");
+  assert.ok(rms(music, 1, 3, 8000) > 0.05);
+  // Its end is no click: the last few milliseconds are all but silent.
+  assert.ok(rms(music, music.length / 8000 - 0.01, music.length / 8000, 8000) < 0.01);
+  // The crowd: applause held until the winner has the trophy (no hush
+  // before it), and the roar held through the lift (no quiet at its end).
+  const made = PodiumSound.sounds(C, null, 8000);
+  const ovation = PodiumSound.run(made.ovation());
+  const L = ovation.length / 8000;
+  const walk = C.HANDOVERS[2].arrive - 1 - C.BEATS.present;
+  assert.ok(rms(ovation, L - 0.9, L - 0.3, 8000) > rms(ovation, walk - 0.4, walk + 0.4, 8000) * 1.25, `the applause rises to the winner's handover: ${rms(ovation, L - 0.9, L - 0.3, 8000) / rms(ovation, walk - 0.4, walk + 0.4, 8000)}`);
+  const roar = PodiumSound.run(made.roar());
+  const R8 = roar.length / 8000;
+  assert.ok(rms(roar, R8 - 1.6, R8 - 0.6, 8000) > rms(roar, 0.6, 1.6, 8000) * 0.45, "the roar holds through the lift");
+  // A ring: a struck metal sound, sharp at the start, dying over about a second, with partials that are not harmonics.
+  const rings = [3, 2, 1].map((place) => PodiumSound.renderRing(place, R));
+  rings.forEach((ring) => {
+    assert.ok(ring.length / R > 0.9 && ring.length / R < 1.8);
+    assert.ok(rms(ring, 0, 0.05, R) > rms(ring, 0.6, 0.9, R) * 4);
+    assert.ok(rms(ring, ring.length / R - 0.05, ring.length / R, R) < 0.01);
+  });
+  // Lower for the bigger trophy: bronze highest, gold lowest (by zero crossings).
+  const zero = (s) => { let n = 0; for (let i = 1; i < R * 0.3; i += 1) if ((s[i] >= 0) !== (s[i - 1] >= 0)) n += 1; return n; };
+  assert.ok(zero(rings[0]) > zero(rings[1]) && zero(rings[1]) > zero(rings[2]), `${rings.map(zero)}`);
 });

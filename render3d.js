@@ -2395,4 +2395,4 @@ function podiumTitleAt(t) {
   return ceremony.podium.titleRect(canvas2d.clientWidth || canvas2d.width, canvas2d.clientHeight || canvas2d.height, t);
 }
 
-api.podium = { preload: podiumPreload, begin: podiumBegin, prepare: podiumPrepare, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };
+api.podium = { seek: (t) => { if (ceremony.podium) ceremony.podium.seek(t); }, preload: podiumPreload, begin: podiumBegin, prepare: podiumPrepare, frame: podiumFrame, end: podiumEnd, inspect: podiumInspect, titleAt: podiumTitleAt };

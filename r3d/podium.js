@@ -17,6 +17,7 @@ import { buildDriver, suitFonts, driverLoaded, suitColours } from "./driver.js";
 import { canvasTexture, color } from "./textures.js";
 
 import { drawFlag } from "./flags.js";
+import { createPresentation } from "./presentation.js";
 
 const BaseCeremony = window.Ceremony;
 const BASE_FOV = 36;
@@ -50,6 +51,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   const STEPS = [1, 2, 3].map((place) => Ceremony.stepFor(place));
   const counts = Ceremony.counts(tier);
   let figures = [];
+  let presentation = null;
   let built = false;
   let compiled = false;
   let compiling = null;
@@ -60,7 +62,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   let firstFramePrograms = null;
   const confetti = { mesh: null, pieces: [], burstAt: -1 };
   // With reduced motion asked for (read every frame, it can change): the
-  // camera holds its settled view, nobody steps forward, the banners hang
+  // camera holds its settled view (and one other for the presentation, cut
+  // to: ceremony.js, stillCameraAt), nobody steps (each stands forward on
+  // their step from the start), the banners hang
   // still, the confetti lies where it fell and there is no spray.
   const motionQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const still = () => Boolean(motionQuery && motionQuery.matches);
@@ -452,8 +456,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     };
   }
 
-  // What a falling piece lands on: a step's top or the floor.
+  // What a falling piece lands on: a step's top, the trophies' table or the floor.
+  const TABLE = Ceremony.TABLE;
   function groundAt(x, z) {
+    if (Math.abs(x - TABLE.x) < TABLE.width / 2 && Math.abs(z - TABLE.z) < TABLE.length / 2) return TABLE.height + 0.003;
     for (let i = 0; i < STEPS.length; i += 1) {
       const s = STEPS[i];
       if (Math.abs(x - s.x) < s.width / 2 && Math.abs(z) < s.depth / 2) return s.height + 0.003;
@@ -597,6 +603,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       buildSet();
       buildLights();
       buildFigures();
+      // The trophy presentation: the table, the trophies, the presenter.
+      presentation = createPresentation({ scene, Ceremony, entries, cup, tier, figures, cupColour, geo, mat });
       buildConfetti();
       buildSpray();
       built = true;
@@ -621,7 +629,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     const start = performance.now();
     while (uploads.length && performance.now() - start < 8) renderer.initTexture(uploads.pop());
     if (uploads.length) return false;
-    inspectState.sheetsUploaded = figures.every((f) => Boolean(renderer.properties.get(f.fig.sheet).__webglTexture));
+    inspectState.sheetsUploaded = [...figures.map((f) => f.fig.sheet), presentation.sheet].every((sheet) => Boolean(renderer.properties.get(sheet).__webglTexture));
     compiled = true;
     return true;
   }
@@ -678,7 +686,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   }
 
   function placeCamera(t, calm = still(), cam = camera) {
-    const c = Ceremony.cameraAt(calm ? Ceremony.BEATS.sweepEnd : t);
+    const c = calm ? Ceremony.stillCameraAt(t) : Ceremony.cameraAt(t);
     cam.position.set(c.x, c.y, c.z);
     cam.up.set(0, 1, 0);
     cam.lookAt(c.lookX, c.lookY, c.lookZ);
@@ -735,15 +743,20 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     figures.forEach((f) => {
       const place = f.entry.place;
       f.fig.play(Ceremony.poseAt(place, t));
-      // The props change hands as the hands meet, halfway through the fade.
-      if (f.props.trophy) f.props.trophy.visible = Ceremony.trophyShown(place, t);
+      // The model's own trophy is never shown: each driver is handed one of
+      // the podium's three (r3d/presentation.js). The bottle comes into the
+      // hand halfway through the fade.
+      if (f.props.trophy) f.props.trophy.visible = false;
       if (f.props.bottle) f.props.bottle.visible = Ceremony.bottleShown(place, t);
-      f.fig.root.position.z = f.step.standZ + (calm ? 0 : Ceremony.STEP_FORWARD * Ceremony.forwardAt(place, t));
+      // (With reduced motion nobody steps: each stands forward from the start,
+      // where the presenter can reach them.)
+      f.fig.root.position.z = f.step.standZ + Ceremony.STEP_FORWARD * (calm ? 1 : Ceremony.forwardAt(place, t));
       f.fig.update(dt);
     });
     scene.children.forEach((o) => {
       if (o.userData.sway !== undefined) o.rotation.x = calm ? 0 : Math.sin(t * 0.9 + o.userData.sway) * 0.025;
     });
+    presentation.update(t, dt);
     placeCamera(t, calm);
     scene.updateMatrixWorld();
     updateConfetti(t, dt, calm);
@@ -808,6 +821,34 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     return r;
   }
 
+  // A box in the scene ({ min, max }), as the camera sees it: { left, top,
+  // right, bottom } in CSS px, or null when none of it is in the picture.
+  // (A box partly behind the camera is taken to fill the picture: never
+  // "out of it" by mistake.)
+  function boxOnScreen({ min, max }) {
+    camera.updateMatrixWorld();
+    const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    let behind = 0;
+    for (let i = 0; i < 8; i += 1) {
+      corner.set(i & 1 ? max[0] : min[0], i & 2 ? max[1] : min[1], i & 4 ? max[2] : min[2]).applyMatrix4(camera.matrixWorldInverse);
+      if (corner.z > -camera.near) { behind += 1; continue; }
+      corner.applyMatrix4(camera.projectionMatrix);
+      r.left = Math.min(r.left, (corner.x * 0.5 + 0.5) * view.w);
+      r.right = Math.max(r.right, (corner.x * 0.5 + 0.5) * view.w);
+      r.top = Math.min(r.top, (-corner.y * 0.5 + 0.5) * view.h);
+      r.bottom = Math.max(r.bottom, (-corner.y * 0.5 + 0.5) * view.h);
+    }
+    if (behind === 8) return null;
+    if (behind > 0) return { left: 0, top: 0, right: view.w, bottom: view.h };
+    return r.right < 0 || r.left > view.w || r.bottom < 0 || r.top > view.h ? null : r;
+  }
+  // (The presenter: a box round where they stand, as tall as they are.)
+  function aroundPresenter() {
+    const p = presentation.presenter.root.position;
+    return { min: [p.x - 0.28, 0, p.z - 0.28], max: [p.x + 0.28, 1.8, p.z + 0.28] };
+  }
+  const overTable = (p) => Math.abs(p.x - TABLE.x) < TABLE.width / 2 && Math.abs(p.z - TABLE.z) < TABLE.length / 2;
+
   // Whether the name plates show at time t.
   const platesIn = (t) => Ceremony.platesShown(t, still());
 
@@ -840,7 +881,14 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
         landed: confetti.pieces.length - airborne.length,
         meanVy: airborne.length ? airborne.reduce((s, p) => s + p.vy, 0) / airborne.length : 0,
         meanY: airborne.length ? airborne.reduce((s, p) => s + p.y, 0) / airborne.length : 0,
+        // Lying on the table's top; and (never) fallen through it.
+        onTable: confetti.pieces.filter((p) => p.landed && overTable(p) && Math.abs(p.y - TABLE.height) < 0.01).length,
+        throughTable: confetti.pieces.filter((p) => overTable(p) && p.y < TABLE.height - 0.01).length,
       },
+      ...(presentation ? presentation.inspect() : {}),
+      // Where the table and the presenter are in the picture (CSS px), or
+      // null when wholly out of it.
+      onScreen: presentation ? { table: boxOnScreen(presentation.tableBox()), presenter: presentation.presenter.root.visible ? boxOnScreen(aroundPresenter()) : null } : null,
       spray: { byPlace: Object.fromEntries(figures.map((f) => [f.entry.place, f.emitted || 0])), pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
     };
   }
@@ -856,6 +904,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       skeletons.forEach((sk) => sk.dispose());
       f.fig.dispose();
     });
+    if (presentation) presentation.dispose();
     if (confetti.mesh) confetti.mesh.dispose();
     figures = [];
     own.geometries.forEach((g) => g.dispose());
@@ -865,5 +914,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     scene.clear();
   }
 
-  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
+  // For the checks and the captures: carry the picture on from t seconds in
+  // (the figures, the trophies and the camera follow from the time alone;
+  // the sound, the confetti and the spray do not move with it).
+  const seek = (t) => { if (startedAt && Number.isFinite(t) && t >= 0) startedAt = lastAt - t * 1000; };
+
+  return { scene, camera, seek, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
 }

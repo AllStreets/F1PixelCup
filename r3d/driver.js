@@ -561,11 +561,14 @@ function shapeFace(model, weights, parts, look, tier) {
   });
 }
 
-function dress(model, driver, team, look, tier) {
-  const { suit, trim } = suitColours(team);
+// outfit: formal wear in place of a race suit (the podium's presenter,
+// r3d/presenter.js): { suit, shirt, shoes, hands (bare: the skin's colour),
+// sheet (the jacket, front and back, drawn on the suit's own sheet) }.
+function dress(model, driver, team, look, tier, outfit = null) {
+  const { suit, trim } = outfit ? { suit: outfit.suit, trim: outfit.suit } : suitColours(team);
   const made = new Map();
   // The driver's marks (number, flag, code, surname), on the body's cloth.
-  const sheet = suitSheet(driver, { suit, trim, team: team && team.short }, tier);
+  const sheet = outfit ? outfit.sheet : suitSheet(driver, { suit, trim, team: team && team.short }, tier);
   // (`onBody`: the body's own suit and trim wear the marks; the collar band,
   // a mesh in its own space, wears the plain trim.)
   const dressed = (m, onBody) => {
@@ -574,8 +577,16 @@ function dress(model, driver, team, look, tier) {
     let out = m.clone();
     if (m.name === "suit") out.color = color(suit);
     if (m.name === "suit_trim") out.color = color(trim);
-    if (onBody && (m.name === "suit" || m.name === "suit_trim")) wearSuit(out, sheet, { detail: m.name === "suit", trim: color(trim) });
-    if (m.name === "helmet") {
+    if (outfit) {
+      // Cloth, not a race suit's coated fabric; a shirt's collar; bare hands; shoes.
+      if (m.name === "suit" || m.name === "suit_trim") out.roughness = 0.82;
+      if (key === "suit_trim@collar") out.color = color(outfit.shirt);
+      if (m.name === "gloves") { out.color = color(outfit.hands); out.roughness = 0.6; }
+      if (m.name === "boots") { out.color = color(outfit.shoes); out.roughness = 0.3; }
+    }
+    if (onBody && (m.name === "suit" || m.name === "suit_trim")) wearSuit(out, sheet, { detail: m.name === "suit" && !outfit, trim: color(trim) });
+    // (No helmet is ever shown with an outfit: none is painted for it.)
+    if (m.name === "helmet" && !outfit) {
       out.map = helmetTexture(driver);
       out.color = new THREE.Color(0xffffff);
       out.roughness = 0.22;
@@ -631,7 +642,7 @@ export function buildDriver(driver, team, options = {}) {
   if (look && Faces.checkLook(look).length) throw new Error(`${driver.id}'s look: ${Faces.checkLook(look).join(", ")}`);
   const bare = headwear === "none" && Boolean(look);
   const model = SkeletonUtils.clone(template);
-  const { materials, sheet } = dress(model, driver, team, look, tier);
+  const { materials, sheet } = dress(model, driver, team, look, tier, options.outfit || null);
   const root = new THREE.Group();
   root.add(model);
   const props = {};

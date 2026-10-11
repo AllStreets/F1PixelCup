@@ -267,9 +267,9 @@
       podium: [
         { file: "podium-spray", label: "Champagne", caption: `${name(first)}, ${name(second)} and ${name(third)} spray the champagne`,
           alt: `The podium: ${name(first)} on the top step, ${name(second)} second and ${name(third)} third, bareheaded in their team suits, spraying champagne` },
-        { file: "podium-arms", label: "Arms up", caption: "Arms up, each one stepping forward",
-          alt: `The podium: ${name(first)}, ${name(second)} and ${name(third)} with their arms raised, name plates below` },
-        { file: "podium-trophy", label: "Trophy", caption: `${name(first)} lifts the trophy under the confetti`,
+        { file: "podium-handover", label: "Trophies", caption: `${name(first)} is handed the gold trophy`,
+          alt: `The trophy presentation: a presenter in formal dress hands ${name(first)} the gold trophy on the top step; ${name(second)} holds the silver and ${name(third)} the bronze` },
+        { file: "podium-trophy", label: "Trophy", caption: `${name(first)} lifts the gold trophy under the confetti`,
           alt: `${name(first)} lifts the trophy between ${name(second)} and ${name(third)} as confetti falls` },
         { file: "podium-anthem", label: "Anthem", caption: `All three stand for ${name(first)}'s anthem, under their flags`,
           alt: `The podium during the anthem: ${name(first)}, ${name(second)} and ${name(third)} standing still, each under a banner with their national flag` },

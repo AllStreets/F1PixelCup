@@ -40,6 +40,12 @@ write("podium-celebration.wav", PodiumSound.mix(Ceremony.withAnthem(PodiumSound.
 const SMALL = 16000;
 Object.entries(PodiumSound.ANTHEMS).forEach(([key, a]) => write(`anthem-${slug(a.country)}.wav`, PodiumSound.renderPiece(key, SMALL), SMALL));
 write("anthem-fallback-fanfare.wav", PodiumSound.renderPiece(null, SMALL), SMALL);
+// The trophy presentation on its own: from the anthem's end to the first cork.
+{
+  const C = Ceremony.withAnthem(PodiumSound.anthemSeconds(winner));
+  const whole = PodiumSound.mix(C, winner, { until: C.BEATS.spray + 1.5 });
+  write("trophy-presentation.wav", whole.slice(Math.floor((C.BEATS.present - 0.5) * RATE)));
+}
 // The crowd on its own (crowd-sound.js): the trophy's roar, and the
 // grandstands' crowd as a race loops it (twice round, to hear the join).
 // crowd-roar-before.wav, beside them, is the roar as it was (shaped noise,

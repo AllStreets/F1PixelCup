@@ -39,12 +39,46 @@
     bass: [[48, 0, 1], [48, 1, 2], [48, 3, 3]],
   };
 
-  const piece = (key) => (key === "sting" ? STING : has(key) ? ANTHEMS[key] : FANFARE);
-  const TAIL = 1.6;
+  // The presentation's processional: stately, the game's own, played as the
+  // trophies are brought to the drivers.
+  // Four phrases of eight beats, then its last note (processional(): held
+  // as the winner's trophy is raised to them). bpm here is its own tempo.
+  const PROCESSION = {
+    title: "Trophy processional", bpm: 108, beats: 32,
+    melody: [[67, 0, 1.5], [72, 1.5, 0.5], [76, 2, 1], [79, 3, 1], [81, 4, 1.5], [79, 5.5, 0.5], [76, 6, 1], [72, 7, 1],
+      [77, 8, 1.5], [76, 9.5, 0.5], [74, 10, 1], [71, 11, 1], [72, 12, 1], [74, 13, 1], [76, 14, 2],
+      [79, 16, 1.5], [81, 17.5, 0.5], [83, 18, 1], [81, 19, 1], [79, 20, 1.5], [77, 21.5, 0.5], [76, 22, 1], [74, 23, 1],
+      [72, 24, 1.5], [74, 25.5, 0.5], [76, 26, 1], [77, 27, 1], [79, 28, 1], [77, 29, 1], [74, 30, 1], [71, 31, 1]],
+    bass: [[48, 0, 2], [52, 2, 2], [53, 4, 2], [48, 6, 2], [50, 8, 2], [43, 10, 2], [48, 12, 2], [45, 14, 2],
+      [52, 16, 2], [53, 18, 2], [53, 20, 2], [48, 22, 2], [45, 24, 2], [53, 26, 2], [48, 28, 1], [43, 29, 3]],
+    last: [72, 48],
+  };
+  // The processional for a ceremony, in time with it: it starts with the
+  // presentation, its four phrases bring the presenter to the winner, its
+  // last note sounds as the winner's trophy is raised to them, and it has
+  // died away as they take it (the sting and the roar are that moment's).
+  const PROCESSION_TAIL = 0.38;
+  function processional(ceremony) {
+    const B = ceremony.BEATS;
+    const raise = ceremony.HANDOVERS.find((h) => h.place === 1).raise;
+    const bpm = (PROCESSION.beats * 60) / (raise - B.present);
+    const held = ((B.trophy - PROCESSION_TAIL - raise) * bpm) / 60;
+    if (!(held > 0)) throw new Error(`no time for the processional's last note: ${held} beats`);
+    return {
+      title: PROCESSION.title, bpm, beats: PROCESSION.beats + held, tail: PROCESSION_TAIL,
+      melody: [...PROCESSION.melody, [PROCESSION.last[0], PROCESSION.beats, held]],
+      bass: [...PROCESSION.bass, [PROCESSION.last[1], PROCESSION.beats, held]],
+    };
+  }
+
+  // key: an anthem's, "sting", a piece itself (the processional), or anything else for the fanfare.
+  const piece = (key) => (key && typeof key === "object" ? key : key === "sting" ? STING : has(key) ? ANTHEMS[key] : FANFARE);
+  // The hall has died away this long after a piece's last note (s).
+  const TAIL = 1.1;
   // How long a piece sounds: its notes, then the hall dying away.
-  const seconds = (key) => (piece(key).beats * 60) / piece(key).bpm + TAIL;
+  const seconds = (key) => (piece(key).beats * 60) / piece(key).bpm + (piece(key).tail ?? TAIL);
   // How long the ceremony stands for it (ceremony.js: withAnthem).
-  const anthemSeconds = (key) => (piece(key).beats * 60) / piece(key).bpm + 0.6;
+  const anthemSeconds = (key) => seconds(key);
 
   function seeded(seed) {
     let s = (seed >>> 0) || 1;
@@ -126,7 +160,7 @@
 
   // A piece played by a small brass band in a hall: the tune on trumpets, the
   // same an octave down on horns, the bass on a tuba. key: an anthem's
-  // (anthem-data.js), "sting", or anything else for the fanfare.
+  // (anthem-data.js), "sting", a piece itself, or anything else for the fanfare.
   function renderPiece(key, rate = RATE) {
     const work = pieceSteps(key, rate);
     work.steps.forEach((step) => step());
@@ -157,7 +191,12 @@
     parts.forEach(([notes, how]) => {
       for (let i = 0; i < notes.length; i += NOTES_A_STEP) steps.push(() => voice(dry, rate, notes.slice(i, i + NOTES_A_STEP), spb, how));
     });
-    steps.push(() => { out = normalise(hall(dry, rate)); });
+    steps.push(() => {
+      out = normalise(hall(dry, rate));
+      // (The last of the hall, faded to nothing: no piece ends on a click.)
+      const fade = Math.floor(Math.min(0.25, p.tail ?? TAIL) * rate);
+      for (let i = 0; i < fade; i += 1) out[out.length - 1 - i] *= i / fade;
+    });
     return { steps, result: () => out, octaves: { melody: shift, bass: lift } };
   }
 
@@ -259,10 +298,31 @@
     return normalise(out, 0.85);
   }
 
+  // A trophy lifted: a soft ring of struck metal, a bell's uneven partials
+  // dying over a second; lower for the bigger trophy.
+  const RING_PITCH = { 3: 1320, 2: 988, 1: 740 };
+  const RING_SECONDS = 1.3;
+  function renderRing(place, rate = RATE) {
+    const rnd = seeded(300 + place);
+    const out = new Float32Array(Math.ceil(RING_SECONDS * rate));
+    const f0 = RING_PITCH[place] || RING_PITCH[1];
+    const partials = [[1, 1, 3.2], [2.76, 0.5, 4.5], [5.4, 0.25, 7], [8.93, 0.12, 10]].filter(([k]) => f0 * k < rate * 0.45);
+    for (let i = 0; i < out.length; i += 1) {
+      const t = i / rate;
+      let v = 0;
+      partials.forEach(([k, amp, decay]) => { v += Math.sin(2 * Math.PI * f0 * k * t) * amp * Math.exp(-t * decay); });
+      // (The touch that sets it off: a few milliseconds of click.)
+      const tick = t < 0.004 ? (rnd() * 2 - 1) * (1 - t / 0.004) * 0.6 : 0;
+      out[i] = (v + tick) * Math.min(1, t * 2000) * Math.min(1, (RING_SECONDS - t) / 0.2);
+    }
+    return normalise(out, 0.8);
+  }
+
   // A confetti cannon: the thump of the charge and the rush of paper.
+  const CANNON_SECONDS = 0.9;
   function renderCannon(seed, rate = RATE) {
     const rnd = seeded(seed);
-    const out = new Float32Array(Math.ceil(0.9 * rate));
+    const out = new Float32Array(Math.ceil(CANNON_SECONDS * rate));
     const rush = band(rnd, 700, 5200, rate);
     let phase = 0;
     for (let i = 0; i < out.length; i += 1) {
@@ -282,57 +342,97 @@
   // (crowd-sound.js: voices, not noise) follows the ceremony's beats (a
   // Ceremony.withAnthem() instance).
   const once = (make) => { let out = null; return { steps: [() => { out = make(); }], result: () => out }; };
+  // How long each sound runs (s), from the ceremony's beats: the same
+  // numbers sounds() renders to and cues() says.
+  function lengths(ceremony, winner) {
+    const B = ceremony.BEATS;
+    return {
+      welcome: B.anthem,
+      anthem: seconds(winner || "fanfare"),
+      procession: seconds(processional(ceremony)),
+      ovation: B.trophy - B.present,
+      ring1: RING_SECONDS, ring2: RING_SECONDS, ring3: RING_SECONDS,
+      sting: seconds("sting"),
+      // (From a moment before the winner takes it, to the champagne.)
+      roar: B.spray - B.trophy + 0.2,
+      cannon1: CANNON_SECONDS, cannon2: CANNON_SECONDS,
+      cheer: 12, murmur: MURMUR_SECONDS,
+      cork1: CORK_SECONDS, cork2: CORK_SECONDS, cork3: CORK_SECONDS,
+      fizz1: 4.2, fizz2: 3.8, fizz3: 4.0,
+    };
+  }
+
   function sounds(ceremony, winner, rate = RATE) {
     const B = ceremony.BEATS;
+    const L = lengths(ceremony, winner);
     const crowd = (length, level, seed, options) => Crowd.crowdSteps(length, level, seed, { rate, ...options });
-    const trophyFor = B.spray - B.trophy + 1.2;
+    const out = (length, t) => Math.min(1, (length - t) / 0.9);
     return {
       anthem: () => pieceSteps(winner || "fanfare", rate),
+      procession: () => pieceSteps(processional(ceremony), rate),
       sting: () => pieceSteps("sting", rate),
-      // The walk on: a murmur swelling, a cheer as each driver steps up.
-      welcome: () => crowd(B.anthem + 0.4, (t) => Math.min(1.1, 0.25 + 0.2 * (t / B.sweepEnd)
-        + [3, 2, 1].reduce((sum, place) => sum + 0.6 * bump(t, B.arms[place] + 0.35, 0.25, 0.9), 0)) * Math.min(1, (B.anthem + 0.4 - t) / 0.9), 11, { voices: 32, whistles: 3, claps: 14 }),
-      // After the anthem: hands, and a few voices.
-      applause: () => crowd(3.6, (t) => Math.min(1, 1.3 * Math.exp(-t / 2.2)) * Math.min(1, (3.6 - t) / 0.9), 23, { voices: 14, claps: 150, whistles: 2, hubbubGain: 0.3 }),
-      // The trophy: the roar going up with it, fast, and dying slowly.
-      roar: () => crowd(trophyFor, (t) => Math.min(1.2, 0.3 + 1.0 * bump(t, 0.6, 0.35, 2.6)) * Math.min(1, (trophyFor - t) / 1.0), 37, { voices: 44, whistles: 5, horns: 2, claps: 10 }),
+      // The walk on: a murmur swelling, a cheer as each driver steps up;
+      // quiet by the anthem's first note.
+      welcome: () => crowd(L.welcome, (t) => Math.min(1.1, 0.25 + 0.2 * (t / B.sweepEnd)
+        + [3, 2, 1].reduce((sum, place) => sum + 0.6 * bump(t, B.arms[place] + 0.35, 0.25, 0.9), 0)) * out(L.welcome, t), 11, { voices: 32, whistles: 3, claps: 14 }),
+      // The presentation: applause as the first trophy is taken up, swelling
+      // at each handover (more for second than third), hushed again between,
+      // rising as the winner's is raised to them and held until they have
+      // it (the roar is that moment's, and takes over).
+      ovation: () => crowd(L.ovation, (t) => Math.min(1.1, 0.3 + 0.3 * bump(t, 0.9, 0.5, 1.2)
+        + ceremony.HANDOVERS.reduce((sum, h) => sum + (h.place === 1 ? 0.75 * Math.exp(-(((h.release - B.present - t) / 1.8) ** 2))
+          : (h.place === 2 ? 0.75 : 0.6) * bump(t, h.release - B.present + 0.3, 0.3, 1.1)), 0)) * Math.min(1, (L.ovation - t) / 0.25), 23,
+      { voices: 32, claps: 40, whistles: 3, hubbubGain: 0.3 }),
+      ring1: () => once(() => renderRing(1, rate)),
+      ring2: () => once(() => renderRing(2, rate)),
+      ring3: () => once(() => renderRing(3, rate)),
+      // The winner's trophy: the roar going up with it, fast, and held
+      // through the lift; over as the champagne begins.
+      roar: () => crowd(L.roar, (t) => Math.min(1.2, 0.3 + 1.0 * bump(t, 0.6, 0.35, 4.5)) * Math.min(1, (L.roar - t) / 0.5), 37, { voices: 44, whistles: 5, horns: 2, claps: 10 }),
       // The champagne: cheering that settles and fades.
-      cheer: () => crowd(12, (t) => (0.35 + 0.75 * bump(t, 1.0, 0.5, 3.5)) * Math.min(1, (12 - t) / 4), 53, { voices: 40, whistles: 5, horns: 1, claps: 12 }),
+      cheer: () => crowd(L.cheer, (t) => (0.35 + 0.75 * bump(t, 1.0, 0.5, 3.5)) * Math.min(1, (L.cheer - t) / 4), 53, { voices: 40, whistles: 5, horns: 1, claps: 12 }),
       // And for as long as the podium stays up: the crowd talking, looped.
-      murmur: () => crowd(MURMUR_SECONDS, () => 0.35, 67, { voices: 24, loop: true }),
+      murmur: () => crowd(L.murmur, () => 0.35, 67, { voices: 24, loop: true }),
       cannon1: () => once(() => renderCannon(71, rate)),
       cannon2: () => once(() => renderCannon(72, rate)),
       cork1: () => once(() => renderCork(101, rate)),
       cork2: () => once(() => renderCork(102, rate)),
       cork3: () => once(() => renderCork(103, rate)),
-      fizz1: () => once(() => renderFizz(4.2, 201, rate)),
-      fizz2: () => once(() => renderFizz(3.8, 202, rate)),
-      fizz3: () => once(() => renderFizz(4.0, 203, rate)),
+      fizz1: () => once(() => renderFizz(L.fizz1, 201, rate)),
+      fizz2: () => once(() => renderFizz(L.fizz2, 202, rate)),
+      fizz3: () => once(() => renderFizz(L.fizz3, 203, rate)),
     };
   }
   const run = (work) => { work.steps.forEach((step) => step()); return work.result(); };
 
-  // When each sound starts (seconds into the ceremony) and how loud, in
-  // order. tier: Low has no spray (quality.js), so no fizz; the corks still
-  // go. spray: false where no spray is drawn at all (reduced motion). A cue
-  // with loop plays round and round from its start, faded in over fadeIn s.
-  function cues(ceremony, { tier = "high", spray = true } = {}) {
+  // When each sound starts (seconds into the ceremony), how long it runs,
+  // how loud, and which scene it belongs to (it ends before the next scene
+  // begins), in order. tier: Low has no spray (quality.js), so no fizz; the
+  // corks still go. spray: false where no spray is drawn at all (reduced
+  // motion). winner: whose anthem (for its length). A cue with loop plays
+  // round and round from its start, faded in over fadeIn s.
+  function cues(ceremony, { tier = "high", spray = true, winner = null } = {}) {
     const B = ceremony.BEATS;
+    const L = lengths(ceremony, winner);
     const list = [
-      { id: "welcome", sound: "welcome", at: 0, gain: 0.5 },
-      { id: "anthem", sound: "anthem", at: B.anthem, gain: 0.9 },
-      { id: "applause", sound: "applause", at: B.anthemEnd - 0.2, gain: 0.55 },
-      { id: "roar", sound: "roar", at: B.trophy - 0.2, gain: 0.38 },
-      { id: "sting", sound: "sting", at: B.trophy + ceremony.PROP_SWAP, gain: 0.5 },
-      { id: "cannon1", sound: "cannon1", at: B.trophy + 0.02, gain: 0.42 },
-      { id: "cannon2", sound: "cannon2", at: B.trophy + 0.2, gain: 0.34 },
-      { id: "cheer", sound: "cheer", at: B.spray, gain: 0.4 },
-      { id: "murmur", sound: "murmur", at: B.spray + 7, gain: 0.14, loop: true, fadeIn: 4 },
+      { id: "welcome", at: 0, gain: 0.5 },
+      { id: "anthem", at: B.anthem, gain: 0.9 },
+      { id: "ovation", at: B.present, gain: 0.42 },
+      { id: "procession", at: B.present, gain: 0.6 },
+      { id: "roar", at: B.trophy - 0.2, gain: 0.38 },
+      { id: "sting", at: B.trophy + ceremony.PROP_SWAP, gain: 0.5 },
+      { id: "cannon1", at: B.trophy + 0.02, gain: 0.42 },
+      { id: "cannon2", at: B.trophy + 0.2, gain: 0.34 },
+      { id: "cheer", at: B.spray, gain: 0.4 },
+      { id: "murmur", at: B.spray + 7, gain: 0.14, loop: true, fadeIn: 4 },
     ];
+    // A ring as each trophy is lifted.
+    ceremony.HANDOVERS.forEach((h) => list.push({ id: `ring${h.place}`, at: h.release + 0.3, gain: 0.3, place: h.place }));
     [1, 2, 3].forEach((place) => {
-      list.push({ id: `cork${place}`, sound: `cork${place}`, at: ceremony.corkAt(place), gain: 0.8, place });
-      if (spray && ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, sound: `fizz${place}`, at: ceremony.corkAt(place) + 0.012, gain: 0.46, place });
+      list.push({ id: `cork${place}`, at: ceremony.corkAt(place), gain: 0.8, place });
+      if (spray && ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, at: ceremony.corkAt(place) + 0.012, gain: 0.46, place });
     });
+    list.forEach((c) => { c.sound = c.id; c.seconds = L[c.id]; c.scene = ceremony.sceneAt(c.at); });
     return list.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
 
@@ -341,7 +441,7 @@
   // without: a cue's id to leave out.
   function mix(ceremony, winner, { tier = "high", spray = true, rate = RATE, until = null, without = null } = {}) {
     const made = sounds(ceremony, winner, rate);
-    const plan = cues(ceremony, { tier, spray }).filter((c) => c.id !== without).map((c) => ({ ...c, samples: run(made[c.sound]()) }));
+    const plan = cues(ceremony, { tier, spray, winner }).filter((c) => c.id !== without).map((c) => ({ ...c, samples: run(made[c.sound]()) }));
     const end = until ?? Math.max(...plan.map((c) => c.at + c.samples.length / rate));
     const out = new Float32Array(Math.ceil(end * rate));
     plan.forEach((c) => {
@@ -414,5 +514,5 @@
     return crests[Math.floor(crests.length / 2)];
   }
 
-  return { popShape, crackle, RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, run, renderCork, renderFizz, renderCannon, sounds, cues, mix };
+  return { popShape, crackle, RATE, ANTHEMS, FANFARE, STING, PROCESSION, processional, TAIL, lengths, renderRing, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, run, renderCork, renderFizz, renderCannon, sounds, cues, mix };
 }));
