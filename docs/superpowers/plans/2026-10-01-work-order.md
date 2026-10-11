@@ -238,11 +238,13 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Spinning cars: solid or not** (branch `balance`; user, 2026-10-12): a Settings switch, off by default. Off: cars pass through a spinning car (the Mario Kart feel, as now). On: a spinning car blocks the road (the F1 feel, as before).
 
 - [x] **Las Vegas: grandstands, crowds and the last empty spots** (branch `landmarks-2025`; user, 2026-10-11) **[REVIEW]**.
-- [ ] **Podium sounds** (branch `stage-k-podium`; user, 2026-10-11): the crowd, corks, spray and a fanfare; the winner's national anthem, instrumental, synthesized from public-domain scores (sources and licences recorded); the ceremony in a real podium's order.
+- [x] **Podium sounds** (branch `stage-k-podium`; user, 2026-10-11): the crowd, corks, spray and a fanfare; the winner's national anthem, instrumental, synthesized from public-domain scores (sources and licences recorded); the ceremony in a real podium's order.
 
 - [x] **The Sphere's Earth** (branch `landmarks-2025`; user, 2026-10-12): a photoreal Earth from NASA's Blue Marble (public domain, credited), turning on its tilted axis as the real one's globe does.
 
 - [ ] **Re-run the headed perf check on a quiet machine** (`node tools/perf/check-headed.js 8770`): `ratioClimbsBack` failed 3 of 3 on 2026-10-12 with the load average near 9 (an agent's browser and the user's Chrome busy); the other ten results passed. If it still fails when quiet, High has lost its headroom since the Las Vegas stands and the Sphere.
+
+- [ ] **Three anthems on the fanfare for now (the user's call):** Italy and Brazil (no free score read reliably yet; both compositions are public domain), Thailand (transcribed and verified in `tools/anthems/transcribed/th.txt`, held back: the composer died in 1968).
 
 ## 9. Stop before Supabase
 
