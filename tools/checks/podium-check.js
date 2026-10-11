@@ -466,7 +466,7 @@ async (page) => {
       const st = Render3D.podium.inspect();
       if (!s) return null;
       const C = Ceremony.withAnthem(s.anthemSeconds);
-      const want = PodiumSound.cues(C, { tier: st.tier });
+      const want = PodiumSound.cues(C, { tier: st.tier, winner: s.anthem });
       const first = s.log.find((l) => l.id === "welcome");
       return {
         ...s, tier: st.tier, t: st.t, pictureStartedAt: st.startedAt, sceneAnthemSeconds: st.anthemSeconds, beats: C.BEATS, corks: [1, 2, 3].map((place) => C.corkAt(place)),
@@ -489,13 +489,13 @@ async (page) => {
       && Math.abs(fr.anthemSeconds - fr.wantSeconds) < 1e-9 && Math.abs(fr.sceneAnthemSeconds - fr.wantSeconds) < 1e-9) || JSON.stringify(fr).slice(0, 300);
     // (Counted at the moment the ceremony started, before anything could be
     // rendered late.)
-    results.soundsRenderedAhead = (fr && fr.readyAtStart === fr.sounds && fr.sounds >= 15 && fr.waiting === 0) || `${fr && fr.readyAtStart} of ${fr && fr.sounds} at the start`;
+    results.soundsRenderedAhead = (fr && fr.readyAtStart === fr.sounds && fr.sounds >= 19 && fr.waiting === 0) || `${fr && fr.readyAtStart} of ${fr && fr.sounds} at the start`;
     results.audioRunning = (fr && fr.audio === "running" && fr.started === true) || `${fr && fr.audio}, started ${fr && fr.started}`;
     // Where each sound was really put on the audio clock (the time handed to
     // its source), from the ceremony's start, and none begun part-way through.
     results.everySoundAtItsBeat = (fr && fr.played.length === fr.wantCues.length && fr.skipped.length === 0
       && same([...fr.played].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])), fr.wantCues)
-      && ["welcome", "anthem", "applause", "roar", "sting", "cannon1", "cannon2", "cork1", "cork2", "cork3", "fizz1", "cheer", "murmur"].every((id) => fr.tier === "low" && id === "fizz1" ? true : fr.played.some((c) => c[0] === id)))
+      && ["welcome", "anthem", "ovation", "procession", "ring3", "ring2", "ring1", "roar", "sting", "cannon1", "cannon2", "cork1", "cork2", "cork3", "fizz1", "cheer", "murmur"].every((id) => fr.tier === "low" && id === "fizz1" ? true : fr.played.some((c) => c[0] === id)))
       || JSON.stringify({ played: fr && fr.played, want: fr && fr.wantCues }).slice(0, 600);
     const cueAt = (id) => fr.wantCues.find((c) => c[0] === id)[1];
     results.cuesOnTheTimeline = (cueAt("anthem") === fr.beats.anthem && [1, 2, 3].every((place) => cueAt(`cork${place}`) === fr.corks[place - 1])

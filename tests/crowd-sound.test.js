@@ -41,9 +41,9 @@ function isACrowd(m, name) {
   assert.ok(m.syllables > 0.085, `${name}: syllable depth ${m.syllables.toFixed(3)}`);
 }
 
-test("the podium's crowd is voices: the roar, the welcome, the cheer and the applause, measured", () => {
+test("the podium's crowd is voices: the roar, the welcome, the cheer and the ovation, measured", () => {
   const made = PodiumSound.sounds(Ceremony.withAnthem(20), "mc", RATE);
-  ["roar", "welcome", "cheer", "applause"].forEach((name) => isACrowd(measure(PodiumSound.run(made[name]())), name));
+  ["roar", "welcome", "cheer", "ovation"].forEach((name) => isACrowd(measure(PodiumSound.run(made[name]())), name));
   // The murmur is the same people talking, lower and darker.
   const murmur = measure(PodiumSound.run(made.murmur()));
   assert.ok(murmur.centroid > 350 && murmur.centroid < 1200 && murmur.above5k < 0.02 && murmur.flatness < 0.5 && murmur.syllables > 0.085, JSON.stringify(murmur));

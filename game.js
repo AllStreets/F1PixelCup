@@ -4238,7 +4238,7 @@ function preparePodiumSound() {
   const plan = {
     winner: summary.podium[0] ? summary.podium[0].driverId : null,
     anthem: anthem.key, anthemSeconds: anthem.seconds, on: anthem.on,
-    cues: anthem.on ? PodiumSound.cues(ceremony, { tier, spray: !calm }) : [],
+    cues: anthem.on ? PodiumSound.cues(ceremony, { tier, spray: !calm, winner: anthem.key }) : [],
     buffers: new Map(), sources: [], started: null, readyAtStart: null, log: [], waiting: [],
   };
   audio.podium = plan;
