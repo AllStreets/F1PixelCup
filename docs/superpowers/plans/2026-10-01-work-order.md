@@ -247,6 +247,9 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **Crowd roar and anthems, round 2** (branch `stage-k-podium`; user, 2026-10-12): the roar sounds like splashing water: make it voices; find Italy's anthem again (and Brazil's); include Thailand's (the user accepts it).
 - [x] ~~Three anthems on the fanfare for now (the user's call):~~ decided above.
 
+- [ ] **Champagne pop and fizz** (branch `stage-k-podium`; user, 2026-10-12): a real bottle pop and effervescent fizz.
+- [ ] **Team crests on the suits** (branch `driver-faces`; user, 2026-10-12) **[REVIEW]**: an original crest per team on the chest (the project's rule forbids real logos; the user was told and may choose otherwise), the team's name, the race number, the national flag, and race-suit detail.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
