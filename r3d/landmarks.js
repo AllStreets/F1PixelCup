@@ -10,6 +10,7 @@ import { color, seeded, hashString, canvasTexture, buildingMaterial, photo, make
 import { ribbon, footprintClear, scatterTrees } from "./track.js";
 import { tracksideModel, LANDMARK_SCALE } from "./models.js";
 import { buildYachts, harbourSide } from "./yachts.js";
+import { buildVegasStrip } from "./vegas.js";
 
 // ---------------------------------------------------------------------------
 // Venue settings
@@ -207,13 +208,18 @@ export const VENUES = {
     landmarks: ["foroSol"],
   },
   lasvegas: {
-    // Saturday night on the Strip: the resorts lit up along the west side,
-    // the city's towers all round.
+    // Saturday night on the Strip: every tall building round the circuit
+    // where it really stands, the Strip's landmarks lit (r3d/vegas.js). The
+    // desert night is clear: the far towers stand out to the horizon.
     ground: "city", night: true, standColor: "#7a3cff", stand: "covered", runoffTint: "#8c8896",
     trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
-    skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] },
-    extras: ["siteLandmarks", "vegasStrip", "skylineArc", "floodlights"],
-    landmarks: ["vegasSphere", "vegasStrip"],
+    city: "vegasStrip",
+    fogNear: 1800, fogFar: 7000,
+    extras: ["floodlights"],
+    landmarks: [],
+    // If the Strip's model can't load: the Sphere by its site and towers on
+    // the horizon, as before it.
+    cityFallback: { extras: ["siteLandmarks", "skylineArc"], landmarks: ["vegasSphere"], skyline: { arc: [0, Math.PI * 2], count: 120, height: [60, 220] } },
   },
   losail: {
     // Under the lights in the desert north of Doha, Lusail's towers to the south.
@@ -916,15 +922,16 @@ function sphereScreen() {
   return m;
 }
 
-// A landmark's own materials, lit for the venue by their role.
-function dressLandmark(model, venue) {
+// A landmark's own materials, lit for the venue by their role. `extra`: a
+// function of a material giving its own for roles of its own (or null).
+export function dressLandmark(model, venue, extra = null) {
   const made = new Map();
   const night = Boolean(venue.night);
   const dressed = (src) => {
     if (made.has(src.name)) return made.get(src.name);
-    let out;
+    let out = extra ? extra(src) : null;
     // At night the glass reads dark and the rooms carry the tower.
-    if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#22303f", slab: "#3a4049", lit: 0.5, floors: 0.45 } : {});
+    if (out) { /* its own */ } else if (src.name === "facade") out = facadeMaterial(night, night ? { glass: "#22303f", slab: "#3a4049", lit: 0.5, floors: 0.45 } : {});
     // Blue glass (Eureka, the Rialto, the Flame Towers) and bronze (the Strip).
     else if (src.name === "facade_blue") out = facadeMaterial(night, night ? { glass: "#16243a", slab: "#3f4b5c", lit: 0.7, floors: 0.4 } : { glass: "#2c4c74", slab: "#b9c3cf" });
     // A hotel's rooms (Yas): narrower bays, fewer lit, whole floors calm
@@ -1239,13 +1246,10 @@ const SITES = {
   bakuOldCity: (c) => ({ anchors: anchorsAround(c, 0.33, 80, insideFirst(c)), parts: ["walls", "maiden_tower"], gaps: [6, 10, 16, 24, 36, 55, 80], step: 12, gapFirst: true, faceTrack: true }),
   cotaTower: (c) => ({ anchors: anchorsAround(c, 0.8, 60, insideFirst(c)), gaps: [30, 60, 100, 160, 240], step: 16 }),
   foroSol: (c) => ({ anchors: anchorsAround(c, 0.88, 30, outsideFirst), gaps: [6, 12, 20, 32, 50, 80, 120], step: 14, gapFirst: true, faceTrack: true }),
-  // Close by the track, its ground in front kept clear (the Strip's blocks
-  // fill in round it, not in front of it).
-  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
-  // The Strip's towers with their ground in front kept clear, so the city's
-  // blocks fill in round them, not across the view of them from the track.
-  vegasStrip: (c) => ({ anchors: anchorsFacing(c, Math.PI), gaps: [120, 200, 300, 450], step: 30, forecourt: true }),
   losailGrandstand: (c) => ({ anchors: oppositePits(c), gaps: [8, 16, 28, 45, 70], step: 18, gapFirst: true, faceTrack: true }),
+  // (Las Vegas's Sphere where the Strip's model is missing: r3d/vegas.js
+  // places it where it stands otherwise.)
+  vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
 };
 
@@ -1718,16 +1722,6 @@ const EXTRAS = {
     });
   },
 
-  // The Strip: tall resorts, lit, close along the circuit.
-  vegasStrip(course, group, venue, rand) {
-    streetBlocks(course, group, rand, {
-      // One row: the Strip's own towers (the landmarks) stand behind them.
-      rows: 1, height: [50, 160], depth: [40, 80], width: [40, 80], maxCount: 240, spacing: 12, setback: 14,
-      palette: ["#d8c79a", "#c9a46a", "#e6dccb", "#9fb3c8", "#c48a9a", "#b9a2d6", "#f0e0b0"],
-      night: true, glass: "#2a2440", lit: 0.7,
-    });
-  },
-
   // A lake filling the circuit's infield (Albert Park): overlapping discs,
   // the largest that fit first, each clear of the barriers, so the water
   // takes the infield's shape.
@@ -1785,10 +1779,22 @@ const EXTRAS = {
 
 // ---------------------------------------------------------------------------
 
-export function buildLandmarks(course, venue) {
+// A venue's city, built before anything else claims its ground (the track
+// data's grandstands fill in round it): Las Vegas's Strip. Or null.
+export function buildCity(course, venue) {
+  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark });
+  return null;
+}
+
+export function buildLandmarks(course, venue0, city = null) {
   const group = new THREE.Group();
+  if (city) group.add(city);
+  // A city that couldn't be built: its venue's fallback instead.
+  const venue = venue0.city && !city && venue0.cityFallback
+    ? { ...venue0, ...venue0.cityFallback, extras: [...venue0.cityFallback.extras, ...venue0.extras] }
+    : venue0;
   const rand = seeded(hashString(course.track.id) ^ 0x5bd1e995);
-  const animated = [];
+  const animated = city && city.userData.animate ? [city] : [];
   garages(course, group, venue);
   cornerBoards(course, group, venue);
   (venue.extras || []).forEach((name) => {

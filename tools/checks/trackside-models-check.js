@@ -19,6 +19,10 @@ async (page) => {
   } catch (e) { /* not fatal */ }
   const context = await page.context().browser().newContext({ viewport: null });
   const p = await context.newPage();
+  // Only some circuits, for a quick run: globalThis.CIRCUITS = "lasvegas,monaco,monza"
+  // (or the CIRCUITS environment variable of a headless run). Default: all.
+  const only = String(globalThis.CIRCUITS || (typeof process !== "undefined" && process.env && process.env.CIRCUITS) || "").split(",").map((x) => x.trim()).filter(Boolean);
+  await p.addInitScript((ids) => { window.CHECK_ONLY = ids; }, only);
   p.on("pageerror", (e) => errors.push(String(e)));
   p.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   const cdp = await context.newCDPSession(p);
@@ -27,6 +31,10 @@ async (page) => {
   await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width: 1440, height: 900 } });
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && Render3D.ready, null, { timeout: 60000 });
+  // (A mistyped id would leave nothing to check, and everything passing.)
+  const unknown = await p.evaluate(() => CHECK_ONLY.filter((id) => !CIRCUITS.some((c) => c.id === id)));
+  if (unknown.length) errors.push(`CIRCUITS names no such circuit: ${unknown.join(", ")}`);
+  results.circuitsChecked = only.length ? only.length > unknown.length : true;
   const step = async (fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { return `error: ${String(e).split("\n")[0].slice(0, 160)}`; } };
   // Only the raced venue's models are held: built for Albert Park, then for
   // Shanghai, Melbourne's towers are let go and Shanghai's grandstand is in
@@ -59,7 +67,7 @@ async (page) => {
   };
   results.everyLandmarkFromItsModel = await step((WANT) => {
     const bad = [];
-    CIRCUITS.forEach((c) => {
+    CIRCUITS.filter((x) => !CHECK_ONLY.length || CHECK_ONLY.includes(x.id)).forEach((c) => {
       const track = TRACKS.find((t) => t.id === c.id);
       Render3D.auditScenery(track, { step: 50, lanes: 1 });
       const built = Render3D.inspect().trackside.landmarks.filter((l) => l.fromModel).map((l) => l.name);
@@ -111,7 +119,7 @@ async (page) => {
   // Nothing over the track and nobody on the road, every circuit.
   results.nothingOnTheTrack = await step(() => {
     const bad = [];
-    CIRCUITS.forEach((c) => {
+    CIRCUITS.filter((x) => !CHECK_ONLY.length || CHECK_ONLY.includes(x.id)).forEach((c) => {
       const track = TRACKS.find((t) => t.id === c.id);
       const hits = Render3D.auditScenery(track);
       const people = Render3D.auditPeople(track);
@@ -163,7 +171,7 @@ async (page) => {
     requestAnimationFrame(tick);
   }));
   const frames = {};
-  for (const c of await step(() => CIRCUITS.map((x) => x.id))) {
+  for (const c of await step(() => CIRCUITS.filter((x) => !CHECK_ONLY.length || CHECK_ONLY.includes(x.id)).map((x) => x.id))) {
     await race(c);
     await step(() => {
       const t = Render3D.inspect().trackside;

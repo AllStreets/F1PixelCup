@@ -35,7 +35,10 @@ https://www.openstreetmap.org/copyright
 Used in tools/tracks/osm-features.json (fetched by tools/tracks/fetch_osm.py)
 and, through it, tracks-data.js: the positions of the real pit lanes, the
 Monaco and Silverstone start lines, the Monaco tunnel and the signature
-corners (their name boards).
+corners (their name boards). And in tools/vegas/strip.json (fetched by
+tools/vegas/build_strip_data.py) and, through it, the produced work
+assets/landmarks/vegas_strip.glb: the Las Vegas Strip's buildings (their
+footprints, heights, colours and roofs) and its landmarks' places.
 
 Contains information from OpenStreetMap, © OpenStreetMap contributors, which
 is made available under the Open Database License (ODbL) 1.0:
