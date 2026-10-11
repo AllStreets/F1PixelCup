@@ -221,8 +221,11 @@ body.landing { overflow-x: hidden; }
 }
 
 /* ---- Race day: replays, the podium, two players ---- */
-.hero-features { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 0; }
-.hero-features .chip { text-decoration: none; }
+/* One row, always: wider than the copy's column where the window has room,
+   and a row that scrolls sideways (no bar) where it has not, as on a phone. */
+.hero-features { display: flex; flex-wrap: nowrap; gap: 8px; margin: 22px 0 0; width: max-content; max-width: calc(100vw - 2 * clamp(16px, 5vw, 64px)); overflow-x: auto; scrollbar-width: none; }
+.hero-features::-webkit-scrollbar { display: none; }
+.hero-features .chip { text-decoration: none; flex: none; white-space: nowrap; }
 .hero-features .chip:hover, .hero-features .chip:focus-visible { background: rgba(225, 6, 0, 0.3); }
 
 .race-day .section-lead { max-width: 44em; }
