@@ -18,8 +18,8 @@
 // ["items"]; the default takes circuits, teams, items, helmets, trackside,
 // trackside2025 (the 2025 venues' landmarks) and historic (the historic
 // circuits' landmarks). "vegas" takes the Las Vegas Strip at night, "ontrack"
-// the Safety Car at its gate and leading, and "wall" a barrier hit (all 1600 px wide: sips -Z 1600
-// -s formatOptions 78, and -Z 1920 for vegas-strip). The race-day parts are
+// the Safety Car at its gate and leading, and "wall" a barrier hit (sips -Z 1000
+// -s formatOptions 76; vegas-strip stays 1600 wide with a -Z 800 copy for its srcset). The race-day parts are
 // "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
 // the pit lane's race choices and the circuit picker; "readme" takes the
 // README's pictures (docs/readme/).
@@ -527,12 +527,14 @@ async (page) => {
     const pair = (a, b) => [[lead, ...a], [second, ...b]];
     const VEGAS = [
       // Down the Strip: the Eiffel Tower on the left, the Bellagio's fountains on the right.
-      { name: "vegas-strip", d: 5590, cars: [[lead, 30, 0], [second, 4, 10], ["norris", 120, -6]], from: [-44, -10, 12], at: [250, 4, 26], fov: 54 },
+      { name: "vegas-strip", d: 5590, cars: [[lead, 30, 0], [second, 4, 10]], from: [-44, -10, 12], at: [250, 4, 26], fov: 54 },
       { name: "vegas-bellagio", lm: "bellagio_lake", shift: 40, cars: pair([0, 2], [-22, -6]), from: [-50, -17, 42], ah: 44, fov: 68 },
       { name: "vegas-eiffel", lm: "eiffel", cars: pair([-90, -6], [-112, 4]), from: [-170, 15, 42], ah: 100, fov: 66 },
       { name: "vegas-wynn", lm: "resort_wynn", cars: pair([-120, 6], [-144, -4]), from: [-230, -15, 46], ah: 150, fov: 52 },
       { name: "vegas-sphere", lm: "vegasSphere", cars: pair([-70, -6], [-94, 4]), from: [-180, 15, 44], ah: 70, fov: 55 },
       { name: "vegas-caesars", lm: "caesars_fountains", cars: pair([-40, 6], [-64, -4]), from: [-120, -15, 44], ah: 50, fov: 60 },
+      // The moon and stars over the Strip (the site's night-sky card).
+      { name: "ontrack-night-sky", lm: "resort_wynn", cars: pair([-120, 6], [-144, -4]), from: [-150, -15, 30], ah: 300, fov: 44 },
       { name: "vegas-venetian", lm: "campanile", cars: pair([-70, -6], [-94, 4]), from: [-170, 15, 44], ah: 70, fov: 60 },
     ];
     await raceAt("lasvegas", lead);
@@ -591,12 +593,13 @@ async (page) => {
         if (!sc) return;
         const w = (d, lat) => route.toWorld(((d % L) + L) % L, lat);
         const road = sc.phase === "road";
-        const from = w(sc.d + 70, road ? -26 : sc.lat - Math.sign(sc.lat || 1) * 26);
+        const from = w(sc.d + 70, road ? -26 : sc.lat - Math.sign(sc.lat || 1) * 34);
         const at = w(sc.d - (road ? 50 : 0), sc.lat);
         Render3D.setPhotoCamera({ from: { x: from.x, y: from.y, d: sc.d, h: 11 }, at: { x: at.x, y: at.y, d: sc.d, h: 4 }, fov: road ? 46 : 42 });
+        if (!road) Render3D.setPhotoCamera({ from: { x: from.x, y: from.y, d: sc.d, h: 17 }, at: { x: at.x, y: at.y, d: sc.d, h: 4 }, fov: 40 });
       }, 30);
     });
-    const scPhase = (test) => p.waitForFunction(test, null, { timeout: 60000 });
+    const scPhase = (test, timeout = 60000) => p.waitForFunction(test, null, { timeout });
     await scPhase(() => state.safetyCar && state.safetyCar.phase === "join");
     await p.waitForTimeout(500);
     await shot("ontrack-sc-gate");
@@ -607,7 +610,7 @@ async (page) => {
       const sc = state.safetyCar;
       const L = state.track.totalLength;
       return sc && sc.leading && state.racers.filter((r) => { const gap = (((sc.d - r.trackDistance) % L) + L) % L; return gap > 20 && gap < 220; }).length >= 3;
-    });
+    }, 5000).catch(() => {}); // (a field too spread out to close up in its seven seconds: shot as it stands)
     await shot("ontrack-sc-leading");
     written.push("ontrack-sc-leading");
     await p.evaluate(() => { clearInterval(window.captureCam); Render3D.setPhotoCamera(null); });
@@ -621,7 +624,7 @@ async (page) => {
     await hideOverlays();
     await p.evaluate(() => { const pl = getPlayer(); pl.isPlayer = true; pl.wallHits = 0; input.throttle = true; });
     await p.waitForFunction(() => getPlayer().wallHits > 0, null, { timeout: 60000, polling: "raf" });
-    await p.waitForTimeout(90);
+    await p.waitForTimeout(30);
     await p.evaluate(() => {
       state.paused = true;
       state.pausedAt = performance.now();
@@ -631,7 +634,7 @@ async (page) => {
       // From the road's side of the car (the wall is on the other).
       const road = state.track.points.reduce((a, b) => (Math.hypot(b.x - pl.x, b.y - pl.y) < Math.hypot(a.x - pl.x, a.y - pl.y) ? b : a));
       const side = Math.sign(-(road.x - pl.x) * Math.sin(h) + (road.y - pl.y) * Math.cos(h)) || 1;
-      Render3D.setPhotoCamera({ from: spot(-34, side * 26, 12), at: spot(4, 0, 4), fov: 46 });
+      Render3D.setPhotoCamera({ from: spot(-26, side * 20, 10), at: spot(0, 0, 4), fov: 46 });
     });
     await p.waitForTimeout(500);
     await shot("ontrack-wall");

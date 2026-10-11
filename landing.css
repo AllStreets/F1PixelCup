@@ -301,7 +301,7 @@ body.landing { overflow-x: hidden; }
 /* ---- The Las Vegas Strip at night: a banner as wide as the page, six sights under it ---- */
 .vegas { margin-top: clamp(40px, 6vw, 72px); }
 .vegas-banner { position: relative; margin: 0; background: #05050a; }
-.vegas-banner img { display: block; width: 100%; height: clamp(360px, 56vw, 760px); object-fit: cover; object-position: 50% 45%; }
+.vegas-banner img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 900px; object-fit: cover; object-position: 50% 30%; }
 .vegas-banner::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, var(--bg) 0%, rgba(7, 7, 12, 0.72) 22%, rgba(7, 7, 12, 0) 55%); }
 .vegas-copy { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; padding: 0 clamp(16px, 5vw, 64px) clamp(16px, 3vw, 36px); max-width: 1400px; margin: 0 auto; }
 .vegas-copy .kicker { color: #ff5ad0; }
@@ -313,7 +313,9 @@ body.landing { overflow-x: hidden; }
 @media (max-width: 900px) { .vegas-sights { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) {
   .vegas-sights { grid-template-columns: minmax(0, 1fr); }
-  .vegas-banner::after { background: linear-gradient(0deg, var(--bg) 0%, rgba(7, 7, 12, 0.8) 40%, rgba(7, 7, 12, 0) 80%); }
+  /* Phones: the whole picture, the words under it. */
+  .vegas-banner::after { display: none; }
+  .vegas-copy { position: static; padding-top: 14px; }
 }
 
 /* ---- New on track: four pictures and two cards of words ---- */

@@ -73,12 +73,12 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td><em><b>The Bellagio's fountains.</b> Rows of jets rise and fall across the lake, all of them together every half minute.</em></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/readme/safety-car.jpg" alt="The Safety Car with its roof lights on, leading a queue of cars at Spa" width="100%"/></td>
+<td width="50%"><img src="docs/readme/safety-car.jpg" alt="The Safety Car with its roof lights on, leading the cars behind it at Spa" width="100%"/></td>
 <td width="50%"><img src="docs/readme/wall.jpg" alt="Leclerc's Ferrari hitting the barrier at Suzuka in a burst of sparks and dust" width="100%"/></td>
 </tr>
 <tr>
 <td><em><b>The Safety Car.</b> It drives in through a service gate, catches up to the front and leads the field, here at Spa, then drives back to its garage.</em></td>
-<td><em><b>Barriers that bite.</b> Leclerc ran wide at Suzuka: sparks, dust and a lost place or two.</em></td>
+<td><em><b>Barriers that bite.</b> Leclerc ran wide at Suzuka: a flash of sparks on the wall, and the cars behind slip by.</em></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/readme/cars.jpg" alt="Norris's McLaren leads Piastri's, Verstappen's Red Bull and the Mercedes at Suzuka" width="100%"/></td>
@@ -146,7 +146,7 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td width="33%" valign="top">🍌 <b>8 power-ups</b><br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, 0.25x to 4x, with broadcast graphics and the race's sound.</sub></td>
+<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, with broadcast graphics and sound, from 0.25x to 4x.</sub></td>
 <td width="33%" valign="top">🥂 <b>A 3D podium</b><br/><sub>The top three with their own faces: arms up, the trophy, the champagne.</sub></td>
 <td width="33%" valign="top">🎮 <b>Two players</b><br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
 </tr>
@@ -299,7 +299,7 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 
 ## Race day
 
-**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x. Replays have sound, heard from the camera: the engine close and level onboard, the cars coming and going past a trackside camera with the Doppler shift. Pick a car and every camera stays on it; **Auto** (or `A`) hands the choice of cars back to the director.
+**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x. Replays have sound at 0.5x, 1x and 2x (the venue only at 0.25x and 4x), heard from the camera: the engine close and level onboard, the cars coming and going past a trackside camera with the Doppler shift. Pick a car and every camera stays on it; **Auto** (or `A`) hands the choice of cars back to the director.
 
 **The podium.** After a cup, the season or a single race, the top three stand on their steps in 3D. The camera sweeps in, the arms go up (third, then second, then first, each stepping forward), the camera pushes in on the winner lifting the trophy, then the champagne (on Medium and High graphics) and the confetti, and a slow orbit for as long as you want to watch. The name plates carry the points and the banners the team colours.
 
@@ -417,7 +417,7 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 
 **Live:** https://f1-pixel-cup.vercel.app. The Vercel project follows this repo: every push to `main` deploys, other branches get preview URLs, and `.vercelignore` keeps `docs/`, `tests/` and `tools/` out of the upload.
 
-**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). `vegas.jpg`, `bellagio.jpg`, `safety-car.jpg` and `wall.jpg` are copies of the site's own pictures (the script's `vegas`, `ontrack` and `wall` parts). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
+**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). `vegas.jpg` (1200 wide), `bellagio.jpg`, `safety-car.jpg` and `wall.jpg` (800) are copies of the site's own pictures (the script's `vegas`, `ontrack` and `wall` parts). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
 
 </details>
 
@@ -436,7 +436,7 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | **Sep 29 to 30** · *a world* | A career per driver, the power-ups' beauty pass, painted helmets, the 2025 grid's pages on the site, broadcast post-processing, pit lanes from OpenStreetMap, marshals and the helicopter, rain with real wet grip, car v2 and the Blender driver figure. |
 | **Oct 1 to 2** · *race day* | TV-camera replays, the 3D podium ceremony and two-player split screen. |
 | **Oct 4 to 5** · *the whole calendar* | The drivers' own faces; landmarks, yachts, stands and 3D crowds at every venue; all 24 circuits of 2025 in six cups and the Season; random, custom and single races; the Legends and Golden Era cups. Then this README. |
-| **Oct 5 to 10** · *sound and fury* | Sound in the replays and an engine that starts up, shimmers flat out and crackles on the lift; the Safety Car's service gates; steering that matters, barrier hits and comebacks from the back; landmarks at the historic circuits; a moon over the night races; and the whole Las Vegas Strip, building by building. |
+| **Oct 6 to 10** · *sound and fury* | Sound in the replays and an engine that starts up, shimmers flat out and crackles on the lift; the Safety Car's service gates; steering that matters, barrier hits and comebacks from the back; landmarks at the historic circuits; a moon over the night races; and the whole Las Vegas Strip, building by building. |
 
 ### What's next
 
