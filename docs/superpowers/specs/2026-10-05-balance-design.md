@@ -124,6 +124,14 @@ The user: driving straight through a spinning car is sometimes too easy, and has
 - **The setting:** Settings, "Spinning cars block the road", Off by default. Its note says which way it is: Off, "The Mario Kart way: you drive straight through a car that is spinning or has hit the wall"; On, "The F1 way: a car that is spinning or has hit the wall is solid. Go round it, or lose your speed against it."
 - **Off** is the behaviour above: a spinning or wall-shaken car takes no part in contacts until it is clear, and CPU cars don't lift behind it.
 - **On:** it is as solid as any car (`powerups.js` `carsCollide`). Running into it costs the usual speed; CPU cars steer round it from further away, as they do with the setting off, and lift when they are about to hit it.
+- **What the F1 way costs** (Pro, the same 48 races each way, the autopilot driving):
+
+  | | from last: mean finish / win / top 5 | from pole: mean finish / win |
+  |---|---|---|
+  | Off (pass through) | 2.8 / 27 % / 94 % | 1.9 / 60 % |
+  | On (solid) | 3.9 / 21 % / 77 % | 2.0 / 52 % |
+
+  A comeback from last ends about a place lower on average with spinning cars solid, and blocked episodes that end without a pass rise from 15 % to 23 %. From pole the difference is within the measurement's noise (about 7 points on a win rate).
 - One setting for everyone on track, players and CPU cars, in one and two players. Kept in the browser (`f1pixelcup.solidSpins`). A race takes it as it stands at the start, and its replay's recording carries it (`header.solidSpins`). Careers and scores don't depend on it.
 
 ## Result
