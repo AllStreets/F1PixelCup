@@ -193,7 +193,7 @@
       settleFinishers();
       const finished = state.racers.filter((r) => r.finished);
       return {
-        diff, trackId, seed, start, startPlace,
+        diff, trackId, seed, start, startPlace, solidSpins,
         finish: player.finishPosition || placeOf(player),
         simSeconds: Math.round(time),
         laps: state.track.laps,

@@ -167,9 +167,21 @@ async (page) => {
   await p.addScriptTag({ url: `http://localhost:8765/tools/balance/comeback.js?${Date.now()}` });
   // Off again, a new race passes through a spinning car and records that.
   await setup("monza");
-  results.passThroughRecorded = await run(() => {
-    updateRace(1 / 60, raceNow() + 1000 / 60);
-    return state.raceSolidSpins === false && state.recording.header.solidSpins === false;
+  results.passThroughAgainAndRecorded = await run(() => {
+    const route = getItemRoute(state.track);
+    const [a, b] = state.racers;
+    state.racers.forEach((r) => { if (r !== a && r !== b) r.finished = true; });
+    const d = state.track.totalLength - 500;
+    const now = raceNow();
+    [[a, 0, 220], [b, 14, 60]].forEach(([r, gap, speed]) => {
+      const w = route.toWorld(d + gap, 2);
+      Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d + gap, lat: 2, speed, segmentHint: null, spinUntil: 0 });
+    });
+    b.spinUntil = now + 1000;
+    handleRacerContacts(now);
+    const through = a.speed === 220 && b.speed === 60;
+    updateRace(1 / 60, now + 1000 / 60);
+    return (through && state.raceSolidSpins === false && state.recording.header.solidSpins === false) || JSON.stringify({ a: a.speed, b: b.speed });
   });
 
   // The wall. Suzuka's first corners, flat out from the line with nobody

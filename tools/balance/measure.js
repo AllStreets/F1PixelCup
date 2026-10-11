@@ -29,7 +29,7 @@ module.exports = async (page, port) => {
       for (let seed = from; seed <= to; seed += 1) {
         const result = await page.evaluate((opts) => Comeback.race(opts), { diff, trackId, seed, start, solidSpins: process.env.SOLID === "1" });
         out.push(result);
-        process.stderr.write(`${diff} ${trackId} ${seed} ${start}: P${result.finish}\n`);
+        process.stderr.write(`${diff} ${trackId} ${seed} ${start}${result.solidSpins ? " solid" : ""}: P${result.finish}\n`);
       }
     }
   }

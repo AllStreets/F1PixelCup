@@ -1197,8 +1197,8 @@
     $("spins-toggle").textContent = solid ? "On" : "Off";
     $("spins-toggle").classList.toggle("is-on", solid);
     $("spins-note").textContent = solid
-      ? "The F1 way: a car that is spinning or has hit the wall is solid. Go round it, or lose your speed against it. From the next race."
-      : "The Mario Kart way: you drive straight through a car that is spinning or has hit the wall. From the next race.";
+      ? "The F1 way: a car that is spinning or has hit the wall is solid. Go round it, or lose your speed against it. From the next session."
+      : "The Mario Kart way: you drive straight through a car that is spinning or has hit the wall. From the next session.";
     // Graphics: the player's choice, and with Auto, what it picked.
     const r3d = window.Render3D;
     const g = r3d && r3d.graphics ? r3d.graphics() : null;

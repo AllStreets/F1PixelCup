@@ -761,8 +761,8 @@ function applyTrafficAvoidance(racer, throttle, brake, steerInput, now) {
     const forward = dx * cos + dy * sin;
     const side = -dx * sin + dy * cos;
     // A car spinning or shaken off a wall is seen from further away and given
-    // a wider berth: the field goes round it where it can (and through it
-    // where it can't; handleRacerContacts).
+    // a wider berth: the field goes round it where it can (and, unless spinning
+    // cars are solid, through it where it can't; handleRacerContacts).
     const stricken = isRecovering(other, now);
     const reach = stricken ? 200 : 90;
     if (forward < -16 || forward > reach || Math.abs(side) > 42) return;
@@ -3207,8 +3207,9 @@ function updateRacer(racer, dt, now) {
     racer.formationUntil = now + PHYSICS_STEP_MS * 2.5;
   }
 
-  // Out of a spin (or off a wall) the car rejoins the fight only once it is
-  // clear of the cars it was let through, so it never lands on top of one;
+  // Out of a spin (or off a wall), where the field passes through it (the
+  // setting), the car rejoins the fight only once it is clear of the cars it
+  // was let through, so it never lands on top of one;
   // after RECOVER_GRACE_MS it rejoins wherever it is.
   const recoveringTo = Math.max(racer.spinUntil || 0, racer.recoverUntil || 0);
   if (!state.raceSolidSpins && recoveringTo > now && recoveringTo <= now + PHYSICS_STEP_MS * 1.5 && now < (racer.recoverCapAt || 0)
@@ -3452,8 +3453,8 @@ function powerUpFrame(now) {
 //   back and can go no faster than a little under that car's speed.
 // A car in Overtake Mode loses nothing and isn't moved; the car it touches
 // spins and is knocked aside; so does a car on a Formation Lap (the Bullet
-// Bill). A car spinning, or shaken off a wall, takes no part: the field slips
-// by it.
+// Bill). A car spinning, or shaken off a wall, takes no part (the field slips
+// by it) unless the setting makes spinning cars solid.
 const SIDE_SCRUB = 0.99;
 const REAR_LOSS = 0.9;
 const KNOCK_ASIDE = 14;
@@ -3464,7 +3465,8 @@ function handleRacerContacts(now) {
       const b = state.racers[j];
       if (a.finished || b.finished) continue;
       // A car spinning, or shaken off a wall, is out of the fight for a
-      // moment: the cars round it slip by.
+      // moment: the cars round it slip by, unless spinning cars are solid
+      // (the setting; powerups.js carsCollide).
       if (!PowerUps.carsCollide(isRecovering(a, now), isRecovering(b, now), state.raceSolidSpins)) continue;
       if (!onSameStretch(a, b)) continue;
       const dx = b.x - a.x;

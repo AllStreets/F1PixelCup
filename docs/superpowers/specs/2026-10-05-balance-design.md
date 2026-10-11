@@ -117,7 +117,7 @@ After the second round, starting on pole won only 25 % of races on Pro and 4 % o
 - **A broken box is back in 2 s,** not 1 (it was 3 before this work): a little less of everything, for everyone.
 - **The measuring autopilot** holds an Oil Slick behind it as a shield while it is in the top three, as a sensible leader would.
 
-## Fourth round: spinning cars, solid or not (2026-10-12)
+## Fourth round: spinning cars, solid or not (2026-10-10)
 
 The user: driving straight through a spinning car is sometimes too easy, and has a Mario Kart feel; a spinning car that blocks has more of an F1 feel. "I like both and I want both."
 
