@@ -237,7 +237,7 @@ Stage R comes last because its screenshots should show the finished game. If a R
 
 - [x] **Spinning cars: solid or not** (branch `balance`; user, 2026-10-12): a Settings switch, off by default. Off: cars pass through a spinning car (the Mario Kart feel, as now). On: a spinning car blocks the road (the F1 feel, as before).
 
-- [ ] **Las Vegas: grandstands, crowds and the last empty spots** (branch `landmarks-2025`; user, 2026-10-11) **[REVIEW]**.
+- [x] **Las Vegas: grandstands, crowds and the last empty spots** (branch `landmarks-2025`; user, 2026-10-11) **[REVIEW]**.
 - [ ] **Podium sounds** (branch `stage-k-podium`; user, 2026-10-11): the crowd, corks, spray and a fanfare; the winner's national anthem, instrumental, synthesized from public-domain scores (sources and licences recorded); the ceremony in a real podium's order.
 
 ## 9. Stop before Supabase
