@@ -17,7 +17,9 @@
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside,
 // trackside2025 (the 2025 venues' landmarks) and historic (the historic
-// circuits' landmarks). The race-day parts are
+// circuits' landmarks). "vegas" takes the Las Vegas Strip at night, "ontrack"
+// the Safety Car at its gate and leading, and "wall" a barrier hit (sips -Z 1000
+// -s formatOptions 76; vegas-strip stays 1600 wide with a -Z 800 copy for its srcset). The race-day parts are
 // "replay", "podium" and "split" (assets/shots/race-day/); "choices" takes
 // the pit lane's race choices and the circuit picker; "readme" takes the
 // README's pictures (docs/readme/).
@@ -499,6 +501,147 @@ async (page) => {
     await dayShot("split-pitlane", dir);
   };
   if (parts.includes("split")) await shootSplit(RD, null, true);
+
+  // ---- The Las Vegas Strip at night (the site's #vegas) and the track's
+  // new life (#on-track: the Safety Car's gate, a barrier hit). A real race on
+  // autopilot a few seconds in, paused, the named cars set on the road (lat
+  // from the centreline) and a hand-placed camera; [gap, lat, height] along
+  // the lap from the landmark's nearest point (or from d). 1600x900, HUD
+  // hidden; sips makes the web sizes (see the header).
+  const raceAt = async (circuit, driverId) => {
+    await sizeTo(1600, 900);
+    await freshGame();
+    await p.evaluate(({ driverId, ci, ti }) => {
+      Game.selectDriver(DRIVERS.findIndex((d) => d.id === driverId));
+      Game.selectPlayers(1); Game.selectCup(ci); Game.selectGridMode("back"); Game.selectWeatherMode("dry");
+      Game.startCup();
+      if (ti > 0) { state.raceIndex = ti; startRace(ti); }
+    }, { driverId, ...(await spotOf(circuit)) });
+    await p.waitForFunction(() => state.phase === "race", null, { timeout: 90000 });
+    await p.evaluate(() => document.fullscreenElement && document.exitFullscreen()).catch(() => {});
+    await sizeTo(1600, 900);
+    await p.evaluate(() => { getPlayer().isPlayer = false; });
+  };
+  if (parts.includes("vegas")) {
+    const [lead, second] = SHOTS.raceDay.players;
+    const pair = (a, b) => [[lead, ...a], [second, ...b]];
+    const VEGAS = [
+      // Down the Strip: the Eiffel Tower on the left, the Bellagio's fountains on the right.
+      { name: "vegas-strip", d: 5590, cars: [[lead, 30, 0], [second, 4, 10]], from: [-44, -10, 12], at: [250, 4, 26], fov: 54 },
+      { name: "vegas-bellagio", lm: "bellagio_lake", shift: 40, cars: pair([0, 2], [-22, -6]), from: [-50, -17, 42], ah: 44, fov: 68 },
+      { name: "vegas-eiffel", lm: "eiffel", cars: pair([-90, -6], [-112, 4]), from: [-170, 15, 42], ah: 100, fov: 66 },
+      { name: "vegas-wynn", lm: "resort_wynn", cars: pair([-120, 6], [-144, -4]), from: [-230, -15, 46], ah: 150, fov: 52 },
+      { name: "vegas-sphere", lm: "vegasSphere", cars: pair([-70, -6], [-94, 4]), from: [-180, 15, 44], ah: 70, fov: 55 },
+      { name: "vegas-caesars", lm: "caesars_fountains", cars: pair([-40, 6], [-64, -4]), from: [-120, -15, 44], ah: 50, fov: 60 },
+      // The moon and stars over the Strip (the site's night-sky card).
+      { name: "ontrack-night-sky", lm: "resort_wynn", cars: pair([-120, 6], [-144, -4]), from: [-150, -15, 30], ah: 300, fov: 44 },
+      { name: "vegas-venetian", lm: "campanile", cars: pair([-70, -6], [-94, 4]), from: [-170, 15, 44], ah: 70, fov: 60 },
+    ];
+    await raceAt("lasvegas", lead);
+    await p.waitForTimeout(4000);
+    await hideOverlays();
+    for (const s of VEGAS) {
+      await p.evaluate((s) => {
+        state.paused = true;
+        state.pausedAt = performance.now();
+        const L = state.track.totalLength;
+        const route = getItemRoute(state.track);
+        const lm = s.lm ? Render3D.inspect().trackside.landmarks.find((x) => x.name === s.lm) : null;
+        if (s.lm && !lm) throw new Error(`capture-shots: no landmark ${s.lm}`);
+        let d0 = s.d || 0;
+        if (lm) {
+          for (let d = 0, best = Infinity; d < L; d += 4) {
+            const q = route.toWorld(d, 0);
+            const e = Math.hypot(q.x - lm.x, q.y - lm.z);
+            if (e < best) { best = e; d0 = d; }
+          }
+        }
+        d0 += s.shift || 0;
+        const at = (gap) => (((d0 + gap) % L) + L) % L;
+        const put = (r, gap, lat) => {
+          const q = route.toWorld(at(gap), lat);
+          Object.assign(r, { x: q.x, y: q.y, heading: q.heading, angle: q.heading, trackDistance: at(gap), lat, speed: 0, spinUntil: 0 });
+        };
+        const named = s.cars.map((c) => c[0]);
+        s.cars.forEach(([id, gap, lat]) => put(state.racers.find((r) => r.driver.id === id), gap, lat));
+        // The rest of the field queues well behind, out of the picture.
+        state.racers.filter((r) => !named.includes(r.driver.id)).forEach((r, i) => put(r, -400 - i * 26, i % 2 ? 12 : -12));
+        state.shots = []; state.hazards = []; state.particles = []; state.fxFlashes = [];
+        const spot = ([gap, lat, h]) => { const q = route.toWorld(at(gap), lat); return { x: q.x, y: q.y, d: at(gap), h }; };
+        Render3D.setPhotoCamera({ from: spot(s.from), at: s.at ? spot(s.at) : { x: lm.x, y: lm.z, d: at(0), h: s.ah }, fov: s.fov });
+      }, s);
+      await p.waitForTimeout(900);
+      await shot(s.name);
+      written.push(s.name);
+      await p.evaluate(() => { Render3D.setPhotoCamera(null); state.paused = false; });
+      await p.waitForTimeout(300);
+    }
+  }
+  if (parts.includes("ontrack")) {
+    // The Safety Car, called at Spa nine seconds in by the game's own
+    // deploySafetyCar: waiting at its service gate, then leading the field. A
+    // camera rides ahead of it, looking back.
+    await raceAt("spa", SHOTS.raceDay.replay);
+    await p.waitForTimeout(9000);
+    await hideOverlays();
+    await p.evaluate(() => {
+      deploySafetyCar(getPlayer(), performance.now());
+      const route = getItemRoute(state.track);
+      const L = state.track.totalLength;
+      window.captureCam = setInterval(() => {
+        const sc = state.safetyCar;
+        if (!sc) return;
+        const w = (d, lat) => route.toWorld(((d % L) + L) % L, lat);
+        const road = sc.phase === "road";
+        const from = w(sc.d + 70, road ? -26 : sc.lat - Math.sign(sc.lat || 1) * 34);
+        const at = w(sc.d - (road ? 50 : 0), sc.lat);
+        Render3D.setPhotoCamera({ from: { x: from.x, y: from.y, d: sc.d, h: 11 }, at: { x: at.x, y: at.y, d: sc.d, h: 4 }, fov: road ? 46 : 42 });
+        if (!road) Render3D.setPhotoCamera({ from: { x: from.x, y: from.y, d: sc.d, h: 17 }, at: { x: at.x, y: at.y, d: sc.d, h: 4 }, fov: 40 });
+      }, 30);
+    });
+    const scPhase = (test, timeout = 60000) => p.waitForFunction(test, null, { timeout });
+    await scPhase(() => state.safetyCar && state.safetyCar.phase === "join");
+    await p.waitForTimeout(500);
+    await shot("ontrack-sc-gate");
+    written.push("ontrack-sc-gate");
+    await scPhase(() => state.safetyCar && state.safetyCar.phase === "road" && state.safetyCar.leading);
+    // Once the field has closed up behind it (three cars within 220 of it).
+    await scPhase(() => {
+      const sc = state.safetyCar;
+      const L = state.track.totalLength;
+      return sc && sc.leading && state.racers.filter((r) => { const gap = (((sc.d - r.trackDistance) % L) + L) % L; return gap > 20 && gap < 220; }).length >= 3;
+    }, 5000).catch(() => {}); // (a field too spread out to close up in its seven seconds: shot as it stands)
+    await shot("ontrack-sc-leading");
+    written.push("ontrack-sc-leading");
+    await p.evaluate(() => { clearInterval(window.captureCam); Render3D.setPhotoCamera(null); });
+
+  }
+  if (parts.includes("wall")) {
+    // A barrier hit: at Suzuka the player's car is left unsteered at speed, so
+    // it runs wide off the first corners into the barrier; the race is paused a
+    // moment after the hit, sparks and dust in the air, and a camera set behind it.
+    await raceAt("suzuka", SHOTS.raceDay.replay);
+    await hideOverlays();
+    await p.evaluate(() => { const pl = getPlayer(); pl.isPlayer = true; pl.wallHits = 0; input.throttle = true; });
+    await p.waitForFunction(() => getPlayer().wallHits > 0, null, { timeout: 60000, polling: "raf" });
+    await p.waitForTimeout(30);
+    await p.evaluate(() => {
+      state.paused = true;
+      state.pausedAt = performance.now();
+      const pl = getPlayer();
+      const h = pl.heading ?? pl.angle;
+      const spot = (fwd, side, up) => ({ x: pl.x + Math.cos(h) * fwd - Math.sin(h) * side, y: pl.y + Math.sin(h) * fwd + Math.cos(h) * side, d: pl.trackDistance, h: up });
+      // From the road's side of the car (the wall is on the other).
+      const road = state.track.points.reduce((a, b) => (Math.hypot(b.x - pl.x, b.y - pl.y) < Math.hypot(a.x - pl.x, a.y - pl.y) ? b : a));
+      const side = Math.sign(-(road.x - pl.x) * Math.sin(h) + (road.y - pl.y) * Math.cos(h)) || 1;
+      Render3D.setPhotoCamera({ from: spot(-26, side * 20, 10), at: spot(0, 0, 4), fov: 46 });
+    });
+    await p.waitForTimeout(500);
+    await shot("ontrack-wall");
+    await p.evaluate(() => { Render3D.setPhotoCamera(null); state.paused = false; });
+    written.push("ontrack-wall");
+    await p.evaluate(() => { input.throttle = false; });
+  }
 
   // ---- Choosing races (the site's "Your way" card): the pit lane with a
   // random cup drawn, and the circuit picker with a custom cup being chosen, both
