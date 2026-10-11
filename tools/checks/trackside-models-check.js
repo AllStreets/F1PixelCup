@@ -176,6 +176,16 @@ async (page) => {
     });
   }
 
+  // Las Vegas's race-weekend grandstands (r3d/track.js venueStands): a dozen
+  // or more round the lap, every one with its crowd.
+  if (await step(() => !CHECK_ONLY.length || CHECK_ONLY.includes("lasvegas"))) {
+    results.vegasStands = await step(() => {
+      Render3D.auditScenery(TRACKS.find((t) => t.id === "lasvegas"), { step: 80, lanes: 1 });
+      const t = Render3D.inspect().trackside;
+      return (t.standSpots.length >= 12 && t.people.stands === t.standSpots.length) || JSON.stringify({ spots: t.standSpots.length, crowds: t.people.stands });
+    });
+  }
+
   // Nothing over the track and nobody on the road, every circuit.
   results.nothingOnTheTrack = await step(() => {
     const bad = [];

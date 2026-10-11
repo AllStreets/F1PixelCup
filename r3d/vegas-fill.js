@@ -530,6 +530,91 @@ function emptyGround(course, cx, cz, rand, mapped, free) {
   return out;
 }
 
+// The race weekend's own furniture in the strip of ground just outside the
+// barriers, wherever it is free (`open`), a piece every 50 units or so of
+// the lap on each side, no two kinds in a row by rule: hospitality marquees
+// (white, lit within), paddock-club suites (two glazed storeys facing the
+// track), broadcast compounds (cabins, a mast, a dish), floodlight towers,
+// blank signage frames (lit, no lettering) and short rows of palms. All low:
+// nothing here hides a resort. Returns how many of each.
+function raceWeekend(course, soup, lights, open, rand, palm) {
+  const made = { marquees: 0, suites: 0, compounds: 0, towers: 0, frames: 0, palmRows: 0 };
+  // Each kind's footprint (metres): half its length along the track, half its depth.
+  const SIZE = [[11, 5], [15, 4.5], [9, 4], [1.2, 1.2], [7, 0.7], [9, 2]];
+  const placed = [];
+  const n = course.samples.length;
+  const every = Math.max(1, Math.round((50 / course.track.totalLength) * n));
+  const white = rgba("#ecebe6", WALL.plain);
+  const dark = rgba("#2e3036", WALL.plain);
+  const steel = rgba("#5a5d64", WALL.plain);
+  for (let i = 0; i < n; i += every) {
+    const p = course.samples[i];
+    [-1, 1].forEach((side) => {
+      const kind = Math.floor(rand() * SIZE.length);
+      const [hl, hd] = SIZE[kind];
+      const reach = (side > 0 ? p.outerR : p.outerL) + 2 + MARGIN + 2 + hd * S;
+      const x = (p.x + p.nx * side * reach - O.x) / S;
+      const y = -(p.y + p.ny * side * reach - O.z) / S;
+      // Along the track and out from it, in the map's axes (its north is -z).
+      const d = [-p.ny, -p.nx];
+      const o = [p.nx * side, -p.ny * side];
+      const at = (a, b) => [x + d[0] * a + o[0] * b, y + d[1] * a + o[1] * b];
+      for (const a of [-1, -0.5, 0, 0.5, 1]) for (const b of [-1, 0, 1]) { const q = at(a * hl, b * hd); if (!open(q[0], q[1], MARGIN, 4, 2)) return; }
+      if (placed.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + hl + 4)) return;
+      placed.push({ x, y, r: hl });
+      if (kind === 0) {
+        // A marquee: white walls lit from within, a ridged roof.
+        soup.box(x, y, d, hl, hd, 0, 3.2, white);
+        const t = soup.at(wx(x), wz(y));
+        const P = (a, b, h) => { const q = at(a, b); return [wx(q[0]), h * S, wz(q[1])]; };
+        [-1, 1].forEach((e) => {
+          soup.face(t, [P(-hl, e * hd, 3.2), P(hl, e * hd, 3.2), P(hl, 0, 5.6), P(-hl, 0, 5.6)], [o[0] * e * 0.4, 0.9, -o[1] * e * 0.4], [[0, 20], [0, 20], [0, 20], [0, 20]], white);
+          soup.face(t, [P(e * hl, -hd, 3.2), P(e * hl, hd, 3.2), P(e * hl, 0, 5.6)], [d[0] * e, 0, -d[1] * e], [[0, 20], [0, 20], [0, 20]], white);
+        });
+        made.marquees += 1;
+      } else if (kind === 1) {
+        // A paddock-club suite: two glazed storeys to the track, a lit rail on its roof.
+        soup.box(x, y, d, hl, hd, 0, 7.4, dark, 20);
+        const f = at(0, -hd - 0.05);
+        lights.box(f[0], f[1], d, hl - 0.6, 0.06, 0.6, 3.2, [0.92, 0.78, 0.52, 1], 0);
+        lights.box(f[0], f[1], d, hl - 0.6, 0.06, 4.2, 6.9, [0.95, 0.84, 0.62, 1], 0);
+        lights.box(f[0], f[1], d, hl, 0.05, 8.3, 8.4, [0.7, 0.75, 0.9, 1], 0);
+        made.suites += 1;
+      } else if (kind === 2) {
+        // A broadcast compound: cabins, a mast with its lamp, a dish.
+        [-6, 0, 6].forEach((a) => { const q = at(a, 0.6); soup.box(q[0], q[1], d, 2.7, 1.3, 0, 2.6, rgba("#b9bbc0", WALL.plain), 20); });
+        const m = at(8.4, -2.4);
+        soup.box(m[0], m[1], d, 0.18, 0.18, 0, 13, steel, 20);
+        lights.box(m[0], m[1], d, 0.3, 0.3, 13, 13.5, [1.0, 0.2, 0.15, 1], 0);
+        const dish = at(-8, -2.4);
+        soup.box(dish[0], dish[1], d, 1.1, 1.1, 0, 0.6, steel, 20);
+        soup.box(dish[0], dish[1], [d[0] * 0.8 + o[0] * 0.6, d[1] * 0.8 + o[1] * 0.6], 1.3, 0.15, 0.6, 3.0, rgba("#d4d6da", WALL.plain), 20);
+        const strip = at(0, -0.75);
+        lights.box(strip[0], strip[1], d, 8.5, 0.04, 2.1, 2.3, [0.85, 0.9, 1.0, 1], 0);
+        made.compounds += 1;
+      } else if (kind === 3) {
+        // A floodlight tower by the fence, its lamps toward the track.
+        soup.box(x, y, d, 0.3, 0.3, 0, 17, steel, 20);
+        const h = at(0, -0.5);
+        lights.box(h[0], h[1], d, 2.2, 0.35, 16.2, 17.5, [1.0, 0.97, 0.9, 1], 0);
+        made.towers += 1;
+      } else if (kind === 4) {
+        // A signage frame: a blank board on two posts, lit (no lettering).
+        [-1, 1].forEach((e) => { const q = at(e * (hl - 0.4), 0); soup.box(q[0], q[1], d, 0.2, 0.2, 0, 7, steel, 20); });
+        soup.box(x, y, d, hl, 0.2, 3.6, 6.8, rgba("#dcdad2", WALL.plain), 20);
+        lights.box(x, y, d, hl, 0.22, 3.4, 3.52, [0.9, 0.92, 1.0, 1], 0);
+        made.frames += 1;
+      } else {
+        // A row of palms.
+        let any = false;
+        [-7, 0, 7].forEach((a) => { const q = at(a, 0); if (palm(q[0], q[1], 0.45 + rand() * 0.15)) any = true; });
+        if (any) made.palmRows += 1;
+      }
+    });
+  }
+  return made;
+}
+
 function carGeometry() {
   const body = new THREE.BoxGeometry(4.5 * S, 0.8 * S, 1.8 * S);
   body.translate(0, 0.65 * S, 0);
@@ -612,6 +697,16 @@ export function buildVegasFill(course, venue, { tier = "high", landmarks = null 
   // buildings within `room` metres, not in the lake.
   const open = (x, y, margin, r, room = 1.5) => clearAt(course, x, y, margin, r) && !built(x, y, room) && dry(x, y);
   const concrete = rgba("#8d8d92", WALL.plain);
+  // Palms, each where its own fronds are clear of the barriers (they reach
+  // 14 units at full size) and of every building.
+  const palmSpots = [];
+  const palm = (x, y, scale, reach = NEAR) => {
+    if (!nearTrack(course, x, y, reach) || !open(x, y, 14 * scale + 5, 4, 2)) return false;
+    palmSpots.push({ x, y, yaw: rand() * 6.28, scale });
+    return true;
+  };
+  // The race weekend's own furniture just outside the barriers.
+  const raceWeek = raceWeekend(course, soup, lights, open, rand, palm);
 
   // The monorail: its beam where it is clear of the track and its run-off
   // (it stops short and starts again), piers under the beam only, a station
@@ -769,15 +864,8 @@ export function buildVegasFill(course, venue, { tier = "high", landmarks = null 
   const parked = instanced("fill_cars", carGeometry(), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.35 }), cars);
   group.add(parked);
 
-  // Palms, each where its own fronds are clear of the barriers (they reach
-  // 14 units at full size) and of every building: along the boulevards,
-  // round the pools, on the golf course and in the gardens, in the beds.
-  const palmSpots = [];
-  const palm = (x, y, scale, reach = NEAR) => {
-    if (!nearTrack(course, x, y, reach) || !open(x, y, 14 * scale + 5, 4, 2)) return false;
-    palmSpots.push({ x, y, yaw: rand() * 6.28, scale });
-    return true;
-  };
+  // More palms: along the boulevards, round the pools, on the golf course
+  // and in the gardens, in the beds.
   let count = 0;
   data.roads.forEach((r, k) => {
     if (r.c !== "p") return;
@@ -877,6 +965,6 @@ export function buildVegasFill(course, venue, { tier = "high", landmarks = null 
   group.userData.animate = (dt) => { clock.value += dt; };
   // (The game's own plain ground is not drawn under this one.)
   group.userData.replacesGround = true;
-  group.userData.landmark = { name: "vegasFill", fromModel: true, x: Math.round(cx), z: Math.round(cz), buildings: kept.length, leftOut: data.low.length - kept.length, cars: cars.length, carParks, lamps: posts.length, palms: palmSpots.length, greenTrees, beds: beds.length, spans, piers, bridges, shelters, boards, canopy, farLights: sparks.length / 3 };
+  group.userData.landmark = { name: "vegasFill", fromModel: true, x: Math.round(cx), z: Math.round(cz), buildings: kept.length, leftOut: data.low.length - kept.length, cars: cars.length, carParks, lamps: posts.length, palms: palmSpots.length, greenTrees, beds: beds.length, raceWeek, spans, piers, bridges, shelters, boards, canopy, farLights: sparks.length / 3 };
   return group;
 }

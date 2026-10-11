@@ -18,6 +18,7 @@ import {
 import { wettable, WET_ROAD, WET_RUNOFF, WET_GRAVEL, WET_PAINT } from "./rain.js";
 import { tracksideModel, STAND_MODELS } from "./models.js";
 import { inEntranceGap } from "./entrances.js";
+import { standSite, rectPoints } from "./vegas-place.js";
 
 // (A UMD module: imported for its side effect, it defines self.Runoff.)
 import "../runoff.js";
@@ -798,9 +799,51 @@ export function buildDecor(course, venue) {
     obj.userData.kind = obj.name === "farmhouse" ? "farmhouse" : d.type;
     group.add(obj);
   });
+  // A venue's own stands, where the track data has too few (Las Vegas's
+  // race-weekend grandstands along the Strip's streets).
+  if (venue.stands) group.userData.venueStands = venueStands(course, venue, bg, group);
   group.userData.dropped = dropped;
   group.userData.moved = moved;
   return group;
+}
+
+// A venue's own grandstands (venue.stands): tried every `step` round the lap
+// on both sides (every other place first, so they spread), each with its
+// front as near the barrier as it fits (`gaps`), wherever its whole
+// footprint is clear of the circuit and of everything already placed (the
+// city, the Safety Car's entrances, the pits, the track data's stands); at
+// most `max`. Built as the track data's stands are, with their crowds.
+function venueStands(course, venue, bg, group) {
+  const { step = 180, max = 24, gaps = [6, 14, 24, 36] } = venue.stands;
+  const [hl, hd] = FOOTPRINT.grandstand;
+  const total = course.track.totalLength;
+  const places = [];
+  for (let d = step / 2; d < total; d += step) places.push(d);
+  const order = [...places.filter((_, k) => k % 2 === 0), ...places.filter((_, k) => k % 2 === 1)];
+  let built = 0;
+  order.forEach((d) => {
+    [-1, 1].forEach((side) => {
+      if (built >= max) return;
+      const p = course.sampleAt(d);
+      for (const gap of gaps) {
+        const site = standSite(p, side, gap, hd);
+        if (!footprintClear(course, site.x, site.y, site.angle, hl, hd, 6)) continue;
+        const ground = rectPoints(site.x, site.y, site.angle, hl + 4, hd + 4, 16);
+        if (ground.some(([x, z]) => course.occupied.blocked(x, z, 9))) continue;
+        ground.forEach(([x, z]) => course.occupied.add(x, z, 12));
+        const obj = buildDecorPiece({ type: "grandstand", ...site, d }, bg, venue, 100 + built);
+        obj.position.set(site.x, 0, site.y);
+        obj.rotation.y = -site.face - Math.PI / 2;
+        obj.userData.d = d;
+        obj.userData.kind = "grandstand";
+        obj.userData.venueStand = true;
+        group.add(obj);
+        built += 1;
+        break;
+      }
+    });
+  });
+  return built;
 }
 
 // A piece moved along the lap from where the track data put it (siting.js
