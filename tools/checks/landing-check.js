@@ -6,7 +6,7 @@
 // driverCards 20, teamCards 10, and every other grid-page value true. threeLoaded false
 // (the site never loads the 3D engine); every noSideScroll true; the race-day values
 // (raceDay, raceDayImages, raceDayAlts, raceDayGallery, replayCopyTrue, twoPlayerKeys, raceDayLayout1600,
-// raceDayLayout1000, raceDayLayout390), every navOneLine (870 to 1900) and every *TextClean true;
+// raceDayLayout1000, raceDayLayout390), vegas, onTrack, onTrackTrue, replaySoundCopy, every navOneLine (870 to 1900) and every *TextClean true;
 // errors [] (a window the browser would not size counts as an error).
 // Returns { results, errors } (the shared convention of every check in tools/checks).
 async (page) => {
@@ -258,6 +258,72 @@ async (page) => {
     return (after.src !== before.src && after.src.includes("podium-trophy") && after.attr.includes("podium-trophy") && after.alt !== before.alt && after.cap !== before.cap
       && main.naturalWidth > 0 && pressed === "false,false,true,false" && thumbs[0].getAttribute("aria-pressed") === "true")
       || JSON.stringify({ before, after, pressed, nw: main.naturalWidth });
+  });
+  // The Las Vegas Strip at night: a banner (Leclerc leading Hamilton down the
+  // Strip) and six landmark pictures, every one loading, with a way in from the hero.
+  const loaded = (sel) => p.evaluate(async (sel) => {
+    const imgs = [...document.querySelectorAll(sel)];
+    for (const i of imgs) {
+      i.scrollIntoView({ block: "center", behavior: "instant" });
+      if (!i.complete) await Promise.race([new Promise((r) => { i.addEventListener("load", r, { once: true }); i.addEventListener("error", r, { once: true }); }), new Promise((r) => setTimeout(r, 4000))]);
+    }
+    window.scrollTo({ top: 0, behavior: "instant" });
+    return imgs.map((i) => ({ file: i.getAttribute("src").split("/").pop(), ok: i.complete && i.naturalWidth > 0, alt: i.alt, lazy: i.loading === "lazy",
+      shaped: Math.abs(i.naturalHeight - (i.naturalWidth * Number(i.getAttribute("height"))) / Number(i.getAttribute("width"))) <= 1 }));
+  }, sel);
+  {
+    const banner = await loaded("#vegas .vegas-banner img");
+    const sights = await loaded("#vegas .vegas-sights img");
+    const all = [...banner, ...sights];
+    out.vegas = (banner.length === 1 && sights.length === 6 && all.every((i) => i.ok && i.lazy && i.shaped && i.alt.length > 20 && /^vegas-/.test(i.file))
+      && banner[0].alt.indexOf("Charles Leclerc") >= 0 && banner[0].alt.indexOf("Charles Leclerc") < banner[0].alt.indexOf("Lewis Hamilton")
+      && new Set(all.map((i) => i.file)).size === 7
+      && await p.evaluate(() => Boolean(document.querySelector('#hero a[href="#vegas"]')) && document.querySelectorAll("#vegas .vegas-sights figcaption b").length === 6))
+      || JSON.stringify(all.filter((i) => !(i.ok && i.lazy && i.shaped)).map((i) => i.file)) + ` ${banner.length}+${sights.length}`;
+  }
+  // On track: the Safety Car's gates, the barrier, the night sky (pictures),
+  // the engine and the frame rate (words): six cards, four with a picture.
+  {
+    const imgs = await loaded("#on-track .ontrack-card img");
+    const elsewhere = await p.evaluate(() => [...document.querySelectorAll("#vegas img")].map((i) => i.getAttribute("src").split("/").pop()));
+    out.onTrack = (imgs.length === 4 && imgs.every((i) => i.ok && i.lazy && i.shaped && i.alt.length > 20 && /^ontrack-/.test(i.file) && !elsewhere.includes(i.file))
+      && new Set(imgs.map((i) => i.file)).size === 4
+      && await p.evaluate(() => {
+        const cards = [...document.querySelectorAll("#on-track .ontrack-card")];
+        const ids = cards.map((c) => c.dataset.card).join(",");
+        return ids === "safety-car,safety-car-leads,barriers,night-sky,engine,performance" && cards.every((c) => c.querySelector("h3") && c.querySelector("p").textContent.length > 60);
+      })) || JSON.stringify(imgs);
+  }
+  // The Safety Car's card says the spell the game gives it (PowerUps.TIMINGS),
+  // and the night-sky card names the night races: the circuits whose sky the
+  // renderer takes for night (a linear luminance under 0.12, as render3d.js).
+  out.onTrackTrue = await p.evaluate(() => {
+    const card = document.querySelector('#on-track [data-card="safety-car-leads"]');
+    const sky = document.querySelector('#on-track [data-card="night-sky"]');
+    if (!card || !sky) return false;
+    const words = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
+    const lin = (v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+    const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
+    const night = CIRCUITS.filter((c) => c.night ?? lum(c.bg.sky) < 0.12);
+    return card.textContent.includes(`${words[Math.round(PowerUps.TIMINGS.safetyCarMs / 1000)]} seconds`)
+      && night.length > 0 && sky.textContent.includes(`${words[night.length]} night races`) && night.every((c) => sky.textContent.includes(c.short));
+  });
+  // The replays' copy has their sound and the Auto button (its label read
+  // from screens.js), and How to play lists the replay's keys: each letter is
+  // one game.js handles, and the seek is the game's own REPLAY_SEEK_MS.
+  out.replaySoundCopy = await p.evaluate(async () => {
+    const block = document.getElementById("replays");
+    const keys = document.getElementById("replay-keys");
+    if (!block || !keys) return false;
+    const screens = await (await fetch(`./screens.js?${Date.now()}`)).text();
+    const auto = /data-replay="auto"[^>]*>([^<]+)</.exec(screens);
+    const rows = Object.fromEntries([...keys.querySelectorAll("dt")].map((dt) => [dt.textContent.trim(), dt.nextElementSibling.textContent]));
+    const game = await (await fetch(`./game.js?${Date.now()}`)).text();
+    const seek = Number(/const REPLAY_SEEK_MS = (\d+)/.exec(game)[1]) / 1000;
+    return Boolean(auto) && block.textContent.includes(auto[1].trim()) && /sound/i.test(block.textContent)
+      && ["a", "c", "x"].every((k) => game.includes(`lower === "${k}"`))
+      && (rows["← →"] || "").includes(`${seek} seconds`) && /car/i.test(rows["↑ ↓"] || "") && /slower or faster/i.test(rows["− +"] || "")
+      && /auto/i.test(rows.A || "") && /camera/i.test(rows.C || "") && /pause/i.test(rows.Space || "") && /leave/i.test(rows["X / Esc"] || "");
   });
   out.indexTextClean = await textClean(p);
 

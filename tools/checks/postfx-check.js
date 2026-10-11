@@ -40,6 +40,8 @@ async (page) => {
   // Auto judges the machine on real racing frames only: not the qualifying
   // simulation behind the loading panel, not the loading itself, not a pause.
   results.autoSamplesRacingOnly = await step(async () => {
+    // (Auto is no longer where a new player starts: High is. Chosen here.)
+    Render3D.setGraphics("auto");
     const wait = (n) => new Promise((resolve) => { let left = n; const t = () => (--left <= 0 ? resolve() : requestAnimationFrame(t)); requestAnimationFrame(t); });
     Game.selectGridMode("qualifying");
     Game.startCup();

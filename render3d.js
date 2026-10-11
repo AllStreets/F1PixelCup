@@ -84,7 +84,7 @@ function storedGraphics() {
   try {
     return Quality.parseChoice(window.localStorage.getItem(GRAPHICS_KEY));
   } catch (error) {
-    return "auto";
+    return Quality.parseChoice(null);
   }
 }
 
