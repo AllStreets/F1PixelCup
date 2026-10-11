@@ -92,7 +92,11 @@ test("the cues: each sound at its beat on the ceremony's timeline, whatever the 
     [1, 2, 3].forEach((p) => {
       assert.equal(at(`cork${p}`), C.corkAt(p));
       if (tier === "low") assert.equal(at(`fizz${p}`), null);
-      else assert.ok(at(`fizz${p}`) >= C.corkAt(p) && at(`fizz${p}`) < C.corkAt(p) + 0.1);
+      else {
+        // The fizz starts with the pop, and is loud enough to read over the cheering.
+        assert.ok(at(`fizz${p}`) >= C.corkAt(p) && at(`fizz${p}`) < C.corkAt(p) + 0.03);
+        assert.ok(cues.find((c) => c.id === `fizz${p}`).gain >= cues.find((c) => c.id === "cheer").gain);
+      }
     });
     assert.equal(at("cheer"), B.spray);
     // The crowd's murmur carries on for as long as the podium is up.
@@ -132,7 +136,7 @@ test("the mix: the crowd as they step up, the anthem alone while they stand, the
     const diff = out.slice(0, without.length).map((v, i) => v - without[i]);
     assert.ok(rms(diff, t, t + 0.03) > 0.1, `cork ${p}: ${rms(diff, t, t + 0.03)}`);
     assert.ok(rms(diff, t - 1, t - 0.001) === 0);
-    assert.ok(rms(diff, t, t + 0.03) > rms(diff, t + 0.2, t + 0.3) * 8, "a pop: all at the start");
+    assert.ok(rms(diff, t, t + 0.03) > rms(diff, t + 0.15, t + 0.21) * 8, "a pop: all at the start");
   });
   // Never clipped, whoever wins (the corks over the cheering are the loudest moment).
   let peak = 0;
@@ -144,22 +148,88 @@ test("the mix: the crowd as they step up, the anthem alone while they stand, the
   assert.ok(rms(out, out.length / RATE - 0.3, out.length / RATE) < 0.02);
 });
 
-test("the celebration's sounds are what they say: a cork is short and falls in pitch, fizz is bright, a cannon thumps", () => {
+// What the champagne was (a falling sine with a long hiss; steady bright
+// noise): kept so the tests below are seen to refuse it.
+function oldCork(rate) {
+  let s = 101;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  const out = new Float32Array(Math.ceil(0.32 * rate));
+  let phase = 0;
+  let lp = 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / rate;
+    phase += (2 * Math.PI * (900 * Math.exp(-t * 22) + 140)) / rate;
+    const x = rnd() * 2 - 1;
+    lp = x * 0.1 + lp * 0.9;
+    out[i] = Math.sin(phase) * Math.exp(-t * 38) + (x - lp) * 0.5 * Math.exp(-t * 16) * Math.min(1, t * 400);
+  }
+  return out;
+}
+function oldFizz(seconds, rate) {
+  let s = 201;
+  const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+  const out = new Float32Array(seconds * rate);
+  let lp = 0;
+  for (let i = 0; i < out.length; i += 1) {
+    const t = i / rate;
+    const x = rnd() * 2 - 1;
+    lp = x * 0.45 + lp * 0.55;
+    out[i] = (x - lp) * (0.62 + 0.38 * Math.sin(t * 7 * 6.28)) * Math.exp(-t * (2.2 / seconds));
+  }
+  return out;
+}
+
+// A cork: one sharp attack, one ring that falls from the neck's pitch as it
+// opens and is gone in about a tenth of a second, a puff of gas right behind
+// the attack and none later; a fifth of a second in all.
+function isAPop(m, name) {
+  assert.ok(m.attack < 0.005, `${name}: loudest at ${m.attack} s`);
+  assert.ok(m.length >= 0.15 && m.length <= 0.25, `${name}: ${m.length} s long`);
+  assert.ok(m.done > 0.06 && m.done < 0.14, `${name}: 95% of it out by ${m.done} s`);
+  assert.ok(m.early > 600 && m.early < 950, `${name}: rings at ${m.early} Hz at first`);
+  assert.ok(m.late > 380 && m.late < 560 && m.late < m.early - 150, `${name}: rings at ${m.late} Hz later`);
+  assert.ok(m.gasEarly > 0.05 && m.gasLate < m.gasEarly * 0.7, `${name}: gas ${m.gasEarly} then ${m.gasLate}`);
+}
+
+test("the cork is a hollow pop: a sharp attack, one falling ring, a puff of gas, a fifth of a second", () => {
   const R = 24000;
-  const cork = PodiumSound.renderCork(1, R);
-  assert.ok(cork.length / R < 0.4);
+  const corks = [101, 102, 103].map((seed) => PodiumSound.renderCork(seed, R));
+  corks.forEach((cork, i) => isAPop(PodiumSound.popShape(cork, R), `cork ${i + 1}`));
+  // Each bottle its own: three different pitches at the start.
+  const early = corks.map((cork) => PodiumSound.popShape(cork, R).early);
+  assert.ok(new Set(early).size >= 2 && Math.max(...early) - Math.min(...early) >= 25, `pitches ${early}`);
+  assert.notDeepEqual(corks[0], corks[1]);
+  assert.deepEqual(PodiumSound.renderCork(101, R), corks[0]);
+  // What it was is refused (too long, and hissing on after the pop).
+  assert.throws(() => isAPop(PodiumSound.popShape(oldCork(R), R), "the old cork"));
+});
+
+test("the spray is effervescence: bright, made of ticks (not a steady hiss), thick at first and thinning, shaken", () => {
+  const R = 24000;
+  const fizz = PodiumSound.renderFizz(4, 201, R);
+  const CrowdSound = require("../crowd-sound.js");
+  const isFizz = (samples, name) => {
+    const sp = CrowdSound.spectrum(samples, R);
+    assert.ok(sp.centroid > 5000 && sp.above5k > 0.5, `${name}: centroid ${sp.centroid.toFixed(0)} Hz, ${sp.above5k.toFixed(2)} above 5 kHz`);
+    // Crackle: in each 10 ms the peak stands well over the level (a hiss: about 3).
+    assert.ok(PodiumSound.crackle(samples, R) > 4.5, `${name}: crackle ${PodiumSound.crackle(samples, R).toFixed(2)}`);
+  };
+  isFizz(fizz, "fizz");
+  assert.throws(() => isFizz(oldFizz(4, R), "the old fizz"));
+  // It starts hard (with the pop) and the bottle empties.
+  assert.ok(rms(fizz, 0, 0.05, R) > rms(fizz, 0.3, 0.8, R) * 0.7, "hard from the first moment");
+  assert.ok(rms(fizz, 0.2, 0.8, R) > rms(fizz, 3, 3.8, R) * 2, "the bottle empties");
+  // Shaken: the loudness over tenths of a second rises and falls by a good third.
+  const tenths = [];
+  for (let t = 0.2; t < 2; t += 0.1) tenths.push(rms(fizz, t, t + 0.1, R) / Math.exp(-t * (2.6 / 4)));
+  assert.ok(Math.max(...tenths) > Math.min(...tenths) * 1.35, `shake ${Math.min(...tenths)} to ${Math.max(...tenths)}`);
+  assert.deepEqual(PodiumSound.renderFizz(4, 201, R), fizz);
+});
+
+test("a cannon thumps", () => {
+  const R = 24000;
   const zero = (s, from, to) => { let n = 0; for (let i = Math.floor(from * R) + 1; i < Math.floor(to * R); i += 1) if ((s[i] >= 0) !== (s[i - 1] >= 0)) n += 1; return n / (to - from) / 2; };
-  const fizz = PodiumSound.renderFizz(3, 2, R);
   const cannon = PodiumSound.renderCannon(3, R);
-  // Fizz crosses zero thousands of times a second; a cannon starts with a low thump.
-  assert.ok(zero(fizz, 0.5, 1.5) > 2500, `fizz ${zero(fizz, 0.5, 1.5)}`);
   assert.ok(zero(cannon, 0, 0.08) < 1500, `cannon ${zero(cannon, 0, 0.08)}`);
   assert.ok(rms(cannon, 0, 0.1, R) > rms(cannon, 0.6, 0.9, R) * 4);
-  // A cork's pitch falls: more crossings in its first 10 ms than in the next 20.
-  const tone = PodiumSound.renderCork(1, R).map((v, i, all) => (i ? (v + all[i - 1]) / 2 : v));
-  assert.ok(zero(tone, 0, 0.01) > zero(tone, 0.02, 0.04), `cork ${zero(tone, 0, 0.01)} then ${zero(tone, 0.02, 0.04)}`);
-  assert.ok(rms(fizz, 0.2, 0.8, R) > rms(fizz, 2.4, 3, R) * 1.5, "the bottle empties");
-  // Different seeds, different bottles; the same seed, the same sound.
-  assert.notDeepEqual(PodiumSound.renderCork(1, R), PodiumSound.renderCork(2, R));
-  assert.deepEqual(PodiumSound.renderCork(1, R), cork);
 });

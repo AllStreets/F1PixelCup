@@ -176,36 +176,87 @@
     };
   }
 
-  // A cork: the pop (a short thump whose pitch falls, as the neck empties)
-  // and the first hiss of gas.
+  // A cork: a hollow "thoonk". A click (the cork letting go) rings the neck
+  // of the bottle, one damped resonance that falls from about 900 Hz to 400
+  // as the neck opens; a puff of gas right behind it; a soft thump under it;
+  // dry at the front, then a touch of the hall. Each bottle its own pitch.
+  const CORK_SECONDS = 0.22;
   function renderCork(seed, rate = RATE) {
     const rnd = seeded(seed);
-    const out = new Float32Array(Math.ceil(0.32 * rate));
-    const pitch = 780 + rnd() * 240;
-    const hiss = band(rnd, 2500, 9000, rate);
+    const dry = new Float32Array(Math.ceil(CORK_SECONDS * rate));
+    const from = 840 + rnd() * 160;
+    const to = 380 + rnd() * 70;
+    const fall = 0.034 + rnd() * 0.014;
+    const ring = 0.046 + rnd() * 0.01;
+    const gasAt = 0.004 + rnd() * 0.003;
+    const gas = band(rnd, 2000, 6000, rate);
     let phase = 0;
-    for (let i = 0; i < out.length; i += 1) {
+    for (let i = 0; i < dry.length; i += 1) {
       const t = i / rate;
-      phase += (2 * Math.PI * (pitch * Math.exp(-t * 22) + 140)) / rate;
-      out[i] = Math.sin(phase) * Math.exp(-t * 38) + hiss() * 0.5 * Math.exp(-t * 16) * Math.min(1, t * 400);
+      phase += (2 * Math.PI * (to + (from - to) * Math.exp(-t / fall))) / rate;
+      // (A cosine: the resonance starts at its full swing, as a struck cavity does.)
+      const neck = Math.cos(phase) * Math.exp(-t / ring);
+      const click = t < 0.002 ? (rnd() * 2 - 1) * (1 - t / 0.002) : 0;
+      const g = gas();
+      const puff = t > gasAt ? g * Math.min(1, (t - gasAt) / 0.003) * Math.exp(-(t - gasAt) / 0.013) : 0;
+      const thump = Math.sin(2 * Math.PI * 95 * t) * Math.exp(-t / 0.03);
+      dry[i] = neck + click * 0.7 + puff * 0.8 + thump * 0.3;
     }
+    // Faded to nothing over its last 30 ms.
+    const out = hall(dry, rate, 0.12);
+    const tail = Math.floor(0.03 * rate);
+    for (let i = 0; i < tail; i += 1) out[out.length - 1 - i] *= i / tail;
     return normalise(out, 0.9);
   }
 
-  // The spray: fizz (high, bright noise, pulsing as the bottle is shaken)
-  // dying away as it empties.
+  // The spray: effervescence. Thousands of tiny bubble ticks (two-sample
+  // clicks, so all high: 4 kHz and up), thick when the bottle is shaken and
+  // thinning as it empties; a narrow hissing jet under them, fluttering fast
+  // with the shake; and the splatter of drops landing (sparse, lower ticks).
+  // It starts hard, with the pop.
   function renderFizz(length, seed, rate = RATE) {
     const rnd = seeded(seed);
-    const out = new Float32Array(Math.ceil(length * rate));
-    const fizz = band(rnd, 3200, 10500, rate);
-    const splash = band(rnd, 500, 2200, rate);
-    const wobble = 6 + rnd() * 3;
-    for (let i = 0; i < out.length; i += 1) {
+    const n = Math.ceil(length * rate);
+    const out = new Float32Array(n);
+    // The shake (the spray pose pumps the bottle a little over once a second)
+    // and how full the bottle still is.
+    const shakeRate = 1.1 + rnd() * 0.25;
+    const shakePhase = rnd() * 6.28;
+    const full = (t) => Math.exp(-t * (2.6 / length)) * Math.min(1, (length - t) * 4);
+    const shake = (t) => 0.55 + 0.45 * Math.max(0, Math.sin(t * shakeRate * 6.28 + shakePhase)) ** 2;
+    // The jet: 3 to 8 kHz, fluttering at 20 to 40 Hz.
+    const jet = band(rnd, 3000, 8000, rate);
+    const flutter = 22 + rnd() * 14;
+    for (let i = 0; i < n; i += 1) {
       const t = i / rate;
-      const shape = Math.min(1, t * 30) * Math.exp(-t * (2.2 / length)) * Math.min(1, (length - t) * 3);
-      out[i] = (fizz() * (0.62 + 0.38 * Math.sin(t * wobble * 6.28)) + splash() * 0.3) * shape;
+      out[i] = jet() * 0.5 * full(t) * shake(t) * (0.55 + 0.45 * Math.sin(t * flutter * 6.28 + 3 * Math.sin(t * 5.1)));
     }
-    return normalise(out, 0.7);
+    // The bubbles: at up to a few thousand a second. Each a click of two
+    // samples, up then down (no low end at all), most of them tiny and a few big.
+    let t = 0;
+    for (;;) {
+      const level = full(t) * shake(t);
+      t += -Math.log(1 - rnd() * 0.999) / (300 + 3600 * level);
+      const i = Math.floor(t * rate);
+      if (i + 2 >= n) break;
+      const a = (0.25 + 2.6 * rnd() ** 4) * (0.35 + 0.65 * level) * (rnd() < 0.5 ? 1 : -1);
+      out[i] += a;
+      out[i + 1] -= a * (0.7 + rnd() * 0.3);
+      if (rnd() < 0.3) out[i + 2] += a * 0.3;
+    }
+    // The drops landing: a few dozen a second, each a short ring between 800 Hz and 3 kHz.
+    t = 0.08;
+    for (;;) {
+      const level = full(Math.max(0, t - 0.25));
+      t += -Math.log(1 - rnd() * 0.999) / (6 + 45 * level);
+      const start = Math.floor(t * rate);
+      if (start >= n) break;
+      const f = 800 + rnd() * 2200;
+      const a = (0.2 + rnd() * 0.5) * (0.4 + 0.6 * level);
+      const len = Math.floor(0.008 * rate);
+      for (let k = 0; k < len && start + k < n; k += 1) out[start + k] += Math.sin((2 * Math.PI * f * k) / rate) * Math.exp(-k / (0.0018 * rate)) * a;
+    }
+    return normalise(out, 0.85);
   }
 
   // A confetti cannon: the thump of the charge and the rush of paper.
@@ -254,9 +305,9 @@
       cork1: () => once(() => renderCork(101, rate)),
       cork2: () => once(() => renderCork(102, rate)),
       cork3: () => once(() => renderCork(103, rate)),
-      fizz1: () => once(() => renderFizz(3.2, 201, rate)),
-      fizz2: () => once(() => renderFizz(2.9, 202, rate)),
-      fizz3: () => once(() => renderFizz(3.0, 203, rate)),
+      fizz1: () => once(() => renderFizz(4.2, 201, rate)),
+      fizz2: () => once(() => renderFizz(3.8, 202, rate)),
+      fizz3: () => once(() => renderFizz(4.0, 203, rate)),
     };
   }
   const run = (work) => { work.steps.forEach((step) => step()); return work.result(); };
@@ -279,8 +330,8 @@
       { id: "murmur", sound: "murmur", at: B.spray + 7, gain: 0.14, loop: true, fadeIn: 4 },
     ];
     [1, 2, 3].forEach((place) => {
-      list.push({ id: `cork${place}`, sound: `cork${place}`, at: ceremony.corkAt(place), gain: 0.6, place });
-      if (spray && ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, sound: `fizz${place}`, at: ceremony.corkAt(place) + 0.03, gain: 0.32, place });
+      list.push({ id: `cork${place}`, sound: `cork${place}`, at: ceremony.corkAt(place), gain: 0.8, place });
+      if (spray && ceremony.sprayOn(ceremony.corkAt(place) + 0.01, tier, place)) list.push({ id: `fizz${place}`, sound: `fizz${place}`, at: ceremony.corkAt(place) + 0.012, gain: 0.46, place });
     });
     return list.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
   }
@@ -304,5 +355,64 @@
     return out;
   }
 
-  return { RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, run, renderCork, renderFizz, renderCannon, sounds, cues, mix };
+  // ---- Measures, for the tests that keep the champagne a pop and a fizz ----
+
+  // A pop: when its loudest moment comes (s), how long until 95% of its
+  // energy is out (s), and the pitch of its ring (Hz, by zero crossings of
+  // the sound smoothed to under about 1.5 kHz) early and late.
+  function popShape(samples, rate) {
+    let peak = 0;
+    let peakAt = 0;
+    let total = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      if (Math.abs(samples[i]) > peak) { peak = Math.abs(samples[i]); peakAt = i; }
+      total += samples[i] * samples[i];
+    }
+    let sum = 0;
+    let done = 0;
+    for (let i = 0; i < samples.length && sum < total * 0.95; i += 1) { sum += samples[i] * samples[i]; done = i; }
+    const k = Math.exp((-2 * Math.PI * 1500) / rate);
+    const smooth = new Float32Array(samples.length);
+    let y1 = 0;
+    let y2 = 0;
+    for (let i = 0; i < samples.length; i += 1) { y1 = samples[i] * (1 - k) + y1 * k; y2 = y1 * (1 - k) + y2 * k; smooth[i] = y2; }
+    const pitch = (from, to) => {
+      let crossings = 0;
+      const a = Math.floor(from * rate);
+      const b = Math.floor(to * rate);
+      for (let i = a + 1; i < b; i += 1) if ((smooth[i] >= 0) !== (smooth[i - 1] >= 0)) crossings += 1;
+      return crossings / (to - from) / 2;
+    };
+    // The share of the energy above 2 kHz (the gas) in a stretch.
+    const bright = (from, to) => {
+      const h = Math.exp((-2 * Math.PI * 2000) / rate);
+      let lp = 0;
+      let hi = 0;
+      let all = 0;
+      for (let i = Math.floor(from * rate); i < Math.floor(to * rate); i += 1) {
+        lp = samples[i] * (1 - h) + lp * h;
+        hi += (samples[i] - lp) ** 2;
+        all += samples[i] * samples[i];
+      }
+      return hi / Math.max(1e-12, all);
+    };
+    return { attack: peakAt / rate, done: done / rate, length: samples.length / rate, early: pitch(0.004, 0.024), late: pitch(0.06, 0.1), gasEarly: bright(0.004, 0.03), gasLate: bright(0.08, 0.14) };
+  }
+
+  // Crackle: the middle value of peak over RMS in each 10 ms of the sound
+  // (about 3 for a steady hiss; higher the more it is made of separate ticks).
+  function crackle(samples, rate, from = 0.2, to = 2) {
+    const hop = Math.floor(rate / 100);
+    const crests = [];
+    for (let i = Math.floor(from * rate); i + hop <= Math.min(samples.length, to * rate); i += hop) {
+      let peak = 0;
+      let sum = 0;
+      for (let j = 0; j < hop; j += 1) { peak = Math.max(peak, Math.abs(samples[i + j])); sum += samples[i + j] * samples[i + j]; }
+      crests.push(peak / Math.sqrt(sum / hop + 1e-20));
+    }
+    crests.sort((a, b) => a - b);
+    return crests[Math.floor(crests.length / 2)];
+  }
+
+  return { popShape, crackle, RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, run, renderCork, renderFizz, renderCannon, sounds, cues, mix };
 }));

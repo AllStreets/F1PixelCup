@@ -45,6 +45,19 @@ write("anthem-fallback-fanfare.wav", PodiumSound.renderPiece(null, SMALL), SMALL
 // crowd-roar-before.wav, beside them, is the roar as it was (shaped noise,
 // rendered from commit 8c1b209) and is not made again here.
 write("crowd-roar-after.wav", PodiumSound.run(PodiumSound.sounds(Ceremony.withAnthem(PodiumSound.anthemSeconds(winner)), winner).roar()));
+// The champagne on its own, dry, no crowd: one pop, then four seconds of
+// spray. champagne-before.wav, beside it, is the same from commit 655bd82.
+const champagne = (sound) => {
+  const cork = sound.renderCork(101, RATE);
+  const fizz = sound.renderFizz(4, 201, RATE);
+  const out = new Float32Array(Math.ceil(4.3 * RATE));
+  for (let i = 0; i < cork.length; i += 1) out[i] += cork[i] * 0.8;
+  const from = Math.round(0.012 * RATE);
+  for (let i = 0; i < fizz.length && from + i < out.length; i += 1) out[from + i] += fizz[i] * 0.46;
+  return out;
+};
+write("champagne-after.wav", champagne(PodiumSound));
+if (process.env.CHAMPAGNE_BEFORE) write("champagne-before.wav", champagne(require(process.env.CHAMPAGNE_BEFORE)));
 const stands = PodiumSound.run(CrowdSound.standsSteps(RATE));
 const twice = new Float32Array(stands.length * 2);
 twice.set(stands, 0);
