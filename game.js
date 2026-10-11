@@ -4241,6 +4241,13 @@ function preparePodiumSound() {
   audio.podium = plan;
   if (!anthem.on) return;
   const made = PodiumSound.sounds(ceremony, anthem.key, PodiumSound.RATE);
+  // The anthem in its steps (each instrument, then the hall), a task each.
+  const anthemWork = PodiumSound.pieceSteps(anthem.key || "fanfare", PodiumSound.RATE);
+  const anthemSteps = [...anthemWork.steps];
+  made.anthem = () => {
+    while (anthemSteps.length) anthemSteps.shift()();
+    return anthemWork.result();
+  };
   plan.render = (name) => {
     if (plan.buffers.has(name)) return plan.buffers.get(name);
     const samples = made[name]();
@@ -4252,7 +4259,8 @@ function preparePodiumSound() {
   const queue = [...new Set(plan.cues.map((c) => c.sound))];
   const next = () => {
     if (audio.podium !== plan || !queue.length || !audio.ready) return;
-    plan.render(queue.shift());
+    if (queue[0] === "anthem" && anthemSteps.length > 1) anthemSteps.shift()();
+    else plan.render(queue.shift());
     plan.timer = setTimeout(next, 30);
   };
   plan.timer = setTimeout(next, 60);

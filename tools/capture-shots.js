@@ -449,9 +449,14 @@ async (page) => {
     }, DAY.podium);
     await p.waitForFunction(() => Render3D.podium && Render3D.podium.inspect().drawing, null, { timeout: 60000 });
     await p.addStyleTag({ content: "#podium-screen .podium-head, #podium-screen .podium-foot { visibility: hidden !important; }" });
-    const BEATS = [["podium-arms", 4.8], ["podium-trophy", 7.2], ["podium-spray", 13], ["podium-orbit", 27]];
-    for (const [name, t] of BEATS.filter(([n]) => !names || names.includes(n))) {
-      await p.waitForFunction((tt) => Render3D.podium.inspect().t >= tt, t, { timeout: 60000 });
+    // Each at a moment after one of the ceremony's beats (they move with the
+    // winner's anthem: ceremony.js, withAnthem).
+    const BEATS = [["podium-arms", "armsDown", -0.4], ["podium-anthem", "anthemEnd", -3], ["podium-trophy", "trophy", 2.3], ["podium-spray", "spray", 4]];
+    for (const [name, beat, after] of BEATS.filter(([n]) => !names || names.includes(n))) {
+      await p.waitForFunction(([b, plus]) => {
+        const st = Render3D.podium.inspect();
+        return st.t >= Ceremony.withAnthem(st.anthemSeconds).BEATS[b] + plus;
+      }, [beat, after], { timeout: 120000 });
       await dayShot(name, dir);
     }
   };

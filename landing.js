@@ -271,8 +271,8 @@
           alt: `The podium: ${name(first)}, ${name(second)} and ${name(third)} with their arms raised, name plates below` },
         { file: "podium-trophy", label: "Trophy", caption: `${name(first)} lifts the trophy under the confetti`,
           alt: `${name(first)} lifts the trophy between ${name(second)} and ${name(third)} as confetti falls` },
-        { file: "podium-orbit", label: "Orbit", caption: "The camera orbits as the confetti settles",
-          alt: `The camera orbiting the podium, ${name(first)} on the top step, confetti on the steps` },
+        { file: "podium-anthem", label: "Anthem", caption: `All three stand for ${name(first)}'s anthem, under their flags`,
+          alt: `The podium during the anthem: ${name(first)}, ${name(second)} and ${name(third)} standing still, each under a banner with their national flag` },
       ],
       "two-player": [
         { file: "split-spa", label: "Split screen", caption: `${name(p1)} as P1 (top) and ${name(p2)} as P2 at Eau Rouge`,

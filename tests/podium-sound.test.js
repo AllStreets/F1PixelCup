@@ -49,6 +49,11 @@ test("rendering is deterministic, and every anthem and the fanfare render", () =
     const s = PodiumSound.renderPiece(key, 4000);
     assert.ok(rms(s, 0.5, 2, 4000) > 0.05, String(key));
   });
+  // In steps (as the game renders it, a task each) it is the same sound.
+  const work = PodiumSound.pieceSteps("mc", RATE);
+  assert.equal(work.steps.length, 4);
+  work.steps.forEach((step) => step());
+  assert.deepEqual(work.result(), a);
   // A winner without an anthem here gets the fanfare: the game's own tune, the same every time.
   assert.deepEqual(PodiumSound.renderPiece(null, 4000), PodiumSound.renderPiece("fanfare", 4000));
   assert.ok(Math.abs(PodiumSound.anthemSeconds(null) - (PodiumSound.FANFARE.beats * 60) / PodiumSound.FANFARE.bpm - 0.6) < 1e-9);

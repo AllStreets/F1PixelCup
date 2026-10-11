@@ -125,16 +125,28 @@
   // same an octave down on horns, the bass on a tuba. key: an anthem's
   // (anthem-data.js), "sting", or anything else for the fanfare.
   function renderPiece(key, rate = RATE) {
+    const work = pieceSteps(key, rate);
+    work.steps.forEach((step) => step());
+    return work.result();
+  }
+
+  // The same in four steps (each instrument, then the hall), for the game to
+  // spread over as many tasks: no frame waits on a whole anthem.
+  function pieceSteps(key, rate = RATE) {
     const p = piece(key);
     const spb = 60 / p.bpm;
     const dry = new Float32Array(Math.ceil(seconds(key) * rate));
     // Tunes written high (above the staff) sit an octave lower on the trumpets.
     const top = p.melody.reduce((m, n) => Math.max(m, n[0]), 0);
     const shift = top > 86 ? -1 : 0;
-    voice(dry, rate, p.melody, spb, { level: 0.5, harmonics: 9, attack: 0.045, octave: shift });
-    voice(dry, rate, p.melody, spb, { level: 0.3, harmonics: 5, attack: 0.07, octave: shift - 1, vibrato: 0.002 });
-    voice(dry, rate, p.bass, spb, { level: 0.42, harmonics: 6, attack: 0.05, vibrato: 0 });
-    return normalise(hall(dry, rate));
+    let out = null;
+    const steps = [
+      () => voice(dry, rate, p.melody, spb, { level: 0.5, harmonics: 9, attack: 0.045, octave: shift }),
+      () => voice(dry, rate, p.melody, spb, { level: 0.3, harmonics: 5, attack: 0.07, octave: shift - 1, vibrato: 0.002 }),
+      () => voice(dry, rate, p.bass, spb, { level: 0.42, harmonics: 6, attack: 0.05, vibrato: 0 }),
+      () => { out = normalise(hall(dry, rate)); },
+    ];
+    return { steps, result: () => out };
   }
 
   // White noise through a band-pass (two one-pole filters), for the crowd and
@@ -299,5 +311,5 @@
     return out;
   }
 
-  return { RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, renderCrowd, renderApplause, renderCork, renderFizz, renderCannon, sounds, cues, mix };
+  return { RATE, ANTHEMS, FANFARE, STING, anthemFor, seconds, anthemSeconds, renderPiece, pieceSteps, renderCrowd, renderApplause, renderCork, renderFizz, renderCannon, sounds, cues, mix };
 }));
