@@ -58,7 +58,11 @@ const shared = {
   uTime: { value: 0 },
   uNear: { value: CHEER_NEAR },
   uFar: { value: CHEER_FAR },
+  // The chequered flag official's right arm: its angle from straight down
+  // (marshals.js flagPose, set by r3d/trackside.js each frame).
+  uFlagger: { value: 0 },
 };
+export function setFlagger(angle) { shared.uFlagger.value = angle; }
 
 // ---------------------------------------------------------------------------
 // Geometry and material
@@ -123,7 +127,7 @@ function personMaterial(joints, { animated }) {
         attribute float aRole; attribute float aPart;
         attribute vec3 aSkin; attribute vec3 aHair; attribute vec3 aShirt; attribute vec3 aTrousers; attribute vec3 aTrim;
         attribute vec4 aPose;
-        uniform vec3 uPlayer; uniform vec3 uPlayer2; uniform float uTime; uniform float uNear; uniform float uFar;
+        uniform vec3 uPlayer; uniform vec3 uPlayer2; uniform float uTime; uniform float uNear; uniform float uFar; uniform float uFlagger;
         uniform vec3 uHipL; uniform vec3 uKneeL; uniform vec3 uHipR; uniform vec3 uKneeR;
         uniform vec3 uShL; uniform vec3 uElL; uniform vec3 uShR; uniform vec3 uElR;
         varying vec3 vTint;
@@ -137,7 +141,11 @@ function personMaterial(joints, { animated }) {
         vec3 home = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float eager = ${EAGER_BASE.toFixed(2)} + ${EAGER_SPAN.toFixed(2)} * aPose.w;
         float excite = 1.0 - smoothstep(uNear * eager, uFar * eager, min(distance(home.xz, uPlayer.xz), distance(home.xz, uPlayer2.xz)));
-        float sit = aPose.x * (1.0 - excite);
+        // (The flag official, aPose.x 2: never seated, never cheering; the
+        // right arm straight, turned at the shoulder by the flag's own angle.)
+        bool flagger = aPose.x > 1.5;
+        if (flagger) excite = 0.0;
+        float sit = flagger ? 0.0 : aPose.x * (1.0 - excite);
         float a = sit * 1.5708;
         float part = aPart;
         // Arms: swung forward and up over the head, opened a little to a V
@@ -148,6 +156,7 @@ function personMaterial(joints, { animated }) {
         float openR = raiseR * 0.12;
         float openL = raiseL * 0.12;
         float wave = sin(uTime * 7.0 + aPose.y * 6.2832) * 0.45;
+        if (flagger) { raiseR = uFlagger; openR = 0.0; }
         if (part == 3.0) { posed = rotX(posed, uElL, wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), wave * excite); }
         if (part == 5.0) { posed = rotX(posed, uElR, -wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), -wave * excite); }
         if (part == 2.0 || part == 3.0) {
@@ -200,7 +209,7 @@ function instanced(kind, list, { animated, cast, materials, model = kind }) {
   attr("aShirt", 3, rgb("shirt"));
   attr("aTrousers", 3, rgb("trousers"));
   attr("aTrim", 3, rgb("trim"));
-  attr("aPose", 4, (f, a, o) => { a[o] = f.seated ? 1 : 0; a[o + 1] = f.phase || 0; a[o + 2] = f.style || 0; a[o + 3] = f.eager || 0; });
+  attr("aPose", 4, (f, a, o) => { a[o] = f.flagger ? 2 : f.seated ? 1 : 0; a[o + 1] = f.phase || 0; a[o + 2] = f.style || 0; a[o + 3] = f.eager || 0; });
   const key = `${model}:${animated ? 1 : 0}`;
   if (!materials.has(key)) {
     const m = personMaterial(made.joints, { animated });
@@ -437,6 +446,20 @@ function marshalFigures(marshals, rand) {
   });
 }
 
+// The chequered flag official, standing on the flag stand, facing the road.
+function flagOfficial(starter, rand) {
+  if (!starter || !starter.userData.official) return [];
+  starter.updateMatrixWorld(true);
+  const position = starter.localToWorld(starter.userData.official.standAt.clone());
+  // (The stand's +z is towards the road; a figure faces its own +x.)
+  const yaw = yawOf(starter.matrixWorld) - Math.PI / 2;
+  return [{
+    kind: "official", position, yaw, base: yaw, flagger: true, style: 1, phase: 0,
+    skin: color(pick(rand, SKINS)), hair: color(pick(rand, HAIRS)),
+    shirt: color("#f4f4f0"), trousers: color("#1b2440"), trim: color("#c9a227"),
+  }];
+}
+
 // The marshal at each service entrance's gate (r3d/entrances.js): standing
 // by the booth, in orange, looking out over the gate and the road.
 function gateMarshals(entrances, rand) {
@@ -456,7 +479,7 @@ function gateMarshals(entrances, rand) {
 
 // Everything: after the decor, the landmarks (the garages) and the marshals
 // have claimed their ground. `decor` holds the stands r3d/track.js built.
-export function buildPeople(course, { decor, landmarks, marshals, entrances }) {
+export function buildPeople(course, { decor, landmarks, marshals, entrances, starter }) {
   const group = new THREE.Group();
   group.name = "people";
   if (!tracksideModel("people")) {
@@ -473,6 +496,16 @@ export function buildPeople(course, { decor, landmarks, marshals, entrances }) {
   const posts = [...marshalFigures(marshals, rand), ...gateMarshals(entrances, rand)];
   const still = instanced("marshal", posts, { animated: false, cast: true, materials, model: "crew" });
   if (still) group.add(still);
+  // The chequered flag official on their stand (r3d/trackside.js): the
+  // spectators' standing figure in an official's white shirt and navy
+  // trousers, the right arm raised with the flag (the shader's uFlagger).
+  const official = flagOfficial(starter, rand);
+  const officialMesh = instanced("official", official, { animated: true, cast: true, materials, model: CROWD_KINDS[0] });
+  if (officialMesh) {
+    officialMesh.frustumCulled = false;
+    group.add(officialMesh);
+    starter.userData.personScale = PERSON_SCALE;
+  }
   const watchers = [];
   [["crew", crew], ["photographer", snappers], ["camera_operator", tv]].forEach(([kind, list]) => {
     const mesh = instanced(kind, list, { animated: false, cast: true, materials });
@@ -486,7 +519,7 @@ export function buildPeople(course, { decor, landmarks, marshals, entrances }) {
     // Every figure placed, for the checks.
     figures: [
       ...stands.flatMap((s) => s.meshes.flatMap((m) => m.userData.figures.map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.yaw, stand: true })))),
-      ...[...crew, ...snappers, ...tv, ...posts].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform), roof: f.roof })),
+      ...[...crew, ...snappers, ...tv, ...posts, ...official].map((f) => ({ kind: f.kind, x: f.position.x, y: f.position.y, z: f.position.z, yaw: f.base, base: f.base, platform: Boolean(f.platform), roof: f.roof })),
     ],
   };
   return group;

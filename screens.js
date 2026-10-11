@@ -98,6 +98,7 @@
           <header class="bc-tower-head"><span id="bc-track"></span><strong id="bc-lap"></strong></header>
           <div id="bc-rows"></div>
         </aside>
+        <strong id="bc-safety-car" class="bc-safety-car" hidden>SAFETY CAR</strong>
         <div id="bc-third" class="bc-third"></div>
         <p id="bc-announce" class="visually-hidden" aria-live="polite"></p>
         <div id="bc-trace" class="bc-trace hidden" aria-hidden="true">
@@ -737,6 +738,9 @@
     put("speed", $("bc-speed"), info.playing ? (info.speed === 1 ? "" : esc(`${info.speed}x`)) : "PAUSED");
     put("track", $("bc-track"), esc(info.track));
     put("lap", $("bc-lap"), esc(info.lap));
+    // The SAFETY CAR sign (in the flag's yellow), as strong as the game says.
+    const scSign = $("bc-safety-car");
+    if (scSign) { scSign.style.opacity = String(info.safetyCarSign || 0); scSign.hidden = !(info.safetyCarSign > 0); }
     // The tower refreshes four times a second, as the race's own does (its
     // gaps move every frame between samples), and at once on a change of
     // order or of the car in view.

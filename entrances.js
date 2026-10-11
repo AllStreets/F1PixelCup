@@ -759,6 +759,26 @@
     return cap;
   }
 
+  // The SAFETY CAR sign on screen: the FIA's flag yellow (Pantone Yellow C,
+  // the International Sporting Code's Appendix H), in over inMs when it is
+  // called, out over outMs once it goes in.
+  const SIGN = { colour: "#FEDD00", inMs: 250, outMs: 1500 };
+  // How strongly the sign shows now (0..1). `out`: the Safety Car is called
+  // and not yet going in. `memory` is the caller's, kept from frame to frame
+  // (a replay's clock may jump back: then it starts afresh).
+  function sign(memory, out, now) {
+    if (memory.at !== undefined && now < memory.at) { memory.since = undefined; memory.last = undefined; }
+    memory.at = now;
+    if (out) {
+      if (memory.since === undefined) memory.since = now;
+      memory.last = now;
+      return Math.min(1, (now - memory.since) / SIGN.inMs);
+    }
+    memory.since = undefined;
+    if (memory.last === undefined) return 0;
+    return Math.max(0, 1 - (now - memory.last) / SIGN.outMs);
+  }
+
   // The access road a point is on, if any.
   function entranceAt(entrances, d, lat) {
     for (const e of entrances || []) {
@@ -803,6 +823,6 @@
     STEP, SHAPES, LENGTH, OUT, FOLD, KEEP_OUT, MAIN_STAND, MAIN_STAND_SPAN, keepOutFor, HALF, RUNOFF, RUNOFF_STREET, STREET, FOOTPRINT, MARGIN, DECOR_MARGIN, MIN_COUNT, MAX_COUNT, SEP, GOAL_S, NOMINAL,
     START_BEFORE, START_AFTER, PIT_MARGIN, TUNNEL_MARGIN, BRIDGE_MARGIN, UNDER_MARGIN, STRAIGHT, CARPORT, BOOTH,
     ACCESS_SPEED, PIT_SPEED, CATCH, ACCEL, BRAKE, LEAD, PICKUP, CLOSE_UP, NEAR, GIVE_WAY_S, GIVE_WAY_BACK, PASS_S, HOLD_MAX_MS, HOLD_SLACK, RISK, JOIN_MARGIN, TARGET_TYPICAL_S, TARGET_MEDIAN_S, TARGET_WORST_S, CAR_LENGTH, CAR_WIDTH,
-    place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, cornerNear, delta, wrap,
+    place, ways, comingTo, runTime, travelTime, joinTime, wayTime, choose, passingLat, yieldLat, blockedAt, holds, clearToJoin, drive, entranceAt, slopeOn, pointOn, SIGN, sign, cornerNear, delta, wrap,
   };
 }));

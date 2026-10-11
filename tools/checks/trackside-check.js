@@ -342,7 +342,7 @@ async (page) => {
     state.paused = false;
     return (near > 0.012 && far < 0.002) || JSON.stringify({ near, far, ctx: audio.ctx.state });
   });
-  // No fireworks and no chequered flag before the leader finishes; then both.
+  // No fireworks before the leader finishes; then they go up.
   results.fireworksAtTheFlag = await step(async () => {
     const frames = (n) => new Promise((r) => { let k = n; const f = () => (--k <= 0 ? r() : requestAnimationFrame(f)); requestAnimationFrame(f); });
     const before = Render3D.inspect().life;
@@ -354,8 +354,36 @@ async (page) => {
     const later = Render3D.inspect().life;
     state.flagOutAt = 0;
     await frames(2);
-    const show = (x) => ({ fireworks: x.fireworks, starter: x.starterWaving });
-    return (before.fireworks === 0 && !before.starterWaving && after.fireworks > 0 && after.starterWaving && later.fireworks > 0) || JSON.stringify({ before: show(before), after: show(after), later: show(later) });
+    return (before.fireworks === 0 && after.fireworks > 0 && later.fireworks > 0) || JSON.stringify({ before: before.fireworks, after: after.fireworks, later: later.fireworks });
+  });
+  // The chequered flag official (docs/superpowers/specs/2026-10-11-flag-and-
+  // safety-car-signals-design.md): a figure of their own on a flag stand
+  // clear of the road; the flag lowered before the last lap, waved through
+  // it, and lowered again the moment the first car (a CPU car here, not the
+  // player) takes the flag, the player still racing.
+  results.chequeredFlagOfficial = await step(async () => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const waving = () => Render3D.inspect().life.starterWaving;
+    const laps = state.track.laps;
+    const keep = state.racers.map((r) => [r, r.lap, r.finished, r.startedRaceLap]);
+    const people = Render3D.auditPeople(state.track);
+    const official = people.figures.filter((f) => f.kind === "official");
+    state.racers.forEach((r) => { r.lap = laps - 2; r.finished = false; r.startedRaceLap = true; });
+    await wait(700);
+    const before = waving();
+    const cpu = state.racers.find((r) => !r.isPlayer);
+    cpu.lap = laps - 1;
+    await wait(900);
+    const during = waving();
+    cpu.finished = true;
+    const frameSays = tracksideFrame(raceNow()).chequer;
+    await wait(900);
+    const after = waving();
+    keep.forEach(([r, lap, fin, started]) => { r.lap = lap; r.finished = fin; r.startedRaceLap = started; });
+    await wait(100);
+    const clear = official.length === 1 ? Render3D.auditVenue(state.track).starter.clear : null;
+    return (official.length === 1 && clear >= 6 && people.byKind.official === 1 && !before && during && !after && frameSays === false)
+      || JSON.stringify({ officials: official.length, clear, before, during, after, frameSays });
   });
 
   // The player's own chequered flag: the finish shot looks back at the line,

@@ -151,7 +151,7 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td width="33%" valign="top">🎮 <b>Two players</b><br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🏟️ <b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, a TV helicopter, fireworks at the flag.</sub></td>
+<td width="33%" valign="top">🏟️ <b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, an official waving the chequered flag through the last lap, a TV helicopter, fireworks at the flag.</sub></td>
 <td width="33%" valign="top">📈 <b>A career per driver</b><br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub></td>
 <td width="33%" valign="top">🔊 <b>All sound synthesised</b><br/><sub>Engines that start up on the grid and crackle on the lift, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub></td>
 </tr>
@@ -290,8 +290,8 @@ The item you get depends on your place, or on how far you are behind the leader 
 | **Undercut** | Red shell | Homes in on the car ahead, round every corner, and spins it. |
 | **Overtake Mode** | Star | Eight seconds faster and untouchable; cars you touch spin and are knocked aside. |
 | **Formation Lap** | Bullet Bill | Six seconds of autopilot at huge speed straight through the field, knocking cars aside; at the end it carries you on, for up to two seconds more, until you are clear of other cars. |
-| **Steward Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, for them and anyone beside them. |
-| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. |
+| **Steward Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, for them and anyone beside them. If it lands on you, you hear the steward's whistle. |
+| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. A yellow SAFETY CAR sign and its own two-tone warning tell everyone it is out. |
 
 Shots, oil and the safety car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
 

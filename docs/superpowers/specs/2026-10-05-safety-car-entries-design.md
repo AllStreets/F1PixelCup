@@ -109,7 +109,7 @@ road.
   behind it (cars behind the Safety Car come up to it freely).
 - **Picked up:** once it is ahead of the leader (the first rival still racing:
   never the car that called it) and within `PICKUP` = 250 of them, it is
-  leading: its five seconds (PowerUps.TIMINGS.safetyCarMs) start then. It drives
+  leading: its seven seconds (PowerUps.TIMINGS.safetyCarMs) start then. It drives
   the centre line at safety-car pace (PowerUps.FACTORS.safetyCar), slower while
   the leader closes up to 70 behind it.
 - **Target.** From a leader anywhere on the lap at a typical racing speed:

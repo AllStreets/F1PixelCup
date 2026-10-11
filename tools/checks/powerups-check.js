@@ -360,6 +360,73 @@ async (page) => {
     return (resumed && sc.parked && Math.abs(sc.d - bay.d) < 1) || JSON.stringify({ resumed, parked: sc.parked, d: sc.d, bay: bay.d });
   });
 
+  // The SAFETY CAR sign and the two signal sounds (docs/superpowers/specs/
+  // 2026-10-11-flag-and-safety-car-signals-design.md): the sign comes on
+  // when it is called, stays while it is out, and is gone after it goes in;
+  // its sound plays once on the call. The Steward Penalty's sound plays once
+  // for a human driver it spins (player 2 as much as player 1), never for a
+  // CPU car, never when Overtake Mode shrugs it off.
+  await setup();
+  results.safetyCarSignAndSound = await run(() => {
+    const pl = getSortedRacers()[10];
+    const heard0 = signalsPlayed.safetyCar;
+    let t = performance.now();
+    const none = safetyCarSign(t);
+    pl.currentItem = "safetyCar"; useItem(pl, t);
+    const heard = signalsPlayed.safetyCar - heard0;
+    const first = safetyCarSign(t);
+    for (let i = 0; i < 60; i += 1) { t += 16.7; updateRace(1 / 60, t); safetyCarSign(t); }
+    const out = safetyCarSign(t);
+    state.safetyCar.phase = "road"; state.safetyCar.until = t;
+    for (let i = 0; i < 6; i += 1) { t += 16.7; updateRace(1 / 60, t); safetyCarSign(t); }
+    const going = safetyCarSign(t);
+    for (let i = 0; i < 60 * 3; i += 1) { t += 16.7; updateRace(1 / 60, t); safetyCarSign(t); }
+    const gone = safetyCarSign(t);
+    return (none === 0 && first === 0 && out === 1 && going > 0.8 && going < 1 && gone === 0 && heard === 1 && Entrances.SIGN.colour === "#FEDD00")
+      || JSON.stringify({ none, first, out, going, gone, heard });
+  });
+  await setup();
+  results.stewardHitSound = await run(() => {
+    const hit = (victim, protect) => {
+      const before = signalsPlayed.stewardHit;
+      // (Each a blast of its own: the sound's once-a-blast limit starts afresh.)
+      sfxLastPlayed.stewardHit = 0;
+      const now = raceNow();
+      state.racers.forEach((r) => { r.spinUntil = 0; r.spinImmuneUntil = 0; r.protectedUntil = 0; r.formationUntil = 0; });
+      if (protect) victim.protectedUntil = now + 5000;
+      // The penalty lands on whoever leads: put the victim there.
+      const order = getSortedRacers();
+      const lead = order[0];
+      if (lead !== victim) { const d = [lead.trackDistance, lead.lap]; [lead.trackDistance, lead.lap] = [victim.trackDistance, victim.lap]; [victim.trackDistance, victim.lap] = d; }
+      const shooter = getSortedRacers()[12];
+      shooter.currentItem = "stewardPenalty"; useItem(shooter, now);
+      const s = state.shots.find((x) => x.type === "stewardPenalty");
+      s.d = victim.trackDistance; s.armedAt = 0;
+      updateShots(1 / 60, now);
+      state.shots = [];
+      return signalsPlayed.stewardHit - before;
+    };
+    const player = getPlayer();
+    const cpu = state.racers.find((r) => !r.isPlayer);
+    const onPlayer = hit(player, false);
+    const shrugged = hit(player, true);
+    // (The player well clear of the blast: it splashes the cars beside it.)
+    player.trackDistance = (cpu.trackDistance + state.track.totalLength / 2) % state.track.totalLength;
+    player.lap = Math.max(0, cpu.lap - 2);
+    const onCpu = hit(cpu, false);
+    // Player 2 is a human too.
+    cpu.isPlayer = true;
+    const onSecond = hit(cpu, false);
+    cpu.isPlayer = false;
+    // Two players in one blast: once, not twice over.
+    const beside = state.racers.find((r) => !r.isPlayer && r !== cpu);
+    beside.isPlayer = true; cpu.isPlayer = true;
+    beside.trackDistance = cpu.trackDistance; beside.lap = cpu.lap; beside.lat = cpu.lat + 20;
+    const onBoth = hit(cpu, false);
+    beside.isPlayer = false; cpu.isPlayer = false;
+    return (onPlayer === 1 && shrugged === 0 && onCpu === 0 && onSecond === 1 && onBoth === 1) || JSON.stringify({ onPlayer, shrugged, onCpu, onSecond, onBoth });
+  });
+
   // The safety car is solid: even the car that called it can't drive through it.
   await setup();
   results.safetyCarSolid = await run(() => {

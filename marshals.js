@@ -54,5 +54,36 @@
     });
   }
 
-  return { SPACING, AHEAD, CRAWL, GREEN_MS, posts, incident, flags };
+  // Whether the chequered flag waves: some car is on the last lap (it has
+  // `laps - 1` behind it) and nobody has finished. It stops when the first
+  // car takes the flag, whoever it is. `racers`: { lap, finished }.
+  function chequered(racers, laps) {
+    if (!racers || !racers.length || racers.some((r) => r.finished)) return false;
+    return racers.some((r) => (r.lap || 0) >= laps - 1);
+  }
+
+  // The official's flag arm (the people model's right arm, in its metres: a
+  // figure faces +x, up is +y, its right is +z): straight from the shoulder
+  // to the wrist, swung about the shoulder in the plane it faces. `wave` 0
+  // the arm down at their side, 1 raised over the head and swinging; `t` in
+  // seconds. Returns the arm's angle from straight down (what the person
+  // shader turns it by), the wrist, and the pole's lean from upright (towards
+  // the road): held out low over the rail at rest, along the arm when waving. The renderer
+  // (r3d/trackside.js, r3d/people.js) draws both from this.
+  const FLAG_ARM = { shoulder: [0, 1.42, 0.19], wrist: [0, 0.84, 0.27], raise: 2.6, swing: 0.32, rate: 7, rest: 1.25 };
+  function flagPose(wave, t) {
+    const w = Math.max(0, Math.min(1, wave));
+    const angle = w * (FLAG_ARM.raise + FLAG_ARM.swing * Math.sin(t * FLAG_ARM.rate));
+    const [sx, sy, sz] = FLAG_ARM.shoulder;
+    const dx = FLAG_ARM.wrist[0] - sx;
+    const dy = FLAG_ARM.wrist[1] - sy;
+    const c = Math.cos(angle);
+    const sn = Math.sin(angle);
+    const wrist = [sx + dx * c - dy * sn, sy + dx * sn + dy * c, FLAG_ARM.wrist[2] + 0 * sz];
+    // Along the arm, the pole leans (pi - angle) from upright.
+    const lean = FLAG_ARM.rest * (1 - w) + (Math.PI - angle) * w;
+    return { angle, wrist, lean };
+  }
+
+  return { SPACING, AHEAD, CRAWL, GREEN_MS, FLAG_ARM, posts, incident, flags, chequered, flagPose };
 }));
