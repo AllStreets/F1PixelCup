@@ -36,8 +36,9 @@ async (page) => {
   // steps never show and nothing is blank. Each frame is either the results
   // with the race still drawn behind them, or the podium screen over the
   // ceremony drawing that frame.
-  const runCup = async ({ via = "click", hold = 0, players = 1, escape = false } = {}) => {
-    const before = await p.evaluate(({ instant, players }) => {
+  // winner: that driver wins every race of the cup (so the cup).
+  const runCup = async ({ via = "click", hold = 0, players = 1, escape = false, winner = null } = {}) => {
+    const before = await p.evaluate(({ instant, players, winner }) => {
       window.__podiumFrames = [];
       window.__pressed = false;
       const press = (e) => {
@@ -91,7 +92,7 @@ async (page) => {
       state.gridMode = "back";
       startCup();
       for (let race = 0; race < 4; race += 1) {
-        const order = [...state.racers].map((r) => ({ r, k: rnd() })).sort((a, b) => a.k - b.k).map((x) => x.r);
+        const order = [...state.racers].map((r) => ({ r, k: r.driver.id === winner ? -1 : rnd() })).sort((a, b) => a.k - b.k).map((x) => x.r);
         order.forEach((r, i) => {
           r.finished = true;
           r.finishPosition = i + 1;
@@ -105,7 +106,7 @@ async (page) => {
       }
       if (instant) document.getElementById("results-next").click();
       return { top: state.cupEntries.slice(0, 3).map((e) => e.driver.id), humans: state.humanIds.length };
-    }, { instant: via === "instant", players });
+    }, { instant: via === "instant", players, winner });
     if (escape) {
       // Esc while it readies: home to the pit lane, the ceremony let go, the
       // button itself again.
@@ -136,10 +137,18 @@ async (page) => {
       return f.length && f[f.length - 1].drawing && f.filter((x) => x.drawing).length > 30;
     }, null, { timeout: 30000 }).catch(() => {});
     const frames = await p.evaluate(() => window.__podiumFrames);
-    const bad = frames.map((f, i) => [i, f]).filter(([, f]) => f.steps
-      || (f.podium && !(f.is3d && f.drawing && f.blank === 0))
-      || (!f.podium && !(f.results && f.raceWorld))
-      || (f.podium && f.raceWorld));
+    // (A cup run here without a frame drawn has no race world until the game
+    // builds one; once it is there behind the results it must stay.)
+    let hadWorld = false;
+    const bad = frames.map((f, i) => [i, f]).filter(([, f]) => {
+      const lostWorld = !f.podium && f.results && hadWorld && !f.raceWorld;
+      if (!f.podium && f.raceWorld) hadWorld = true;
+      return f.steps
+        || (f.podium && !(f.is3d && f.drawing && f.blank === 0))
+        || (!f.podium && !f.results)
+        || lostWorld
+        || (f.podium && f.raceWorld);
+    });
     const first = frames.find((f) => f.drawing);
     return {
       ...before,
@@ -153,11 +162,20 @@ async (page) => {
 
   await p.goto(`http://localhost:8765/play.html?${Date.now()}`);
   await p.waitForFunction(() => window.Render3D && (Render3D.ready || Render3D.failed), null, { timeout: 60000 });
+  // The sound off for the first part (what is seen): with nothing to stand
+  // for, the ceremony keeps its short pause where the anthem goes. The sound
+  // has its own part below.
+  await p.evaluate(() => Game.setSound(false));
   // Pressed at once: the ceremony can't be ready yet, so the results wait
   // (the button saying so, the race still behind them) and then it opens
   // straight onto the scene's first frame.
   const cup = await runCup({ via: "instant" });
   results.podiumReached = cup.phase === "podium";
+  // With the sound off: nothing planned, nothing played.
+  results.soundOffIsSilent = await p.evaluate(() => {
+    const s = Game.podiumSound();
+    return (s && s.on === false && s.cues.length === 0 && s.log.length === 0 && s.started === false) || JSON.stringify(s).slice(0, 300);
+  });
   results.pressStraightIntoCeremony = cup.straightIn;
   results.waitShownOnButton = (cup.waited > 0 && cup.busyShown) || `${cup.waited} frames waiting, busy ${cup.busyShown}`;
   results.buttonBackAfter = await p.evaluate(() => {
@@ -171,19 +189,26 @@ async (page) => {
   // read is also held to the timeline: each driver's pose, step forward and
   // props are what ceremony.js says for that frame's time.
   const timeline = [];
-  const at = async (t) => {
-    const s = await (await p.waitForFunction((tt) => {
+  // when: seconds in, or [beat, seconds after it] (the beats move with the
+  // anthem's length: ceremony.js, withAnthem).
+  const at = async (when) => {
+    const s = await (await p.waitForFunction((w) => {
       const st = Render3D.podium.inspect();
+      if (!(st.t >= 0)) return false;
+      const C = Ceremony.withAnthem(st.anthemSeconds);
+      const tt = Array.isArray(w) ? (w[0] === "cork" ? C.corkAt(w[2]) : C.BEATS[w[0]]) + w[1] : w;
       if (!(st.t >= tt)) return false;
-      st.p1ArmsAt = Ceremony.BEATS.arms[1];
+      st.beats = C.BEATS;
+      st.corks = [1, 2, 3].map((place) => C.corkAt(place));
+      st.p1ArmsAt = C.BEATS.arms[1];
       st.want = st.drivers.map((d) => ({
-        pose: Ceremony.poseAt(d.place, st.t),
-        z: Ceremony.stepFor(d.place).standZ + Ceremony.STEP_FORWARD * Ceremony.forwardAt(d.place, st.t),
-        trophy: Ceremony.trophyShown(d.place, st.t),
-        bottle: Ceremony.bottleShown(d.place, st.t),
+        pose: C.poseAt(d.place, st.t),
+        z: C.stepFor(d.place).standZ + C.STEP_FORWARD * C.forwardAt(d.place, st.t),
+        trophy: C.trophyShown(d.place, st.t),
+        bottle: C.bottleShown(d.place, st.t),
       }));
       return st;
-    }, t, { timeout: 40000, polling: "raf" })).jsonValue();
+    }, when, { timeout: 90000, polling: "raf" })).jsonValue();
     timeline.push(s);
     return s;
   };
@@ -219,21 +244,49 @@ async (page) => {
     results.armsUpInTurn = (arms.t < arms.p1ArmsAt ? pose(arms) === "stand,arms_up,arms_up" : pose(arms) === "arms_up,arms_up,arms_up") || `${pose(arms)} at ${arms.t}`;
     results.p3SteppedForward = arms.drivers[2].z > first.drivers[2].z + 0.15;
 
-    const trophy = await at(6.4);
+    // The anthem's place in the order: all three stand, no trophy, no confetti
+    // (here the short pause the ceremony keeps with the sound off).
+    const stand = await at(["anthem", 1.2]);
+    results.standForTheAnthem = (stand.beat === "anthem" && pose(stand) === "stand,stand,stand" && Math.abs(stand.anthemSeconds - 3) < 1e-9
+      && !stand.confetti.visible && stand.drivers.every((d) => !d.props.trophy && !d.props.bottle)
+      && stand.beats.armsDown < stand.beats.anthem && stand.beats.anthemEnd < stand.beats.trophy && stand.beats.trophy < stand.beats.spray)
+      || `${stand.beat} ${pose(stand)} ${stand.anthemSeconds}`;
+
+    const trophy = await at(["trophy", 1.4]);
     results.trophyBeat = pose(trophy) === "trophy,wave,wave" || pose(trophy);
     results.trophyOnlyWithP1 = trophy.drivers[0].props.trophy === true && !trophy.drivers[1].props.trophy && !trophy.drivers[2].props.trophy
-      && [first, arms].every((s) => s.drivers.every((d) => !d.props.trophy));
+      && [first, arms, stand].every((s) => s.drivers.every((d) => !d.props.trophy));
     results.confettiBurst = trophy.confetti.visible && trophy.confetti.airborne > trophy.confetti.count * 0.5
       && trophy.confetti.count === { high: 600, medium: 300, low: 120 }[trophy.tier];
-    const later = await at(7.6);
+    const later = await at(["trophy", 2.6]);
     results.confettiFalls = later.confetti.meanY < trophy.confetti.meanY - 0.4 && later.confetti.meanVy < -0.3 || `${trophy.confetti.meanY} -> ${later.confetti.meanY}`;
     results.noSprayBeforeNine = later.spray.emitted === 0;
 
     // Just into the spray: the poses crossfade, so the trophy is still up for
     // the first moment and the bottles come in as the hands meet.
-    const swap = await at(9);
+    const swap = await at(["spray", 0]);
     results.propsSwapMidFade = (swap.drivers[0].props.trophy === swap.want[0].trophy && swap.drivers.every((d, i) => d.props.bottle === swap.want[i].bottle)) || JSON.stringify({ t: swap.t, props: swap.drivers.map((d) => d.props) });
-    const spray = await at(10.6);
+    // A cork for each bottle: no drop leaves a bottle before its own cork
+    // goes, and each is spraying a moment after (Low has no spray).
+    const pops = await p.evaluate(() => new Promise((done) => {
+      const frames = [];
+      const C = Ceremony.withAnthem(Render3D.podium.inspect().anthemSeconds);
+      const tick = () => {
+        const st = Render3D.podium.inspect();
+        frames.push([st.t, st.spray.byPlace]);
+        if (st.t < C.corkAt(3) + 0.6) requestAnimationFrame(tick);
+        else done({ frames, corks: [1, 2, 3].map((place) => C.corkAt(place)), tier: st.tier });
+      };
+      requestAnimationFrame(tick);
+    }));
+    results.sprayFromEachCork = [1, 2, 3].every((place) => {
+      const cork = pops.corks[place - 1];
+      const before = pops.frames.filter(([t]) => t < cork);
+      const after = pops.frames.filter(([t]) => t > cork + 0.3);
+      return before.length > 0 && after.length > 0 && before.every(([, n]) => n[place] === 0)
+        && (pops.tier === "low" ? after.every(([, n]) => n[place] === 0) : after.every(([, n]) => n[place] > 0));
+    }) || JSON.stringify({ corks: pops.corks, frames: pops.frames.filter((f, i) => i % 6 === 0) }).slice(0, 700);
+    const spray = await at(["spray", 1.8]);
     results.allSpray = pose(spray) === "spray,spray,spray" && spray.drivers.every((d) => d.props.bottle && !d.props.trophy) || pose(spray);
     const sprayWanted = spray.tier !== "low";
     results.sprayFlies = sprayWanted ? spray.spray.live > 50 && spray.spray.maxY > 1 : spray.spray.pool === 0;
@@ -355,14 +408,14 @@ async (page) => {
       const t0 = performance.now();
       while (performance.now() - t0 < 20000) {
         const f = Render3D.podium.frame(performance.now());
-        if (f.drawing && f.t > 10.5) break;
+        if (f.drawing && Render3D.podium.inspect().spray.emitted > 200) break;
         await frames(1);
       }
       const drew = Render3D.podium.inspect().t;
       Render3D.podium.end();
       await frames(30);
       const after = mem();
-      return (drew > 10.5 && after.textures <= before.textures && after.geometries <= before.geometries) || JSON.stringify({ drew, before, after });
+      return (drew > 5 && after.textures <= before.textures && after.geometries <= before.geometries) || JSON.stringify({ drew, before, after });
     }, cup.top);
     results.racePostfxBack = (await p.evaluate(() => Render3D.podium.inspect().racePostfx)) !== null || "still released";
 
@@ -373,7 +426,7 @@ async (page) => {
     // opens on the press.
     const enter = await runCup({ via: "enter", hold: 5000 });
     results.enterStraightIntoCeremony = (enter.straightIn === true && enter.waited <= 1) || `${enter.straightIn}, waited ${enter.waited} frames`;
-    const low = await at(10.4).catch(() => null);
+    const low = await at(["spray", 1.6]).catch(() => null);
     results.lowTier = Boolean(low) && low.tier === "low" && low.confetti.count === 120 && low.spray.pool === 0 && low.spray.live === 0;
     await p.evaluate((c) => { Render3D.setGraphics(c); resetToGarage(); }, before);
 
@@ -381,9 +434,9 @@ async (page) => {
     // forward, the confetti lies where it fell, no spray, the plates stay up.
     await p.emulateMedia({ reducedMotion: "reduce" });
     await runCup();
-    const calm = [await at(3), await at(7)];
+    const calm = [await at(3), await at(["trophy", 2])];
     const platesUp = await p.evaluate(() => document.getElementById("podium-screen").classList.contains("plates-in"));
-    calm.push(await at(10.4));
+    calm.push(await at(["spray", 1.6]));
     results.reducedMotion = (calm.every((st) => JSON.stringify(st.camera) === JSON.stringify(calm[0].camera)
       && st.drivers.every((d, i) => Math.abs(d.z - calm[0].drivers[i].z) < 1e-6))
       && calm[1].confetti.airborne === 0 && calm[1].confetti.landed === calm[1].confetti.count
@@ -397,6 +450,86 @@ async (page) => {
     const two = await runCup({ via: "instant", players: 2 });
     results.twoPlayersStraightIntoCeremony = (two.humans === 2 && two.straightIn === true) || `${two.humans} players: ${two.straightIn}`;
     await p.evaluate(() => { resetToGarage(); Game.selectPlayers(1); });
+
+    // ---- The sound (podium-sound.js): the winner's anthem and the celebration ----
+    await p.evaluate(() => { Game.setSound(true); initAudio(); });
+    // What the game says it is playing, set against the ceremony's own beats
+    // and the notes of the anthem it should be (all worked out in the page).
+    const sound = () => p.evaluate(() => {
+      const s = Game.podiumSound();
+      const st = Render3D.podium.inspect();
+      if (!s) return null;
+      const C = Ceremony.withAnthem(s.anthemSeconds);
+      const want = PodiumSound.cues(C, { tier: st.tier });
+      const first = s.log.find((l) => l.id === "welcome");
+      return {
+        ...s, tier: st.tier, t: st.t, sceneAnthemSeconds: st.anthemSeconds, beats: C.BEATS, corks: [1, 2, 3].map((place) => C.corkAt(place)),
+        wantSeconds: PodiumSound.anthemSeconds(s.anthem), wantCues: want.map((c) => [c.id, c.at]),
+        // Each started sound's place on the audio clock, from the ceremony's start.
+        played: first ? s.log.map((l) => [l.id, l.ctxAt - first.ctxAt]) : [],
+        sounds: new Set(want.map((c) => c.sound)).size, audio: audio.ctx ? audio.ctx.state : "none",
+      };
+    });
+    const same = (a, b) => a.length === b.length && a.every(([id, at], i) => id === b[i][0] && Math.abs(at - b[i][1]) < 1e-6);
+
+    // Gasly wins: La Marseillaise. Every sound is rendered while the results
+    // are up, and starts at its beat; the audio clock runs with the picture.
+    const france = await runCup({ via: "click", hold: 7000, winner: "gasly" });
+    const fr = await sound();
+    results.anthemIsTheWinners = (fr && france.top[0] === "gasly" && fr.winner === "gasly" && fr.anthem === "fr" && fr.on === true
+      && Math.abs(fr.anthemSeconds - fr.wantSeconds) < 1e-9 && Math.abs(fr.sceneAnthemSeconds - fr.wantSeconds) < 1e-9) || JSON.stringify(fr).slice(0, 300);
+    results.soundsRenderedAhead = (fr && fr.rendered === fr.sounds && fr.sounds >= 14) || `${fr && fr.rendered} of ${fr && fr.sounds}`;
+    results.audioRunning = (fr && fr.audio === "running" && fr.started === true) || `${fr && fr.audio}, started ${fr && fr.started}`;
+    results.everySoundAtItsBeat = (fr && fr.played.length === fr.wantCues.length && same([...fr.played].sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0])), fr.wantCues)
+      && ["welcome", "anthem", "applause", "roar", "sting", "cannon1", "cannon2", "cork1", "cork2", "cork3", "fizz1", "cheer"].every((id) => fr.tier === "low" && id === "fizz1" ? true : fr.played.some((c) => c[0] === id)))
+      || JSON.stringify({ played: fr && fr.played, want: fr && fr.wantCues }).slice(0, 600);
+    const cueAt = (id) => fr.wantCues.find((c) => c[0] === id)[1];
+    results.cuesOnTheTimeline = (cueAt("anthem") === fr.beats.anthem && [1, 2, 3].every((place) => cueAt(`cork${place}`) === fr.corks[place - 1])
+      && Math.abs(cueAt("sting") - fr.beats.trophy) < 0.3 && cueAt("cannon1") >= fr.beats.trophy && cueAt("cannon1") < fr.beats.trophy + 0.1)
+      || JSON.stringify(fr.wantCues);
+    results.soundClockWithPicture = Math.abs(fr.now - fr.t) < 0.1 || `${fr.now} against ${fr.t}`;
+    // Heard, not only scheduled: through the anthem the level is up, and at
+    // one of its long notes the sound really is that note (stronger at its
+    // pitch than a tone either side), on the trumpets' octave or the horns'.
+    const heard = await p.evaluate(() => new Promise((done) => {
+      const s = Game.podiumSound();
+      const a = PodiumSound.ANTHEMS[s.anthem];
+      const C = Ceremony.withAnthem(s.anthemSeconds);
+      const spb = 60 / a.bpm;
+      const long = a.melody.find((n) => n[2] * spb >= 0.9 && n[1] * spb > 3);
+      const mid = C.BEATS.anthem + (long[1] + long[2] * 0.55) * spb;
+      const hz = (m) => 440 * 2 ** ((m - 69) / 12);
+      const levels = [];
+      let note = null;
+      const tick = () => {
+        const now = Game.podiumSound();
+        if (!now) { done({ gone: true }); return; }
+        levels.push([now.now, now.level]);
+        if (!note && now.now >= mid) note = { at: now.now, power: Game.podiumSoundPower([-2, -1, 0, 1, 2].map((d) => hz(long[0] + d))) };
+        if (now.now < C.BEATS.anthemEnd - 0.5) requestAnimationFrame(tick);
+        else done({ levels, note, long, anthem: [C.BEATS.anthem, C.BEATS.anthemEnd] });
+      };
+      requestAnimationFrame(tick);
+    }));
+    const anthemLevels = heard.levels ? heard.levels.filter(([t]) => t > heard.anthem[0] + 1 && t < heard.anthem[1] - 1.5).map((x) => x[1]) : [];
+    results.anthemIsHeard = (anthemLevels.length > 100 && anthemLevels.reduce((a, b) => a + b, 0) / anthemLevels.length > 0.02 && anthemLevels.filter((v) => v > 0.004).length > anthemLevels.length * 0.9)
+      || `${anthemLevels.length} frames, mean ${anthemLevels.length ? anthemLevels.reduce((a, b) => a + b, 0) / anthemLevels.length : 0}`;
+    results.anthemNoteIsRight = (heard.note && [0, 1, 3, 4].every((i) => heard.note.power[2] > heard.note.power[i] + 6)) || JSON.stringify(heard.note);
+    // Leaving stops it.
+    await p.click("#podium-screen [data-action='pitlane']");
+    await p.waitForTimeout(700);
+    results.leavingStopsTheSound = await p.evaluate(() => Game.podiumSound() === null && state.phase === "garage");
+
+    // Leclerc wins: Monaco's. Antonelli wins: no Italian score free to use
+    // here, so the game's own fanfare stands in.
+    for (const [winner, key] of [["leclerc", "mc"], ["antonelli", null]]) {
+      const run = await runCup({ via: "click", hold: 2500, winner });
+      const s = await sound();
+      results[`anthemFor_${winner}`] = (s && run.top[0] === winner && s.anthem === key && Math.abs(s.anthemSeconds - s.wantSeconds) < 1e-9
+        && Math.abs(s.sceneAnthemSeconds - s.wantSeconds) < 1e-9 && s.played.some((c) => c[0] === "anthem")) || JSON.stringify(s).slice(0, 300);
+      await p.evaluate(() => resetToGarage());
+    }
+    await p.evaluate(() => Game.setSound(false));
   }
 
   // Without 3D: the 2D steps, as before.
