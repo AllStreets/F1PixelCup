@@ -401,8 +401,9 @@
   const EVENT_SPAN = 500;
   const CONTACT_MS = 130;
   const CONTACT_NEAR = 40;
-  // A flash this big is the Steward Penalty landing (game.js: 40; the others 5 and 12).
+  // A flash this big is the Steward Penalty landing (game.js: 40; shrugged off 20; the others 5 and 12).
   const STEWARD_FLASH = 30;
+  const STEWARD_NEAR = 220;
   function eventsBetween(rec, a, b) {
     if (!(b > a) || b - a > EVENT_SPAN || rec.count < 2) return [];
     const events = [];
@@ -418,7 +419,9 @@
       const before = new Set(prev.objects.map((o) => o.id));
       cur.objects.forEach((o) => { if (!before.has(o.id)) events.push({ type: "item", d: o.d, lat: o.lat, item: o.type }); });
       cur.boxes.forEach((taken, i) => { if (taken && !prev.boxes[i]) events.push({ type: "box", box: i }); });
-      if (cur.safetyCar && !prev.safetyCar) events.push({ type: "safetyCar" });
+      // Called: it appears, or (called again) is out once more after going in.
+      const out = (sc) => Boolean(sc) && !sc.leaving && !sc.parked;
+      if (out(cur.safetyCar) && !out(prev.safetyCar)) events.push({ type: "safetyCar" });
       cur.cars.forEach((c, i) => {
         const was = prev.cars[i];
         if (c.boosting && !was.boosting) events.push({ type: "boost", car: i, x: c.x, y: c.y });
@@ -426,6 +429,9 @@
       });
       prev = cur;
     }
+    // A car the Steward Penalty spins makes the penalty's sound, not a spin's as well.
+    const blasts = events.filter((e) => e.type === "steward");
+    if (blasts.length) return events.filter((e) => e.type !== "spin" || !blasts.some((b) => Math.hypot(b.x - e.x, b.y - e.y) < STEWARD_NEAR));
     return events;
   }
 

@@ -29,7 +29,7 @@ test("the SAFETY CAR sign: in when it is called, held while it is out, fading on
   assert.equal(Entrances.sign(m, true, 1000 + Entrances.SIGN.inMs), 1);
   assert.equal(Entrances.sign(m, true, 9000), 1);
   // It goes in: fading over outMs, then gone.
-  assert.equal(Entrances.sign(m, false, 9000 + 16), Entrances.sign({ ...m }, false, 9000 + 16));
+  assert.ok(Math.abs(Entrances.sign(m, false, 9000 + 15) - (1 - 15 / Entrances.SIGN.outMs)) < 1e-9);
   const half = Entrances.sign(m, false, 9000 + Entrances.SIGN.outMs / 2);
   assert.ok(half > 0.3 && half < 0.7, `${half}`);
   assert.equal(Entrances.sign(m, false, 9000 + Entrances.SIGN.outMs + 20), 0);
@@ -76,7 +76,46 @@ test("a replay hears them too: the Safety Car's sound when it appears, the Stewa
   };
   const types = (a, b) => Replay.eventsBetween(rec, a, b).map((e) => e.type).sort();
   assert.deepEqual(types(100, 199), ["impact", "steward"]);
+  // Shrugged off (the smaller flash): no whistle. A car the blast spins: the
+  // whistle, not a spin's sound too; a spin elsewhere still sounds.
+  const car = (spinning, x) => ({ spinning, boosting: false, x, y: 2 });
+  const spun = [{ ...sample(null), cars: [car(false, 1), car(false, 900)] }, { ...sample(null), cars: [car(true, 1), car(true, 900)] }];
+  const rec2 = { ...rec, count: 2, flashes: [{ at: 150, x: 1, y: 2, size: 40 }], sampleAt: (k) => spun[k], indexAt: (t) => (t >= 100 ? 1 : 0) };
+  assert.deepEqual(Replay.eventsBetween(rec2, 50, 199).map((e) => e.type).sort(), ["spin", "steward"]);
+  assert.deepEqual(Replay.eventsBetween({ ...rec2, flashes: [{ at: 150, x: 1, y: 2, size: 20 }] }, 50, 199).map((e) => e.type).sort(), ["impact", "spin", "spin"]);
+  // Called again after going in: its sound again.
+  const again = [sample({ d: 1, lat: 0, leaving: true }), sample({ d: 1, lat: 0, leaving: false })];
+  assert.deepEqual(Replay.eventsBetween({ ...rec, count: 2, flashes: [], sampleAt: (k) => again[k], indexAt: (t) => (t >= 100 ? 1 : 0) }, 50, 199).map((e) => e.type), ["safetyCar"]);
   assert.deepEqual(types(150, 250), ["impact", "safetyCar"]);
   // Once out, no more of it.
   assert.deepEqual(types(250, 350), []);
+});
+
+test("the flag is in the official's hand: the pole's foot at the wrist, the pole along the raised arm, held out low at rest", () => {
+  const { FLAG_ARM } = Marshals;
+  const length = Math.hypot(FLAG_ARM.wrist[0] - FLAG_ARM.shoulder[0], FLAG_ARM.wrist[1] - FLAG_ARM.shoulder[1]);
+  // At rest: the arm down, the wrist where the model has it, the pole held out low, towards the road.
+  const rest = Marshals.flagPose(0, 1.23);
+  assert.equal(rest.angle, 0);
+  assert.deepEqual(rest.wrist.map((v) => +v.toFixed(6)), FLAG_ARM.wrist);
+  assert.equal(rest.lean, FLAG_ARM.rest);
+  // Waving: through a whole swing the wrist stays the arm's length from the
+  // shoulder, above the head, and the pole runs on along the arm.
+  let low = Infinity;
+  let high = -Infinity;
+  for (let t = 0; t < 1; t += 0.01) {
+    const p = Marshals.flagPose(1, t);
+    const ax = p.wrist[0] - FLAG_ARM.shoulder[0];
+    const ay = p.wrist[1] - FLAG_ARM.shoulder[1];
+    assert.ok(Math.abs(Math.hypot(ax, ay) - length) < 1e-9);
+    assert.ok(p.wrist[1] > FLAG_ARM.shoulder[1] + 0.3, "raised over the shoulder");
+    // The pole's direction in the figure's frame: (sin lean, cos lean) forward and up.
+    assert.ok(Math.abs(Math.sin(p.lean) - ax / length) < 1e-9 && Math.abs(Math.cos(p.lean) - ay / length) < 1e-9, "the pole along the arm");
+    low = Math.min(low, p.angle);
+    high = Math.max(high, p.angle);
+  }
+  assert.ok(high - low > 0.5, "it swings");
+  // Halfway up: between the two.
+  const half = Marshals.flagPose(0.5, 0);
+  assert.ok(half.angle > 1 && half.angle < 1.6);
 });

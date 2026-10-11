@@ -1914,6 +1914,7 @@ function startRace(index) {
   state.shots = [];
   state.hazards = [];
   state.safetyCar = null;
+  state.scSign = null;
   state.lastSafetyCarAt = null;
   state.lastStewardAt = null;
   state.boxHiddenUntil = [];
@@ -3297,7 +3298,8 @@ function updateShots(dt, now) {
         spinRacer(racerById(id), PowerUps.SPIN_MS[kind], now, PowerUps.SPIN_KEEP[kind], sfx.stewardHit);
       });
       // The blue shell's blast: a big flash, a burst of smoke and sparks.
-      addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 40, now, 700);
+      // (Shrugged off, a smaller one: the replay tells the two apart by it.)
+      addFlash(leader.trackDistance, leader.lat, "#3aa0ff", shrugged ? 20 : 40, now, 700);
       if (!shrugged) stewardBlast(leader);
       addFeed(!shrugged ? `Steward Penalty lands on ${leader.driver.code}.`
         : `${leader.driver.code}'s Overtake Mode shrugs off the Steward Penalty.`);
@@ -4348,6 +4350,7 @@ function resetToGarage() {
   state.shots = [];
   state.hazards = [];
   state.safetyCar = null;
+  state.scSign = null;
   state.lastSafetyCarAt = null;
   state.lastStewardAt = null;
   state.boxHiddenUntil = [];
@@ -6210,7 +6213,12 @@ const sfx = {
   // everyone; the Steward Penalty landing on a player.
   // (Counted, for the checks: how many times each has been played.)
   safetyCar: () => { signalsPlayed.safetyCar += 1; SignalSounds.SAFETY_CAR.forEach((n) => playTone(n.frequency, n)); },
-  stewardHit: () => { signalsPlayed.stewardHit += 1; SignalSounds.STEWARD_HIT.forEach((n) => playTone(n.frequency, n)); },
+  // (Once for one blast, though it spins two players.)
+  stewardHit: () => {
+    if (!sfxAllowed("stewardHit", 400)) return;
+    signalsPlayed.stewardHit += 1;
+    SignalSounds.STEWARD_HIT.forEach((n) => playTone(n.frequency, n));
+  },
   finalLap: () => {
     playTone(980, { duration: 0.14, volume: 0.3 });
     playTone(980, { duration: 0.14, volume: 0.3, delay: 0.18 });

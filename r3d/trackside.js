@@ -296,8 +296,9 @@ export function buildStarter(course) {
     const off = across * (base + out);
     const x = p.x + p.nx * off;
     const z = p.y + p.ny * off;
-    if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 4, 4, 3) || course.occupied.blocked(x, z, 5)) continue;
-    course.occupied.add(x, z, 5);
+    // (The stand's deck is 8 by 7, the flag's reach a little more.)
+    if (!footprintClear(course, x, z, Math.atan2(p.ty, p.tx), 5, 5, 3) || course.occupied.blocked(x, z, 7)) continue;
+    course.occupied.add(x, z, 7);
     spot = { p, x, z };
     break;
   }
@@ -335,34 +336,31 @@ export function buildStarter(course) {
   g.userData.flag = flag;
   g.userData.hand = hand;
   g.userData.wave = 0;
+  g.userData.arm = 0;
   // Where the official stands (local), for r3d/people.js.
   g.userData.official = { standAt: new THREE.Vector3(0, STAND_DECK + 0.6, 0.6) };
   poseFlag(g, 0, 0);
+  hand.visible = false;
   return g;
 }
 
 // The stand's deck above the ground.
 const STAND_DECK = 9;
-// The official's right arm, as the person shader raises it (r3d/people.js: the
-// shoulder and the arm's length in the model's metres, the raise in radians
-// at full wave, the forearm's swing): the hand, and the pole in it, follow.
-const ARM = { shoulder: [0, 1.42, 0.19], length: 0.6, raise: 2.6, swing: 0.45, rate: 7 };
 export const FLAG_EASE_S = 0.4;
 
-// The flag in the official's hand: `wave` 0 lowered at their side (the pole
-// laid along the rail) to 1 raised over the head and swinging.
+// The flag in the official's hand (marshals.js flagPose: the same arm the
+// person shader draws): the pole's foot at their wrist, the pole along the
+// raised arm, held out low over the rail at rest. Returns the arm's angle.
 function poseFlag(starter, wave, t) {
   const { hand, official } = starter.userData;
   const scale = starter.userData.personScale || 6;
-  const a = ARM.raise * wave;
-  // The hand in the figure's own frame (+x forward, +z its right), then in
-  // the stand's (+z forward: the figure faces the road).
-  const fx = ARM.shoulder[0] + ARM.length * Math.sin(a);
-  const fy = ARM.shoulder[1] - ARM.length * Math.cos(a);
-  const fz = ARM.shoulder[2];
+  const pose = Marshals.flagPose(wave, t);
+  // The figure's frame (+x forward, +z its right) in the stand's (+z
+  // forward: the figure faces the road).
+  const [fx, fy, fz] = pose.wrist;
   hand.position.set(official.standAt.x - fz * scale, official.standAt.y + fy * scale, official.standAt.z + fx * scale);
-  const swing = Math.sin(t * ARM.rate) * ARM.swing * 1.6 * wave;
-  hand.rotation.set(0, 0, (1 - wave) * 1.75 + swing);
+  hand.rotation.set(pose.lean, 0, 0);
+  return pose.angle;
 }
 
 // Per frame: `waving` (the game's: the last lap, until the winner has the
@@ -372,7 +370,9 @@ export function updateStarter(starter, waving, t, dt, cut = false) {
   const u = starter.userData;
   const want = waving ? 1 : 0;
   u.wave = cut ? want : u.wave + Math.max(-dt / FLAG_EASE_S, Math.min(dt / FLAG_EASE_S, want - u.wave));
-  poseFlag(starter, u.wave, t);
+  u.arm = poseFlag(starter, u.wave, t);
+  // (No official to hold it, the people model missing: no flag in the air.)
+  u.hand.visible = Boolean(u.personScale);
   waveCloth(u.flag, t, 0.25 + 0.75 * u.wave);
   return u.wave > 0.5;
 }

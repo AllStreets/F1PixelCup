@@ -58,11 +58,11 @@ const shared = {
   uTime: { value: 0 },
   uNear: { value: CHEER_NEAR },
   uFar: { value: CHEER_FAR },
-  // The chequered flag official's wave (r3d/trackside.js): 0 the arm down, 1
-  // raised and swinging.
+  // The chequered flag official's right arm: its angle from straight down
+  // (marshals.js flagPose, set by r3d/trackside.js each frame).
   uFlagger: { value: 0 },
 };
-export function setFlagger(wave) { shared.uFlagger.value = wave; }
+export function setFlagger(angle) { shared.uFlagger.value = angle; }
 
 // ---------------------------------------------------------------------------
 // Geometry and material
@@ -141,10 +141,10 @@ function personMaterial(joints, { animated }) {
         vec3 home = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
         float eager = ${EAGER_BASE.toFixed(2)} + ${EAGER_SPAN.toFixed(2)} * aPose.w;
         float excite = 1.0 - smoothstep(uNear * eager, uFar * eager, min(distance(home.xz, uPlayer.xz), distance(home.xz, uPlayer2.xz)));
-        // (The flag official, aPose.x 2: never seated, the arm up by the
-        // flag's own wave, not the crowd's excitement.)
+        // (The flag official, aPose.x 2: never seated, never cheering; the
+        // right arm straight, turned at the shoulder by the flag's own angle.)
         bool flagger = aPose.x > 1.5;
-        if (flagger) excite = uFlagger;
+        if (flagger) excite = 0.0;
         float sit = flagger ? 0.0 : aPose.x * (1.0 - excite);
         float a = sit * 1.5708;
         float part = aPart;
@@ -156,7 +156,7 @@ function personMaterial(joints, { animated }) {
         float openR = raiseR * 0.12;
         float openL = raiseL * 0.12;
         float wave = sin(uTime * 7.0 + aPose.y * 6.2832) * 0.45;
-        if (flagger) wave = -wave;
+        if (flagger) { raiseR = uFlagger; openR = 0.0; }
         if (part == 3.0) { posed = rotX(posed, uElL, wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), wave * excite); }
         if (part == 5.0) { posed = rotX(posed, uElR, -wave * excite); objectNormal = rotX(objectNormal, vec3(0.0), -wave * excite); }
         if (part == 2.0 || part == 3.0) {
@@ -176,7 +176,7 @@ function personMaterial(joints, { animated }) {
         vec3 foot = vec3(uKneeL.x, 0.0, uKneeL.z);
         posed += foot - rotZ(rotZ(foot, uKneeL, -a), uHipL, a);
         // A little bounce when on their feet and cheering.
-        if (!flagger) posed.y += excite * 0.05 * max(0.0, sin(uTime * 9.0 + aPose.y * 6.2832));
+        posed.y += excite * 0.05 * max(0.0, sin(uTime * 9.0 + aPose.y * 6.2832));
         ` : ""}
         int role = int(aRole + 0.5);
         vTint = role == 0 ? aSkin : role == 1 ? aHair : role == 2 ? aShirt : role == 3 ? aTrousers
