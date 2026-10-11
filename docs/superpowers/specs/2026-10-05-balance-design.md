@@ -117,6 +117,15 @@ After the second round, starting on pole won only 25 % of races on Pro and 4 % o
 - **A broken box is back in 2 s,** not 1 (it was 3 before this work): a little less of everything, for everyone.
 - **The measuring autopilot** holds an Oil Slick behind it as a shield while it is in the top three, as a sensible leader would.
 
+## Fourth round: spinning cars, solid or not (2026-10-12)
+
+The user: driving straight through a spinning car is sometimes too easy, and has a Mario Kart feel; a spinning car that blocks has more of an F1 feel. "I like both and I want both."
+
+- **The setting:** Settings, "Spinning cars block the road", Off by default. Its note says which way it is: Off, "The Mario Kart way: you drive straight through a car that is spinning or has hit the wall"; On, "The F1 way: a car that is spinning or has hit the wall is solid. Go round it, or lose your speed against it."
+- **Off** is the behaviour above: a spinning or wall-shaken car takes no part in contacts until it is clear, and CPU cars don't lift behind it.
+- **On:** it is as solid as any car (`powerups.js` `carsCollide`). Running into it costs the usual speed; CPU cars steer round it from further away, as they do with the setting off, and lift when they are about to hit it.
+- One setting for everyone on track, players and CPU cars, in one and two players. Kept in the browser (`f1pixelcup.solidSpins`). A race takes it as it stands at the start, and its replay's recording carries it (`header.solidSpins`). Careers and scores don't depend on it.
+
 ## Result
 
 Measured once on the final code (after every fix and merge) with `tools/balance/`: the autopilot as above, 8 circuits x 6 seeds per row (48 races), 5 laps, dry. "Before" is main at 0f239b3, measured the same way.
