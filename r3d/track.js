@@ -936,7 +936,7 @@ function bleacher(bg, venue, i) {
     const y = 0.05 + k * 0.42;
     const z = -1.6 + k * 0.8;
     const seats = [];
-    for (let x = -12.4; x <= 12.4; x += 0.56) seats.push(+x.toFixed(2));
+    for (let x = -12.3; x <= 12.3; x += 0.82) seats.push(+x.toFixed(2));
     rows.push({ y, z, seats });
     // Its tread (a plank on the scaffold) and the bench before it.
     add(new THREE.BoxGeometry(len, 0.5, 0.8 * U), steel, 0, y * U - 0.25, z * U);
