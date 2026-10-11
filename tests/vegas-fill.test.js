@@ -136,6 +136,10 @@ test("the fill is built last, never claims ground, and is audited with the landm
   assert.ok(src.includes("landmarks.add(fill)"), "the fill is not among the audited landmarks");
   const fill = fs.readFileSync(path.join(ROOT, "r3d", "vegas-fill.js"), "utf8");
   assert.ok(!/occupied\.add\(/.test(fill), "the fill claims ground");
+  // The mountains and the glow answer the rain's overcast (r3d/rain.js sets
+  // the uniform of that name on every material that has it).
+  assert.equal((fill.match(/uniforms: \{ overcast: \{ value: 0 \} \}/g) || []).length, 2, "the horizon does not dim in the rain");
+  assert.ok(/uniforms\.overcast\) uniforms\.overcast\.value = isWet/.test(fs.readFileSync(path.join(ROOT, "r3d", "rain.js"), "utf8")));
   assert.ok(/occupied\.blocked\(/.test(fill) && /course\.clearance\(/.test(fill), "the fill does not keep off the track and what stands there");
   // (That each kind of piece is in fact built, and clear, is the browser's:
   // tools/checks/trackside-models-check.js vegasFillBuilt, and auditScenery.)

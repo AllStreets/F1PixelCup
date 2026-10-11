@@ -27,7 +27,7 @@ Written to `tools/vegas/fill.json` and, for the game's loader, to `assets/landma
 - Nothing of the Strip is touched: the fill is low, and no fill building stands inside a Strip footprint.
 - Among the landmarks for `auditScenery`; the painted ground is ground.
 - By tier: Low leaves out the cars, lamp posts and palms; Medium parks half the cars; the near ground is painted at 4096 pixels on High and 2048 otherwise.
-- The painted ground is drawn in the plain ground's place (which is hidden) and is wet in the rain as it was. The mountains and the glow are not dimmed by rain. Las Vegas is raced at night only, so there is no day version.
+- The painted ground is drawn in the plain ground's place (which is hidden) and is wet in the rain as it was. In the rain the mountains fog over into the night and the glow dims with the overcast, as the sky does. Las Vegas is raced at night only, so there is no day version.
 - Only a footprint's outer ring is used, so a courtyard is roofed over.
 
 ## 4. Checks

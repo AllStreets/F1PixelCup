@@ -561,6 +561,9 @@ def building(b, parent):
             flat(m, outline, z0, down=True)
         if tall and inside_poly((cx, cy), outline):
             plant_room(m, outline, cx, cy, w, h)
+        if tall:
+            # A faint line of light at its roof's edge: there, and no more.
+            band(m, outline, h - 1.5, h - 0.9, (0.3, 0.34, 0.46, 1.0), out=0.3)
         return m.finish(parent=parent, extras=extras)
     tower = tall or st.get("all")
     col = tone(st["c"], st["k"]) if tower else tone(st.get("pod", st["trim"]), PLAIN)

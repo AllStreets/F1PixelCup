@@ -484,15 +484,24 @@ function horizon(cx, cz) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
   geo.setIndex(idx);
-  const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0a0b16, fog: false, side: THREE.DoubleSide }));
+  // (Under rain cloud the ridges fog over into the night and the glow dims:
+  // r3d/rain.js sets `overcast` on every material that has it, as the sky's.)
+  const hills = new THREE.Mesh(geo, new THREE.ShaderMaterial({
+    side: THREE.DoubleSide, fog: false,
+    uniforms: { overcast: { value: 0 } },
+    vertexShader: "void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    // (The night's fog and the sky's foot are #10122a: render3d.js applyLighting.)
+    fragmentShader: "uniform float overcast; void main() { gl_FragColor = vec4(mix(vec3(0.0030, 0.0033, 0.0080), vec3(0.0052, 0.0061, 0.0232), clamp(overcast * 1.9, 0.0, 1.0)), 1.0); }",
+  }));
   hills.frustumCulled = false;
   g.add(hills);
   // The glow: light added to the air low over the city, behind the ridges
   // (they stand dark against it), gone a little above them.
   const glow = new THREE.Mesh(new THREE.CylinderGeometry(R + 200, R + 200, 1500, 72, 1, true), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false,
+    uniforms: { overcast: { value: 0 } },
     vertexShader: "varying float vUp; void main() { vUp = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: "varying float vUp; void main() { float a = pow(1.0 - vUp, 2.6); gl_FragColor = vec4(vec3(1.0, 0.56, 0.24) * a * 0.42, 1.0); }",
+    fragmentShader: "uniform float overcast; varying float vUp; void main() { float a = pow(1.0 - vUp, 2.6) * (1.0 - clamp(overcast * 1.7, 0.0, 1.0)); gl_FragColor = vec4(vec3(1.0, 0.56, 0.24) * a * 0.42, 1.0); }",
   }));
   glow.position.set(cx, 730, cz);
   glow.frustumCulled = false;
