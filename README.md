@@ -65,6 +65,22 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 
 <table>
 <tr>
+<td width="50%"><img src="docs/readme/vegas.jpg" alt="Leclerc's Ferrari leading Hamilton's down the Las Vegas Strip at night, the Eiffel Tower on the left and the Bellagio's fountains on the right" width="100%"/></td>
+<td width="50%"><img src="docs/readme/bellagio.jpg" alt="The Bellagio's tower behind its lake at night, rows of fountain jets rising" width="100%"/></td>
+</tr>
+<tr>
+<td><em><b>The Strip at night.</b> Leclerc leads Hamilton down the Las Vegas Strip, past the half-scale Eiffel Tower and the Bellagio. Every major resort stands where it really does, placed from OpenStreetMap.</em></td>
+<td><em><b>The Bellagio's fountains.</b> Rows of jets rise and fall across the lake, all of them together every half minute.</em></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/readme/safety-car.jpg" alt="The Safety Car with its roof lights on, leading a queue of cars at Spa" width="100%"/></td>
+<td width="50%"><img src="docs/readme/wall.jpg" alt="Leclerc's Ferrari hitting the barrier at Suzuka in a burst of sparks and dust" width="100%"/></td>
+</tr>
+<tr>
+<td><em><b>The Safety Car.</b> It drives in through a service gate, catches up to the front and leads the field, here at Spa, then drives back to its garage.</em></td>
+<td><em><b>Barriers that bite.</b> Leclerc ran wide at Suzuka: sparks, dust and a lost place or two.</em></td>
+</tr>
+<tr>
 <td width="50%"><img src="docs/readme/cars.jpg" alt="Norris's McLaren leads Piastri's, Verstappen's Red Bull and the Mercedes at Suzuka" width="100%"/></td>
 <td width="50%"><img src="docs/readme/harbour.jpg" alt="Monaco's harbour from above: stands full of people, yachts at the quay, cars on the harbour front" width="100%"/></td>
 </tr>
@@ -130,14 +146,14 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td width="33%" valign="top">🍌 <b>8 power-ups</b><br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, 0.25x to 4x, with broadcast graphics.</sub></td>
+<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, 0.25x to 4x, with broadcast graphics and the race's sound.</sub></td>
 <td width="33%" valign="top">🥂 <b>A 3D podium</b><br/><sub>The top three with their own faces: arms up, the trophy, the champagne.</sub></td>
 <td width="33%" valign="top">🎮 <b>Two players</b><br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
 </tr>
 <tr>
 <td width="33%" valign="top">🏟️ <b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, a TV helicopter, fireworks at the flag.</sub></td>
 <td width="33%" valign="top">📈 <b>A career per driver</b><br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub></td>
-<td width="33%" valign="top">🔊 <b>All sound synthesised</b><br/><sub>Engine, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub></td>
+<td width="33%" valign="top">🔊 <b>All sound synthesised</b><br/><sub>Engines that start up on the grid and crackle on the lift, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub></td>
 </tr>
 </table>
 
@@ -217,6 +233,8 @@ All 32, at one scale, five laps each. 🌙 marks the night races, under floodlig
 
 Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. Every venue has its landmarks, built in Blender, the historic circuits too: Hockenheim's Motodrom, the Nürburg on its wooded hill above its village, the Serra de Sintra above Estoril with the Pena Palace on top, Johannesburg's skyline from Kyalami, Sepang's double-fronted grandstand under its palm-leaf canopies, Istanbul Park's grandstand hung from its masts, a terraced Tuscan hill at Mugello and a Finger Lake between autumn woods at Watkins Glen.
 
+Las Vegas has the whole Strip: every major resort from the Strat to Mandalay Bay stands where OpenStreetMap puts it, each in its own stone or glass, with the half-scale Eiffel Tower, the Bellagio's lake and its fountain show, the Venetian's campanile, the Colosseum at Caesars Palace, the High Roller, the Luxor's pyramid and beam, and the Sphere. The night races run under a moon and stars.
+
 > [!NOTE]
 > **Where the pits are.** Where OpenStreetMap maps the real pit lane, the game's sits beside it, on its real side. Three don't: at Interlagos the real lane leaves the track through the Senna S and at Singapore its side bends too tightly for garages, so theirs are across the road, and Monaco's is placed by hand. Albert Park, Monza, Suzuka and Las Vegas have none mapped, so theirs come from the circuit's shape.
 
@@ -281,7 +299,7 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 
 ## Race day
 
-**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x.
+**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x. Replays have sound, heard from the camera: the engine close and level onboard, the cars coming and going past a trackside camera with the Doppler shift. Pick a car and every camera stays on it; **Auto** (or `A`) hands the choice of cars back to the director.
 
 **The podium.** After a cup, the season or a single race, the top three stand on their steps in 3D. The camera sweeps in, the arms go up (third, then second, then first, each stepping forward), the camera pushes in on the winner lifting the trophy, then the champagne (on Medium and High graphics) and the confetti, and a slow orbit for as long as you want to watch. The name plates carry the points and the banners the team colours.
 
@@ -337,6 +355,7 @@ The first pad is P1's, the second P2's (standard mapping), and a pad and the key
 | Previous or next car | `↑` `↓` |
 | Slower or faster (0.25x to 4x) | `-`, `=` (or `+`) |
 | Next camera | `C` |
+| Auto: the director picks the cars again | `A` |
 | Leave the replay | `X` or `Esc` |
 
 ---
@@ -377,8 +396,8 @@ tools/checks/      the browser checks          tests/      the Node tests
 - **Built in Blender, from code.** The car, the driver figure, the power-up models, the landmarks, the grandstands, the crowd and crews, and the yachts are all generated by Python scripts in `tools/blender/`, run headless (`Blender -b --factory-startup -P <script>`). Each script checks its own result and refuses to write a broken model; the trackside models are compressed with meshopt.
 - **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (shape sliders from a set of about forty, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
 - **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
-- **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one and stepping down if the first seconds run slow.
-- **Checked twice.** `npm test` runs 461 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
+- **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one. The 3D picture's resolution is capped per tier (a Retina screen's full resolution on High) and steps down a notch when frames miss 60 a second, then back up when there is room; Auto drops a tier only once that has run out. The HUD always draws at the screen's own resolution.
+- **Checked twice.** `npm test` runs 499 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
 
 ### Run it yourself
 
@@ -398,7 +417,7 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 
 **Live:** https://f1-pixel-cup.vercel.app. The Vercel project follows this repo: every push to `main` deploys, other branches get preview URLs, and `.vercelignore` keeps `docs/`, `tests/` and `tools/` out of the upload.
 
-**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
+**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). `vegas.jpg`, `bellagio.jpg`, `safety-car.jpg` and `wall.jpg` are copies of the site's own pictures (the script's `vegas`, `ontrack` and `wall` parts). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
 
 </details>
 
@@ -417,6 +436,7 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | **Sep 29 to 30** · *a world* | A career per driver, the power-ups' beauty pass, painted helmets, the 2025 grid's pages on the site, broadcast post-processing, pit lanes from OpenStreetMap, marshals and the helicopter, rain with real wet grip, car v2 and the Blender driver figure. |
 | **Oct 1 to 2** · *race day* | TV-camera replays, the 3D podium ceremony and two-player split screen. |
 | **Oct 4 to 5** · *the whole calendar* | The drivers' own faces; landmarks, yachts, stands and 3D crowds at every venue; all 24 circuits of 2025 in six cups and the Season; random, custom and single races; the Legends and Golden Era cups. Then this README. |
+| **Oct 5 to 10** · *sound and fury* | Sound in the replays and an engine that starts up, shimmers flat out and crackles on the lift; the Safety Car's service gates; steering that matters, barrier hits and comebacks from the back; landmarks at the historic circuits; a moon over the night races; and the whole Las Vegas Strip, building by building. |
 
 ### What's next
 

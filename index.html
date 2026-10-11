@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>F1 Pixel Cup: race the real circuits in your browser</title>
-  <meta name="description" content="All 20 drivers and all 24 circuits of the 2025 season, in 3D, in your browser, with TV-camera replays, a 3D podium and two-player split screen.">
+  <meta name="description" content="All 20 drivers and all 24 circuits of the 2025 season, in 3D, in your browser, with the Las Vegas Strip at night, TV-camera replays with sound, a 3D podium and two-player split screen.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231b1620'/%3E%3Crect x='4' y='5' width='24' height='8' rx='2' fill='%23dc0000'/%3E%3Crect x='4' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='12' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='20' y='18' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='8' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='16' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3Crect x='24' y='22' width='4' height='4' fill='%23fff0c9'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,8 +43,47 @@
         <h1 class="it-title hero-title">Lights out.<br>Your race.</h1>
         <p class="hero-lead">All 20 drivers, all 24 circuits of the calendar and a career that remembers every lap. In 3D, in your browser.</p>
         <a class="go-btn play-link" href="./play.html"><span>Play now ›</span></a>
-        <p class="hero-features"><a class="chip" href="#replays">TV replays</a><a class="chip" href="#podium">3D podium</a><a class="chip" href="#two-player">Two players</a><a class="chip" href="#race-choices">Custom cups</a></p>
+        <p class="hero-features"><a class="chip" href="#vegas">Vegas at night</a><a class="chip" href="#replays">TV replays</a><a class="chip" href="#podium">3D podium</a><a class="chip" href="#two-player">Two players</a><a class="chip" href="#race-choices">Custom cups</a></p>
       </div>
+    </section>
+
+    <section id="vegas" class="vegas" aria-labelledby="vegas-title">
+      <figure class="vegas-banner">
+        <img src="./assets/shots/vegas-strip.jpg" srcset="./assets/shots/vegas-strip-800.jpg 800w, ./assets/shots/vegas-strip.jpg 1600w" sizes="100vw" width="1600" height="900" loading="lazy" decoding="async"
+          alt="Charles Leclerc's Ferrari leading Lewis Hamilton's down the Las Vegas Strip at night, the half-scale Eiffel Tower lit gold on the left and the Bellagio's fountains on the right">
+        <figcaption class="vegas-copy">
+          <p class="kicker">Round 22 · Las Vegas Strip Circuit</p>
+          <h2 id="vegas-title" class="it-title section-title">Saturday night on the Strip</h2>
+          <p>Every major resort of the Strip stands where it really does, placed from OpenStreetMap and lit for the night race. Flat out past the Bellagio's fountains, under the Eiffel Tower, round the Sphere.</p>
+        </figcaption>
+      </figure>
+      <div class="vegas-sights">
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-bellagio.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Bellagio's curved tower behind its lake, rows of fountain jets rising in front of it at night">
+          <figcaption><b>The Bellagio's fountains</b> Rows of jets rise and fall in a show across the lake, and all of them go up together every half minute.</figcaption>
+        </figure>
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-eiffel.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The half-scale Eiffel Tower lit gold beside the circuit, a striped hot-air balloon at its foot">
+          <figcaption><b>The Eiffel Tower</b> Half the height of the one in Paris, four lattice legs lit gold, with the hot-air balloon beside it.</figcaption>
+        </figure>
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-sphere.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Sphere showing a planet with oceans and clouds, towers of the Strip behind it">
+          <figcaption><b>The Sphere</b> Its whole skin lit with a planet, right beside the track.</figcaption>
+        </figure>
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-wynn.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Wynn's curved bronze glass tower under a full moon and stars">
+          <figcaption><b>The Wynn</b> A tall curve of bronze glass, here under the moon.</figcaption>
+        </figure>
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-caesars.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="A floodlit stone tower of Caesars Palace and its fountain basins, the Bellagio and its lake beyond">
+          <figcaption><b>Caesars Palace</b> Floodlit stone towers and three fountain basins, with the Bellagio next door.</figcaption>
+        </figure>
+        <figure class="trackside-card">
+          <img src="./assets/shots/vegas-venetian.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Venetian's brick bell tower with its green spire among the lit hotel towers, the track curving past">
+          <figcaption><b>The Venetian</b> The campanile's brick shaft and green spire, the resort's towers round it.</figcaption>
+        </figure>
+      </div>
+      <p class="vegas-more muted">Also out there: the Colosseum, the High Roller, the Luxor's pyramid and its beam into the sky, and the Strat.</p>
     </section>
 
     <section id="circuits" class="section">
@@ -70,7 +109,9 @@
             <li><strong>Four cameras:</strong> Director, Trackside, Onboard and Helicopter. Trackside cameras pan and zoom to follow the car, then cut to the next one round the lap.</li>
             <li><strong>A director</strong> cuts between them on its own and follows the closest battle at the front.</li>
             <li><strong>Broadcast graphics:</strong> a timing tower, a lower third naming the driver in shot, the lap count and, onboard, the throttle and brake trace and the steering.</li>
-            <li><strong>0.25x to 4x</strong>, pause, and jump to any moment of the race. Pick the camera and the car yourself, or leave it to the director.</li>
+            <li><strong>With sound:</strong> you hear the race from the camera. Onboard the engine is right there; from trackside and the helicopter the cars come and go, with the pitch shift as they pass.</li>
+            <li><strong>Your car stays yours:</strong> pick a car and every camera stays on it. Press <b>Auto</b> to hand the choice of cars back to the director.</li>
+            <li><strong>0.25x to 4x</strong>, pause, and jump to any moment of the race.</li>
           </ul>
           <p class="feature-how">On the results screen, press <b>Watch the replay</b>. It replays the race you just ran.</p>
         </div>
@@ -108,6 +149,42 @@
           <div class="keymap" data-keymap></div>
         </div>
       </article>
+    </section>
+
+    <section id="on-track" class="section">
+      <p class="kicker">New on track</p>
+      <h2 class="it-title section-title">Louder, harder, fairer</h2>
+      <p class="section-lead muted">A Safety Car that drives in through a gate, barriers that bite, engines that start and crackle, and a moon over the night races.</p>
+      <div class="ontrack-grid">
+        <article class="ontrack-card" data-card="safety-car">
+          <img src="./assets/shots/ontrack-sc-gate.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Safety Car leaving its shelter at a service gate at Spa-Francorchamps, its slip road running through a gap in the barrier onto the track">
+          <h3>Service gates</h3>
+          <p>Every circuit has service gates round the lap. Called, the Safety Car takes whichever gate (or the pit exit) gets it in front of the leader soonest, and waits there if a car is coming.</p>
+        </article>
+        <article class="ontrack-card" data-card="safety-car-leads">
+          <img src="./assets/shots/ontrack-sc-leading.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="The Safety Car with its roof lights on, leading a queue of cars through a corner at Spa-Francorchamps">
+          <h3>Then it leads</h3>
+          <p>It catches up to the front, holds the field for seven seconds, then puts its lights out and drives back round to the pit lane and into its garage.</p>
+        </article>
+        <article class="ontrack-card" data-card="barriers">
+          <img src="./assets/shots/ontrack-wall.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="Charles Leclerc's Ferrari hitting the barrier beyond the gravel at Suzuka, sparks and dust flying from the rear of the car">
+          <h3>Steer, or meet the wall</h3>
+          <p>Let go in a corner and you run wide, across the run-off and into the barrier. A hard hit throws sparks and dust and shakes the camera, and the cars behind slip by while you gather it up.</p>
+        </article>
+        <article class="ontrack-card" data-card="night-sky">
+          <img src="./assets/shots/vegas-wynn.jpg" width="1000" height="563" loading="lazy" decoding="async" alt="A full moon and stars in the night sky over the Las Vegas Strip Circuit">
+          <h3>Night skies</h3>
+          <p>The five night races (Jeddah, Singapore, Las Vegas, Lusail and Yas Marina) run under a pale moon and stars. When it rains, the cloud hides them.</p>
+        </article>
+        <article class="ontrack-card is-words" data-card="engine">
+          <h3>Engines that start</h3>
+          <p>On the grid your car and the ones nearest it turn over, catch and blip before the lights. Flat out, the note keeps moving: the hybrid whines, then runs dry on a long straight. Lift off at high revs and it crackles and pops. Every sound is synthesised live.</p>
+        </article>
+        <article class="ontrack-card is-words" data-card="performance">
+          <h3>Smooth at full sharpness</h3>
+          <p>On High graphics the 3D picture draws at a Retina screen's full resolution. If frames start to miss 60 a second, its resolution steps down a notch, and back up when there is room. The HUD's text stays crisp throughout.</p>
+        </article>
+      </div>
     </section>
 
     <section id="trackside" class="section">
@@ -193,6 +270,16 @@
             <dt>Space</dt><dd>Use your power-up</dd>
             <dt>Esc / P</dt><dd>Pause (Q from pause to quit; Start on a gamepad)</dd>
             <dt>Gamepad</dt><dd>Stick or d-pad to steer, right trigger or the bottom face button for throttle, left trigger or the right face button to brake and reverse, a bumper to drift, the left or top face button for power-ups</dd>
+          </dl>
+          <h3 class="howto-sub">In a replay</h3>
+          <dl class="keys" id="replay-keys">
+            <dt>Space</dt><dd>Play or pause</dd>
+            <dt>← →</dt><dd>Back or forward 5 seconds</dd>
+            <dt>↑ ↓</dt><dd>Previous or next car</dd>
+            <dt>C</dt><dd>Next camera</dd>
+            <dt>A</dt><dd>Auto: the director picks the cars again</dd>
+            <dt>− +</dt><dd>Slower or faster</dd>
+            <dt>X / Esc</dt><dd>Leave the replay</dd>
           </dl>
           <h3 class="howto-sub">Two players</h3>
           <p class="muted">Pick 2 players in the pit lane. P or Esc pauses for both.</p>
