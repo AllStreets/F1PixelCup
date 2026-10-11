@@ -152,7 +152,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   // In front of a driver's chest, where the hands change over; and by their
   // left side, where the left hand keeps it (the figure's own space: x
   // ahead, -z its left).
-  const chestPoint = (d, trophy, out) => d.fig.root.localToWorld(out.set(0.24 + trophy.bowl, 1.16, -0.02));
+  // (A tall one lower, so its top stays under the chin.)
+  const chestPoint = (d, trophy, out) => d.fig.root.localToWorld(out.set(0.24 + trophy.bowl, 1.16 - Math.max(0, trophy.top - 0.21) * 0.6, -0.02));
   const holdPoint = (d, trophy, out) => d.fig.root.localToWorld(out.set(0.2 + trophy.bowl, 1.08, -(0.2 + trophy.bowl * 0.8)));
   // How far a driver has stepped forward on their step.
   const forwardOn = (d) => d.fig.root.position.z - d.step.standZ;

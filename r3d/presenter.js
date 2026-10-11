@@ -49,23 +49,25 @@ export function presenterFor(cup, entries) {
 }
 
 // The front and back of the jacket, on the suit's own sheet (suits.js: the
-// torso's panel): the shirt in the V of the lapels, the lapels' edges, a tie
-// or the blouse's neckline and a brooch, buttons.
+// torso's panels): in front the shirt in the V of the lapels, the lapels'
+// edges, a tie or the blouse's neckline and a brooch, buttons; behind, the
+// jacket's collar, the seam down the middle and its vent.
 function formalSheet(outfit, tier) {
   const size = Suits.sheetSize(tier);
   const canvas = document.createElement("canvas");
   [canvas.width, canvas.height] = size;
   const g = canvas.getContext("2d");
   const { panel } = Suits.LAYOUT;
-  // The front panel is the sheet's left half (sheetUV says where a point of
-  // the cloth lands): x across the chest (m, 0 the middle), y up (m).
-  const at = (x, y) => {
-    const [u, v] = Suits.sheetUV("front", x, y);
+  // The front panel is the sheet's left half, the back its right (sheetUV
+  // says where a point of the cloth lands): x across the chest (m, 0 the
+  // middle), y up (m).
+  const at = (x, y, side = "front") => {
+    const [u, v] = Suits.sheetUV(side, x, y);
     return [u * size[0], (1 - v) * size[1]];
   };
-  const poly = (points, fill) => {
+  const poly = (points, fill, side = "front") => {
     g.beginPath();
-    points.forEach(([x, y], i) => { const [px, py] = at(x, y); if (i) g.lineTo(px, py); else g.moveTo(px, py); });
+    points.forEach(([x, y], i) => { const [px, py] = at(x, y, side); if (i) g.lineTo(px, py); else g.moveTo(px, py); });
     g.closePath();
     g.fillStyle = fill;
     g.fill();
@@ -98,11 +100,19 @@ function formalSheet(outfit, tier) {
     g.arc(bx, by, size[1] * 0.007, 0, Math.PI * 2);
     g.fill();
   });
+  // Behind: the jacket's collar (the shirt's shows over it: the figure's own
+  // collar band), the seam down the middle of the back, the vent at its foot.
+  const seam = "rgba(0, 0, 0, 0.42)";
+  poly([[-0.085, top], [0.085, top], [0.07, top - 0.035], [-0.07, top - 0.035]], lapel, "back");
+  poly([[-0.0016, top - 0.04], [0.0016, top - 0.04], [0.0016, panel.bottom + 0.15], [-0.0016, panel.bottom + 0.15]], seam, "back");
+  poly([[-0.004, panel.bottom + 0.15], [0.004, panel.bottom + 0.15], [0.007, panel.bottom], [-0.007, panel.bottom]], seam, "back");
+  // (A woman's jacket is cut in at the waist: a dart each side of the seam.)
+  if (!outfit.tie) [-0.07, 0.07].forEach((x) => poly([[x - 0.0012, 1.3], [x + 0.0012, 1.3], [x * 0.8 + 0.0012, panel.bottom + 0.04], [x * 0.8 - 0.0012, panel.bottom + 0.04]], seam, "back"));
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.premultiplyAlpha = true;
   tex.anisotropy = 4;
-  tex.userData = { marks: { formal: outfit.tie ? "suit and tie" : "trouser suit" }, size };
+  tex.userData = { marks: { formal: outfit.tie ? "suit and tie" : "trouser suit", back: "collar, seam and vent" }, size };
   return tex;
 }
 
