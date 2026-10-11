@@ -4287,7 +4287,10 @@ function playPodiumCue(plan, cue) {
   const ctxA = audio.ctx;
   const buffer = plan.buffers.get(cue.sound);
   const at = plan.started + cue.at;
-  const late = Math.max(0, ctxA.currentTime - at);
+  // (A few hundredths late is only that first frame's own time: such a
+  // sound is played whole, from now, rather than clipped at its start.)
+  const behind = Math.max(0, ctxA.currentTime - at);
+  const late = behind < 0.5 && !cue.loop ? 0 : behind;
   if (!cue.loop && late >= buffer.duration) return;
   const source = ctxA.createBufferSource();
   source.buffer = buffer;
@@ -4306,15 +4309,26 @@ function playPodiumCue(plan, cue) {
   plan.log.push({ id: cue.id, at: cue.at, startAt, skip, seconds: buffer.duration, loop: Boolean(cue.loop) });
 }
 
-// The ceremony is t seconds in (its first frame, or the 2D podium opening):
-// every cue whose sound is ready is set to start at its own moment; the
+// The ceremony was t seconds in at the moment `at` (performance.now() of
+// its first frame, or of the 2D podium opening). The sound takes its zero
+// from that same moment on the audio clock, however long the frame itself
+// took (the first one frees the race's world), so both run from one start;
+// after that each is real time and they cannot drift, through a hitch or a
+// hidden tab. Every cue whose sound is ready is set at its own moment; the
 // others as soon as they are rendered (the first sounds are ready first).
-function startPodiumSound(t) {
+function startPodiumSound(t, at) {
   const plan = audio.podium;
   if (!plan || plan.started !== null || !plan.on || !audioReady()) return;
   try {
     const ctxA = audio.ctx;
-    plan.started = ctxA.currentTime + 0.03 - t;
+    // (By the browser's own pairing of the two clocks where it gives one:
+    // under load the audio clock's reading can lag the page's by a frame or two.)
+    const pair = ctxA.getOutputTimestamp ? ctxA.getOutputTimestamp() : null;
+    const atAudio = pair && pair.performanceTime > 0
+      ? pair.contextTime + (at - pair.performanceTime) / 1000
+      : ctxA.currentTime - (performance.now() - at) / 1000;
+    plan.started = atAudio - t;
+    plan.startedPerf = at - t * 1000;
     plan.readyAtStart = plan.buffers.size;
     plan.gain = ctxA.createGain();
     plan.gain.gain.value = 1;
@@ -4386,7 +4400,9 @@ function podiumSoundState({ last = false } = {}) {
   return {
     winner: plan.winner, anthem: plan.anthem, anthemSeconds: plan.anthemSeconds, on: plan.on,
     cues: plan.cues.map((c) => ({ id: c.id, at: c.at, gain: c.gain })), rendered: plan.buffers.size, readyAtStart: plan.readyAtStart,
-    started: plan.started !== null, zero: plan.started, now: plan.started !== null ? audio.ctx.currentTime - plan.started : null,
+    started: plan.started !== null, zero: plan.started, startedPerf: plan.startedPerf ?? null,
+    // The audio clock and the page's clock read together (the browser's own pairing).
+    clock: audio.ctx && audio.ctx.getOutputTimestamp ? audio.ctx.getOutputTimestamp() : null, baseLatency: audio.ctx ? audio.ctx.baseLatency || 0 : 0, now: plan.started !== null ? audio.ctx.currentTime - plan.started : null,
     log: plan.log.map((l) => ({ ...l })), waiting: plan.waiting.length, level,
   };
 }
@@ -4459,7 +4475,7 @@ function showPodium() {
   // Without the 3D ceremony the celebration is still heard, from now. (A cup
   // whose results never readied one, e.g. no 3D at all, prepares it here.)
   if (!audio.podium) preparePodiumSound();
-  if (!threeD) startPodiumSound(0);
+  if (!threeD) startPodiumSound(0, performance.now());
   if (!window.Screens) return;
   const summary = podiumSummary();
   window.Screens.showPodium({
@@ -4482,12 +4498,14 @@ function drawPodiumScene() {
   let frame = null;
   if (worldView() === "3d" && window.Render3D.podium) {
     const reserve = window.Screens && window.Screens.podiumReserve ? window.Screens.podiumReserve() : null;
-    const drawn = render3dSafely(() => window.Render3D.podium.frame(performance.now(), reserve));
+    const frameAt = performance.now();
+    state.podiumFrameAt = frameAt;
+    const drawn = render3dSafely(() => window.Render3D.podium.frame(frameAt, reserve));
     if (drawn.ok) frame = drawn.value;
   }
   const on = Boolean(frame && frame.drawing);
   // The sound runs on the ceremony's own clock: from its first drawn frame.
-  if (on) startPodiumSound(frame.t);
+  if (on) startPodiumSound(frame.t, state.podiumFrameAt);
   if (on !== state.podium3d || on) {
     state.podium3d = on;
     if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.platesIn);
