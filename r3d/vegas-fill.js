@@ -15,9 +15,12 @@
 // - The mountains' silhouette round the horizon and the city's sodium glow.
 //
 // Built last, after everything else has its ground, and claims none: a piece
-// stands only where it is clear of the track's barriers and of whatever is
-// already there (the Strip's buildings, the stands, the Safety Car's
-// entrances, the marshals' posts, the people); anything else is left out.
+// stands only where it is clear of the track's barriers (a building 14 units
+// outside them at every point of its outline; a palm by its fronds' reach;
+// a lamp post 9, a parked car 8) and of whatever is already there (the
+// Strip's buildings and lake, the stands, the Safety Car's entrances, the
+// marshals' posts, the people, the fill's own buildings); anything else is
+// left out. Las Vegas is raced at night only: this is its night.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -25,7 +28,8 @@ import { tracksideModel } from "./models.js";
 import { color } from "./textures.js";
 import { palmFronds } from "./track.js";
 import { VEGAS_SCALE as S, VEGAS_ORIGIN as O, stripFacade, videoMaterial } from "./vegas.js";
-import { KIND, WALL, insidePoly, areaOf, carSpots, alongLine, lengthOf, lookOf, seeded } from "./vegas-fill-plan.js";
+import { wettable, WET_RUNOFF } from "./rain.js";
+import { KIND, WALL, insidePoly, areaOf, longAxis, carSpots, alongLine, lengthOf, lookOf, outlineSamples, clearSpans, lotLamps, nearest, seeded } from "./vegas-fill-plan.js";
 
 // The world from the map's metres (x east, y north).
 const wx = (x) => O.x + x * S;
@@ -128,14 +132,14 @@ function cap(soup, t, flat, y, normal, col, v) {
 }
 
 // One low building from its footprint: its walls in its kind, its roof.
-function lowBuilding(soup, lights, b, rand) {
+function lowBuilding(soup, lights, b, rand, front) {
   const o = ccw(b.o);
   const n = o.length / 2;
   let cx = 0; let cy = 0;
   for (let i = 0; i < n; i += 1) { cx += o[i * 2]; cy += o[i * 2 + 1]; }
   cx /= n; cy /= n;
   const t = soup.at(wx(cx), wz(cy));
-  const look = lookOf(b.k, rand());
+  const look = lookOf(b.k, rand(), front);
   const col = rgba(look.tint, look.wall);
   const roof = rgba(["#2b2b30", "#34333a", "#26272b", "#3a3836"][Math.floor(rand() * 4)], WALL.plain);
   // A canopy (a filling station's, a porte-cochère's): a slab on its posts,
@@ -172,39 +176,74 @@ function lowBuilding(soup, lights, b, rand) {
   }
 }
 
+const clearAt = (course, x, y, margin, r) => course.clearance(wx(x), wz(y), margin + 60) >= margin && !course.occupied.blocked(wx(x), wz(y), r);
+const nearTrack = (course, x, y, reach = NEAR) => course.clearance(wx(x), wz(y), reach) < reach;
+
+// A map of ground taken, painted from outlines and lines (metres) and asked
+// by point: `side` game units square round (cx, cz), 4 units a pixel.
+function groundMask(cx, cz, side, draw) {
+  const px = Math.round(side / 4);
+  const canvas = document.createElement("canvas");
+  canvas.width = px;
+  canvas.height = px;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const k = px / side;
+  const X = (x) => (wx(x) - (cx - side / 2)) * k;
+  const Y = (y) => (wz(y) - (cz - side / 2)) * k;
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#fff";
+  ctx.lineCap = "round";
+  draw({
+    poly(flat, grow = 3) {
+      ctx.beginPath();
+      for (let i = 0; i < flat.length; i += 2) (i ? ctx.lineTo(X(flat[i]), Y(flat[i + 1])) : ctx.moveTo(X(flat[i]), Y(flat[i + 1])));
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = grow * 2 * S * k;
+      ctx.stroke();
+    },
+    line(flat, width) {
+      ctx.beginPath();
+      for (let i = 0; i < flat.length; i += 2) (i ? ctx.lineTo(X(flat[i]), Y(flat[i + 1])) : ctx.moveTo(X(flat[i]), Y(flat[i + 1])));
+      ctx.lineWidth = width * S * k;
+      ctx.stroke();
+    },
+  });
+  const taken = ctx.getImageData(0, 0, px, px).data;
+  // Is (x, y) metres, or anything within r metres of it, on taken ground?
+  // (Outside the map: not taken.)
+  return (x, y, r = 0) => {
+    const reach = Math.ceil(r * S * k);
+    const sx = Math.round(X(x)); const sy = Math.round(Y(y));
+    for (let dx = -reach; dx <= reach; dx += Math.max(1, reach)) {
+      for (let dy = -reach; dy <= reach; dy += Math.max(1, reach)) {
+        const qx = sx + dx; const qy = sy + dy;
+        if (qx >= 0 && qy >= 0 && qx < px && qy < px && taken[(qy * px + qx) * 4] > 40) return true;
+      }
+    }
+    return false;
+  };
+}
+
 // The low buildings that stand clear of the track and of what is already
-// there; the rest are left out.
-function buildings(course, data, soup, lights, rand) {
-  let kept = 0;
-  let left = 0;
+// there (every 15 units round their outlines, and their middles) and out of
+// the lake (`dry`); the rest are left out. Returns those built.
+function buildings(course, data, soup, lights, rand, onMainRoad, dry) {
+  const kept = [];
   data.low.forEach((b) => {
     // (Drawn from the generator whether it is kept or not: the same building
     // has the same look whatever stands round it.)
     const pick = seeded(Math.floor(rand() * 1e9));
-    let ok = true;
-    let cx = 0; let cy = 0;
-    const n = b.o.length / 2;
-    for (let i = 0; i < n && ok; i += 1) {
-      const x = wx(b.o[i * 2]); const z = wz(b.o[i * 2 + 1]);
-      cx += b.o[i * 2] / n; cy += b.o[i * 2 + 1] / n;
-      // Every corner and every edge's middle.
-      const mx = wx((b.o[i * 2] + b.o[((i + 1) % n) * 2]) / 2); const mz = wz((b.o[i * 2 + 1] + b.o[((i + 1) % n) * 2 + 1]) / 2);
-      ok = course.clearance(x, z, MARGIN + 60) >= MARGIN && course.clearance(mx, mz, MARGIN + 60) >= MARGIN && !course.occupied.blocked(x, z, 2.5) && !course.occupied.blocked(mx, mz, 2.5);
-    }
-    if (ok) ok = course.clearance(wx(cx), wz(cy), MARGIN + 60) >= MARGIN && !course.occupied.blocked(wx(cx), wz(cy), 2.5);
-    if (!ok) { left += 1; return; }
-    lowBuilding(soup, lights, b, pick);
-    kept += 1;
+    if (!outlineSamples(b.o, 15 / S).every(([x, y]) => clearAt(course, x, y, MARGIN, 2.5) && dry(x, y))) return;
+    lowBuilding(soup, lights, b, pick, onMainRoad(b.o[0], b.o[1]));
+    kept.push(b);
   });
-  return { kept, left };
+  return kept;
 }
 
-const clearAt = (course, x, y, margin, r) => course.clearance(wx(x), wz(y), margin + 60) >= margin && !course.occupied.blocked(wx(x), wz(y), r);
-const nearTrack = (course, x, y, reach = NEAR) => course.clearance(wx(x), wz(y), reach) < reach;
-
 // Where the street lamps stand (metres): along the roads by their class and
-// across the car parks, the same list the ground is painted from and the
-// posts are built from.
+// across the car parks (along each one's own aisles), the same list the
+// ground is painted from and the posts are built from.
 function lampSpots(data) {
   const STEP = { m: 80, p: 46, s: 52, t: 62, r: 74 };
   const out = [];
@@ -212,17 +251,13 @@ function lampSpots(data) {
     if (!STEP[r.c]) return;
     alongLine(r.p, STEP[r.c], (k % 2 ? 1 : -1) * (r.w / 2 + 1.6), (k * 17) % STEP[r.c]).forEach(([x, y, yaw]) => out.push({ x, y, yaw: yaw + (k % 2 ? -Math.PI / 2 : Math.PI / 2), road: r.c }));
   });
-  data.lots.forEach((lot) => {
-    let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
-    for (let i = 0; i < lot.length; i += 2) { x0 = Math.min(x0, lot[i]); x1 = Math.max(x1, lot[i]); y0 = Math.min(y0, lot[i + 1]); y1 = Math.max(y1, lot[i + 1]); }
-    for (let x = x0 + 14; x < x1; x += 34) for (let y = y0 + 14; y < y1; y += 34) if (insidePoly(x, y, lot)) out.push({ x, y, yaw: 0, road: "lot" });
-  });
+  data.lots.forEach((lot) => lotLamps(lot, 34).forEach(([x, y, yaw]) => out.push({ x, y, yaw, road: "lot" })));
   return out;
 }
 
 // The ground painted: `side` game units square round (cx, cz), `px` pixels a
 // side. `far`: the city past the map (its grid of streets and house lights)
-// and a hole where the near ground lies.
+// (the near ground lies a little over its middle).
 function paintGround(data, lamps, { cx, cz, side, px, far = null, marks, beds = [] }) {
   const canvas = document.createElement("canvas");
   canvas.width = px;
@@ -311,11 +346,13 @@ function paintGround(data, lamps, { cx, cz, side, px, far = null, marks, beds = 
   // The resorts' own grounds where nothing is mapped: planted beds, a path round each, its lights.
   beds.forEach((b) => {
     ctx.fillStyle = "#3a3840";
-    ctx.beginPath(); ctx.ellipse(X(b.x), Y(b.y), (b.r + 2.2) * m, (b.r * 0.7 + 2.2) * m, b.turn, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = b.k % 3 ? "#173522" : "#1f3d24";
-    ctx.beginPath(); ctx.ellipse(X(b.x), Y(b.y), b.r * m, b.r * 0.7 * m, b.turn, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(X(b.x), Y(b.y), (b.r + 2.2) * m, (b.r * b.flat + 2.2) * m, b.turn, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ["#173522", "#1f3d24", "#14301f", "#243f22"][b.k % 4];
+    ctx.beginPath(); ctx.ellipse(X(b.x), Y(b.y), b.r * m, b.r * b.flat * m, b.turn, 0, Math.PI * 2); ctx.fill();
   });
-  // Car parks: asphalt inside a kerb, the bays' lines where they can be seen.
+  // Car parks: asphalt inside a kerb; near the circuit, the painted line
+  // down the middle of each double row of bays (as r3d/vegas-fill-plan.js
+  // carSpots parks them).
   data.lots.forEach((lot) => {
     path(lot, true);
     ctx.fillStyle = "#17181c";
@@ -323,6 +360,25 @@ function paintGround(data, lamps, { cx, cz, side, px, far = null, marks, beds = 
     ctx.strokeStyle = "#3c3c44";
     ctx.lineWidth = Math.max(1, 0.5 * m);
     ctx.stroke();
+    if (far || areaOf(lot) < 500) return;
+    const a = longAxis(lot);
+    const ux = Math.cos(a); const uy = Math.sin(a);
+    let u0 = Infinity; let u1 = -Infinity; let v0 = Infinity; let v1 = -Infinity;
+    for (let i = 0; i < lot.length; i += 2) {
+      const u = lot[i] * ux + lot[i + 1] * uy; const v = -lot[i] * uy + lot[i + 1] * ux;
+      u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+    }
+    ctx.save();
+    ctx.clip();
+    ctx.strokeStyle = "rgba(190, 190, 200, 0.42)";
+    ctx.lineWidth = Math.max(1, 0.3 * m);
+    for (let v = v0 + 2.6 + 5.4; v < v1 - 2.6; v += 18) {
+      ctx.beginPath();
+      ctx.moveTo(X((u0 + 3) * ux - v * uy), Y((u0 + 3) * uy + v * ux));
+      ctx.lineTo(X((u1 - 3) * ux - v * uy), Y((u1 - 3) * uy + v * ux));
+      ctx.stroke();
+    }
+    ctx.restore();
   });
   // The paved plaza round the Sphere, the promenade to the High Roller.
   if (marks) {
@@ -378,26 +434,26 @@ function paintGround(data, lamps, { cx, cz, side, px, far = null, marks, beds = 
     ctx.fillRect(x - r, y - r, r * 2, r * 2);
   });
   ctx.globalCompositeOperation = "source-over";
-  if (far) ctx.clearRect((px - far.hole * k) / 2, (px - far.hole * k) / 2, far.hole * k, far.hole * k);
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   return tex;
 }
 
-function groundPlane(tex, side, cx, cz, y, hole) {
+function groundPlane(tex, side, cx, cz, y, name) {
   // Lit by the night's own light and by itself: the lamps' pools and the
-  // pools' water are light, the asphalt is not.
-  const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85, roughness: 0.96, alphaTest: hole ? 0.5 : 0 });
+  // pools' water are light, the asphalt is not. Wet in the rain, as the
+  // plain ground it stands in for was.
+  const mat = wettable(new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.85, roughness: 0.96 }), WET_RUNOFF);
   mat.userData.worldOwned = true;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(side, side), mat);
   mesh.rotation.x = -Math.PI / 2;
   mesh.position.set(cx, y, cz);
-  mesh.receiveShadow = !hole;
+  mesh.receiveShadow = name === "fill_ground";
   // (Ground: the road is laid on it, and the audit of what stands over the
   // track does not count it.)
   mesh.userData.ground = true;
-  mesh.name = hole ? "fill_far_ground" : "fill_ground";
+  mesh.name = name;
   return mesh;
 }
 
@@ -416,7 +472,7 @@ function horizon(cx, cz) {
     // (West is -x: the highest range; the east's lower; gaps north and south.)
     const west = Math.max(0, -Math.cos(a)) ** 1.5;
     const east = Math.max(0, Math.cos(a)) ** 2;
-    ridge.push(110 + 420 * west + 230 * east + 70 * Math.sin(a * 7 + 1.3) + 45 * Math.sin(a * 17) + 60 * rand());
+    ridge.push(300 + 640 * west + 340 * east + 110 * Math.sin(a * 7 + 1.3) + 70 * Math.sin(a * 17) + 90 * rand());
   }
   const p = [];
   const idx = [];
@@ -428,68 +484,39 @@ function horizon(cx, cz) {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(p, 3));
   geo.setIndex(idx);
-  const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x07080f, fog: false, side: THREE.DoubleSide }));
+  const hills = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x0a0b16, fog: false, side: THREE.DoubleSide }));
   hills.frustumCulled = false;
   g.add(hills);
-  // The glow: light added to the air low over the city, gone by the ridges' height.
-  const glow = new THREE.Mesh(new THREE.CylinderGeometry(R - 150, R - 150, 520, 72, 1, true), new THREE.ShaderMaterial({
+  // The glow: light added to the air low over the city, behind the ridges
+  // (they stand dark against it), gone a little above them.
+  const glow = new THREE.Mesh(new THREE.CylinderGeometry(R + 200, R + 200, 1500, 72, 1, true), new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending, fog: false,
     vertexShader: "varying float vUp; void main() { vUp = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
-    fragmentShader: "varying float vUp; void main() { float a = pow(1.0 - vUp, 2.2); gl_FragColor = vec4(vec3(1.0, 0.56, 0.24) * a * 0.34, 1.0); }",
+    fragmentShader: "varying float vUp; void main() { float a = pow(1.0 - vUp, 2.6); gl_FragColor = vec4(vec3(1.0, 0.56, 0.24) * a * 0.42, 1.0); }",
   }));
-  glow.position.set(cx, 240, cz);
+  glow.position.set(cx, 730, cz);
   glow.frustumCulled = false;
-  glow.renderOrder = 1;
+  glow.renderOrder = -1;
   g.add(glow);
   g.traverse((o) => { if (o.material) o.material.userData.worldOwned = true; });
   return g;
 }
 
-// The ground near the circuit that the map leaves empty (no building, car
-// park, road, pool or garden on it) and nothing else stands on: a planted
-// bed's place every 34 m of it. Each { x, y, r, turn, k } in metres.
-function emptyGround(course, data, cx, cz, rand) {
-  const SIDE = 3600;
-  const px = 900;
-  const canvas = document.createElement("canvas");
-  canvas.width = px;
-  canvas.height = px;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  const k = px / SIDE;
-  const X = (x) => (wx(x) - (cx - SIDE / 2)) * k;
-  const Y = (y) => (wz(y) - (cz - SIDE / 2)) * k;
-  ctx.fillStyle = "#fff";
-  ctx.strokeStyle = "#fff";
-  ctx.lineCap = "round";
-  const fillPoly = (flat) => {
-    ctx.beginPath();
-    for (let i = 0; i < flat.length; i += 2) (i ? ctx.lineTo(X(flat[i]), Y(flat[i + 1])) : ctx.moveTo(X(flat[i]), Y(flat[i + 1])));
-    ctx.closePath();
-    ctx.fill();
-    ctx.lineWidth = 6 * S * k;
-    ctx.stroke();
-  };
-  data.low.forEach((b) => fillPoly(b.o));
-  [...data.lots, ...data.pools, ...data.greens].forEach(fillPoly);
-  data.roads.forEach((r) => {
-    ctx.beginPath();
-    for (let i = 0; i < r.p.length; i += 2) (i ? ctx.lineTo(X(r.p[i]), Y(r.p[i + 1])) : ctx.moveTo(X(r.p[i]), Y(r.p[i + 1])));
-    ctx.lineWidth = (r.w + 8) * S * k;
-    ctx.stroke();
-  });
-  const taken = ctx.getImageData(0, 0, px, px).data;
+// The ground near the circuit that the map leaves empty and nothing stands
+// on (`mapped`: asks the map; `free`: asks the game): planted beds scattered
+// over it, no two alike, never in rows. Each { x, y, r, flat, turn, k } in metres.
+function emptyGround(course, cx, cz, rand, mapped, free) {
   const out = [];
-  const half = SIDE / 2 / S;
+  const half = 1800 / S;
   const mx = (cx - O.x) / S; const my = -(cz - O.z) / S;
-  for (let gx = -half + 20; gx < half - 20; gx += 34) {
-    for (let gy = -half + 20; gy < half - 20; gy += 34) {
-      const x = mx + gx + (rand() - 0.5) * 12; const y = my + gy + (rand() - 0.5) * 12;
-      const r = 6 + rand() * 7;
-      const turn = rand() * Math.PI;
-      const sx = Math.round(X(x)); const sy = Math.round(Y(y));
-      if (taken[(sy * px + sx) * 4] > 40 || !nearTrack(course, x, y, 620) || !clearAt(course, x, y, 12, r * S + 3)) continue;
-      out.push({ x, y, r, turn, k: out.length });
-    }
+  for (let i = 0; i < 9000 && out.length < 1100; i += 1) {
+    const x = mx + (rand() * 2 - 1) * half; const y = my + (rand() * 2 - 1) * half;
+    const r = 4 + rand() * rand() * 14;
+    const bed = { x, y, r, flat: 0.5 + rand() * 0.45, turn: rand() * Math.PI, k: out.length };
+    if (mapped(x, y, r + 3) || !nearTrack(course, x, y, 620) || !free(x, y, r * S + 4)) continue;
+    // (Apart from each other: a bed's width and a path between.)
+    if (out.some((b) => Math.hypot(b.x - x, b.y - y) < b.r + r + 7)) continue;
+    out.push(bed);
   }
   return out;
 }
@@ -541,47 +568,69 @@ function sparkTexture() {
   return new THREE.CanvasTexture(c);
 }
 
-export function buildVegasFill(course, venue) {
+export function buildVegasFill(course, venue, { tier = "high", landmarks = null } = {}) {
   const model = tracksideModel("vegasFill");
   const data = model && model.userData.fill;
   if (!data) return null;
-  const night = Boolean(venue.night);
   const group = new THREE.Group();
   group.name = "landmark:vegasFill";
   const rand = seeded(20251122);
   const { cx, cz } = course.bounds;
   const clock = { value: 0 };
+  const MASK = 5200;
+  // The Bellagio's lake where the game has it (it moves with its resort):
+  // nothing of the fill stands in it.
+  const lake = landmarks && landmarks.getObjectByName("lm_bellagio_lake");
+  const water = lake ? new THREE.Box3().setFromObject(lake).expandByScalar(5) : null;
+  const dry = (x, y) => !water || wx(x) < water.min.x || wx(x) > water.max.x || wz(y) < water.min.z || wz(y) > water.max.z;
 
-  // The buildings, and what is built like them.
+  // The buildings, and what is built like them. (A plain building on a main
+  // road has a lit front.)
   const soup = new Soup();
   const lights = new Soup();
   const screens = new Soup();
-  const counts = buildings(course, data, soup, lights, rand);
+  const mainRoad = groundMask(cx, cz, MASK, (m) => data.roads.forEach((r) => { if (r.c === "p" || r.c === "s") m.line(r.p, r.w + 70); }));
+  const kept = buildings(course, data, soup, lights, rand, (x, y) => mainRoad(x, y), dry);
+  // Where the fill's own buildings stand, and where the map has anything at all.
+  const built = groundMask(cx, cz, MASK, (m) => kept.forEach((b) => m.poly(b.o, 1)));
+  const mapped = groundMask(cx, cz, MASK, (m) => {
+    kept.forEach((b) => m.poly(b.o, 3));
+    [...data.lots, ...data.pools, ...data.greens].forEach((o) => m.poly(o, 3));
+    data.roads.forEach((r) => m.line(r.p, r.w + 8));
+  });
+  // Is a piece free to stand at (x, y) metres: `margin` units outside the
+  // barriers, nothing of the game's within r units, none of the fill's
+  // buildings within `room` metres, not in the lake.
+  const open = (x, y, margin, r, room = 1.5) => clearAt(course, x, y, margin, r) && !built(x, y, room) && dry(x, y);
   const concrete = rgba("#8d8d92", WALL.plain);
 
-  // The monorail: its beam on piers, a station here and there, a train.
+  // The monorail: its beam where it is clear of the track and its run-off
+  // (it stops short and starts again), piers under the beam only, a station
+  // here and there, a train.
   let piers = 0;
+  let spans = 0;
   data.rail.forEach((line, k) => {
-    for (let i = 0; i + 3 < line.length; i += 2) {
-      const ax = line[i]; const ay = line[i + 1]; const bx = line[i + 2]; const by = line[i + 3];
-      const len = Math.hypot(bx - ax, by - ay);
-      if (len < 0.5) continue;
-      // (Never over the track or its run-off: the beam stops short and starts again.)
-      const steps = Math.max(1, Math.ceil(len / 12));
-      let ok = true;
-      for (let s = 0; s <= steps && ok; s += 1) ok = course.clearance(wx(ax + ((bx - ax) * s) / steps), wz(ay + ((by - ay) * s) / steps), MARGIN + 60) >= MARGIN;
-      if (!ok) continue;
-      soup.box((ax + bx) / 2, (ay + by) / 2, [(bx - ax) / len, (by - ay) / len], len / 2 + 0.2, 0.75, 7.2, 8.8, concrete, 20);
-    }
-    alongLine(line, 34, 0, 8).forEach(([x, y, yaw]) => {
-      if (!clearAt(course, x, y, MARGIN, 2)) return;
-      soup.box(x, y, [Math.cos(yaw), Math.sin(yaw)], 0.7, 0.9, 0, 7.2, concrete, 20);
-      piers += 1;
+    const runs = clearSpans(line, 11, (x, y) => course.clearance(wx(x), wz(y), MARGIN + 60) >= MARGIN && dry(x, y));
+    runs.forEach((run) => {
+      spans += 1;
+      run.forEach(([x, y], i) => {
+        if (i + 1 < run.length) {
+          const [bx, by] = run[i + 1];
+          const len = Math.hypot(bx - x, by - y);
+          soup.box((x + bx) / 2, (y + by) / 2, [(bx - x) / len, (by - y) / len], len / 2 + 0.2, 0.75, 7.2, 8.8, concrete, 20);
+        }
+        if (i % 3 !== 1 || !open(x, y, MARGIN, 2, 1)) return;
+        soup.box(x, y, [1, 0], 0.8, 0.8, 0, 7.2, concrete, 20);
+        piers += 1;
+      });
     });
     if (lengthOf(line) < 500) return;
     alongLine(line, 850, 0, 240 + k * 90).forEach(([x, y, yaw], j) => {
       const d = [Math.cos(yaw), Math.sin(yaw)];
-      if (![-1, 0, 1].every((e) => clearAt(course, x + d[0] * e * 26, y + d[1] * e * 26, MARGIN, 3))) return;
+      // (Its hall and the train beside it, end to end: on the beam, clear.)
+      const onBeam = runs.some((run) => run.some(([px, py]) => Math.hypot(px - x, py - y) < 12));
+      const room = [-1, 0, 1].every((e) => [0, 9].every((off) => open(x + d[0] * e * 26 - d[1] * off, y + d[1] * e * 26 + d[0] * off, MARGIN, 3, 3)));
+      if (!onBeam || !room) return;
       // A station: a glazed hall on the beam, lit.
       soup.box(x, y, d, 28, 5.5, 8.8, 13.2, rgba("#b9bcc2", WALL.plain), 20);
       lights.box(x, y, d, 27, 5.6, 10.2, 11.6, [0.8, 0.86, 0.95, 1], 0);
@@ -599,7 +648,7 @@ export function buildVegasFill(course, venue) {
   data.bridges.forEach((line) => {
     const len = lengthOf(line);
     if (len < 18 || len > 220) return;
-    if (!alongLine(line, 6, 0, 0).every(([x, y]) => clearAt(course, x, y, MARGIN + 4, 3))) return;
+    if (!alongLine(line, 6, 0, 0).every(([x, y]) => clearAt(course, x, y, MARGIN + 4, 3) && dry(x, y))) return;
     for (let i = 0; i + 3 < line.length; i += 2) {
       const ax = line[i]; const ay = line[i + 1]; const bx = line[i + 2]; const by = line[i + 3];
       const l = Math.hypot(bx - ax, by - ay);
@@ -618,7 +667,7 @@ export function buildVegasFill(course, venue) {
   data.roads.forEach((r, k) => {
     if (r.c !== "p" && r.c !== "s") return;
     alongLine(r.p, 270, -(r.w / 2 + 4.5), 60 + (k * 53) % 200).forEach(([x, y, yaw]) => {
-      if (shelters >= 90 || !nearTrack(course, x, y, 900) || !clearAt(course, x, y, 12, 3.5)) return;
+      if (shelters >= 90 || !nearTrack(course, x, y, 900) || !open(x, y, 12, 3.5, 3)) return;
       const d = [Math.cos(yaw), Math.sin(yaw)];
       soup.box(x, y, d, 2.2, 0.8, 2.3, 2.5, rgba("#3a3c42", WALL.plain), 20);
       [-1, 1].forEach((e) => soup.box(x + d[0] * e * 2.1, y + d[1] * e * 2.1, d, 0.08, 0.08, 0, 2.3, rgba("#3a3c42", WALL.plain), 20));
@@ -628,7 +677,7 @@ export function buildVegasFill(course, venue) {
     alongLine(r.p, 420, (k % 2 ? 1 : -1) * (r.w / 2 + 13), 150 + (k * 97) % 380).forEach(([x, y, yaw]) => {
       if (boards >= 44 || !nearTrack(course, x, y, 1300)) return;
       const d = [Math.cos(yaw + 0.5), Math.sin(yaw + 0.5)];
-      if (![-1, 0, 1].every((e) => clearAt(course, x + d[0] * e * 7, y + d[1] * e * 7, MARGIN + 4, 4))) return;
+      if (![-1, 0, 1].every((e) => open(x + d[0] * e * 7, y + d[1] * e * 7, MARGIN + 4, 4, 2))) return;
       soup.box(x, y, d, 0.5, 0.5, 0, 9.5, rgba("#44464c", WALL.plain), 20);
       if (boards % 5 < 3) {
         // A screen of abstract colour (no picture, no lettering), both ways.
@@ -666,12 +715,11 @@ export function buildVegasFill(course, venue) {
     canopy = true;
   }
 
-  const facade = stripFacade(night);
+  const facade = stripFacade(true);
   facade.name = "facade_vegas_fill";
   facade.userData.worldOwned = true;
   soup.meshes(facade, "fill_buildings").forEach((m) => group.add(m));
   const neon = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
-  if (!night) neon.color = new THREE.Color(0.35, 0.35, 0.35);
   neon.userData.worldOwned = true;
   lights.meshes(neon, "fill_lights").forEach((m) => group.add(m));
   const video = videoMaterial(clock);
@@ -680,7 +728,7 @@ export function buildVegasFill(course, venue) {
 
   // The lamps: posts and heads near the circuit, points of light beyond.
   const lamps = lampSpots(data);
-  const posts = lamps.filter((l) => nearTrack(course, l.x, l.y) && clearAt(course, l.x, l.y, 9, 2));
+  const posts = lamps.filter((l) => nearTrack(course, l.x, l.y) && open(l.x, l.y, 9, 2, 1));
   const pole = new THREE.BoxGeometry(0.3 * S, 9 * S, 0.3 * S);
   pole.translate(0, 4.5 * S, 0);
   const arm = new THREE.BoxGeometry(2.2 * S, 0.2 * S, 0.25 * S);
@@ -688,60 +736,80 @@ export function buildVegasFill(course, venue) {
   const poles = instanced("fill_lamp_posts", mergeGeometries([pole, arm]), new THREE.MeshStandardMaterial({ color: 0x3a3c42, roughness: 0.7 }), posts);
   const head = new THREE.BoxGeometry(1.1 * S, 0.22 * S, 0.5 * S);
   head.translate(1.7 * S, 8.86 * S, 0);
-  const heads = instanced("fill_lamp_heads", head, new THREE.MeshBasicMaterial({ color: night ? 0xffd9a0 : 0x8a8a8a, toneMapped: false }), posts);
+  const heads = instanced("fill_lamp_heads", head, new THREE.MeshBasicMaterial({ color: 0xffd9a0, toneMapped: false }), posts);
   group.add(poles, heads);
 
-  // The cars parked in the car parks near the circuit.
+  // The cars parked in the car parks: every car park near the circuit has
+  // its rows; the nearest of them all are drawn.
   const paint = ["#d9dadc", "#c2c4c8", "#1b1c1f", "#5c5f66", "#8a1c1c", "#22345a", "#e9e6da", "#3a3d42", "#6b6f76"].map((h) => color(h));
-  const cars = [];
+  let spots = [];
+  let carParks = 0;
   data.lots.forEach((lot) => {
-    if (cars.length >= CARS.high || areaOf(lot) < 500) return;
+    if (areaOf(lot) < 500) return;
     let near = false;
     for (let i = 0; i < lot.length && !near; i += 2) near = nearTrack(course, lot[i], lot[i + 1]);
     if (!near) return;
-    carSpots(lot, rand, { share: 0.62 }).forEach(([x, y, yaw]) => {
-      if (cars.length < CARS.high && clearAt(course, x, y, 8, 2.5)) cars.push({ x, y, yaw, color: paint[Math.floor(rand() * paint.length)] });
-    });
+    const mine = carSpots(lot, rand, { share: 0.62 }).filter(([x, y]) => open(x, y, 8, 2.5, 2.5));
+    if (mine.length) carParks += 1;
+    mine.forEach(([x, y, yaw]) => spots.push({ x, y, yaw, color: paint[Math.floor(rand() * paint.length)] }));
   });
+  spots = nearest(spots, (c) => course.clearance(wx(c.x), wz(c.y), NEAR + 200), CARS.high);
+  const cars = spots;
   // (In no order of place: a lower tier draws the first of them, spread over every car park.)
   for (let i = cars.length - 1; i > 0; i -= 1) { const j = Math.floor(rand() * (i + 1)); [cars[i], cars[j]] = [cars[j], cars[i]]; }
   const parked = instanced("fill_cars", carGeometry(), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.35 }), cars);
   group.add(parked);
 
-  // Palms: along the boulevards and round the pools.
+  // Palms, each where its own fronds are clear of the barriers (they reach
+  // 14 units at full size) and of every building: along the boulevards,
+  // round the pools, on the golf course and in the gardens, in the beds.
   const palmSpots = [];
+  const palm = (x, y, scale, reach = NEAR) => {
+    if (!nearTrack(course, x, y, reach) || !open(x, y, 14 * scale + 5, 4, 2)) return false;
+    palmSpots.push({ x, y, yaw: rand() * 6.28, scale });
+    return true;
+  };
+  let count = 0;
   data.roads.forEach((r, k) => {
     if (r.c !== "p") return;
-    alongLine(r.p, 30, (k % 2 ? 1 : -1) * (r.w / 2 + 4.5), (k * 13) % 30).forEach(([x, y]) => {
-      if (palmSpots.length < 520 && nearTrack(course, x, y) && clearAt(course, x, y, 10, 4)) palmSpots.push({ x, y, yaw: rand() * 6.28, scale: 0.55 + rand() * 0.25 });
-    });
+    alongLine(r.p, 30, (k % 2 ? 1 : -1) * (r.w / 2 + 4.5), (k * 13) % 30).forEach(([x, y]) => { if (count < 480 && palm(x, y, 0.55 + rand() * 0.25)) count += 1; });
   });
+  count = 0;
   data.pools.forEach((p) => {
-    for (let i = 0; i < p.length && palmSpots.length < 700; i += 8) {
+    for (let i = 0; i < p.length && count < 200; i += 8) {
       const x = p[i] + (rand() - 0.5) * 9 + 5; const y = p[i + 1] + (rand() - 0.5) * 9 + 5;
-      if (!insidePoly(x, y, p) && nearTrack(course, x, y) && clearAt(course, x, y, 10, 4)) palmSpots.push({ x, y, yaw: rand() * 6.28, scale: 0.4 + rand() * 0.2 });
+      if (!insidePoly(x, y, p) && palm(x, y, 0.4 + rand() * 0.2)) count += 1;
     }
   });
-  // The resorts' own grounds near the circuit, where the map has nothing: a
-  // planted bed every so often, palms in most, low lights along its path.
-  const beds = emptyGround(course, data, cx, cz, rand);
-  const pathLights = [];
-  beds.forEach((b) => {
-    if (b.k % 4 !== 3 && palmSpots.length < 1300) palmSpots.push({ x: b.x + (rand() - 0.5) * b.r, y: b.y + (rand() - 0.5) * b.r * 0.6, yaw: rand() * 6.28, scale: 0.4 + rand() * 0.3 });
-    if (b.k % 2) palmSpots.push({ x: b.x + (rand() - 0.5) * b.r * 1.4, y: b.y + (rand() - 0.5) * b.r, yaw: rand() * 6.28, scale: 0.32 + rand() * 0.2 });
-    for (let i = 0; i < 3; i += 1) pathLights.push({ x: b.x + Math.cos(b.turn + i * 2.1) * (b.r + 1.4), y: b.y - Math.sin(b.turn + i * 2.1) * (b.r * 0.7 + 1.4), road: "path" });
-  });
-  // The golf course's and the gardens' trees.
+  let greenTrees = 0;
   data.greens.forEach((g) => {
     if (areaOf(g) < 4000) return;
     let x0 = Infinity; let x1 = -Infinity; let y0 = Infinity; let y1 = -Infinity;
     for (let i = 0; i < g.length; i += 2) { x0 = Math.min(x0, g[i]); x1 = Math.max(x1, g[i]); y0 = Math.min(y0, g[i + 1]); y1 = Math.max(y1, g[i + 1]); }
-    const want = Math.min(160, Math.ceil(areaOf(g) / 1800));
-    for (let i = 0; i < want * 2 && palmSpots.length < 1500; i += 1) {
+    const want = Math.min(170, Math.ceil(areaOf(g) / 1500));
+    let got = 0;
+    for (let i = 0; i < want * 3 && got < want && greenTrees < 380; i += 1) {
       const x = x0 + rand() * (x1 - x0); const y = y0 + rand() * (y1 - y0);
-      if (insidePoly(x, y, g) && nearTrack(course, x, y, 1100) && clearAt(course, x, y, 12, 4)) palmSpots.push({ x, y, yaw: rand() * 6.28, scale: 0.4 + rand() * 0.35 });
+      if (insidePoly(x, y, g) && palm(x, y, 0.4 + rand() * 0.35, 1100)) { got += 1; greenTrees += 1; }
     }
   });
+  // The resorts' own grounds near the circuit, where the map has nothing:
+  // planted beds, palms in most, a few low lights along each one's path.
+  const beds = emptyGround(course, cx, cz, rand, mapped, (x, y, r) => clearAt(course, x, y, 12, r) && dry(x, y));
+  const pathLights = [];
+  count = 0;
+  beds.forEach((b) => {
+    if (b.k % 4 !== 3 && count < 420 && palm(b.x + (rand() - 0.5) * b.r, b.y + (rand() - 0.5) * b.r * b.flat, 0.34 + rand() * 0.3)) count += 1;
+    const n = 1 + (b.k % 4);
+    for (let i = 0; i < n; i += 1) pathLights.push({ x: b.x + Math.cos(b.turn + i * 6.283 / n + b.k) * (b.r + 1.4), y: b.y - Math.sin(b.turn + i * 6.283 / n + b.k) * (b.r * b.flat + 1.4), road: "path" });
+  });
+  const trunk = new THREE.CylinderGeometry(1.2, 1.8, 26, 5);
+  trunk.translate(0, 13, 0);
+  const fronds = palmFronds();
+  fronds.translate(0, 26, 0);
+  const trunks = instanced("fill_palm_trunks", trunk, new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.9 }), palmSpots);
+  const crowns = instanced("fill_palm_fronds", fronds, new THREE.MeshStandardMaterial({ color: color("#4e7a3a"), roughness: 0.85, emissive: color("#4e7a3a"), emissiveIntensity: 0.18 }), palmSpots);
+  group.add(trunks, crowns);
 
   // The far lights: the lamps past the posts, and windows through the city.
   const sparks = [];
@@ -752,7 +820,7 @@ export function buildVegasFill(course, venue) {
     sparks.push(wx(l.x), 9 * S, wz(l.y));
     tints.push(warm.r, warm.g, warm.b);
   });
-  data.low.forEach((b) => {
+  kept.forEach((b) => {
     if (rand() > 0.45 || nearTrack(course, b.o[0], b.o[1], 500)) return;
     sparks.push(wx(b.o[0]), Math.min(b.h, 6) * S, wz(b.o[1]));
     const c = rand() < 0.7 ? pale : cool;
@@ -774,40 +842,32 @@ export function buildVegasFill(course, venue) {
   const points = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size: 11, sizeAttenuation: true, map: sparkTexture(), vertexColors: true, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
   points.name = "fill_far_lights";
   points.frustumCulled = false;
-  points.visible = night;
   points.material.userData.worldOwned = true;
   group.add(points);
 
-  const trunk = new THREE.CylinderGeometry(1.2, 1.8, 26, 5);
-  trunk.translate(0, 13, 0);
-  const fronds = palmFronds();
-  fronds.translate(0, 26, 0);
-  const trunks = instanced("fill_palm_trunks", trunk, new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.9 }), palmSpots);
-  const crowns = instanced("fill_palm_fronds", fronds, new THREE.MeshStandardMaterial({ color: color("#4e7a3a"), roughness: 0.85, emissive: color("#4e7a3a"), emissiveIntensity: night ? 0.18 : 0 }), palmSpots);
-  group.add(trunks, crowns);
-
-  // The ground: near the circuit in detail, the valley beyond it.
+  // The ground: near the circuit in detail (finer on High), the valley
+  // beyond it, a little lower so the two never fight.
   const NEAR_SIDE = 4600;
   const FAR_SIDE = 17000;
-  const near = groundPlane(paintGround(data, [...lamps, ...pathLights], { cx, cz, side: NEAR_SIDE, px: 4096, marks: data.marks, beds }), NEAR_SIDE, cx, cz, -0.4, false);
-  const far = groundPlane(paintGround(data, lamps, { cx, cz, side: FAR_SIDE, px: 2048, far: { city: CITY, hole: NEAR_SIDE - 6 } }), FAR_SIDE, cx, cz, -0.4, true);
+  const near = groundPlane(paintGround(data, [...lamps, ...pathLights], { cx, cz, side: NEAR_SIDE, px: tier === "high" ? 4096 : 2048, marks: data.marks, beds }), NEAR_SIDE, cx, cz, -0.4, "fill_ground");
+  const far = groundPlane(paintGround(data, lamps, { cx, cz, side: FAR_SIDE, px: 2048, far: { city: CITY } }), FAR_SIDE, cx, cz, -1.3, "fill_far_ground");
   group.add(near, far, horizon(cx, cz));
 
   // By tier: Low leaves out the cars, the posts and the palms (the painted
   // ground and the points of light stay); Medium parks half the cars.
   let shown = null;
-  group.userData.showFor = (tier) => {
-    if (tier === shown) return;
-    shown = tier;
-    const low = tier === "low";
-    parked.count = Math.min(cars.length, CARS[tier] ?? CARS.high);
+  group.userData.showFor = (t) => {
+    if (t === shown) return;
+    shown = t;
+    const low = t === "low";
+    parked.count = Math.min(cars.length, CARS[t] ?? CARS.high);
     parked.visible = parked.count > 0;
     [poles, heads, trunks, crowns].forEach((m) => { m.visible = !low && m.count > 0; });
   };
-  group.userData.showFor("high");
+  group.userData.showFor(tier);
   group.userData.animate = (dt) => { clock.value += dt; };
-  // (The game's own plain ground lies under this one.)
+  // (The game's own plain ground is not drawn under this one.)
   group.userData.replacesGround = true;
-  group.userData.landmark = { name: "vegasFill", fromModel: true, x: Math.round(cx), z: Math.round(cz), buildings: counts.kept, leftOut: counts.left, cars: cars.length, lamps: posts.length, palms: palmSpots.length, beds: beds.length, piers, bridges, shelters, boards, canopy, farLights: sparks.length / 3 };
+  group.userData.landmark = { name: "vegasFill", fromModel: true, x: Math.round(cx), z: Math.round(cz), buildings: kept.length, leftOut: data.low.length - kept.length, cars: cars.length, carParks, lamps: posts.length, palms: palmSpots.length, greenTrees, beds: beds.length, spans, piers, bridges, shelters, boards, canopy, farLights: sparks.length / 3 };
   return group;
 }

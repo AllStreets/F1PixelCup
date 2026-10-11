@@ -18,7 +18,8 @@ and the footbridges round the Las Vegas Strip Circuit and writes
   loader fetches with the venue (a scene without geometry, the data in its
   extras).
 
-No names or marks are kept: a name only decides a building's kind.
+No names or marks are kept: a name only decides a building's kind. (Only a
+footprint's outer ring is kept: a courtyard is roofed over.)
 """
 import argparse
 import json
@@ -183,9 +184,18 @@ def main():
             if not o or area(o) < 30:
                 continue
             c = (sum(p[0] for p in o) / len(o), sum(p[1] for p in o) / len(o))
-            if in_strip(c):
+            # Its middle and points every 4 m round its outline (each drawn a
+            # tenth toward the middle: a neighbour shares its wall with a tower):
+            # none inside a building of the Strip.
+            probes = [c]
+            for a, b in zip(o, o[1:] + o[:1]):
+                parts = max(2, math.ceil(math.dist(a, b) / 4))
+                probes += [(a[0] + (b[0] - a[0]) * i / parts, a[1] + (b[1] - a[1]) * i / parts) for i in range(parts)]
+            if any(in_strip((p[0] + (c[0] - p[0]) * t, p[1] + (c[1] - p[1]) * t)) for p in probes for t in (0.06, 0.1, 0.14)):
                 continue
             kind = KINDS.get(tags["building"], GENERIC)
+            if tags.get("amenity") == "parking":
+                kind = GARAGE
             name = tags.get("name", "").lower()
             if "chapel" in name or tags.get("amenity") == "place_of_worship":
                 kind = CHAPEL
@@ -211,7 +221,7 @@ def main():
         elif tags.get("railway") == "monorail":
             rail.append(flat(simplify(pts, 0.5)))
         elif tags.get("highway") == "footway":
-            if len(pts) >= 2:
+            if len(pts) >= 2 and tags.get("bridge") not in (None, "no"):
                 bridges.append(flat(simplify(pts, 0.5)))
         elif tags.get("highway") in ROADS and tags.get("tunnel") != "yes":
             c, w = ROADS[tags["highway"]]

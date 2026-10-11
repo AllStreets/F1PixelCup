@@ -164,6 +164,18 @@ async (page) => {
       && onWater(out.yasmarina, 10, 100) && onWater(out.baku, 6, 100) && onWater(out.jeddah, 6, 100)) || JSON.stringify(out);
   });
 
+  // Las Vegas's ground filled in (r3d/vegas-fill.js): every kind of piece
+  // built (cars in most of its car parks, trees on the golf course, piers
+  // only under the monorail's beam), on High, Medium and Low.
+  if (await step(() => !CHECK_ONLY.length || CHECK_ONLY.includes("lasvegas"))) {
+    results.vegasFillBuilt = await step(async () => {
+      Render3D.auditScenery(TRACKS.find((t) => t.id === "lasvegas"), { step: 80, lanes: 1 });
+      const f = Render3D.inspect().trackside.landmarks.find((l) => l.name === "vegasFill");
+      return Boolean(f && f.buildings > 2500 && f.leftOut > 20 && f.cars > 1500 && f.carParks > 25 && f.lamps > 500 && f.palms > 600 && f.greenTrees > 60
+        && f.beds > 200 && f.spans > 5 && f.piers > 50 && f.piers <= f.spans * 40 && f.farLights > 5000) || JSON.stringify(f);
+    });
+  }
+
   // Nothing over the track and nobody on the road, every circuit.
   results.nothingOnTheTrack = await step(() => {
     const bad = [];

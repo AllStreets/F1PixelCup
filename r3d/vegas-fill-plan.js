@@ -112,11 +112,72 @@ const TINTS = {
   [KIND.chapel]: ["#e6e2da"],
   [KIND.shed]: ["#5c5d62", "#66625c"],
 };
-export function lookOf(kind, pick) {
+// A plain building has a lit front (shops, a restaurant) only on a main
+// road (`front`) or here and there (a third of the rest); the others are
+// dark blocks with a few windows, as most of a city is at night.
+export function lookOf(kind, pick, front = false) {
   const tints = TINTS[kind] || TINTS[KIND.generic];
   const tint = tints[Math.min(tints.length - 1, Math.floor(pick * tints.length))];
-  const wall = kind === KIND.garage ? WALL.ribbon : kind === KIND.hotel ? WALL.stone : kind === KIND.house || kind === KIND.shed ? WALL.quiet : WALL.plain;
+  let wall = WALL.plain;
+  if (kind === KIND.garage) wall = WALL.ribbon;
+  else if (kind === KIND.hotel) wall = WALL.stone;
+  else if (kind === KIND.house || kind === KIND.shed) wall = WALL.quiet;
+  else if (kind === KIND.generic && !front && (pick * 7) % 1 > 0.33) wall = WALL.quiet;
   return { tint, wall };
+}
+
+// Points round a closed outline no more than `step` apart (every corner
+// among them) and its middle: what must be clear for a building to stand.
+export function outlineSamples(flat, step) {
+  const out = [];
+  const n = flat.length / 2;
+  let cx = 0; let cy = 0;
+  for (let i = 0; i < n; i += 1) {
+    const ax = flat[i * 2]; const ay = flat[i * 2 + 1];
+    const bx = flat[((i + 1) % n) * 2]; const by = flat[((i + 1) % n) * 2 + 1];
+    cx += ax / n; cy += ay / n;
+    const parts = Math.max(2, Math.ceil(Math.hypot(bx - ax, by - ay) / step));
+    for (let k = 0; k < parts; k += 1) out.push([ax + ((bx - ax) * k) / parts, ay + ((by - ay) * k) / parts]);
+  }
+  out.push([cx, cy]);
+  return out;
+}
+
+// A line cut where it is not clear: its points a `step` apart, in the runs
+// (two points or more) for which ok(x, y) holds. The monorail's beam is
+// built along each run and its piers stand only under one.
+export function clearSpans(flat, step, ok) {
+  const spans = [];
+  let run = [];
+  const close = () => { if (run.length > 1) spans.push(run); run = []; };
+  alongLine(flat, step).forEach(([x, y]) => (ok(x, y) ? run.push([x, y]) : close()));
+  close();
+  return spans;
+}
+
+// Lamps across a car park: a grid `gap` apart along its own long axis (its
+// aisles'), those inside it.
+export function lotLamps(flat, gap = 34) {
+  const a = longAxis(flat);
+  const ux = Math.cos(a); const uy = Math.sin(a);
+  let u0 = Infinity; let u1 = -Infinity; let v0 = Infinity; let v1 = -Infinity;
+  for (let i = 0; i < flat.length; i += 2) {
+    const u = flat[i] * ux + flat[i + 1] * uy; const v = -flat[i] * uy + flat[i + 1] * ux;
+    u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+  }
+  const out = [];
+  for (let u = u0 + gap * 0.4; u < u1; u += gap) {
+    for (let v = v0 + gap * 0.4; v < v1; v += gap) {
+      const x = u * ux - v * uy; const y = u * uy + v * ux;
+      if (insidePoly(x, y, flat)) out.push([x, y, a]);
+    }
+  }
+  return out;
+}
+
+// The n items nearest by dist(item), nearest first.
+export function nearest(items, dist, n) {
+  return items.map((item) => [dist(item), item]).sort((p, q) => p[0] - q[0]).slice(0, n).map((p) => p[1]);
 }
 
 // A small generator of the same numbers every time (the fill is the same

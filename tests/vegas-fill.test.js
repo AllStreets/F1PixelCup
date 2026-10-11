@@ -27,11 +27,15 @@ test("the map's data: credited, the Strip's own origin, every layer present", ()
 test("nothing of the fill stands inside a building of the Strip", () => {
   const inside = [];
   const strip = STRIP.buildings.map((b) => b.outline.flat());
+  // Its middle and points every 4 m round its outline, each drawn a tenth
+  // of the way toward its middle (a neighbour shares its wall with a tower).
   DATA.low.forEach((b) => {
-    let cx = 0; let cy = 0;
-    for (let i = 0; i < b.o.length; i += 2) { cx += b.o[i]; cy += b.o[i + 1]; }
-    cx /= b.o.length / 2; cy /= b.o.length / 2;
-    if (strip.some((s) => plan.insidePoly(cx, cy, s))) inside.push([cx, cy]);
+    const pts = plan.outlineSamples(b.o, 4);
+    const [cx, cy] = pts[pts.length - 1];
+    pts.forEach(([x, y]) => {
+      const px = x + (cx - x) * 0.1; const py = y + (cy - y) * 0.1;
+      if (strip.some((s) => plan.insidePoly(px, py, s))) inside.push([px, py]);
+    });
   });
   assert.deepEqual(inside.slice(0, 3), []);
 });
@@ -79,11 +83,50 @@ test("a low building's look: quiet kinds, none a resort's", () => {
   assert.equal(plan.lookOf(plan.KIND.garage, 0.5).wall, plan.WALL.ribbon);
   assert.equal(plan.lookOf(plan.KIND.hotel, 0.5).wall, plan.WALL.stone);
   assert.equal(plan.lookOf(plan.KIND.house, 0.5).wall, plan.WALL.quiet);
-  assert.equal(plan.lookOf(plan.KIND.generic, 0.99).wall, plan.WALL.plain);
+  // A plain building: a lit front on a main road, and for about a third of the rest.
+  let lit = 0;
+  for (let k = 0; k < 1000; k += 1) {
+    assert.equal(plan.lookOf(plan.KIND.generic, k / 1000, true).wall, plan.WALL.plain);
+    if (plan.lookOf(plan.KIND.generic, k / 1000).wall === plan.WALL.plain) lit += 1;
+    else assert.equal(plan.lookOf(plan.KIND.generic, k / 1000).wall, plan.WALL.quiet);
+  }
+  assert.ok(lit > 250 && lit < 420, `${lit} in 1000 lit`);
   for (let k = 0; k <= 6; k += 1) assert.match(plan.lookOf(k, 0.999).tint, /^#[0-9a-f]{6}$/);
   // The walls' kinds are the facade shader's (tools/blender/vegas_resorts.py).
   const py = fs.readFileSync(path.join(ROOT, "tools", "blender", "vegas_resorts.py"), "utf8");
   assert.ok(py.includes("STONE, QUIET, PLAIN, RIBBON, LINED, GLASS = 1.0, 0.9, 0.8, 0.65, 0.5, 0.35"));
+});
+
+test("a building's outline is sampled closely enough that no long wall crosses the track unseen", () => {
+  const pts = plan.outlineSamples([0, 0, 300, 0, 300, 40, 0, 40], 12);
+  // No two neighbours further apart than the step; every corner and the middle among them.
+  for (let i = 0; i + 2 < pts.length; i += 1) assert.ok(Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]) <= 12 + 1e-9);
+  [[0, 0], [300, 0], [300, 40], [0, 40], [150, 20]].forEach(([x, y]) => assert.ok(pts.some((p) => p[0] === x && p[1] === y), `no ${x}, ${y}`));
+  // A wall across a track along x = 150 (20 wide) is caught, though its corners are clear.
+  assert.ok(pts.some(([x]) => Math.abs(x - 150) < 10));
+});
+
+test("the monorail's beam stops at the track and its piers stand only under it", () => {
+  // A line along x; the track crosses it between x = 90 and x = 130.
+  const spans = plan.clearSpans([0, 0, 300, 0], 10, (x) => x < 90 || x > 130);
+  assert.equal(spans.length, 2);
+  assert.deepEqual(spans[0][spans[0].length - 1], [80, 0]);
+  assert.deepEqual(spans[1][0], [140, 0]);
+  spans.flat().forEach(([x]) => assert.ok(x < 90 || x > 130));
+  // A lone clear point between two blocked is no span (no beam, so no pier).
+  assert.deepEqual(plan.clearSpans([0, 0, 40, 0], 10, (x) => x === 20), []);
+});
+
+test("a car park's lamps follow its own aisles, and the nearest cars are the ones drawn", () => {
+  // A car park turned 30 degrees: its lamps in rows along it, all inside.
+  const c = Math.cos(Math.PI / 6); const s = Math.sin(Math.PI / 6);
+  const lot = [[0, 0], [120, 0], [120, 70], [0, 70]].flatMap(([x, y]) => [x * c - y * s, x * s + y * c]);
+  const lamps = plan.lotLamps(lot, 34);
+  assert.ok(lamps.length >= 6, `${lamps.length} lamps`);
+  lamps.forEach(([x, y]) => assert.ok(plan.insidePoly(x, y, lot)));
+  const rows = new Set(lamps.map(([x, y]) => (-x * s + y * c).toFixed(1)));
+  assert.equal(rows.size, 2, "two rows along the car park, not the map's axes");
+  assert.deepEqual(plan.nearest([5, 1, 9, 3], (v) => v, 2), [1, 3]);
 });
 
 test("the fill is built last, never claims ground, and is audited with the landmarks", () => {
@@ -94,4 +137,8 @@ test("the fill is built last, never claims ground, and is audited with the landm
   const fill = fs.readFileSync(path.join(ROOT, "r3d", "vegas-fill.js"), "utf8");
   assert.ok(!/occupied\.add\(/.test(fill), "the fill claims ground");
   assert.ok(/occupied\.blocked\(/.test(fill) && /course\.clearance\(/.test(fill), "the fill does not keep off the track and what stands there");
+  // (That each kind of piece is in fact built, and clear, is the browser's:
+  // tools/checks/trackside-models-check.js vegasFillBuilt, and auditScenery.)
+  const check = fs.readFileSync(path.join(ROOT, "tools", "checks", "trackside-models-check.js"), "utf8");
+  assert.ok(check.includes("results.vegasFillBuilt"), "the browser check does not look at the fill");
 });

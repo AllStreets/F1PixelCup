@@ -978,12 +978,12 @@ function buildWorld(track) {
   group.add(people);
   // Las Vegas's ground filled in (r3d/vegas-fill.js): last of all, where
   // nothing else stands, claiming nothing; among the landmarks, so the
-  // audit of what stands over the track covers it. Its painted ground lies
-  // where the plain one did.
-  const fill = venue.fill === "vegasFill" ? buildVegasFill(course, venue) : null;
+  // audit of what stands over the track covers it. Its painted ground is drawn
+  // in the plain one's place.
+  const fill = venue.fill === "vegasFill" ? buildVegasFill(course, venue, { tier: currentTier(), landmarks }) : null;
   if (fill) {
     landmarks.add(fill);
-    if (fill.userData.replacesGround) ground.position.y -= 3;
+    if (fill.userData.replacesGround) ground.visible = false;
     const animate = landmarks.userData.animate;
     landmarks.userData.animate = (dt) => { animate?.(dt); fill.userData.animate(dt); };
   }
