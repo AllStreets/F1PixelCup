@@ -24,7 +24,7 @@ async (page) => {
       const r = await eval(src)(page);
       const bad = Object.entries(r.results || {}).filter(([, v]) => v !== true);
       // Informational values (counts, strings) are compared by eye; list them short.
-      out[n] = { ok: bad.length === 0 && (r.errors || []).length === 0, total: Object.keys(r.results || {}).length, bad: bad.map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v).slice(0, 300) : String(v).slice(0, globalThis.LONG ? 1200 : 80)}`), errors: (r.errors || []).slice(0, 3), s: Math.round((Date.now() - t0) / 1000) };
+      out[n] = { ok: bad.length === 0 && (r.errors || []).length === 0, total: Object.keys(r.results || {}).length, bad: bad.map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v).slice(0, globalThis.LONG ? 30000 : 300) : String(v).slice(0, globalThis.LONG ? 1200 : 80)}`), errors: (r.errors || []).slice(0, 3), s: Math.round((Date.now() - t0) / 1000) };
     } catch (e) { out[n] = { ok: false, crash: String(e).slice(0, 300) }; }
   }
   return JSON.stringify(out);
