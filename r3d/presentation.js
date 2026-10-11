@@ -4,7 +4,8 @@
 // (r3d/presenter.js), and each frame's handing over: where ceremony.js says
 // everyone and everything is, the hands are put there (r3d/gestures.js).
 // r3d/podium.js builds it with its own scene and calls update() each frame
-// after the drivers' poses.
+// after the drivers' poses. Everything here follows from the time alone, so
+// the ceremony can be carried on from any moment.
 
 import * as THREE from "three";
 import { buildTrophy } from "./trophies.js";
@@ -13,10 +14,18 @@ import { rigOf, reach, walk, turn, settle } from "./gestures.js";
 import { color } from "./textures.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
-const smooth = (a, b, t) => {
+// (The ceremony's own ease: ceremony.js keeps its for itself.)
+const ease = (a, b, t) => {
   const x = Math.max(0, Math.min(1, (t - a) / (b - a)));
   return x * x * (3 - 2 * x);
 };
+// How a trophy leans in the hand that holds it up (rad, about the hand's own x).
+const LEAN = -0.7;
+// The right hand takes the stem this far under the cup (m).
+const UNDER = 0.035;
+// A forearm's thickness, and a figure's chest, waist and head (m, from the bone).
+const ARM = 0.032;
+const BODY = [["chest", 0.15, 0.1], ["spine", 0.14, 0.05], ["head", 0.105, 0.09]];
 
 // Where a hand grips, from the driver model's own trophy (a prop on the
 // right hand): the point on its stem and the way it stands, in the right
@@ -34,9 +43,9 @@ function gripsOf(rig) {
   // Its long axis: the direction the points spread most along (power iteration).
   const axis = new THREE.Vector3(0.3, 1, 0.2).normalize();
   for (let k = 0; k < 30; k += 1) {
-    const next = new THREE.Vector3();
-    points.forEach((v) => { const d = v.clone().sub(mean); next.addScaledVector(d, d.dot(axis)); });
-    axis.copy(next.normalize());
+    const sum = new THREE.Vector3();
+    points.forEach((v) => { const d = v.clone().sub(mean); sum.addScaledVector(d, d.dot(axis)); });
+    axis.copy(sum.normalize());
   }
   // Which end is the cup: the wider one.
   let lo = Infinity;
@@ -57,33 +66,39 @@ function gripsOf(rig) {
   const gripL = mirror(gripR.clone().applyMatrix4(restR)).applyMatrix4(invL);
   const axisL = mirror(axis.clone().transformDirection(restR)).transformDirection(invL);
   const frame = (at, up) => ({ at, up, quat: new THREE.Quaternion().setFromUnitVectors(UP, up) });
-  return { R: frame(gripR, axis), L: frame(gripL, axisL) };
+  const grips = { R: frame(gripR, axis), L: frame(gripL, axisL) };
+  // A trophy leans in the hand that has it, so its foot and its cup stand
+  // clear of the wrist and the forearm: `stem` is the way it then stands.
+  grips.R.quat.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), LEAN));
+  grips.R.stem = new THREE.Vector3(0, 1, 0).applyQuaternion(grips.R.quat);
+  grips.L.stem = mirror(grips.R.stem.clone().transformDirection(restR)).transformDirection(invL);
+  return grips;
 }
 
 export function createPresentation({ scene, Ceremony, entries, cup, tier, figures, cupColour, geo, mat }) {
   const T = Ceremony.TABLE;
+  const PASS = Ceremony.PASS;
   const handover = Object.fromEntries(Ceremony.HANDOVERS.map((h) => [h.place, h]));
 
-  // ---- The table: a cloth to the floor in the cup's colour, a pale top ----
+  // ---- The table: a dark cloth to the floor, a band in the cup's colour, a pale top ----
   const cloth = mat(new THREE.MeshStandardMaterial({ color: "#141a33", roughness: 0.85 }));
   const band = mat(new THREE.MeshStandardMaterial({ color: color(cupColour), roughness: 0.6 }));
   const top = mat(new THREE.MeshStandardMaterial({ color: "#efe9dc", roughness: 0.7 }));
-  const skirt = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width, T.height - 0.02, T.depth)), cloth);
+  const skirt = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width, T.height - 0.02, T.length)), cloth);
   skirt.position.set(T.x, (T.height - 0.02) / 2, T.z);
-  const slab = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width + 0.04, 0.02, T.depth + 0.04)), top);
+  const slab = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width + 0.04, 0.02, T.length + 0.04)), top);
   slab.position.set(T.x, T.height - 0.01, T.z);
-  // A band in the cup's colour round the cloth.
-  const ribbon = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width + 0.006, 0.05, T.depth + 0.006)), band);
+  const ribbon = new THREE.Mesh(geo(new THREE.BoxGeometry(T.width + 0.006, 0.05, T.length + 0.006)), band);
   ribbon.position.set(T.x, T.height - 0.12, T.z);
   [skirt, slab, ribbon].forEach((m) => { m.castShadow = true; m.receiveShadow = true; scene.add(m); });
   skirt.name = "trophy-table";
 
-  // ---- The trophies, on it ----
+  // ---- The trophies, on it (toward the presenter's side) ----
   const trophies = {};
-  [3, 2, 1].forEach((place) => {
+  const PLACES = [3, 2, 1];
+  PLACES.forEach((place) => {
     const trophy = buildTrophy(place, { geo, mat });
-    // (Toward the presenter's side of the table.)
-    trophy.table = new THREE.Vector3(T.x + T.on[place], T.height - trophy.foot, T.z - 0.05);
+    trophy.table = new THREE.Vector3(T.x + T.near, T.height - trophy.foot, T.z + T.on[place]);
     trophy.group.position.copy(trophy.table);
     scene.add(trophy.group);
     trophies[place] = trophy;
@@ -93,46 +108,51 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   const who = presenterFor(cup, entries);
   const presenter = buildPresenter(who, tier);
   presenter.rig = rigOf(presenter.model);
-  const off = Ceremony.presenterAt(-1);
-  presenter.root.position.set(off.x, 0, off.z);
+  const waits = Ceremony.presenterAt(0);
+  presenter.root.position.set(waits.x, 0, waits.z);
+  presenter.root.rotation.y = waits.heading - Math.PI / 2;
   scene.add(presenter.root);
 
-  // The drivers' rigs, and the grips (the same build for every figure).
-  const drivers = figures.map((f) => ({ ...f, rig: rigOf(f.fig.model), place: f.entry.place }));
-  const grips = gripsOf(drivers[0].rig);
+  // The drivers' rigs by place, and the grips (the same build for every figure).
+  const drivers = {};
+  figures.forEach((f) => { drivers[f.entry.place] = { ...f, rig: rigOf(f.fig.model), place: f.entry.place, reach: 0 }; });
+  const grips = gripsOf(drivers[1].rig);
+  const stemR = { local: grips.R.stem, world: new THREE.Vector3() };
+  const stemL = { local: grips.L.stem, world: new THREE.Vector3() };
 
-  const gaps = { reach: {}, carry: 0, carryAt: null, hold: {} };
-  // Where each trophy was as the driver's hand closed on it.
-  const given = { 1: new THREE.Vector3(), 2: new THREE.Vector3(), 3: new THREE.Vector3() };
-  const state = { where: {}, presenter: null };
+  // What the frame's solving left: how far each hand ended from what it
+  // was put on (the arm's reach permitting), and where each trophy is.
+  const state = { t: -1, presenter: null, where: {}, hands: { take: {}, join: {}, hold: {}, presenter: null } };
   const v1 = new THREE.Vector3();
   const v2 = new THREE.Vector3();
   const v3 = new THREE.Vector3();
   const q1 = new THREE.Quaternion();
   const q2 = new THREE.Quaternion();
-  const upright = new THREE.Quaternion();
   const pole = new THREE.Vector3();
   const ahead = new THREE.Vector3();
+  const pr = new THREE.Vector3();
+  const dr = new THREE.Vector3(-1, 0, 0);
 
   // A figure's own directions in the world, from the way it faces (0: +z).
   const forwardOf = (heading, out) => out.set(Math.sin(heading), 0, Math.cos(heading));
   const rightOf = (heading, out) => out.set(-Math.cos(heading), 0, Math.sin(heading));
+  // A trophy standing, turned with whoever has it (its handles across them).
+  const standing = (heading, out) => out.setFromAxisAngle(UP, heading);
+  const ON_TABLE = standing(Ceremony.presenterAt(Ceremony.HANDOVERS[0].pick).heading, new THREE.Quaternion());
+  const HELD = standing(0, new THREE.Quaternion());
 
-  // Where a trophy is handed over (its stem): out from the presenter's
-  // chest toward the driver's taking shoulder, at the height the driver's
-  // hand comes down to. Within both their reaches by where the presenter
-  // stands (ceremony.js: PRESENT.spotSide, spotZ).
-  function handoverPoint(d, P, out) {
-    d.rig.arms.R.upper.getWorldPosition(v3);
-    out.set(v3.x - P.x, 0, v3.z - P.z).normalize().multiplyScalar(0.4);
-    return out.set(P.x + out.x, d.step.height + 1.4 - 0.52, P.z + out.z);
-  }
-
-  // Where a presenter carries one: in front of the waist, its base at about a metre.
+  // Where a presenter carries one: in front of the waist, its foot at about a metre.
   function carryPoint(P, trophy, out) {
     forwardOf(P.heading, ahead);
-    return out.set(P.x, 1.0 - trophy.foot - 0.035, P.z).addScaledVector(ahead, 0.34);
+    return out.set(P.x, 1.0 - trophy.foot, P.z).addScaledVector(ahead, 0.3 + trophy.baseRadius);
   }
+  // In front of a driver's chest, where the hands change over; and by their
+  // left side, where the left hand keeps it (the figure's own space: x
+  // ahead, -z its left).
+  const chestPoint = (d, trophy, out) => d.fig.root.localToWorld(out.set(0.24 + trophy.bowl, 1.16, -0.02));
+  const holdPoint = (d, trophy, out) => d.fig.root.localToWorld(out.set(0.2 + trophy.bowl, 1.08, -(0.2 + trophy.bowl * 0.8)));
+  // How far a driver has stepped forward on their step.
+  const forwardOn = (d) => d.fig.root.position.z - d.step.standZ;
 
   // The world point of a hand's grip.
   const gripPoint = (rig, s, out) => rig.arms[s].hand.localToWorld(out.copy(grips[s].at));
@@ -141,94 +161,121 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
   // poses for the frame (and their places) already.
   function update(t, dt) {
     const P = Ceremony.presenterAt(t);
+    state.t = t;
     state.presenter = P;
+    state.hands.presenter = null;
     presenter.root.visible = P.on;
-    presenter.root.position.set(P.x, 0, P.z);
-    presenter.root.rotation.y = P.heading - Math.PI / 2;
-    presenter.play("stand");
-    presenter.update(dt);
-    presenter.root.updateMatrixWorld(true);
-    drivers.forEach((d) => d.fig.root.updateMatrixWorld(true));
-    settle(presenter.rig);
-    drivers.forEach((d) => settle(d.rig));
-    const pr = rightOf(P.heading, new THREE.Vector3());
+    PLACES.forEach((place) => { drivers[place].fig.root.updateMatrixWorld(true); settle(drivers[place].rig); });
+    rightOf(P.heading, pr);
 
-    // The presenter's trophy this moment (the one being taken, carried or given), if any.
-    const busy = Ceremony.HANDOVERS.find((h) => t >= h.pick - 0.5 && t < h.release + 0.35);
+    // The presenter's trophy this moment (being taken, carried or given), if any.
+    const busy = Ceremony.HANDOVERS.find((h) => t >= h.pick && t < h.release);
     if (P.on) {
-      walk(presenter.rig, P.stride, P.walking, pr, { arms: !busy || t < busy.pick - 0.3 });
-      // A slight bow to the table as the trophy is taken; a nod once it is given.
-      if (P.take > 0) { turn(presenter.rig.bones.spine, pr, -0.4 * P.take); turn(presenter.rig.bones.chest, pr, -0.22 * P.take); }
+      presenter.root.position.set(P.x, 0, P.z);
+      presenter.root.rotation.y = P.heading - Math.PI / 2;
+      presenter.play("stand");
+      presenter.update(dt);
+      presenter.root.updateMatrixWorld(true);
+      settle(presenter.rig);
+      walk(presenter.rig, P.stride, P.walking, pr, { arms: !busy });
+      // A slight lean to the table as the trophy is taken; a nod once it is given.
+      if (P.take > 0) { turn(presenter.rig.bones.spine, pr, -0.1 * P.take); turn(presenter.rig.bones.chest, pr, -0.06 * P.take); }
       if (P.nod > 0) { turn(presenter.rig.bones.head, pr, -0.34 * P.nod); turn(presenter.rig.bones.chest, pr, -0.1 * P.nod); }
     }
 
-    // The drivers reach (a lean with it) before the trophies are placed.
-    drivers.forEach((d) => {
-      const w = Ceremony.reachAt(d.place, t);
-      d.reach = w;
-      if (w > 0) turn(d.rig.bones.chest, rightOf(0, v1), -0.24 * w);
-    });
-
-    [3, 2, 1].forEach((place) => {
+    PLACES.forEach((place) => {
       const trophy = trophies[place];
       const h = handover[place];
-      const d = drivers.find((x) => x.place === place);
+      const d = drivers[place];
       const { where, pass } = Ceremony.trophyAt(place, t);
       state.where[place] = where;
       const g = trophy.group;
+      const point = Ceremony.handPoint(place, forwardOn(d));
+      d.reach = Ceremony.reachAt(place, t);
+      // The driver bends to it (the presenter stands lower): more, the further back they stand.
+      if (d.reach > 0) {
+        const bend = 0.4 + 0.9 * Math.max(0, Ceremony.STEP_FORWARD - forwardOn(d));
+        turn(d.rig.bones.spine, dr, -bend * d.reach);
+        turn(d.rig.bones.chest, dr, -0.2 * d.reach);
+      }
       if (where === "table") {
         g.position.copy(trophy.table);
-        g.quaternion.copy(upright);
+        g.quaternion.copy(ON_TABLE);
       } else if (where === "presenter") {
-        // Up off the table to the carry, then held up to the driver.
+        // Straight up off the table, then in to the carry; then held up to the driver.
         carryPoint(P, trophy, v1);
-        v1.lerp(trophy.table, 1 - smooth(h.lifted, h.carried, t));
-        if (t < h.carried) v1.y += 0.05 * Math.sin(Math.PI * smooth(h.lifted, h.carried, t));
-        g.position.copy(v1).lerp(handoverPoint(d, P, v2), P.raise);
-        g.quaternion.copy(upright);
+        const u = ease(h.lifted, h.carried, t);
+        const inward = ease(0.4, 1, u);
+        g.position.set(
+          trophy.table.x + (v1.x - trophy.table.x) * inward,
+          trophy.table.y + 0.07 * Math.min(1, u / 0.3) + (v1.y - trophy.table.y - 0.07) * inward,
+          trophy.table.z + (v1.z - trophy.table.z) * inward,
+        );
+        if (P.raise > 0) g.position.lerp(v2.set(point[0], point[1], point[2]), P.raise);
+        standing(P.heading, g.quaternion);
       }
-      // The driver's right hand: out to the trophy's stem as it is held up.
+      // The driver's right hand: out to the stem as it is held up, and on
+      // it where it was given until the presenter has let go.
       if (d.reach > 0) {
-        const target = where === "presenter" ? v3.copy(g.position) : given[place];
-        pole.set(-0.5, -1, -0.2);
-        const gap = reach(d.rig, "R", target, { weight: d.reach, grip: grips.R.at, pole });
-        if (where === "presenter") given[place].copy(g.position);
-        if (where === "presenter" && t > h.contact - 0.12) gaps.reach[place] = gap;
+        v3.set(point[0], point[1], point[2]);
+        if (where === "presenter") v3.copy(g.position);
+        v3.y -= UNDER;
+        pole.set(-0.3, -1, -0.2);
+        stemR.world.copy(UP);
+        state.hands.take[place] = reach(d.rig, "R", v3, { weight: d.reach, grip: grips.R.at, pole, axis: stemR });
       }
       if (where === "right" || where === "left") {
-        // In the right hand, standing as the hand holds it (eased from upright
-        // once the presenter has let go).
-        const hand = d.rig.arms.R.hand;
-        gripPoint(d.rig, "R", v1);
-        hand.getWorldQuaternion(q1).multiply(grips.R.quat);
-        q2.copy(upright).slerp(q1, smooth(h.release, h.release + 0.4, t));
-        if (pass > 0) {
-          // To the left hand: the left comes to the stem, then the trophy
-          // goes with it to where it is held, upright, beside the chest.
-          v2.set(0.2 + trophy.radius, 1.08, -(0.2 + trophy.radius * 0.8));
-          d.fig.root.localToWorld(v2);
-          const go = smooth(0.45, 1, pass);
-          v1.lerp(v2, go);
-          q2.slerp(upright, go);
+        const gone = ease(0, PASS.joined, pass);
+        if (pass > 0 && where === "right") {
+          // Down in front of the chest, upright, for the left hand to take.
+          pole.set(-0.6, -1, -0.2);
+          stemR.world.copy(UP);
+          chestPoint(d, trophy, v3).y -= UNDER;
+          reach(d.rig, "R", v3, { weight: gone, grip: grips.R.at, pole, axis: stemR });
         }
-        g.position.copy(v1);
-        g.quaternion.copy(q2);
-        if (pass > 0) {
-          pole.set(0.5, -1, -0.3);
-          v3.copy(g.position).addScaledVector(v2.set(0, 1, 0).applyQuaternion(g.quaternion), -0.035 * (1 - smooth(0.45, 1, pass)));
-          const gap = reach(d.rig, "L", v3, { weight: smooth(0, 0.45, pass), grip: grips.L.at, pole });
-          if (pass >= 1) gaps.hold[place] = gap;
+        if (where === "right") {
+          // In the right hand, standing as the hand holds it (eased from
+          // how the presenter held it, once they have let go).
+          d.rig.arms.R.hand.getWorldQuaternion(q1).multiply(grips.R.quat);
+          standing(h.stands[2], q2).slerp(q1, ease(h.release, h.release + 0.4, t));
+          g.quaternion.copy(q2).slerp(HELD, gone);
+          gripPoint(d.rig, "R", g.position).addScaledVector(v1.copy(UP).applyQuaternion(g.quaternion), UNDER);
+          if (pass > 0) {
+            // The left hand comes to the stem, under the right.
+            v1.copy(UP).applyQuaternion(g.quaternion);
+            v3.copy(g.position).addScaledVector(v1, -trophy.lower);
+            pole.set(0.6, -1, -0.2);
+            stemL.world.copy(v1);
+            state.hands.join[place] = reach(d.rig, "L", v3, { weight: ease(0.08, PASS.joined, pass), grip: grips.L.at, pole, axis: stemL });
+          }
+        } else {
+          // The left hand has it: from the chest to the driver's side, and
+          // kept there; the right lets go.
+          const go = ease(PASS.given, 1, pass);
+          chestPoint(d, trophy, v1).lerp(holdPoint(d, trophy, v2), go);
+          v3.copy(v1).addScaledVector(UP, -trophy.lower);
+          pole.set(0.6, -1, -0.2);
+          stemL.world.copy(UP);
+          state.hands.hold[place] = reach(d.rig, "L", v3, { weight: 1, grip: grips.L.at, pole, axis: stemL });
+          gripPoint(d.rig, "L", g.position).addScaledVector(UP, trophy.lower);
+          g.quaternion.copy(HELD);
+          const still = 1 - ease(PASS.given, PASS.given + 0.3, pass);
+          if (still > 0) {
+            pole.set(-0.6, -1, -0.2);
+            stemR.world.copy(UP);
+            v3.copy(g.position).y -= UNDER;
+            reach(d.rig, "R", v3, { weight: still, grip: grips.R.at, pole, axis: stemR });
+          }
         }
       }
       g.updateMatrixWorld(true);
     });
 
-    // The presenter's hands: on the base of the trophy being taken, carried
-    // or given, one each side; let go a moment after the driver has it.
+    // The presenter's hands: on the foot of the trophy being taken, carried
+    // or given, one each side; they let go a moment after the driver has it.
     if (P.on && busy) {
       const trophy = trophies[busy.place];
-      // (Both hold it for a moment; the presenter's hands are off by the release.)
-      const w = t < busy.lifted ? P.take : 1 - smooth(busy.contact + 0.08, busy.release, t);
+      const w = t < busy.lifted ? ease(busy.pick, busy.lifted - 0.04, t) : 1 - ease(busy.contact + 0.08, busy.release, t);
       if (w > 0) {
         let worst = 0;
         [["R", 1], ["L", -1]].forEach(([s, sign]) => {
@@ -236,32 +283,67 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           pole.set(0, -1, 0).addScaledVector(pr, sign * 0.6);
           worst = Math.max(worst, reach(presenter.rig, s, v1, { weight: w, grip: grips[s].at, pole }));
         });
-        gaps.now = worst;
-        if (w >= 1 && worst > gaps.carry) { gaps.carry = worst; gaps.carryAt = [busy.place, +(t - busy.pick).toFixed(2)]; }
+        state.hands.presenter = { place: busy.place, gap: worst, weight: w };
       }
     }
   }
 
+  // ---- What the checks read (worked out when asked, not every frame) ----
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  // How far a forearm (elbow to just short of the wrist: the hand itself is
+  // on the stem) stays from a trophy's metal.
+  function armGap(rig, s, trophy) {
+    rig.arms[s].fore.getWorldPosition(a);
+    rig.arms[s].hand.getWorldPosition(b);
+    let gap = Infinity;
+    for (let k = 0; k <= 8; k += 1) gap = Math.min(gap, trophy.gapTo(trophy.group.worldToLocal(c.copy(a).lerp(b, (k / 8) * 0.8))) - ARM);
+    return gap;
+  }
+  // And a figure's chest, waist and head.
+  function bodyGap(rig, trophy) {
+    let gap = Infinity;
+    BODY.forEach(([name, radius, up]) => {
+      rig.bones[name].getWorldPosition(c);
+      c.y += up;
+      gap = Math.min(gap, trophy.gapTo(trophy.group.worldToLocal(c)) - radius);
+    });
+    return gap;
+  }
+
   function inspect() {
     const P = state.presenter;
+    const on = Boolean(P && P.on);
     return {
-      presenter: { id: who.id, kind: who.kind, on: Boolean(P && P.on), x: presenter.root.position.x, z: presenter.root.position.z, looks: presenter.looks() },
-      table: { x: T.x, z: T.z, height: T.height },
-      trophies: [3, 2, 1].map((place) => {
+      presenter: {
+        id: who.id, kind: who.kind, on, shown: presenter.root.visible, x: presenter.root.position.x, z: presenter.root.position.z, looks: presenter.looks(),
+        // Clear of every trophy (the one in hand as well), body and arms.
+        body: on ? Math.min(...PLACES.map((place) => bodyGap(presenter.rig, trophies[place]))) : null,
+        arms: on ? Math.min(...PLACES.flatMap((place) => ["R", "L"].map((s) => armGap(presenter.rig, s, trophies[place])))) : null,
+        hands: state.hands.presenter ? { ...state.hands.presenter } : null,
+      },
+      table: { x: T.x, z: T.z, height: T.height, width: T.width, length: T.length },
+      trophies: PLACES.map((place) => {
         const trophy = trophies[place];
         const p = trophy.group.getWorldPosition(new THREE.Vector3());
-        const d = drivers.find((x) => x.place === place);
-        const chest = d.rig.bones.chest.getWorldPosition(new THREE.Vector3());
+        const d = drivers[place];
+        const others = PLACES.filter((x) => x !== place).map((x) => trophies[x]);
         return {
           place, metal: trophy.metal, color: trophy.color, height: trophy.height, radius: trophy.radius, where: state.where[place] || "table",
           x: p.x, y: p.y, z: p.z, foot: p.y + trophy.foot,
-          // How far its axis is from the driver's chest, less its own width.
-          clear: Math.hypot(p.x - chest.x, p.z - chest.z) - trophy.radius,
-          rightGrip: gripPoint(d.rig, "R", new THREE.Vector3()).distanceTo(p),
-          leftGrip: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p),
+          // How upright it stands (1: straight up).
+          upright: new THREE.Vector3(0, 1, 0).applyQuaternion(trophy.group.quaternion).y,
+          // Clear of the other two (their widest, side by side).
+          apart: Math.min(...others.map((o) => Math.hypot(o.group.position.x - p.x, o.group.position.y - p.y, o.group.position.z - p.z) - o.radius - trophy.radius)),
+          // The driver's own body and forearms, clear of its metal.
+          body: bodyGap(d.rig, trophy),
+          arms: { R: armGap(d.rig, "R", trophy), L: armGap(d.rig, "L", trophy) },
+          // How far each of the driver's hands (its grip) is from the stem.
+          grip: { R: gripPoint(d.rig, "R", new THREE.Vector3()).distanceTo(p), L: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p) },
         };
       }),
-      gaps: { reach: { ...gaps.reach }, carry: gaps.carry, carryAt: gaps.carryAt, now: gaps.now, hold: { ...gaps.hold } },
+      hands: { take: { ...state.hands.take }, join: { ...state.hands.join }, hold: { ...state.hands.hold } },
     };
   }
 
@@ -272,6 +354,5 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
     presenter.dispose();
   }
 
-  // (Shown while the scene compiles; off stage, and hidden, until its cue.)
-  return { update, inspect, dispose, presenter, sheet: presenter.sheet, hide: () => { presenter.root.visible = false; } };
+  return { update, inspect, dispose, presenter, sheet: presenter.sheet };
 }

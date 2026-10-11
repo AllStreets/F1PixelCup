@@ -563,7 +563,7 @@ function shapeFace(model, weights, parts, look, tier) {
 
 // outfit: formal wear in place of a race suit (the podium's presenter,
 // r3d/presenter.js): { suit, shirt, shoes, hands (bare: the skin's colour),
-// sheet (the jacket's front, drawn on the suit's own sheet) }.
+// sheet (the jacket, front and back, drawn on the suit's own sheet) }.
 function dress(model, driver, team, look, tier, outfit = null) {
   const { suit, trim } = outfit ? { suit: outfit.suit, trim: outfit.suit } : suitColours(team);
   const made = new Map();
@@ -585,7 +585,8 @@ function dress(model, driver, team, look, tier, outfit = null) {
       if (m.name === "boots") { out.color = color(outfit.shoes); out.roughness = 0.3; }
     }
     if (onBody && (m.name === "suit" || m.name === "suit_trim")) wearSuit(out, sheet, { detail: m.name === "suit" && !outfit, trim: color(trim) });
-    if (m.name === "helmet") {
+    // (No helmet is ever shown with an outfit: none is painted for it.)
+    if (m.name === "helmet" && !outfit) {
       out.map = helmetTexture(driver);
       out.color = new THREE.Color(0xffffff);
       out.roughness = 0.22;

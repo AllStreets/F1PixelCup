@@ -454,8 +454,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     };
   }
 
-  // What a falling piece lands on: a step's top or the floor.
+  // What a falling piece lands on: a step's top, the trophies' table or the floor.
+  const TABLE = Ceremony.TABLE;
   function groundAt(x, z) {
+    if (Math.abs(x - TABLE.x) < TABLE.width / 2 && Math.abs(z - TABLE.z) < TABLE.length / 2) return TABLE.height + 0.003;
     for (let i = 0; i < STEPS.length; i += 1) {
       const s = STEPS[i];
       if (Math.abs(x - s.x) < s.width / 2 && Math.abs(z) < s.depth / 2) return s.height + 0.003;
@@ -626,8 +628,6 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     while (uploads.length && performance.now() - start < 8) renderer.initTexture(uploads.pop());
     if (uploads.length) return false;
     inspectState.sheetsUploaded = [...figures.map((f) => f.fig.sheet), presentation.sheet].every((sheet) => Boolean(renderer.properties.get(sheet).__webglTexture));
-    // (Compiled with the scene; off stage until the presentation.)
-    presentation.hide();
     compiled = true;
     return true;
   }
@@ -876,8 +876,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     scene.clear();
   }
 
-  // (For the checks and the captures: carry on from t seconds in.)
-  const seek = (t) => { if (startedAt) startedAt = lastAt - t * 1000; };
+  // For the checks and the captures: carry the picture on from t seconds in
+  // (the figures, the trophies and the camera follow from the time alone;
+  // the sound, the confetti and the spray do not move with it).
+  const seek = (t) => { if (startedAt && Number.isFinite(t) && t >= 0) startedAt = lastAt - t * 1000; };
 
   return { scene, camera, seek, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
 }
