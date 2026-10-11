@@ -265,8 +265,9 @@ export function updateFireworks(points, course, frame, stands, since, tier) {
 }
 
 // ---------------------------------------------------------------------------
-// The starter: by the line, past the barrier, waving the chequered flag once
-// the leader has taken it.
+// The chequered flag official: on a flag stand by the line, right behind the
+// barrier, waving the flag through the last lap until the winner has it
+// (docs/superpowers/specs/2026-10-11-flag-and-safety-car-signals-design.md).
 // ---------------------------------------------------------------------------
 
 export function buildStarter(course) {
@@ -303,45 +304,75 @@ export function buildStarter(course) {
   if (!spot) return null;
   const g = new THREE.Group();
   g.name = "starter";
-  const stand = new THREE.Mesh(new THREE.BoxGeometry(5, 12, 5), mat(0x2a2d34));
-  stand.position.y = 6;
-  g.add(stand);
-  const person = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.1, 4, 8), mat(0xffffff));
-  person.position.y = 14;
-  g.add(person);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8), mat(0xd9a07a));
-  head.position.y = 16.6;
-  g.add(head);
-  const chequer = canvasTexture(64, 40, (g2, w, h) => {
+  // The flag stand: a railed deck on a post, high enough to be seen over the
+  // barrier; the official (r3d/people.js) stands on it, facing the road.
+  const steel = mat(0x2a2d34, { metalness: 0.4, roughness: 0.5 });
+  const white = mat(0xf2f2ee);
+  const add = (geo, m, x, y, z) => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; g.add(mesh); return mesh; };
+  add(new THREE.BoxGeometry(2.2, STAND_DECK, 2.2), steel, 0, STAND_DECK / 2, 0);
+  add(new THREE.BoxGeometry(8, 0.6, 7), steel, 0, STAND_DECK + 0.3, 0);
+  // Rails round three sides (open at the back, where the steps would be),
+  // a chequered board across the front.
+  [[-3.8, 0, 0.4, 7], [3.8, 0, 0.4, 7], [0, 3.3, 8, 0.4]].forEach(([x, z, w, d]) => add(new THREE.BoxGeometry(w, 0.4, d), white, x, STAND_DECK + 4.6, z));
+  [[-3.8, 3.3], [3.8, 3.3], [-3.8, -3.3], [3.8, -3.3]].forEach(([x, z]) => add(new THREE.BoxGeometry(0.4, 4.6, 0.4), white, x, STAND_DECK + 2.6, z));
+  const chequer = canvasTexture(64, 40, (g2) => {
     for (let i = 0; i < 8; i += 1) for (let j = 0; j < 5; j += 1) { g2.fillStyle = (i + j) % 2 ? "#111" : "#f4f4f4"; g2.fillRect(i * 8, j * 8, 8, 8); }
   }, { repeat: false });
-  // The chequered flag on its pole, in the starter's raised hand.
+  const board = add(new THREE.PlaneGeometry(7.6, 2.2), new THREE.MeshStandardMaterial({ map: chequer, roughness: 0.7, side: THREE.DoubleSide }), 0, STAND_DECK + 2.2, 3.56);
+  board.castShadow = false;
+  // The chequered flag on its pole, in the official's right hand.
   const hand = new THREE.Group();
-  hand.position.set(0.9, 15.4, 0);
-  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 6, 6), mat(0x333338, { metalness: 0.5 }));
-  staff.position.y = 3;
+  const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 7, 6), mat(0x333338, { metalness: 0.5 }));
+  staff.position.y = 3.2;
   hand.add(staff);
   const flag = flagCloth(6, 4, new THREE.MeshStandardMaterial({ map: chequer, side: THREE.DoubleSide, roughness: 0.6 }));
   flag.position.set(0, 4.6, 0);
   hand.add(flag);
-  hand.visible = false;
   g.add(hand);
   g.position.set(spot.x, spot.p.h, spot.z);
+  // Local +z towards the road.
   g.rotation.y = Math.atan2(spot.p.x - spot.x, spot.p.y - spot.z);
   g.userData.flag = flag;
   g.userData.hand = hand;
+  g.userData.wave = 0;
+  // Where the official stands (local), for r3d/people.js.
+  g.userData.official = { standAt: new THREE.Vector3(0, STAND_DECK + 0.6, 0.6) };
+  poseFlag(g, 0, 0);
   return g;
 }
 
-// `since`: the show's milliseconds since the flag fell.
-export function updateStarter(starter, flagOutAt, since, t) {
+// The stand's deck above the ground.
+const STAND_DECK = 9;
+// The official's right arm, as the person shader raises it (r3d/people.js: the
+// shoulder and the arm's length in the model's metres, the raise in radians
+// at full wave, the forearm's swing): the hand, and the pole in it, follow.
+const ARM = { shoulder: [0, 1.42, 0.19], length: 0.6, raise: 2.6, swing: 0.45, rate: 7 };
+export const FLAG_EASE_S = 0.4;
+
+// The flag in the official's hand: `wave` 0 lowered at their side (the pole
+// laid along the rail) to 1 raised over the head and swinging.
+function poseFlag(starter, wave, t) {
+  const { hand, official } = starter.userData;
+  const scale = starter.userData.personScale || 6;
+  const a = ARM.raise * wave;
+  // The hand in the figure's own frame (+x forward, +z its right), then in
+  // the stand's (+z forward: the figure faces the road).
+  const fx = ARM.shoulder[0] + ARM.length * Math.sin(a);
+  const fy = ARM.shoulder[1] - ARM.length * Math.cos(a);
+  const fz = ARM.shoulder[2];
+  hand.position.set(official.standAt.x - fz * scale, official.standAt.y + fy * scale, official.standAt.z + fx * scale);
+  const swing = Math.sin(t * ARM.rate) * ARM.swing * 1.6 * wave;
+  hand.rotation.set(0, 0, (1 - wave) * 1.75 + swing);
+}
+
+// Per frame: `waving` (the game's: the last lap, until the winner has the
+// flag); the arm and the flag ease up and down over FLAG_EASE_S.
+export function updateStarter(starter, waving, t, dt, cut = false) {
   if (!starter) return false;
-  const waving = Boolean(flagOutAt) && since < 20000;
-  starter.userData.hand.visible = waving;
-  if (waving) {
-    // Waved over the head, side to side.
-    starter.userData.hand.rotation.z = Math.sin(t * 7) * 0.8;
-    waveCloth(starter.userData.flag, t, 1);
-  }
-  return waving;
+  const u = starter.userData;
+  const want = waving ? 1 : 0;
+  u.wave = cut ? want : u.wave + Math.max(-dt / FLAG_EASE_S, Math.min(dt / FLAG_EASE_S, want - u.wave));
+  poseFlag(starter, u.wave, t);
+  waveCloth(u.flag, t, 0.25 + 0.75 * u.wave);
+  return u.wave > 0.5;
 }

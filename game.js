@@ -2160,6 +2160,9 @@ function tracksideFrame(now) {
     flags,
     helicopter: leader ? { d: wrapLap((leader.trackDistance || 0) - 400) } : null,
     flagOutAt: state.chequerAt || state.flagOutAt || 0,
+    // The official's chequered flag: waved on the last lap until the first
+    // car, whoever it is, takes it (marshals.js chequered).
+    chequer: racing && Marshals.chequered(state.racers, track.laps),
     winnerColour: winner && winner.kart ? winner.kart.body : null,
     // (The race runs fast-forward after the flag; the show runs on real
     // time, held while paused.)
@@ -2353,7 +2356,7 @@ function fireShot(racer, requested, now) {
 }
 
 // keep: the share of its speed the car keeps (powerups.js SPIN_KEEP).
-function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
+function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55, sound = sfx.spin) {
   if (!racer || isProtected(racer, now)) return false;
   // Brief grace period after recovering, so overlapping hits cannot pin a car.
   if (now < (racer.spinImmuneUntil || 0)) return false;
@@ -2365,7 +2368,7 @@ function spinRacer(racer, duration = 900, now = raceNow(), keep = 0.55) {
   racer.recoverCapAt = racer.spinUntil + RECOVER_GRACE_MS;
   if (racer.isPlayer) {
     addScreenShake(10, 420, racer);
-    sfx.spin();
+    sound();
   }
   racer.speed *= keep;
   emitFx("hitTaken", racer);
@@ -2381,6 +2384,18 @@ function safetyCarHolds(racer, now) {
   scBodyOf.id = racer.id;
   scBodyOf.d = racer.trackDistance || 0;
   return Entrances.holds(sc, scBodyOf, state.track.totalLength, now);
+}
+
+// How strongly the SAFETY CAR sign shows (entrances.js sign): in when it is
+// called, fading once it goes in. One answer a moment, for every view.
+function safetyCarSign(now) {
+  const sc = state.safetyCar;
+  if (!state.scSign) state.scSign = {};
+  if (state.scSign.now !== now) {
+    state.scSign.now = now;
+    state.scSign.alpha = Entrances.sign(state.scSign, Boolean(sc) && !sc.leaving && !sc.parked, now);
+  }
+  return state.scSign.alpha;
 }
 
 // The ways onto the track (entrances.js): the pit lane, and the circuit's
@@ -2421,6 +2436,8 @@ function deploySafetyCar(racer, now) {
   const was = state.safetyCar;
   const fieldSpeed = safetyCarFieldSpeed();
   state.lastSafetyCarAt = raceSeconds(now);
+  // Its own sound, on every call: every player hears it.
+  if (!state.headless) sfx.safetyCar();
   // Like the lightning it stands for, it costs every rival the power-up they
   // hold (or are rolling for).
   state.racers.forEach((r) => {
@@ -3276,7 +3293,8 @@ function updateShots(dt, now) {
       const shrugged = isProtected(leader, now);
       victims.forEach((id, i) => {
         const kind = i === 0 ? "stewardLeader" : "stewardSplash";
-        spinRacer(racerById(id), PowerUps.SPIN_MS[kind], now, PowerUps.SPIN_KEEP[kind]);
+        // (A player it spins hears the Steward's own sound, not the spin's.)
+        spinRacer(racerById(id), PowerUps.SPIN_MS[kind], now, PowerUps.SPIN_KEEP[kind], sfx.stewardHit);
       });
       // The blue shell's blast: a big flash, a burst of smoke and sparks.
       addFlash(leader.trackDistance, leader.lat, "#3aa0ff", 40, now, 700);
@@ -4519,6 +4537,7 @@ function replayTrackside(frame, ghosts, now) {
     flags: frame.flags,
     helicopter: leader ? { d: wrapLap(leader.trackDistance - 400) } : null,
     flagOutAt: chequer,
+    chequer: Marshals.chequered(ghosts, r.rec.header.laps),
     // The show after the flag, on the replay's clock (so a seek lands in it).
     showMs: chequer ? now - chequer : 0,
     winnerColour: winner ? winner.kart.body : null,
@@ -4545,6 +4564,10 @@ function replayGraphics(frame, shot, focus) {
   }));
   const lapShown = leader.finished ? h.laps : Math.min(leader.lap + 1, h.laps);
   const lap = leader.finished ? "FINISH" : lapShown === h.laps ? "FINAL LAP" : `LAP ${lapShown}/${h.laps}`;
+  // The SAFETY CAR sign, from the recorded Safety Car (on the replay's clock).
+  const sc = frame.safetyCar;
+  if (!r.scSign) r.scSign = {};
+  const scSign = Entrances.sign(r.scSign, Boolean(sc) && !sc.leaving && !sc.parked, r.time);
   const fc = cars.find((c) => c.meta.id === shot.focusId) || leader;
   const ahead = order[order.indexOf(fc) - 1];
   // Four seconds of the car's controls (on the player's car, the player's
@@ -4580,6 +4603,7 @@ function replayGraphics(frame, shot, focus) {
     autoCar: shot.director && !shot.carChosen,
     track: h.trackName || state.track.name,
     lap,
+    safetyCarSign: scSign,
     tower,
     focus: {
       id: fc.meta.id, name: fc.meta.name, code: fc.meta.code, number: fc.meta.number, team: fc.meta.team, color: fc.meta.color,
@@ -4754,7 +4778,7 @@ function updateReplayAudio(ghosts, focus) {
     else if (e.type === "box") at = state.track.itemBoxes[e.box] || e;
     return { e, dist: at.x !== undefined ? distanceTo(at.x, at.y) : 0 };
   }).sort((a, b) => a.dist - b.dist);
-  const sounds = { impact: sfx.impact, contact: sfx.impact, item: sfx.itemUse, box: sfx.itemGet, boost: sfx.boost, spin: sfx.spin, finish: sfx.finish };
+  const sounds = { impact: sfx.impact, contact: sfx.impact, item: sfx.itemUse, box: sfx.itemGet, boost: sfx.boost, spin: sfx.spin, finish: sfx.finish, safetyCar: sfx.safetyCar, steward: sfx.stewardHit };
   placed.forEach(({ e, dist }) => {
     audio.sfxScale = Math.min(1, EngineSound.distanceGain(dist) * 1.6);
     try {
@@ -6181,6 +6205,10 @@ const sfx = {
     playTone(760, { duration: 0.12, volume: 0.26 });
     playTone(1140, { duration: 0.18, volume: 0.24, delay: 0.1 });
   },
+  // The race's signals (signal-sounds.js): the Safety Car coming out, for
+  // everyone; the Steward Penalty landing on a player.
+  safetyCar: () => SignalSounds.SAFETY_CAR.forEach((n) => playTone(n.frequency, n)),
+  stewardHit: () => SignalSounds.STEWARD_HIT.forEach((n) => playTone(n.frequency, n)),
   finalLap: () => {
     playTone(980, { duration: 0.14, volume: 0.3 });
     playTone(980, { duration: 0.14, volume: 0.3, delay: 0.18 });
@@ -7107,6 +7135,19 @@ function drawDriverHud(track, player) {
       ctx.textAlign = "left";
       ctx.restore();
     }
+  }
+
+  // ---- Safety Car: the sign, in the flag's yellow, while it is out ----
+  const scSign = safetyCarSign(now);
+  if (scSign > 0) {
+    ctx.save();
+    ctx.globalAlpha = scSign;
+    ctx.fillStyle = Entrances.SIGN.colour;
+    ctx.font = "bold 46px Georgia";
+    ctx.textAlign = "center";
+    ctx.fillText("SAFETY CAR", view.width / 2, 246);
+    ctx.textAlign = "left";
+    ctx.restore();
   }
 
   // ---- Two players: this one home, the other still racing ----

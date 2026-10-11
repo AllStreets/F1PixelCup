@@ -54,5 +54,13 @@
     });
   }
 
-  return { SPACING, AHEAD, CRAWL, GREEN_MS, posts, incident, flags };
+  // Whether the chequered flag waves: some car is on the last lap (it has
+  // `laps - 1` behind it) and nobody has finished. It stops when the first
+  // car takes the flag, whoever it is. `racers`: { lap, finished }.
+  function chequered(racers, laps) {
+    if (!racers || !racers.length || racers.some((r) => r.finished)) return false;
+    return racers.some((r) => (r.lap || 0) >= laps - 1);
+  }
+
+  return { SPACING, AHEAD, CRAWL, GREEN_MS, posts, incident, flags, chequered };
 }));

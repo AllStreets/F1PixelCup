@@ -340,6 +340,8 @@ html, body { height: 100%; overflow: hidden; }
   font: italic 900 1.15em/1 var(--font); letter-spacing: 0.04em; text-transform: uppercase;
 }
 .bc-tower-head strong { white-space: nowrap; }
+/* The SAFETY CAR sign, as the race's HUD shows it: the FIA's flag yellow (Pantone Yellow C). */
+.bc-safety-car { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); color: #FEDD00; font: bold clamp(1.6rem, 3.2vw, 2.9rem)/1 Georgia, serif; white-space: nowrap; pointer-events: none; }
 .bc-tower-head span { order: -1; min-width: 0; font: 700 0.56em/1 var(--font); letter-spacing: 0.14em; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bc-row {
   display: grid; grid-template-columns: 1.9em 0.28em 1fr auto; align-items: center; gap: 0.55em;

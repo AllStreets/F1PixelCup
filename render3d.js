@@ -25,7 +25,7 @@ import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopte
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, buildCity, buildMainStand, waterMaterial } from "./r3d/landmarks.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
-import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
+import { buildPeople, updatePeople, showCrowdFor, inspectPeople, setFlagger, PERSON_SCALE } from "./r3d/people.js";
 import { buildEntrances, updateEntrances, inspectEntrances } from "./r3d/entrances.js";
 import { showYachtsFor, updateYachts, inspectYachts, auditFleet } from "./r3d/yachts.js";
 import { createPowerUpLayer, itemRuntimeMaterials } from "./r3d/powerups.js";
@@ -881,7 +881,9 @@ function updateTrackside(world, track, life, now, dt, { players, racers } = {}) 
   updateMarshalPosts(world.marshals, life && life.flags, t);
   updateHelicopter(helicopter, world, life && life.helicopter, dt);
   world.life.fireworks = updateFireworks(fireworks, world.course, life, track.crowdStands, flag ? show.ms : 0, currentTier());
-  world.life.starter = updateStarter(world.starter, flag, show.ms, t);
+  // The official's chequered flag: the last lap, until the winner has it.
+  world.life.starter = updateStarter(world.starter, Boolean(life && life.chequer), t, paused ? 0 : wallDt / 1000, Boolean(life && life.showMs !== undefined && !life.playing));
+  setFlagger(world.starter ? world.starter.userData.wave : 0);
   updatePeople(world.people, { players, racers, t, dt: paused ? 0 : dt });
   updateYachts(world.yachts, t);
 }
@@ -972,7 +974,7 @@ function buildWorld(track) {
   if (starter) group.add(starter);
   // The people (r3d/people.js): the crowd in the stands, the pit crews, the
   // photographers and the TV crew, after everything else has its ground.
-  const people = buildPeople(course, { decor, landmarks, marshals, entrances });
+  const people = buildPeople(course, { decor, landmarks, marshals, entrances, starter });
   group.add(people);
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
