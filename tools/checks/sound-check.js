@@ -63,6 +63,39 @@ async (page) => {
   // No pops on the way up or flat out; three or more on the lift.
   results.liftOffCrackles = (live && live.popsBefore === 0 && live.popsAfter >= 3) || JSON.stringify(live);
 
+  // The tunnel is heard on the engine: at Monaco, by name, the same car held
+  // flat out in the open and then in the middle of the tunnel. In the open
+  // nothing rings; in the tunnel the engine's filter rings sharply, the
+  // engine is louder and most of it goes to the reverb. (The engine rebuilt
+  // in 2026-10 hid the tunnel: the same send on a softer note.)
+  const tunnel = await step(async () => {
+    // (After the other results: from the pit lane, the sound on, no replay open.)
+    if (state.replay) Game.replay.exit();
+    resetToGarage();
+    audio.enabled = true;
+    initAudio();
+    const cup = CUP_DEFS.findIndex((c) => c.circuitIds.includes("monaco"));
+    Game.selectCup(cup); Game.selectGridMode("back"); Game.startCup();
+    for (let i = 0; i < 900 && state.preparing; i += 1) await new Promise((r) => requestAnimationFrame(r));
+    startRace(getActiveCup().tracks.findIndex((t) => t.id === "monaco"));
+    state.preparing = null;
+    const t = state.track;
+    const L = t.totalLength;
+    const mid = (t.tunnel.from + ((((t.tunnel.to - t.tunnel.from) % L) + L) % L) / 2) % L;
+    const max = getPlayer().physics.maxSpeed;
+    const car = { speed: max, physics: { maxSpeed: max }, throttleIn: 1, brakeIn: 0, finished: false, trackDistance: (mid + L / 2) % L };
+    state.phase = "race"; state.paused = false; state.lastTick = 100000;
+    freshEngines();
+    const hold = () => { for (let n = 0; n < 90; n += 1) { state.lastTick += 1000 / 60; updateEngineAudio(car); } const e = state.engineSound || {}; return { ring: e.ring, q: e.q, send: e.send, swell: e.swell, ready: audio.ready, last: Boolean(audio.engine && audio.engine.last) }; };
+    const open = hold();
+    car.trackDistance = mid;
+    const inside = hold();
+    resetToGarage();
+    return { open, inside };
+  });
+  results.tunnelHeardOnTheEngine = (tunnel && tunnel.open && tunnel.inside && tunnel.open.ring === 0 && tunnel.open.send === 0 && tunnel.open.swell === 1
+    && tunnel.inside.ring > 0.95 && tunnel.inside.q >= 6 && tunnel.inside.send >= 1.5 && tunnel.inside.swell >= 1.25) || JSON.stringify(tunnel);
+
   // Starting up. Qualifying: the player's own car is fired up (the starter
   // turning it over, the catch, a flare over idle, a settle) and the running
   // engine takes over as it rolls out, in its gear at once: no run up
@@ -243,5 +276,6 @@ async (page) => {
     if (s.sound === null) localStorage.removeItem("f1pixelcup.sound"); else localStorage.setItem("f1pixelcup.sound", s.sound);
   }, saved);
   await context.close();
+
   return { results, errors, info };
 }

@@ -4735,7 +4735,8 @@ function updateReplayAudio(ghosts, focus) {
       const venue = venueSound(focus, true);
       if (!onboard && cam.shot === "helicopter") venue.helicopter = 1;
       const a = mix.ambience;
-      audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9 * (mix.engine > 0 ? 1 : 0), t, 0.08);
+      audio.venue.reverb.gain.setTargetAtTime(venue.reverb * TUNNEL_SEND * (mix.engine > 0 ? 1 : 0), t, 0.08);
+      audio.ring = venue.reverb;
       audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07 * a, t, 0.25);
       audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012 * a, t, 0.4);
       audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05 * a, t, 0.3);
@@ -5846,6 +5847,16 @@ function saveAudioPreference() {
 
 // A reverb's impulse: stereo noise decaying over `seconds`, a little
 // different in each ear.
+// The tunnel (and, briefly, a bridge): how much of the engine goes to the
+// reverb, how sharply the engine's filter rings there (ENGINE_Q in the open)
+// and how much louder it is. The engine rebuilt in 2026-10 is a broader,
+// softer note than the old two oscillators, so the tunnel has to do more to
+// be heard on it.
+const TUNNEL_SEND = 1.7;
+const ENGINE_Q = 2.5;
+const TUNNEL_Q = 7;
+const TUNNEL_SWELL = 0.35;
+
 function makeReverbImpulse(ctxA, seconds) {
   const length = Math.floor(ctxA.sampleRate * seconds);
   const buffer = ctxA.createBuffer(2, length, ctxA.sampleRate);
@@ -6247,6 +6258,9 @@ function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 
   voice.oscB.frequency.setTargetAtTime(f * 2, t, 0.012);
   voice.oscSub.frequency.setTargetAtTime(f / 2, t, 0.012);
   voice.filter.frequency.setTargetAtTime(700 + s.load * 3800 + (s.rpm / EngineSound.LIMIT_RPM) * 600, t, 0.04);
+  // Under a roof the walls throw the engine back: it rings and it is louder.
+  const ring = audio.ring || 0;
+  voice.filter.Q.setTargetAtTime(ENGINE_Q + (TUNNEL_Q - ENGINE_Q) * ring, t, 0.08);
   voice.lfoGain.gain.setTargetAtTime(4 + 6 * s.load, t, 0.1);
   // An upshift: the ignition cut, a few hundredths; a downshift: the blip.
   // (Each a few milliseconds' glide, never a step: a step would click.)
@@ -6259,7 +6273,7 @@ function driveEngineVoice(voice, car, { on = true, share = 1, pitch = 1, dt = 1 
     voice.cut.gain.setTargetAtTime(1.35, t, 0.004);
     voice.cut.gain.setTargetAtTime(1, t + 0.03, 0.05);
   }
-  const level = alive ? (0.055 + ratio * 0.1 + s.load * 0.02) * share : 0;
+  const level = alive ? (0.055 + ratio * 0.1 + s.load * 0.02) * share * (1 + TUNNEL_SWELL * ring) : 0;
   voice.gain.gain.setTargetAtTime(level, t, 0.06);
   voice.whistle.frequency.setTargetAtTime((2600 + s.turbo * 1800) * pitch, t, 0.1);
   voice.turboGain.gain.setTargetAtTime(alive ? s.turbo * s.load * 0.006 * share : 0, t, 0.15);
@@ -6395,14 +6409,15 @@ function updateEngineAudio(player, second = null) {
   // What the engine is doing, for the checks.
   if (audio.engine.last) {
     const e = audio.engine.last;
-    state.engineSound = { rpm: e.rpm, gear: e.gear, turbo: e.turbo, ers: e.ers, pops: audio.engine.pops, freq: e.rpm / 40, starting };
+    const ring = audio.ring || 0;
+    state.engineSound = { rpm: e.rpm, gear: e.gear, turbo: e.turbo, ers: e.ers, pops: audio.engine.pops, freq: e.rpm / 40, starting, ring, q: ENGINE_Q + (TUNNEL_Q - ENGINE_Q) * ring, send: ring * TUNNEL_SEND, swell: 1 + TUNNEL_SWELL * ring };
   }
 
   if (audio.venue) {
     // The convolver only runs where the circuit has a tunnel or a bridge.
     const rings = Boolean(state.track && state.track.reverbZones && state.track.reverbZones.length);
     if (rings !== audio.venue.feeding) {
-      [audio.venue.engineGain, audio.venue.engineGain2].forEach((g) => {
+      [audio.engine, audio.engine2].flatMap((v) => [v.gain, v.turboGain, v.ersGain]).forEach((g) => {
         if (rings) g.connect(audio.venue.convolver);
         else g.disconnect(audio.venue.convolver);
       });
@@ -6417,7 +6432,8 @@ function updateEngineAudio(player, second = null) {
       state.venueSound = near;
       Object.assign(venue, near);
     }
-    audio.venue.reverb.gain.setTargetAtTime(venue.reverb * 0.9, now, 0.08);
+    audio.venue.reverb.gain.setTargetAtTime(venue.reverb * TUNNEL_SEND, now, 0.08);
+    audio.ring = venue.reverb;
     audio.venue.crowd.gain.setTargetAtTime(venue.crowd * 0.07, now, 0.25);
     audio.venue.hum.gain.setTargetAtTime(venue.hum * 0.012, now, 0.4);
     audio.venue.rotor.gain.setTargetAtTime(venue.helicopter * 0.05, now, 0.3);
