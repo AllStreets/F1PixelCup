@@ -39,7 +39,7 @@
   // clear of the step's front). handOut, handUp: where the trophy's stem is
   // as it changes hands, from the driver toward the presenter and above the
   // step. exit: where the presenter walks off to (out of any frame).
-  const PRESENT = { gap: 0.2, take: 0.35, pick: 0.7, raise: 0.45, contact: 0.6, give: 0.85, gold: { contact: 0.9, give: 1.25 }, nod: 0.3, liftFor: 2.0, pass: 0.9,
+  const PRESENT = { gap: 0.2, take: 0.35, pick: 0.7, raise: 0.45, contact: 0.6, give: 0.85, gold: { contact: 0.9, give: 1.25 }, nod: 0.3, liftFor: 2.0, pass: 1.0,
     spotZ: 0.9, spotSide: -0.5, handOut: 0.55, handUp: 1.08, exit: [-9.5, 5.8] };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
     if (!(anthemSeconds >= 0) || !Number.isFinite(anthemSeconds)) throw new Error(`anthem length ${anthemSeconds}`);
@@ -105,8 +105,11 @@
       if (d < -Math.PI) d += 2 * Math.PI;
       return d;
     };
-    const turnTo = (heading) => {
-      const by = nearest(facing, heading);
+    // way: +1 to turn by the left (anticlockwise from above) whichever is
+    // nearer; otherwise the short way round.
+    const turnTo = (heading, way = 0) => {
+      let by = nearest(facing, heading);
+      if (way > 0 && by < 0) by += 2 * Math.PI;
       if (Math.abs(by) < 1e-3) return;
       const time = Math.max(0.3, Math.abs(by) / TURN_RATE);
       path.push({ kind: "turn", from: clock, to: clock + time, at: here, a: facing, by });
@@ -114,8 +117,8 @@
       facing += by;
     };
     // (Up to speed and down again at the same rate; a short walk never reaches it.)
-    const walk = (to) => {
-      turnTo(toward(here, to));
+    const walk = (to, way = 0) => {
+      turnTo(toward(here, to), way);
       const length = Math.hypot(to[0] - here[0], to[1] - here[1]);
       const rate = WALK_SPEED / RAMP;
       const time = length >= WALK_SPEED * RAMP ? length / WALK_SPEED + RAMP : 2 * Math.sqrt(length / rate);
@@ -135,7 +138,9 @@
       h.lifted = h.pick + PRESENT.take;
       h.carried = h.pick + PRESENT.pick;
       stop(PRESENT.pick, place);
-      walk(spotFor(place));
+      // (Round by the camera's side: the trophy in hand swings over the
+      // end of the table it came from, not across the ones still on it.)
+      walk(spotFor(place), 1);
       h.arrive = clock;
       turnTo(toward(here, driverAt(place)));
       // At the step: hold it up; the driver's hand closes on it; let go, nod.
@@ -148,7 +153,7 @@
       // The driver lifts it, then brings it down to the left hand (the
       // winner at the end of the big lift, in time for the bottle).
       h.liftEnd = place === 1 ? h.release + TROPHY_TIME : h.release + PRESENT.liftFor;
-      h.leftBy = place === 1 ? h.liftEnd - 0.05 : h.liftEnd + 0.55;
+      h.leftBy = place === 1 ? h.liftEnd - 0.05 : h.liftEnd - 0.15 + PRESENT.pass;
       h.leftFrom = h.leftBy - PRESENT.pass;
       HANDOVERS.push(h);
       if (place !== 1) {
@@ -273,7 +278,7 @@
     // brings it down in front of the chest and the left comes to the stem
     // (by PASS.joined), both hold it (to PASS.given), then the left has it
     // and takes it to the driver's side while the right lets go.
-    const PASS = { joined: 0.42, given: 0.55 };
+    const PASS = { joined: 0.5, given: 0.62 };
     function trophyAt(place, t) {
       const h = handover[place];
       if (t < h.lifted) return { where: "table", pass: 0 };

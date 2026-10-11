@@ -817,6 +817,24 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     return r;
   }
 
+  // A box standing on the floor (its middle, half its width and depth, its
+  // height), as the camera sees it: { left, top, right, bottom } in CSS px,
+  // or null when none of it is in the picture.
+  function boxOnScreen(x, z, halfX, halfZ, height) {
+    camera.updateMatrixWorld();
+    const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    for (let i = 0; i < 8; i += 1) {
+      corner.set(x + (i & 1 ? halfX : -halfX), i & 2 ? height : 0, z + (i & 4 ? halfZ : -halfZ)).project(camera);
+      if (corner.z > 1) return null;
+      r.left = Math.min(r.left, (corner.x * 0.5 + 0.5) * view.w);
+      r.right = Math.max(r.right, (corner.x * 0.5 + 0.5) * view.w);
+      r.top = Math.min(r.top, (-corner.y * 0.5 + 0.5) * view.h);
+      r.bottom = Math.max(r.bottom, (-corner.y * 0.5 + 0.5) * view.h);
+    }
+    return r.right < 0 || r.left > view.w || r.bottom < 0 || r.top > view.h ? null : r;
+  }
+  const overTable = (p) => Math.abs(p.x - TABLE.x) < TABLE.width / 2 && Math.abs(p.z - TABLE.z) < TABLE.length / 2;
+
   // Whether the name plates show at time t.
   const platesIn = (t) => Ceremony.platesShown(t, still());
 
@@ -849,8 +867,14 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
         landed: confetti.pieces.length - airborne.length,
         meanVy: airborne.length ? airborne.reduce((s, p) => s + p.vy, 0) / airborne.length : 0,
         meanY: airborne.length ? airborne.reduce((s, p) => s + p.y, 0) / airborne.length : 0,
+        // Lying on the table's top; and (never) fallen through it.
+        onTable: confetti.pieces.filter((p) => p.landed && overTable(p) && Math.abs(p.y - TABLE.height) < 0.01).length,
+        throughTable: confetti.pieces.filter((p) => overTable(p) && p.y < TABLE.height - 0.01).length,
       },
       ...(presentation ? presentation.inspect() : {}),
+      // Where the table and the presenter are in the picture (CSS px), or
+      // null when wholly out of it.
+      onScreen: presentation ? { table: boxOnScreen(TABLE.x, TABLE.z, TABLE.width / 2, TABLE.length / 2, TABLE.height), presenter: presentation.presenter.root.visible ? boxOnScreen(presentation.presenter.root.position.x, presentation.presenter.root.position.z, 0.28, 0.28, 1.8) : null } : null,
       spray: { byPlace: Object.fromEntries(figures.map((f) => [f.entry.place, f.emitted || 0])), pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
     };
   }

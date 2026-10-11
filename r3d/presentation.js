@@ -22,7 +22,10 @@ const ease = (a, b, t) => {
 // How a trophy leans in the hand that holds it up (rad, about the hand's own x).
 const LEAN = -0.7;
 // The right hand takes the stem this far under the cup (m).
-const UNDER = 0.035;
+const UNDER = 0.04;
+// How a hand comes to a stem another hand holds, and leaves it: from this
+// far beyond the trophy's foot on its own side, a little below (m).
+const APPROACH = { x: 0.14, y: 0.04 };
 // A forearm's thickness, and a figure's chest, waist and head (m, from the bone).
 const ARM = 0.032;
 const BODY = [["chest", 0.15, 0.1], ["spine", 0.14, 0.05], ["head", 0.105, 0.09]];
@@ -241,12 +244,16 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           g.quaternion.copy(q2).slerp(HELD, gone);
           gripPoint(d.rig, "R", g.position).addScaledVector(v1.copy(UP).applyQuaternion(g.quaternion), UNDER);
           if (pass > 0) {
-            // The left hand comes to the stem, under the right.
+            // The left hand comes to the stem, under the right: from below
+            // and beside it (never down through the cup).
             v1.copy(UP).applyQuaternion(g.quaternion);
             v3.copy(g.position).addScaledVector(v1, -trophy.lower);
+            const short = 1 - ease(PASS.joined * 0.55, PASS.joined, pass);
+            v3.x += (APPROACH.x + trophy.baseRadius) * short;
+            v3.y -= APPROACH.y * short;
             pole.set(0.6, -1, -0.2);
             stemL.world.copy(v1);
-            state.hands.join[place] = reach(d.rig, "L", v3, { weight: ease(0.08, PASS.joined, pass), grip: grips.L.at, pole, axis: stemL });
+            state.hands.join[place] = reach(d.rig, "L", v3, { weight: ease(0.06, PASS.joined * 0.6, pass), grip: grips.L.at, pole, axis: stemL });
           }
         } else {
           // The left hand has it: from the chest to the driver's side, and
@@ -259,11 +266,15 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           state.hands.hold[place] = reach(d.rig, "L", v3, { weight: 1, grip: grips.L.at, pole, axis: stemL });
           gripPoint(d.rig, "L", g.position).addScaledVector(UP, trophy.lower);
           g.quaternion.copy(HELD);
-          const still = 1 - ease(PASS.given, PASS.given + 0.3, pass);
+          // (Away to its own side first, clear of the cup, then back to its pose.)
+          const still = 1 - ease(PASS.given + 0.1, PASS.given + 0.36, pass);
           if (still > 0) {
+            const away = ease(PASS.given, PASS.given + 0.14, pass);
             pole.set(-0.6, -1, -0.2);
             stemR.world.copy(UP);
-            v3.copy(g.position).y -= UNDER;
+            v3.copy(g.position);
+            v3.x -= (APPROACH.x + trophy.bowl) * away;
+            v3.y -= UNDER + APPROACH.y * away;
             reach(d.rig, "R", v3, { weight: still, grip: grips.R.at, pole, axis: stemR });
           }
         }
@@ -335,7 +346,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           // How upright it stands (1: straight up).
           upright: new THREE.Vector3(0, 1, 0).applyQuaternion(trophy.group.quaternion).y,
           // Clear of the other two (their widest, side by side).
-          apart: Math.min(...others.map((o) => Math.hypot(o.group.position.x - p.x, o.group.position.y - p.y, o.group.position.z - p.z) - o.radius - trophy.radius)),
+          apart: Math.min(...others.map((o) => (p.y + trophy.foot > o.group.position.y + o.top || o.group.position.y + o.foot > p.y + trophy.top ? Infinity
+            : Math.hypot(o.group.position.x - p.x, o.group.position.z - p.z) - o.radius - trophy.radius))),
           // The driver's own body and forearms, clear of its metal.
           body: bodyGap(d.rig, trophy),
           arms: { R: armGap(d.rig, "R", trophy), L: armGap(d.rig, "L", trophy) },
