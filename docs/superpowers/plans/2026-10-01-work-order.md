@@ -242,7 +242,7 @@ Stage R comes last because its screenshots should show the finished game. If a R
 
 - [x] **The Sphere's Earth** (branch `landmarks-2025`; user, 2026-10-12): a photoreal Earth from NASA's Blue Marble (public domain, credited), turning on its tilted axis as the real one's globe does.
 
-- [ ] **Re-run the headed perf check on a quiet machine** (`node tools/perf/check-headed.js 8770`): `ratioClimbsBack` failed 3 of 3 on 2026-10-12 with the load average near 9 (an agent's browser and the user's Chrome busy); the other ten results passed. If it still fails when quiet, High has lost its headroom since the Las Vegas stands and the Sphere.
+- [x] **Re-ran the headed perf check with no agents running** (2026-10-12): 11 of 11, twice. The earlier `ratioClimbsBack` failures were the machine's load, not lost headroom.
 
 - [x] **Crowd roar and anthems, round 2** (branch `stage-k-podium`; user, 2026-10-12): the roar sounds like splashing water: make it voices; find Italy's anthem again (and Brazil's); include Thailand's (the user accepts it).
 - [x] ~~Three anthems on the fanfare for now (the user's call):~~ decided above.
