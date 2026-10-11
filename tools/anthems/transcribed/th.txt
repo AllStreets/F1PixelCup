@@ -1,0 +1,29 @@
+# Phleng Chat Thai (Thailand). Melody read from the official score below (the
+# Royal Gazette, 1939), which gives the tune twice over: in numbered notation
+# (1 = C) and on the staff, in C major, 4/4. The excerpt is the opening four
+# bars and the closing four (bars 13 to 16); both follow the same upbeat
+# figure, so the join is the score's own. The score says "moderate, stately";
+# 84 quarter notes a minute gives the anthem its official length (about 46 s
+# for all 16 bars). The bass line is this game's own (plain roots).
+source: https://commons.wikimedia.org/wiki/File:Phleng_Chat_Thai_Sheet_Music_(official).jpg
+bpm: 84
+# Upbeat and bars 1 to 4
+melody: G3/0.25 C4/0.75 E4/0.25
+melody: G4/1 G4/0.75 G4/0.25 A4/0.75 G4/0.25 F4/0.75 A4/0.25
+melody: G4/2 E4/1 E4/0.75 F4/0.25
+melody: E4/0.75 D4/0.25 D4/1 D4/0.75 D4/0.25 D4/0.75 E4/0.25
+melody: D4/0.75 C4/0.25 C4/2 C4/0.75 E4/0.25
+# Bars 13 to 16
+melody: G4/1 G4/1 A4/0.75 B4/0.25 C5/0.75 D5/0.25
+melody: E5/2 E5/0.75 D5/0.25 C5/0.75 A4/0.25
+melody: G4/0.75 A4/0.25 B4/0.75 C5/0.25 E5/0.75 C5/0.25 D5/0.75 C5/0.25
+melody: C5/2.5
+bass: r/1.25
+bass: C3/4
+bass: C3/4
+bass: G2/4
+bass: G2/1 C3/3
+bass: C3/2 F2/1 G2/1
+bass: C3/2 C3/1 F2/1
+bass: C3/1 G2/1 C3/1 G2/1
+bass: C3/2.5
