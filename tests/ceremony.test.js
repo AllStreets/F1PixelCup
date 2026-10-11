@@ -353,8 +353,11 @@ test("the presenter: on from the side, to the table and each driver in turn, off
   C.HANDOVERS.forEach((h) => {
     const p = C.presenterAt((h.raise + h.contact) / 2);
     const step = C.stepFor(h.place);
-    assert.ok(Math.abs(p.x - step.x) < 0.05 && p.z > step.depth / 2 + 0.2 && p.z < step.depth / 2 + 0.8, JSON.stringify(p));
-    assert.ok(Math.abs(Math.cos(p.heading) + 1) < 0.02, "faces the podium (-z)");
+    // (To one side of the driver, so both stay in view; never behind the table.)
+    assert.ok(Math.abs(step.x - p.x) > 0.4 && Math.abs(step.x - p.x) < 0.8 && p.z > step.depth / 2 + 0.2 && p.z < step.depth / 2 + 0.8, JSON.stringify(p));
+    assert.ok(Math.abs(p.x - C.TABLE.x) > C.TABLE.width / 2 + 0.6, "clear of the table");
+    const toDriver = Math.atan2(step.x - p.x, step.standZ + C.STEP_FORWARD - p.z);
+    assert.ok(Math.abs(Math.sin(p.heading - toDriver)) < 0.02 && Math.cos(p.heading - toDriver) > 0.9, "faces the driver");
     assert.equal(p.carrying, h.place);
     assert.ok(p.raise > 0.5);
     assert.equal(C.presenterAt(h.release + 0.01).carrying, null);
@@ -367,21 +370,21 @@ test("the presenter: on from the side, to the table and each driver in turn, off
   assert.equal(C.presenterAt(B.spray - 0.01).on, false);
   assert.equal(C.presenterAt(B.spray + 5).on, false);
   assert.ok(B.presenterGone <= B.spray - 0.5);
-  // Never jumps: 10 ms apart it moves under 4 cm (2 m/s is 2 cm) and turns under 0.12 rad; the legs move only when it does.
+  // Never jumps: 10 ms apart it moves under 4 cm (2.3 m/s is 2.3 cm, more at the middle of an eased walk) and turns under 0.14 rad; the legs move only when it does.
   let walked = 0;
   for (let t = B.present; t < B.presenterGone; t += 0.01) {
     const a = C.presenterAt(t);
     const b = C.presenterAt(t + 0.01);
     if (!b.on) break;
     const d = Math.hypot(a.x - b.x, a.z - b.z);
-    assert.ok(d < 0.04, `moves ${d} at ${t}`);
+    assert.ok(d < 0.045, `moves ${d} at ${t}`);
     let turn = Math.abs(a.heading - b.heading) % (2 * Math.PI);
     if (turn > Math.PI) turn = 2 * Math.PI - turn;
-    assert.ok(turn < 0.12, `turns ${turn} at ${t}`);
+    assert.ok(turn < 0.14, `turns ${turn} at ${t}`);
     assert.ok(Math.abs((b.stride - a.stride) - d) < 1e-6, "the stride is the distance walked");
     walked += d;
   }
-  assert.ok(walked > 12 && walked < 22, `walks ${walked} m`);
+  assert.ok(walked > 12 && walked < 26, `walks ${walked} m`);
   // The table: in front of the podium, clear of every step's number (between two steps' middles).
   assert.ok(C.TABLE.z > 1.8 && Math.abs(C.TABLE.x) > 0.4 && Math.abs(Math.abs(C.TABLE.x) - 1.6) > 0.4);
 });

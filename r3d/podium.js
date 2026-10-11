@@ -17,6 +17,7 @@ import { buildDriver, suitFonts, driverLoaded, suitColours } from "./driver.js";
 import { canvasTexture, color } from "./textures.js";
 
 import { drawFlag } from "./flags.js";
+import { createPresentation } from "./presentation.js";
 
 const BaseCeremony = window.Ceremony;
 const BASE_FOV = 36;
@@ -50,6 +51,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   const STEPS = [1, 2, 3].map((place) => Ceremony.stepFor(place));
   const counts = Ceremony.counts(tier);
   let figures = [];
+  let presentation = null;
   let built = false;
   let compiled = false;
   let compiling = null;
@@ -597,6 +599,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       buildSet();
       buildLights();
       buildFigures();
+      // The trophy presentation: the table, the trophies, the presenter.
+      presentation = createPresentation({ scene, Ceremony, entries, cup, tier, figures, cupColour, geo, mat });
       buildConfetti();
       buildSpray();
       built = true;
@@ -621,7 +625,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     const start = performance.now();
     while (uploads.length && performance.now() - start < 8) renderer.initTexture(uploads.pop());
     if (uploads.length) return false;
-    inspectState.sheetsUploaded = figures.every((f) => Boolean(renderer.properties.get(f.fig.sheet).__webglTexture));
+    inspectState.sheetsUploaded = [...figures.map((f) => f.fig.sheet), presentation.sheet].every((sheet) => Boolean(renderer.properties.get(sheet).__webglTexture));
+    // (Compiled with the scene; off stage until the presentation.)
+    presentation.hide();
     compiled = true;
     return true;
   }
@@ -735,8 +741,10 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     figures.forEach((f) => {
       const place = f.entry.place;
       f.fig.play(Ceremony.poseAt(place, t));
-      // The props change hands as the hands meet, halfway through the fade.
-      if (f.props.trophy) f.props.trophy.visible = Ceremony.trophyShown(place, t);
+      // The model's own trophy is never shown: each driver is handed one of
+      // the podium's three (r3d/presentation.js). The bottle comes into the
+      // hand halfway through the fade.
+      if (f.props.trophy) f.props.trophy.visible = false;
       if (f.props.bottle) f.props.bottle.visible = Ceremony.bottleShown(place, t);
       f.fig.root.position.z = f.step.standZ + (calm ? 0 : Ceremony.STEP_FORWARD * Ceremony.forwardAt(place, t));
       f.fig.update(dt);
@@ -744,6 +752,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     scene.children.forEach((o) => {
       if (o.userData.sway !== undefined) o.rotation.x = calm ? 0 : Math.sin(t * 0.9 + o.userData.sway) * 0.025;
     });
+    presentation.update(t, dt);
     placeCamera(t, calm);
     scene.updateMatrixWorld();
     updateConfetti(t, dt, calm);
@@ -841,6 +850,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
         meanVy: airborne.length ? airborne.reduce((s, p) => s + p.vy, 0) / airborne.length : 0,
         meanY: airborne.length ? airborne.reduce((s, p) => s + p.y, 0) / airborne.length : 0,
       },
+      ...(presentation ? presentation.inspect() : {}),
       spray: { byPlace: Object.fromEntries(figures.map((f) => [f.entry.place, f.emitted || 0])), pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
     };
   }
@@ -856,6 +866,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       skeletons.forEach((sk) => sk.dispose());
       f.fig.dispose();
     });
+    if (presentation) presentation.dispose();
     if (confetti.mesh) confetti.mesh.dispose();
     figures = [];
     own.geometries.forEach((g) => g.dispose());
@@ -865,5 +876,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     scene.clear();
   }
 
-  return { scene, camera, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
+  // (For the checks and the captures: carry on from t seconds in.)
+  const seek = (t) => { if (startedAt) startedAt = lastAt - t * 1000; };
+
+  return { scene, camera, seek, setFx: (f) => { fx = f; }, prepare, render, setSize, anchors, platesIn, titleRect, setReserve: (r) => { reserve = r || null; }, inspect, dispose, ready: () => compiled, isDisposed: () => disposed, owned: () => ({ geometries: own.geometries.length, materials: own.materials.length, textures: own.textures.length }) };
 }

@@ -21,9 +21,9 @@
   // podium, between the first and third steps, clear of their numbers; the
   // presenter stands `stand` m on the podium's side of it, `on` is where each
   // trophy sits along it), and how long each part of a handover takes (s).
-  const TABLE = { x: 0.8, z: 2.3, width: 0.74, depth: 0.42, height: 0.95, stand: 0.44, on: { 1: 0, 2: -0.24, 3: 0.24 } };
-  const WALK_SPEED = 2.0;
-  const PRESENT = { gap: 0.5, pick: 0.6, lift: 0.35, give: 1.0, contact: 0.7, nod: 0.4, turn: 0.55, liftFor: 1.7, pass: 0.55, spotZ: 1.0, offX: 5.6, offZ: 1.9 };
+  const TABLE = { x: 0.8, z: 2.3, width: 0.74, depth: 0.42, height: 0.78, stand: 0.44, on: { 1: 0, 2: -0.24, 3: 0.24 } };
+  const WALK_SPEED = 2.3;
+  const PRESENT = { gap: 0.5, pick: 0.55, lift: 0.3, give: 1.0, contact: 0.7, nod: 0.35, turn: 0.5, liftFor: 1.7, pass: 0.55, spotZ: 1.0, spotSide: { 1: -0.6, 2: -0.6, 3: 0.6 }, offX: 5.6, offZ: 1.9 };
   function withAnthem(anthemSeconds = DEFAULT_ANTHEM) {
     if (!(anthemSeconds >= 0) || !Number.isFinite(anthemSeconds)) throw new Error(`anthem length ${anthemSeconds}`);
     // Seconds from the start of the ceremony.
@@ -63,9 +63,12 @@
     // legs: [{ from, to, a: [x, z], b: [x, z] }] walks; stops: [{ from, to,
     // at: [x, z], heading, h: the handover in progress }].
     const tableSpot = [TABLE.x, TABLE.z - TABLE.stand];
-    const spotFor = (place) => [STEPS[place].x, PRESENT.spotZ];
+    // At the foot of a driver's step, to one side of them (the outside for
+    // second and third, clear of the table for the winner), turned to face
+    // them: driver and presenter both stay in view.
+    const spotFor = (place) => [STEPS[place].x + PRESENT.spotSide[place], PRESENT.spotZ];
     const FACE_TABLE = 0;
-    const FACE_PODIUM = Math.PI;
+    const faceDriver = (place) => Math.atan2(-PRESENT.spotSide[place], STEPS[place].standZ + STEP_FORWARD - PRESENT.spotZ);
     const HANDOVERS = [];
     const path = [];
     let clock = BEATS.present;
@@ -94,7 +97,7 @@
       h.raise = clock + PRESENT.turn;
       h.contact = h.raise + PRESENT.contact;
       h.release = h.raise + PRESENT.give;
-      stop(PRESENT.turn + PRESENT.give + PRESENT.nod, FACE_PODIUM, { place });
+      stop(PRESENT.turn + PRESENT.give + PRESENT.nod, faceDriver(place), { place });
       // The driver lifts it, then passes it to the left hand (the winner at
       // the end of the big lift, in time for the bottle).
       h.liftEnd = place === 1 ? h.release + TROPHY_TIME : h.release + PRESENT.liftFor;
@@ -104,7 +107,7 @@
       if (place !== 1) walk(tableSpot);
     });
     // The winner has it: a step back, and off the way they came.
-    walk([here[0] + 0.5, here[1] + 0.7]);
+    walk([here[0] - 0.3, here[1] + 0.9]);
     walk([PRESENT.offX, PRESENT.offZ]);
     BEATS.trophy = HANDOVERS[2].release;
     BEATS.spray = BEATS.trophy + TROPHY_TIME;
@@ -173,13 +176,13 @@
           const heading = headingOf(leg);
           const was = prev ? (prev.kind === "walk" ? headingOf(prev) : prev.heading) : heading;
           return { ...base, x: leg.a[0] + (leg.b[0] - leg.a[0]) * u, z: leg.a[1] + (leg.b[1] - leg.a[1]) * u,
-            heading: turned(was, heading, smooth(leg.from, leg.from + PRESENT.turn, t)), stride: stride + length * u,
+            heading: turned(was, heading, smooth(leg.from, leg.from + Math.min(0.7, leg.to - leg.from), t)), stride: stride + length * u,
             walking: Math.min(1, (t - leg.from) / 0.2, (leg.to - t) / 0.2) };
         }
         const h = handover[leg.place];
         const was = prev.kind === "walk" ? headingOf(prev) : prev.heading;
         const out = { ...base, x: leg.at[0], z: leg.at[1], heading: turned(was, leg.heading, smooth(leg.from, leg.from + PRESENT.turn, t)), stride };
-        if (leg.heading === FACE_TABLE) {
+        if (t < h.carried) {
           out.take = smooth(leg.from + 0.1, h.pick + 0.25, t) * (1 - smooth(h.lifted, h.carried, t));
         } else {
           out.raise = smooth(h.raise, h.raise + 0.5, t) * (1 - smooth(h.release, h.release + 0.3, t));
@@ -259,8 +262,8 @@
     follow.push([BEATS.present + 1.6, TABLE.x * 0.7]);
     HANDOVERS.forEach((h) => {
       follow.push([h.carried, follow[follow.length - 1][1]]);
-      follow.push([h.raise, STEPS[h.place].x * 0.62]);
-      if (h.place !== 1) follow.push([h.release + 0.9, STEPS[h.place].x * 0.62]);
+      follow.push([h.raise, STEPS[h.place].x * 0.7 - 0.2]);
+      if (h.place !== 1) follow.push([h.release + 0.9, STEPS[h.place].x * 0.7 - 0.2]);
     });
     function followX(t) {
       for (let i = 1; i < follow.length; i += 1) {
@@ -288,7 +291,7 @@
       // Distance to what it looks at, its height, and where it looks.
       // (Framed with room above the wall's title for the page's own title.)
       const radius = 17 + (10.4 - 17) * sweep + (9.9 - 10.4) * smooth(BEATS.sweepEnd, BEATS.armsDown, t)
-        + (7.4 - 9.9) * anthem + (8.4 - 7.4) * medium + (6.4 - 8.4) * push + (10.2 - 6.4) * back;
+        + (7.4 - 9.9) * anthem + (7.9 - 7.4) * medium + (6.4 - 7.9) * push + (10.2 - 6.4) * back;
       const lookY = 2.1 + (p1Head - 0.1 - 2.1) * anthem + (1.75 - p1Head + 0.1) * medium + (p1Head + 0.3 - 1.75) * push + (2.15 - p1Head - 0.3) * back;
       const height = 6.8 + (2.5 - 6.8) * sweep + 0.1 * anthem - 0.3 * medium + (p1Head + 0.1 - 2.3) * push + (2.7 - p1Head - 0.1) * back;
       const lookZ = 0.0 + 0.5 * medium + (0.1 - 0.5) * push - 0.1 * back;
