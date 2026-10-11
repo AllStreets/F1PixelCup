@@ -297,3 +297,32 @@ body.landing { overflow-x: hidden; }
 .trackside-card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; display: block; background: linear-gradient(135deg, var(--panel-2), #1d0706); }
 .trackside-card figcaption { padding: 12px 14px 14px; color: var(--muted); line-height: 1.45; }
 .trackside-card figcaption b { display: block; color: #fff; font-weight: 700; margin-bottom: 2px; }
+
+/* ---- The Las Vegas Strip at night: a banner as wide as the page, six sights under it ---- */
+.vegas { margin-top: clamp(40px, 6vw, 72px); }
+.vegas-banner { position: relative; margin: 0; background: #05050a; }
+.vegas-banner img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 900px; object-fit: cover; object-position: 50% 30%; }
+.vegas-banner::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, var(--bg) 0%, rgba(7, 7, 12, 0.72) 22%, rgba(7, 7, 12, 0) 55%); }
+.vegas-copy { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; padding: 0 clamp(16px, 5vw, 64px) clamp(16px, 3vw, 36px); max-width: 1400px; margin: 0 auto; }
+.vegas-copy .kicker { color: #ff5ad0; }
+.vegas-copy p:not(.kicker) { max-width: 40em; margin: 0; color: #e4e4ea; line-height: 1.55; }
+.vegas-sights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 1400px; margin: 20px auto 0; padding: 0 clamp(16px, 5vw, 64px); }
+.vegas-sights .trackside-card { border-top-color: #ff5ad0; }
+.vegas-sights .trackside-card img { height: auto; aspect-ratio: 16 / 9; }
+.vegas-more { max-width: 1400px; margin: 14px auto 0; padding: 0 clamp(16px, 5vw, 64px); font-size: 0.92rem; }
+@media (max-width: 900px) { .vegas-sights { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) {
+  .vegas-sights { grid-template-columns: minmax(0, 1fr); }
+  /* Phones: the whole picture, the words under it. */
+  .vegas-banner::after { display: none; }
+  .vegas-copy { position: static; padding-top: 14px; }
+}
+
+/* ---- New on track: four pictures and two cards of words ---- */
+.ontrack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+@media (min-width: 1000px) { .ontrack-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.ontrack-card { background: var(--panel); border-top: 3px solid var(--red); overflow: hidden; }
+.ontrack-card img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; background: linear-gradient(135deg, var(--panel-2), #1d0706); }
+.ontrack-card h3 { margin: 14px 16px 6px; font: italic 900 1.05rem/1.1 var(--font); text-transform: uppercase; }
+.ontrack-card p { margin: 0 16px 16px; color: var(--muted); line-height: 1.5; }
+.ontrack-card.is-words { border-top-color: rgba(255, 255, 255, 0.35); background: var(--panel-2); display: flex; flex-direction: column; justify-content: center; padding: 10px 0; }
