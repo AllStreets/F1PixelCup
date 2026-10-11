@@ -241,6 +241,18 @@ async (page) => {
           });
       }));
   });
+  // The podium block tells of the anthem and the celebration's sounds, and
+  // shows the anthem (the fourth picture, which loads).
+  out.podiumAnthem = await p.evaluate(async () => {
+    const block = document.getElementById("podium");
+    const text = block ? block.textContent : "";
+    const thumbs = block ? [...block.querySelectorAll(".feature-strip button img")] : [];
+    const anthem = thumbs.find((img) => (img.getAttribute("src") || "").includes("podium-anthem"));
+    if (anthem && !anthem.complete) await new Promise((r) => { anthem.addEventListener("load", r, { once: true }); setTimeout(r, 4000); });
+    return (/national anthem/.test(text) && /cork/.test(text) && /11 countries/.test(text) && Boolean(anthem) && anthem.naturalWidth > 0 && /anthem/i.test(anthem.alt + (anthem.closest("button").textContent || "")))
+      || JSON.stringify({ hasText: /national anthem/.test(text), thumbs: thumbs.map((i) => i.getAttribute("src")) });
+  });
+
   // A thumbnail shows its picture large: the main shot, its alt and its
   // caption change, and only that thumbnail is pressed.
   out.raceDayGallery = await p.evaluate(async () => {
