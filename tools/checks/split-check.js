@@ -340,6 +340,9 @@ async (page) => {
       state.resultsQueued = true;
       finalizeRace();
     }
+    // (The podium opens once its ceremony is ready to draw, not at once: on
+    // High, the default, that is more than a few frames.)
+    for (let i = 0; i < 1200 && state.phase !== "podium"; i += 1) await new Promise((r) => requestAnimationFrame(r));
     for (let i = 0; i < 20; i += 1) await new Promise((r) => requestAnimationFrame(r));
     const [a, b] = [humanEntry(0), humanEntry(1)];
     const careers = [a, b].map((e) => Career.getDriver(e.driver.id));
