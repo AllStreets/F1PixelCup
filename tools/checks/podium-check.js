@@ -535,7 +535,9 @@ async (page) => {
     results.anthemNoteIsRight = (heard.note && [0, 1, 3, 4].every((i) => heard.note.power[2] > heard.note.power[i] + 6)) || JSON.stringify(heard.note);
     // Leaving stops it.
     await p.click("#podium-screen [data-action='pitlane']");
-    await p.waitForTimeout(700);
+    // (Its fade-out has a second to finish: the louder champagne's tail was a
+    // hair over the limit at 0.7 s, some 79 dB down.)
+    await p.waitForTimeout(1000);
     results.leavingStopsTheSound = await p.evaluate(() => {
       const last = Game.podiumSound({ last: true });
       return (Game.podiumSound() === null && state.phase === "garage" && last && last.level < 1e-4) || JSON.stringify({ now: Game.podiumSound(), level: last && last.level });
