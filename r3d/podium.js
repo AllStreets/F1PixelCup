@@ -13,7 +13,7 @@
 // page shows its 2D steps). dispose() frees it all.
 
 import * as THREE from "three";
-import { buildDriver, driverLoaded, suitColours } from "./driver.js";
+import { buildDriver, suitFonts, driverLoaded, suitColours } from "./driver.js";
 import { canvasTexture, color } from "./textures.js";
 
 import { drawFlag } from "./flags.js";
@@ -585,11 +585,15 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
 
   // Builds once the driver model is in, then compiles its shaders and uploads
   // its textures in the background. True once it can draw without a stall.
+  let fontsAsked = false, fontsReady = false;
   function prepare() {
     if (disposed) return false;
     if (compiled) return true;
     if (!built) {
       if (!driverLoaded()) return false;
+      // (The suits' marks are drawn once, in the game's typeface.)
+      if (!fontsAsked) { fontsAsked = true; suitFonts().then(() => { fontsReady = true; }); }
+      if (!fontsReady) return false;
       buildSet();
       buildLights();
       buildFigures();
@@ -617,6 +621,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     const start = performance.now();
     while (uploads.length && performance.now() - start < 8) renderer.initTexture(uploads.pop());
     if (uploads.length) return false;
+    inspectState.sheetsUploaded = figures.every((f) => Boolean(renderer.properties.get(f.fig.sheet).__webglTexture));
     compiled = true;
     return true;
   }
@@ -665,6 +670,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       if (!o.material) return;
       (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => {
         Object.values(m).forEach((v) => { if (v && v.isTexture) found.add(v); });
+        // (And the ones a material's own shader reads: the suits' sheets.)
+        Object.values(m.userData.uniforms || {}).forEach((u) => { if (u.value && u.value.isTexture) found.add(u.value); });
       });
     });
     return [...found];
@@ -752,7 +759,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
     inspectState.t = t;
     return t;
   }
-  const inspectState = { t: -1, newPrograms: null };
+  const inspectState = { t: -1, newPrograms: null, sheetsUploaded: null };
 
   // Where each plate goes: the foot of each step's front, on screen (CSS px).
   // The same list each frame, refilled.
@@ -820,6 +827,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       camera: [camera.position.x, camera.position.y, camera.position.z],
       cupColour,
       newProgramsOnFirstFrame: inspectState.newPrograms,
+      // Whether every suit's sheet was on the GPU when prepare() finished.
+      suitSheetsUploadedAhead: inspectState.sheetsUploaded,
       drivers: figures.map((f) => {
         const p = f.fig.root.getWorldPosition(new THREE.Vector3());
         return { place: f.entry.place, ...f.fig.looks(), x: p.x, y: p.y, z: p.z };

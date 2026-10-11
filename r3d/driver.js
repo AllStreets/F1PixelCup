@@ -19,6 +19,9 @@ import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import "../faces.js";
 import { color } from "./textures.js";
 import { liveryFor, helmetTexture } from "./car.js";
+import { suitSheet, wearSuit, suitFonts } from "./suit.js";
+
+export { suitFonts };
 
 const Faces = globalThis.Faces;
 export const POSES = ["stand", "wave", "arms_up", "trophy", "spray"];
@@ -561,11 +564,17 @@ function shapeFace(model, weights, parts, look, tier) {
 function dress(model, driver, team, look, tier) {
   const { suit, trim } = suitColours(team);
   const made = new Map();
-  const dressed = (m) => {
-    if (made.has(m.name)) return made.get(m.name);
+  // The driver's marks (number, flag, code, surname), on the body's cloth.
+  const sheet = suitSheet(driver, { suit, trim }, tier);
+  // (`onBody`: the body's own suit and trim wear the marks; the collar band,
+  // a mesh in its own space, wears the plain trim.)
+  const dressed = (m, onBody) => {
+    const key = !onBody && m.name === "suit_trim" ? "suit_trim@collar" : m.name;
+    if (made.has(key)) return made.get(key);
     let out = m.clone();
     if (m.name === "suit") out.color = color(suit);
     if (m.name === "suit_trim") out.color = color(trim);
+    if (onBody && (m.name === "suit" || m.name === "suit_trim")) wearSuit(out, sheet, { detail: m.name === "suit", trim: color(trim) });
     if (m.name === "helmet") {
       out.map = helmetTexture(driver);
       out.color = new THREE.Color(0xffffff);
@@ -593,13 +602,15 @@ function dress(model, driver, team, look, tier) {
         out = hairMaterial(m.name, hex, pattern, { volume: m.name === "hair" ? look.hair.volume : 1, brows: m.name === "brows" ? look.brows : null, tier });
       }
     }
-    made.set(m.name, out);
+    made.set(key, out);
     return out;
   };
   model.traverse((node) => {
-    if (node.isMesh) node.material = Array.isArray(node.material) ? node.material.map(dressed) : dressed(node.material);
+    if (!node.isMesh) return;
+    const onBody = partName(node) === "body";
+    node.material = Array.isArray(node.material) ? node.material.map((m) => dressed(m, onBody)) : dressed(node.material, onBody);
   });
-  return made;
+  return { materials: made, sheet };
 }
 
 // The top-level part a mesh belongs to (a glTF node with several materials
@@ -620,7 +631,7 @@ export function buildDriver(driver, team, options = {}) {
   if (look && Faces.checkLook(look).length) throw new Error(`${driver.id}'s look: ${Faces.checkLook(look).join(", ")}`);
   const bare = headwear === "none" && Boolean(look);
   const model = SkeletonUtils.clone(template);
-  const materials = dress(model, driver, team, look, tier);
+  const { materials, sheet } = dress(model, driver, team, look, tier);
   const root = new THREE.Group();
   root.add(model);
   const props = {};
@@ -707,6 +718,8 @@ export function buildDriver(driver, team, options = {}) {
   return {
     root,
     model,
+    // The suit's sheet of marks (uploaded ahead by whoever prepares the scene).
+    sheet,
     play,
     pose: () => current,
     update(dt) { mixer.update(dt); },
@@ -720,6 +733,9 @@ export function buildDriver(driver, team, options = {}) {
         headwear: bare ? "none" : "helmet",
         suit: materials.has("suit") ? `#${materials.get("suit").color.getHexString()}` : null,
         trim: materials.has("suit_trim") ? `#${materials.get("suit_trim").color.getHexString()}` : null,
+        // The marks the suit's sheet was drawn with, and the sheet's size.
+        marks: sheet.userData.marks,
+        sheet: sheet.userData.size,
         helmetTexture: helmet && helmet.map ? helmet.map.uuid : null,
         helmetShown,
         face: face(),
@@ -733,6 +749,7 @@ export function buildDriver(driver, team, options = {}) {
       root.removeFromParent();
       // The helmet's texture is shared with the car; only the clones' own materials go.
       materials.forEach((m) => m.dispose());
+      sheet.dispose();
       // And the positions of the bound parts it shows, its own.
       // (Stripped to that first: the rest of it is shared with every figure.)
       model.traverse((n) => {

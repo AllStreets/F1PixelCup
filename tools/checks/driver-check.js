@@ -210,6 +210,117 @@ async (page) => {
     return (out.high.layers > out.medium.layers && out.medium.layers > out.low.layers && !out.high.lite && out.medium.lite && out.low.lite) || JSON.stringify(out);
   });
 
+  // The suits' marks (docs/superpowers/specs/2026-10-12-race-suits-design.md):
+  // each figure's sheet is drawn with its own driver's number, code, surname
+  // and country, and really has paint where each mark sits and none between
+  // them (the sheet's pixels read back).
+  results.suitsCarryOwnMarks = await p.evaluate(() => {
+    const out = window.preview.figures.map((f) => {
+      const l = f.looks();
+      const d = DRIVERS.find((x) => x.id === l.driverId);
+      const want = window.Suits.marks(d);
+      let body = null, collar = null, belt = null;
+      f.model.traverse((n) => {
+        if (n.isMesh && n.material.name === "suit" && n.material.userData.uniforms) body = n.material;
+        if (n.isMesh && n.name !== "collar" && n.material.name === "suit_trim") belt = n.material;
+        if (n.isMesh && n.name === "collar") collar = n.material;
+      });
+      const sheet = body && body.userData.uniforms.suitSheet.value;
+      if (!sheet) return { id: d.id, sheet: false };
+      const g = sheet.image.getContext("2d");
+      const size = [sheet.image.width, sheet.image.height];
+      // The share of a box of the sheet that is painted.
+      const painted = (side, mark) => {
+        const b = window.Suits.sheetBox(side, mark, size);
+        const px = g.getImageData(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h)).data;
+        let n = 0;
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 128) n += 1;
+        return n / (px.length / 4);
+      };
+      const L = window.Suits.LAYOUT;
+      const shares = {
+        number: painted("front", L.front.number), flag: painted("front", L.front.flag), code: painted("front", L.front.code),
+        surname: painted("back", L.back.surname), backNumber: painted("back", L.back.number),
+        // Between the marks: the right chest, bare.
+        bare: painted("front", { ...L.front.number, x: -L.front.number.x }),
+      };
+      return {
+        id: d.id,
+        own: JSON.stringify(l.marks) === JSON.stringify(want),
+        size: JSON.stringify(l.sheet) === JSON.stringify(window.Suits.sheetSize("high")),
+        shares,
+        ok: shares.number > 0.08 && shares.flag > 0.9 && shares.code > 0.1 && shares.surname > 0.1 && shares.backNumber > 0.1 && shares.bare === 0,
+        collarPlain: Boolean(collar) && !collar.userData.uniforms,
+        // The body's trim (the belt, where the code is) wears the same sheet.
+        beltWears: Boolean(belt && belt.userData.uniforms && belt.userData.uniforms.suitSheet.value === sheet),
+        typeface: document.fonts.check("italic 900 40px 'Titillium Web'") && document.fonts.check("700 40px 'Titillium Web'"),
+      };
+    });
+    // Different drivers, different sheets.
+    const distinct = new Set(out.map((o) => JSON.stringify(o.shares))).size === out.length;
+    return (out.every((o) => o.own && o.size && o.ok && o.collarPlain && o.beltWears && o.typeface) && distinct) || JSON.stringify(out);
+  });
+  // The digits keep their own shape on the cloth (the sheet's pixels are not
+  // square there): Leclerc's 16 on the back is wider than it is tall, in
+  // metres, as heavy italic digits are.
+  results.digitsKeepTheirShape = await p.evaluate(() => {
+    const sheet = window.preview.figures[0].sheet.image;
+    const L = window.Suits.LAYOUT;
+    const b = window.Suits.sheetBox("back", L.back.number, [sheet.width, sheet.height]);
+    const px = sheet.getContext("2d").getImageData(Math.round(b.x), Math.round(b.y), Math.round(b.w), Math.round(b.h));
+    let x0 = px.width, x1 = 0, y0 = px.height, y1 = 0;
+    for (let y = 0; y < px.height; y += 1) for (let x = 0; x < px.width; x += 1) {
+      if (px.data[(y * px.width + x) * 4 + 3] > 128) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    }
+    const wide = ((x1 - x0) / px.width) * L.back.number.w, tall = ((y1 - y0) / px.height) * L.back.number.h;
+    return (wide / tall > 1.05 && wide / tall < 1.6) || `${wide.toFixed(3)} m wide, ${tall.toFixed(3)} m tall`;
+  });
+  results.smallerSheetsOnLowerTiers = await p.evaluate(async () => {
+    const { buildDriver } = await import("../../r3d/driver.js");
+    const d = DRIVERS.find((x) => x.id === "leclerc");
+    const sizes = ["high", "medium", "low"].map((tier) => {
+      const fig = buildDriver(d, getTeamForDriver(d), { tier, headwear: "helmet" });
+      const size = fig.looks().sheet;
+      const marks = fig.looks().marks;
+      fig.dispose();
+      return [size, marks.number];
+    });
+    return JSON.stringify(sizes) === JSON.stringify([[[2048, 1024], "16"], [[1024, 512], "16"], [[512, 256], "16"]]) || JSON.stringify(sizes);
+  });
+
+  // And on the figure as drawn, from behind: Leclerc's 16 reads the right way
+  // round (the thin 1 to the viewer's left, the 6 to the right: mirrored, the
+  // other way), in the suit's ink, and the cloth beside it is bare.
+  await p.goto(`http://localhost:8765/tools/preview/driver.html?drivers=leclerc&cam=rear&t=0.5&${Date.now()}`);
+  await p.waitForFunction(() => window.preview && (window.preview.ready || window.preview.error), null, { timeout: 60000 });
+  results.backNumberDrawnTheRightWayRound = await p.evaluate(() => {
+    const { camera, renderer, figures } = window.preview;
+    window.preview.redraw();
+    const canvas = renderer.domElement;
+    const flat = document.createElement("canvas");
+    [flat.width, flat.height] = [canvas.width, canvas.height];
+    const g = flat.getContext("2d", { willReadFrequently: true });
+    g.drawImage(canvas, 0, 0);
+    const V = figures[0].root.position.constructor;
+    // A point of the back (the figure faces +X; its left is -Z), in pixels.
+    const at = (left, y) => {
+      const v = new V(-0.1, y, -left).project(camera);
+      return [Math.round((v.x * 0.5 + 0.5) * flat.width), Math.round((0.5 - v.y * 0.5) * flat.height)];
+    };
+    const n = window.Suits.LAYOUT.back.number;
+    // White ink (Leclerc's red suit): the share of a box that is near white.
+    const inked = (l0, l1) => {
+      const [x0, y0] = at(l0, n.y + n.h / 2), [x1, y1] = at(l1, n.y - n.h / 2);
+      const px = g.getImageData(Math.min(x0, x1), y0, Math.abs(x1 - x0), y1 - y0).data;
+      let k = 0;
+      for (let i = 0; i < px.length; i += 4) if (Math.min(px[i], px[i + 1], px[i + 2]) > 150) k += 1;
+      return k / (px.length / 4);
+    };
+    // From behind, the figure's left is the viewer's left.
+    const one = inked(n.w / 2, 0), six = inked(0, -n.w / 2), beside = inked(0.165, 0.135);
+    return (one > 0.05 && six > one * 1.3 && beside === 0) || JSON.stringify({ one, six, beside });
+  });
+
   // Every driver's head, in the studio's grid: twenty figures, no errors.
   await p.goto(`http://localhost:8765/tools/preview/driver.html?grid=1&t=0.5&${Date.now()}`);
   await p.waitForFunction(() => window.preview && (window.preview.ready || window.preview.error), null, { timeout: 60000 });
