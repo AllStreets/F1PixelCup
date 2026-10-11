@@ -131,7 +131,7 @@ export function wearSuit(material, sheet, { detail, trim }) {
             // zip's placket, a shade darker either side of it.
             float yoke = suitSeam(vRest.y - 1.372) * step(abs(lx), 0.2) * smoothstep(0.2, 0.5, abs(rn.x));
             float placket = (1.0 - smoothstep(0.011, 0.013, abs(lx))) * front * step(1.03, vRest.y) * step(vRest.y, 1.45);
-            diffuseColor.rgb *= 1.0 - 0.3 * max(max(quilt * 0.55, panelSeam), yoke) - 0.07 * placket;
+            diffuseColor.rgb *= 1.0 - 0.3 * max(max(quilt * 0.42, panelSeam), yoke) - 0.07 * placket;
             diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.3, zip);
             // Ankle cuffs in the trim's colour.
             float cuff = step(0.162, vRest.y) * step(vRest.y, 0.2);
