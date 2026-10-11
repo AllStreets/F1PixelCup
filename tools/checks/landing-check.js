@@ -124,7 +124,8 @@ async (page) => {
   // landmarks), every one loaded, each with its alt text and caption, linked
   // from the top bar.
   out.tracksideShots = await p.evaluate(async () => {
-    const imgs = [...document.querySelectorAll("#trackside .trackside-card img")];
+    // (The grid's own cards: Las Vegas, the section's opener, has its own check.)
+    const imgs = [...document.querySelectorAll("#trackside .trackside-grid .trackside-card img")];
     imgs.forEach((i) => { i.loading = "eager"; });
     await Promise.all(imgs.map((i) => (i.complete ? null : new Promise((r) => { i.onload = r; i.onerror = r; }))));
     const ok = imgs.length === 12 && imgs.filter((i) => /trackside-(sphere|flames|biosphere|austin|forosol|miami)\.jpg$/.test(i.src)).length === 6 && imgs.every((i) => i.naturalWidth > 0 && i.alt.length > 20 && i.closest("figure").querySelector("figcaption b"));
@@ -278,7 +279,9 @@ async (page) => {
     out.vegas = (banner.length === 1 && sights.length === 6 && all.every((i) => i.ok && i.lazy && i.shaped && i.alt.length > 20 && /^vegas-/.test(i.file))
       && banner[0].alt.indexOf("Charles Leclerc") >= 0 && banner[0].alt.indexOf("Charles Leclerc") < banner[0].alt.indexOf("Lewis Hamilton")
       && new Set(all.map((i) => i.file)).size === 7
-      && await p.evaluate(() => Boolean(document.querySelector('#hero a[href="#vegas"]')) && document.querySelectorAll("#vegas .vegas-sights figcaption b").length === 6))
+      && await p.evaluate(() => Boolean(document.querySelector('#hero a[href="#vegas"]')) && document.querySelectorAll("#vegas .vegas-sights figcaption b").length === 6
+        // (Not the page's opener: the Trackside section's lead example, user 2026-10-11.)
+        && Boolean(document.querySelector("#trackside #vegas")) && document.querySelector("#hero + *").id === "circuits"))
       || JSON.stringify(all.filter((i) => !(i.ok && i.lazy && i.shaped)).map((i) => i.file)) + ` ${banner.length}+${sights.length}`;
   }
   // On track: the Safety Car's gates, the barrier, the night sky (pictures),

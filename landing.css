@@ -302,14 +302,15 @@ body.landing { overflow-x: hidden; }
 .trackside-card figcaption b { display: block; color: #fff; font-weight: 700; margin-bottom: 2px; }
 
 /* ---- The Las Vegas Strip at night: a banner as wide as the page, six sights under it ---- */
-.vegas { margin-top: clamp(40px, 6vw, 72px); }
+/* Las Vegas: the Trackside section's lead example. */
+.vegas { margin: clamp(20px, 3vw, 36px) 0 clamp(28px, 4vw, 48px); }
 .vegas-banner { position: relative; margin: 0; background: #05050a; }
 .vegas-banner img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; max-height: 900px; object-fit: cover; object-position: 50% 30%; }
 .vegas-banner::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(0deg, var(--bg) 0%, rgba(7, 7, 12, 0.72) 22%, rgba(7, 7, 12, 0) 55%); }
 .vegas-copy { position: absolute; z-index: 1; left: 0; right: 0; bottom: 0; padding: 0 clamp(16px, 5vw, 64px) clamp(16px, 3vw, 36px); max-width: 1400px; margin: 0 auto; }
 .vegas-copy .kicker { color: #ff5ad0; }
 .vegas-copy p:not(.kicker) { max-width: 40em; margin: 0; color: #e4e4ea; line-height: 1.55; }
-.vegas-sights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; max-width: 1400px; margin: 20px auto 0; padding: 0 clamp(16px, 5vw, 64px); }
+.vegas-sights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0 0; }
 .vegas-sights .trackside-card { border-top-color: #ff5ad0; }
 .vegas-sights .trackside-card img { height: auto; aspect-ratio: 16 / 9; }
 .vegas-more { max-width: 1400px; margin: 14px auto 0; padding: 0 clamp(16px, 5vw, 64px); font-size: 0.92rem; }
