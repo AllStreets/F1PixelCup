@@ -24,7 +24,7 @@ export const METALS = {
   1: { name: "gold", color: "#f0b93a", roughness: 0.2 },
 };
 // The winner's stands on a dark plinth, part of it.
-const PLINTH = { radius: 0.105, top: -0.17, bottom: -0.25 };
+const PLINTH = { radius: 0.09, top: -0.17, bottom: -0.25 };
 // Its two great handles, from the shoulder of the urn to its belly, and
 // third's small ones at the cup's foot (as the driver model's are):
 // [x, y] along each, and the tube's radius.
@@ -33,12 +33,15 @@ const HANDLES = {
   3: { points: [[0.078, 0.17], [0.102, 0.15], [0.106, 0.11], [0.072, 0.1]], radius: 0.008 },
 };
 
-// Where the hand that takes each holds its stem: this far under the cup (m).
+// Where the hand that takes each holds its stem: this far under the cup's
+// foot, the trophy's own origin (m; less than nothing: above it).
 // Where a second hand holds it, under the first. And where the presenter's
 // two hands hold it, by the rim of its foot (above its underside), clear of
 // the hand that takes the stem.
-const UNDER = { 3: 0.04, 2: 0.04, 1: 0.04 };
-const LOWER = { 3: 0.07, 2: 0.09, 1: 0.065 };
+// (Each stem's own shape: the first hand on its upper part, the second on
+// its lower, the two a hand's width apart.)
+const UNDER = { 3: 0.02, 2: 0, 1: -0.015 };
+const LOWER = { 3: 0.085, 2: 0.09, 1: 0.055 };
 const HOLD = { 3: 0.015, 2: 0.012, 1: 0.04 };
 
 // How far out a trophy's own metal reaches at height y (from its stem), its

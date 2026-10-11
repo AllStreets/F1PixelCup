@@ -269,9 +269,9 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           chestPoint(d, trophy, v2).lerp(holdPoint(d, trophy, v3), go);
           v3.copy(over > 0 ? v2 : g.position).addScaledVector(over > 0 ? UP : v1, -trophy.lower);
           const short = 1 - ease(PASS.joined * 0.8, PASS.joined, pass);
-          v3.x += (APPROACH.x + trophy.baseRadius) * short;
+          v3.x += (APPROACH.x + trophy.radius) * short;
           v3.y -= APPROACH.y * short;
-          pole.set(1, -0.6, -0.2);
+          pole.set(1, -0.2, -0.3);
           stemL.world.copy(over > 0 ? UP : v1);
           const gap = reach(d.rig, "L", v3, ease(PASS.joined * 0.45, PASS.joined * 0.85, pass), pole, grips.L.at, stemL);
           if (pass >= PASS.joined) state.hands[pass < PASS.given ? "join" : "hold"][place] = gap;
@@ -366,7 +366,8 @@ export function createPresentation({ scene, Ceremony, entries, cup, tier, figure
           body: bodyGap(d.rig, trophy),
           arms: { R: armGap(d.rig, "R", trophy), L: armGap(d.rig, "L", trophy) },
           // How far each of the driver's hands (its grip) is from the stem.
-          grip: { R: right.distanceTo(p), L: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p) },
+          // and from each other.
+          grip: { R: right.distanceTo(p), L: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(p), apart: gripPoint(d.rig, "L", new THREE.Vector3()).distanceTo(right) },
           // While the presenter has hold of it too: the room between their
           // hands and the driver's right (a hand's own reach round each grip).
           handsApart: hands && hands.place === place ? Math.min(...SIDES.map(([s]) => gripPoint(presenter.rig, s, new THREE.Vector3()).distanceTo(right))) - 2 * HAND : null,

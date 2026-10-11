@@ -332,7 +332,7 @@ async (page) => {
           // the left once it has it.
           if (t >= h.contact && t <= h.release) note(`take${tr.place}`, -st.hands.take[tr.place], t);
           const pass = C.trophyAt(tr.place, t).pass;
-          if (pass >= C.PASS.joined && pass < C.PASS.given) note(`join${tr.place}`, -st.hands.join[tr.place], t);
+          if (pass >= C.PASS.joined && pass < C.PASS.given) { note(`join${tr.place}`, -st.hands.join[tr.place], t); note(`ownHands${tr.place}`, tr.grip.apart, t); }
           if (pass >= C.PASS.given) note(`hold${tr.place}`, -st.hands.hold[tr.place], t);
         });
         if (st.drivers.some((d) => d.props.trophy)) bad.push(`a model trophy shown at ${t.toFixed(2)}`);
@@ -367,7 +367,8 @@ async (page) => {
     // trophy into a chest, a waist or a head, the presenter's or a driver's;
     // and where two people hold one, their hands do not meet.
     const clear = ["presenterBody", "presenterArms", ...[3, 2, 1].flatMap((place) => [`body${place}`, `forearms${place}`, `handsApart${place}`])];
-    results.nothingThroughATrophy = clear.every((k) => w(k) > 0) || short(clear, scene.worst);
+    // (A driver's own two hands on one stem: their grips 6 cm apart or more.)
+    results.nothingThroughATrophy = (clear.every((k) => w(k) > 0) && w("ownHands3") >= 0.06 && w("ownHands2") >= 0.06) || short([...clear, "ownHands3", "ownHands2"], scene.worst);
 
     const trophy = await at(["trophy", 1.4]);
     results.trophyBeat = pose(trophy) === "trophy,wave,wave" || pose(trophy);
@@ -396,15 +397,15 @@ async (page) => {
         note("held", -Math.min(tr.grip.R, tr.grip.L), st.t);
         note("body", tr.body, st.t);
         note("forearms", Math.min(tr.arms.R, tr.arms.L), st.t);
-        if (pass >= C.PASS.joined && pass < C.PASS.given) note("join", -st.hands.join[1], st.t);
+        if (pass >= C.PASS.joined && pass < C.PASS.given) { note("join", -st.hands.join[1], st.t); note("ownHands", tr.grip.apart, st.t); }
         if (pass >= C.PASS.given) note("hold", -st.hands.hold[1], st.t);
         if (st.t < C.BEATS.spray - 0.07) requestAnimationFrame(tick);
         else done(worst);
       };
       requestAnimationFrame(tick);
     }));
-    results.winnerBringsTheGoldDown = (-down.held[0] < 0.1 && down.join && -down.join[0] < 0.03 && down.hold && -down.hold[0] < 0.03 && down.body[0] > 0 && down.forearms[0] > 0)
-      || short(["held", "join", "hold", "body", "forearms"], down);
+    results.winnerBringsTheGoldDown = (-down.held[0] < 0.1 && down.join && -down.join[0] < 0.03 && down.hold && -down.hold[0] < 0.03 && down.body[0] > 0 && down.forearms[0] > 0 && down.ownHands && down.ownHands[0] >= 0.06)
+      || short(["held", "join", "hold", "body", "forearms", "ownHands"], down);
 
     // Just into the spray: the poses crossfade, so the trophy is still up for
     // the first moment and the bottles come in as the hands meet.
