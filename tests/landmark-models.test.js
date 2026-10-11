@@ -170,8 +170,9 @@ test("the open terrace: rows of benches, no roof, the covered stand's footprint"
 // were welded).
 test("every landmark's meshes face outward", () => {
   const fs = require("node:fs");
-  // (vegas_fill.glb is data alone, no mesh in it: tests/vegas-fill.test.js.)
-  fs.readdirSync(DIR).filter((f) => f.endsWith(".glb") && f !== "vegas_fill.glb").forEach((f) => {
+  // (vegas_fill.glb is data alone, no mesh in it: tests/vegas-fill.test.js;
+  // vegas_earth.glb is two pictures on a triangle nothing draws: tests/sphere-earth.test.js.)
+  fs.readdirSync(DIR).filter((f) => f.endsWith(".glb") && f !== "vegas_fill.glb" && f !== "vegas_earth.glb").forEach((f) => {
     const glb = load(path.join(DIR, f));
     glb.doc.nodes.filter((n) => n.mesh !== undefined).forEach((n) => {
       const v = signedVolume(glb, n.name);

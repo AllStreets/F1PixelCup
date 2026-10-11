@@ -266,6 +266,23 @@ async (page) => {
     };
     requestAnimationFrame(tick);
   }));
+  // The Sphere shows the Earth (NASA's Blue Marble, r3d/landmarks.js
+  // sphereScreen) from its map, a turn in 40 to 60 s about its tilted axis,
+  // by the race's clock: as a race runs, the clock it turns by runs with it.
+  if (await step(() => !CHECK_ONLY.length || CHECK_ONLY.includes("lasvegas"))) {
+    results.sphereShowsTheEarth = await step(() => {
+      Render3D.auditScenery(TRACKS.find((t) => t.id === "lasvegas"), { step: 80, lanes: 1 });
+      const s = Render3D.inspect().trackside.landmarks.find((l) => l.name === "vegasSphere");
+      return Boolean(s && s.fromModel && s.earth === true && s.turnSeconds >= 40 && s.turnSeconds <= 60 && s.tilt === 23.4 && Render3D.inspect().trackside.models.loaded.includes("vegasEarth")) || JSON.stringify(s);
+    });
+    await race("lasvegas");
+    const clock = () => step(() => { const s = Render3D.inspect().trackside.landmarks.find((l) => l.name === "vegasSphere"); return s && s.clock ? s.clock.value : null; });
+    const before = await clock();
+    await p.waitForTimeout(1500);
+    const after = await clock();
+    results.sphereTurnsWithTheRace = (before !== null && after - before > 0.8 && after - before < 3) || JSON.stringify({ before, after });
+  }
+
   const frames = {};
   const crowdHeard = {};
   for (const c of await step(() => CIRCUITS.filter((x) => !CHECK_ONLY.length || CHECK_ONLY.includes(x.id)).map((x) => x.id))) {

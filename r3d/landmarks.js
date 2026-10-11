@@ -930,7 +930,100 @@ function facadeMaterial(night, { glass = "#3e5a78", slab = "#c9cdd2", lit = 0.55
 // planet (an abstract image of its own, no mark), its oceans and lands under
 // swirling cloud, turning slowly (its own time uniform, userData.time,
 // advanced by the landmarks' animate). Unlit: the screen is its own light.
+// How long the Sphere's Earth takes to turn once (seconds), and its axis's
+// tilt (degrees): the real Sphere's globe turns visibly as you drive by.
+export const SPHERE_TURN = 48;
+export const SPHERE_TILT = 23.4;
+
+// The Sphere's LED skin showing the Earth: NASA's Blue Marble
+// (assets/landmarks/vegas_earth.glb, tools/sphere/fetch_earth.py: public
+// domain) read per pixel from the direction out of the Sphere's centre,
+// turning steadily about its tilted axis (its time is the race's own clock,
+// userData.time: the same in every view, still while the game is paused, the
+// same again in a replay), a layer of cloud drifting a little faster than
+// the ground, a rim of air, and a faint grid of LEDs close to. Unlit: the
+// screen is its own light, kept under white so the bloom never clips it.
+// Without the map (it failed to load): the drawn planet, as before.
 function sphereScreen() {
+  const earth = tracksideModel("vegasEarth");
+  const maps = {};
+  if (earth) earth.traverse((o) => { if (o.isMesh && o.material.map) maps[o.material.name] = o.material.map; });
+  if (!maps.earth || !maps.clouds) return spherePlanet();
+  Object.values(maps).forEach((t) => {
+    t.wrapS = THREE.RepeatWrapping;
+    t.anisotropy = 8;
+    t.needsUpdate = true;
+  });
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  m.userData.time = { value: 0 };
+  m.userData.earth = true;
+  m.onBeforeCompile = (shader) => {
+    shader.uniforms.uSphereTime = m.userData.time;
+    shader.uniforms.uEarth = { value: maps.earth };
+    shader.uniforms.uClouds = { value: maps.clouds };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vSphereDir; varying float vSphereRim;")
+      // (A sphere's normal is its direction out of its centre: true of the
+      // compressed model too, whose positions are quantized.)
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvSphereDir = normalize(normal);")
+      .replace("#include <project_vertex>", "#include <project_vertex>\nvSphereRim = 1.0 - abs(dot(normalize(normalMatrix * normal), normalize(-mvPosition.xyz)));");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>
+        varying vec3 vSphereDir; varying float vSphereRim; uniform float uSphereTime; uniform sampler2D uEarth; uniform sampler2D uClouds;
+        // A direction on the globe as the map's own place (east to the right
+        // seen from outside, north up) and how fast that place changes across
+        // the screen (xy: along x; zw: along y). Across the date line the
+        // longitude jumps by a whole turn: its change is read from whichever
+        // of its two readings does not jump there, so the map is sampled at
+        // its true fineness and no seam is ever drawn.
+        vec2 sphereMap(vec3 g, out vec4 grad) {
+          float u1 = atan(-g.z, g.x) / 6.2831853 + 0.5;
+          float u2 = fract(u1 + 0.5) - 0.5;
+          float v = 0.5 - asin(clamp(g.y, -1.0, 1.0)) / 3.14159265;
+          vec2 d1 = vec2(dFdx(u1), dFdy(u1)); vec2 d2 = vec2(dFdx(u2), dFdy(u2));
+          vec2 du = vec2(abs(d1.x) < abs(d2.x) ? d1.x : d2.x, abs(d1.y) < abs(d2.y) ? d1.y : d2.y);
+          grad = vec4(du.x, dFdx(v), du.y, dFdy(v));
+          return vec2(u1, v);
+        }
+        vec3 sphereTurn(vec3 d, float turn) {
+          // Out of its tilt, then round its own axis.
+          float ct = ${Math.cos(SPHERE_TILT * Math.PI / 180).toFixed(5)}; float st = ${Math.sin(SPHERE_TILT * Math.PI / 180).toFixed(5)};
+          vec3 a = vec3(d.x * ct + d.y * st, -d.x * st + d.y * ct, d.z);
+          float c = cos(turn); float s = sin(turn);
+          return vec3(a.x * c + a.z * s, a.y, -a.x * s + a.z * c);
+        }`)
+      .replace("#include <color_fragment>", `#include <color_fragment>
+        vec3 d = normalize(vSphereDir);
+        // (West to east, as the Earth turns: its lands cross the Sphere to the east.)
+        float turn = -uSphereTime * ${(2 * Math.PI / SPHERE_TURN).toFixed(6)};
+        vec4 grad;
+        vec2 at = sphereMap(sphereTurn(d, turn), grad);
+        vec3 col = textureGrad(uEarth, at, grad.xy, grad.zw).rgb;
+        // The weather over it, drifting on a little ahead of the ground.
+        vec4 cgrad;
+        vec2 cat = sphereMap(sphereTurn(d, turn * 1.06 - 0.4), cgrad);
+        float cloud = textureGrad(uClouds, cat, cgrad.xy, cgrad.zw).r;
+        col = mix(col, vec3(0.9, 0.92, 0.95), smoothstep(0.12, 0.85, cloud) * 0.82);
+        // A screen's picture: a little more depth in the oceans, its
+        // brightest whites held under white.
+        col = pow(col, vec3(0.92)) * 1.12;
+        col = min(col, vec3(0.93));
+        // The LEDs, close to: a grid that fades to nothing by a few pixels a cell.
+        vec2 cell = at * vec2(1500.0, 750.0);
+        vec2 fw = vec2(abs(grad.x) + abs(grad.z), abs(grad.y) + abs(grad.w)) * vec2(1500.0, 750.0);
+        float near = 1.0 - smoothstep(0.12, 0.3, max(fw.x, fw.y));
+        vec2 f = abs(fract(cell) - 0.5);
+        col *= 1.0 - 0.22 * near * smoothstep(0.34, 0.5, max(f.x, f.y));
+        // The air: a thin blue rim.
+        col += vec3(0.16, 0.36, 0.8) * pow(vSphereRim, 3.5) * 0.5;
+        diffuseColor.rgb = col;`);
+  };
+  m.customProgramCacheKey = () => "sphere-earth-v2";
+  return m;
+}
+
+// The drawn planet the Sphere shows when the Earth's map is not there.
+function spherePlanet() {
   const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
   m.userData.time = { value: 0 };
   m.onBeforeCompile = (shader) => {
@@ -974,7 +1067,7 @@ function sphereScreen() {
         col += vec3(0.1, 0.25, 0.6) * pow(1.0 - abs(d.z), 3.0) * 0.35;
         diffuseColor.rgb = col;`);
   };
-  m.customProgramCacheKey = () => "sphere-screen-v4";
+  m.customProgramCacheKey = () => "sphere-planet-v4";
   return m;
 }
 
@@ -1528,7 +1621,8 @@ function siteLandmarks(course, group, venue) {
   // The Sphere's image turns: returned to be animated (only if it was built).
   const screens = [];
   group.traverse((o) => { if (o.material && o.material.userData && o.material.userData.time) screens.push(o.material.userData.time); });
-  return screens.length ? { userData: { animate: (dt) => screens.forEach((t) => { t.value += dt; }) } } : null;
+  // (Its clock is the race's own, in seconds, where the frame gives it.)
+  return screens.length ? { userData: { animate: (dt, now) => screens.forEach((t) => { t.value = now === undefined ? t.value + dt : now; }) } } : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1930,7 +2024,7 @@ export function buildMainStand(course, venue) {
 // A venue's city, built before anything else claims its ground (the track
 // data's grandstands fill in round it): Las Vegas's Strip. Or null.
 export function buildCity(course, venue) {
-  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark });
+  if (venue.city === "vegasStrip") return buildVegasStrip(course, venue, { dress: dressLandmark, earth: { turn: SPHERE_TURN, tilt: SPHERE_TILT } });
   return null;
 }
 
@@ -1966,6 +2060,6 @@ export function buildLandmarks(course, venue0, city = null, early = null) {
   (venue.trees || []).forEach((t, i) => {
     group.add(scatterTrees(course, { ...t, night: venue.night, seed: (t.seed || 0) + i * 31 }));
   });
-  group.userData.animate = (dt) => animated.forEach((o) => o.userData.animate(dt));
+  group.userData.animate = (dt, now) => animated.forEach((o) => o.userData.animate(dt, now));
   return group;
 }

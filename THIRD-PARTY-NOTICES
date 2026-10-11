@@ -112,6 +112,14 @@ these data files are used, read by this project's own code
 Attribution is not required; it is given here with thanks.
 
 ------------------------------------------------------------------------------
+NASA Earth Observatory / Visible Earth: the Blue Marble
+(https://visibleearth.nasa.gov/images/73909, Blue Marble Next Generation with
+topography and bathymetry, December 2004) and its clouds
+(https://visibleearth.nasa.gov/images/57747). NASA imagery is in the public
+domain. Resized and packed into assets/landmarks/vegas_earth.glb by
+tools/sphere/fetch_earth.py: the Earth the Las Vegas Sphere shows.
+
+------------------------------------------------------------------------------
 F1DB (https://github.com/f1db/f1db) by Marcel Overdijk, release v2026.15.1,
 licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
 Used by the website only (assets/data/grid-2025.js, built by
