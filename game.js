@@ -7835,6 +7835,7 @@ function drawPauseOverlay() {
   ctx.fillStyle = "rgba(255, 240, 201, 0.5)";
   const people = humans();
   ctx.fillText(pauseQuitHint(Boolean(people.length && people.every((racer) => racer.finished) && state.phase === "race")), view.width / 2, view.height / 2 + 54);
+  if (!isFullscreenActive()) ctx.fillText("F for the full screen", view.width / 2, view.height / 2 + 78);
   ctx.textAlign = "left";
   ctx.restore();
 }
@@ -7954,6 +7955,16 @@ function bindEvents() {
       event.preventDefault();
       handleEscapeKey();
       return;
+    }
+    // F: the full screen, on and off, from anywhere (not while a text box
+    // has the keys, nor with a modifier: the browser's own shortcuts).
+    if (event.code === "KeyF" && !event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) {
+      const typing = event.target && event.target.closest && event.target.closest("input, textarea, select, [contenteditable]");
+      if (!typing) {
+        event.preventDefault();
+        toggleFullscreen();
+        return;
+      }
     }
     if (state.phase === "replay") {
       if (!(window.Screens && window.Screens.isOverlayOpen())) handleReplayKey(event);

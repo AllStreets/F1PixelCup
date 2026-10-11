@@ -319,6 +319,7 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 | Drift (charge a boost) | hold `Shift` while turning |
 | Use the power-up | `Space` (Oil Slick: tap to drop, hold to trail) |
 | Pause | `Esc` or `P` |
+| Full screen, on and off | `F` (or double-click the picture) |
 | Quit while paused | `Q` (after the flag, `Q` keeps your result) |
 | Next race, or from qualifying to the race | `Enter` |
 | Back to the pit lane from results or the podium | `Esc` |

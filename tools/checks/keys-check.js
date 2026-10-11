@@ -35,6 +35,21 @@ async (page) => {
   out.enterOnPillSelects = await p.evaluate(() => state.selectedCup === 1);
   out.enterOnPillDidNotStart = await p.evaluate(() => state.phase === "garage");
 
+  // F asks for the full screen from anywhere (user, 2026-10-12), but not
+  // while a text box has the keys (the circuit picker's search). The
+  // browser's own request is counted, since a headless page cannot grant it.
+  await p.evaluate(() => {
+    window.fsAsked = 0;
+    const el = document.documentElement;
+    el.requestFullscreen = () => { window.fsAsked += 1; return Promise.resolve(); };
+  });
+  await p.locator("body").click({ position: { x: 5, y: 5 } });
+  await p.keyboard.press("f");
+  out.fAsksForFullScreen = await p.evaluate(() => window.fsAsked === 1);
+  await p.evaluate(() => { const i = document.createElement("input"); i.id = "fs-probe"; document.body.appendChild(i); i.focus(); });
+  await p.keyboard.press("f");
+  out.fTypesInATextBox = await p.evaluate(() => { const i = document.getElementById("fs-probe"); const ok = window.fsAsked === 1 && i.value === "f"; i.remove(); return ok; });
+
   // Next race can only happen from the results screen.
   await p.evaluate(() => { Game.selectCup(0); Game.startCup(); });
   await p.waitForTimeout(300);
