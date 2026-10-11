@@ -362,28 +362,51 @@ async (page) => {
   // it, and lowered again the moment the first car (a CPU car here, not the
   // player) takes the flag, the player still racing.
   results.chequeredFlagOfficial = await step(async () => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    const waving = () => Render3D.inspect().life.starterWaving;
+    // The race goes on underneath (cars cross the line, laps tick): each
+    // state is held frame by frame while it is looked at, the game's own
+    // answer read first (tracksideFrame: no picture, no timing), then the
+    // picture given up to two and a half seconds to follow it (the arm eases).
     const laps = state.track.laps;
     const keep = state.racers.map((r) => [r, r.lap, r.finished, r.startedRaceLap]);
+    const startKept = state.raceStart;
+    // (A CPU car with at least 800 of its lap still to go, four seconds or
+    // more at any car's top speed: it cannot cross the line, and so finish
+    // for real, in the two and a half seconds it is held on the last lap.
+    // Waited for, the race running, if the whole field is nearer the line.)
+    const L = state.track.totalLength;
+    const farFromLine = () => state.racers.filter((r) => !r.isPlayer && !r.finished).find((r) => L - (r.trackDistance || 0) >= 800 && (r.trackDistance || 0) > 50);
+    for (const until = performance.now() + 30000; !farFromLine() && performance.now() < until;) await new Promise((r) => requestAnimationFrame(r));
+    const cpu = farFromLine();
+    if (!cpu) return "no CPU car far enough from the line";
     const people = Render3D.auditPeople(state.track);
     const official = people.figures.filter((f) => f.kind === "official");
-    state.racers.forEach((r) => { r.lap = laps - 2; r.finished = false; r.startedRaceLap = true; });
-    await wait(700);
-    const before = waving();
-    const cpu = state.racers.find((r) => !r.isPlayer);
-    cpu.lap = laps - 1;
-    await wait(900);
-    const during = waving();
-    cpu.finished = true;
-    const frameSays = tracksideFrame(raceNow()).chequer;
-    await wait(900);
-    const after = waving();
+    const look = async (set, want) => {
+      set();
+      // (Racing, past the start's grace: the flags are live.)
+      state.raceStart = raceNow() - 60000;
+      const says = tracksideFrame(raceNow()).chequer;
+      const until = performance.now() + 2500;
+      let shown = null;
+      while (performance.now() < until) {
+        set();
+        await new Promise((r) => requestAnimationFrame(r));
+        shown = Render3D.inspect().life.starterWaving;
+        if (shown === want && performance.now() > until - 2000) break;
+      }
+      return { says, shown };
+    };
+    const all = (lap) => () => state.racers.forEach((r) => { r.lap = lap; r.finished = false; r.startedRaceLap = true; });
+    // (The rest of the field two laps short of the last: none reaches it meanwhile.)
+    const before = await look(all(laps - 3), false);
+    const during = await look(() => { all(laps - 3)(); cpu.lap = laps - 1; }, true);
+    const after = await look(() => { all(laps - 3)(); cpu.lap = laps; cpu.finished = true; }, false);
     keep.forEach(([r, lap, fin, started]) => { r.lap = lap; r.finished = fin; r.startedRaceLap = started; });
-    await wait(100);
+    state.raceStart = startKept;
+    await new Promise((r) => requestAnimationFrame(r));
     const clear = official.length === 1 ? Render3D.auditVenue(state.track).starter.clear : null;
-    return (official.length === 1 && clear >= 6 && people.byKind.official === 1 && !before && during && !after && frameSays === false)
-      || JSON.stringify({ officials: official.length, clear, before, during, after, frameSays });
+    const ok = official.length === 1 && clear >= 6 && people.byKind.official === 1
+      && before.says === false && before.shown === false && during.says === true && during.shown === true && after.says === false && after.shown === false;
+    return ok || JSON.stringify({ track: state.track.id, officials: official.length, clear, before, during, after });
   });
 
   // The player's own chequered flag: the finish shot looks back at the line,
