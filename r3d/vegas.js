@@ -78,7 +78,7 @@ function stripMaterials(night, clock) {
 // rooms softly lit. Rooms smaller than a pixel or two give way to their
 // wall's average (no shimmer far off). UVs in metres: u round the walls, v
 // the height above the street.
-function stripFacade(night) {
+export function stripFacade(night) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, metalness: 0, vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = { value: night ? 1 : 0 };
@@ -186,7 +186,7 @@ function stripFacade(night) {
 
 // The LED walls: abstract colour flowing across them (no image, no mark),
 // read off their UVs in metres.
-function videoMaterial(clock) {
+export function videoMaterial(clock) {
   const m = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uVideoTime = clock;

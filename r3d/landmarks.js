@@ -221,6 +221,8 @@ export const VENUES = {
     ground: "city", night: true, standColor: "#7a3cff", stand: "covered", runoffTint: "#8c8896",
     trees: [{ kind: "palm", count: 140, tint: "#4e7a3a", near: 50 }],
     city: "vegasStrip",
+    // The ground between and behind its towers, from the map (r3d/vegas-fill.js).
+    fill: "vegasFill",
     fogNear: 1800, fogFar: 7000,
     extras: ["floodlights"],
     landmarks: [],

@@ -964,7 +964,7 @@ function modelStand(venue, bg, i, name) {
 // ---------------------------------------------------------------------------
 
 // Seven drooping fronds radiating from the top of the trunk.
-function palmFronds() {
+export function palmFronds() {
   const parts = [];
   for (let i = 0; i < 7; i += 1) {
     const frond = new THREE.BoxGeometry(14, 0.6, 3.2);
