@@ -124,6 +124,66 @@ async (page) => {
     return passed || JSON.stringify({ a: a.speed, b: b.speed });
   });
 
+  // The setting "Spinning cars block the road": off by default; on, the same
+  // spinning car at Monza is solid (the car behind is held to its speed), the
+  // race's recording says so, and the setting survives a reload.
+  results.solidSpinsOffByDefault = await run(() => Game.isSolidSpins() === false && state.raceSolidSpins === false
+    && window.localStorage.getItem("f1pixelcup.solidSpins") === null);
+  await run(() => { Game.setSolidSpins(true); });
+  await setup("monza");
+  results.solidSpinningCarBlocks = await run(() => {
+    const route = getItemRoute(state.track);
+    const [a, b] = state.racers;
+    state.racers.forEach((r) => { if (r !== a && r !== b) r.finished = true; });
+    const d = state.track.totalLength - 500;
+    const now = raceNow();
+    [[a, 0, 220], [b, 14, 60]].forEach(([r, gap, speed]) => {
+      const w = route.toWorld(d + gap, 2);
+      Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d + gap, lat: 2, speed, segmentHint: null, spinUntil: 0, protectedUntil: 0, formationUntil: 0 });
+    });
+    b.spinUntil = now + 1000;
+    handleRacerContacts(now);
+    const gap = PowerUps.wrapDelta(b.trackDistance, a.trackDistance, state.track.totalLength);
+    const apart = Math.hypot(a.x - b.x, a.y - b.y);
+    const held = a.speed;
+    // Run a step so the recording starts, and read what it says of the race.
+    updateRace(1 / 60, now + 1000 / 60);
+    const recorded = state.recording && state.recording.header.solidSpins;
+    return (held <= 60 * 0.9 + 0.5 && apart >= PowerUps.CAR_LENGTH - 0.5 && recorded === true)
+      || JSON.stringify({ held, apart, gap, recorded });
+  });
+  await p.reload();
+  await p.waitForTimeout(1500);
+  results.solidSpinsSurvivesReload = await run(() => {
+    const kept = Game.isSolidSpins() === true;
+    Screens.showSettings();
+    const shown = document.getElementById("spins-toggle").textContent === "On" && /solid/.test(document.getElementById("spins-note").textContent);
+    // Back to the default for whatever runs next, and the pill follows.
+    document.getElementById("spins-toggle").click();
+    const off = Game.isSolidSpins() === false && document.getElementById("spins-toggle").textContent === "Off"
+      && window.localStorage.getItem("f1pixelcup.solidSpins") === "off";
+    return (kept && shown && off) || JSON.stringify({ kept, shown, off });
+  });
+  await p.addScriptTag({ url: `http://localhost:8765/tools/balance/comeback.js?${Date.now()}` });
+  // Off again, a new race passes through a spinning car and records that.
+  await setup("monza");
+  results.passThroughAgainAndRecorded = await run(() => {
+    const route = getItemRoute(state.track);
+    const [a, b] = state.racers;
+    state.racers.forEach((r) => { if (r !== a && r !== b) r.finished = true; });
+    const d = state.track.totalLength - 500;
+    const now = raceNow();
+    [[a, 0, 220], [b, 14, 60]].forEach(([r, gap, speed]) => {
+      const w = route.toWorld(d + gap, 2);
+      Object.assign(r, { x: w.x, y: w.y, heading: w.heading, trackDistance: d + gap, lat: 2, speed, segmentHint: null, spinUntil: 0 });
+    });
+    b.spinUntil = now + 1000;
+    handleRacerContacts(now);
+    const through = a.speed === 220 && b.speed === 60;
+    updateRace(1 / 60, now + 1000 / 60);
+    return (through && state.raceSolidSpins === false && state.recording.header.solidSpins === false) || JSON.stringify({ a: a.speed, b: b.speed });
+  });
+
   // The wall. Suzuka's first corners, flat out from the line with nobody
   // steering: the car runs wide off the road, meets the barrier exactly where
   // it is drawn, never past it, glances off and carries on round the lap.

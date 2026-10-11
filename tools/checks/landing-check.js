@@ -172,7 +172,7 @@ async (page) => {
     return svg && svg.querySelector(`linearGradient#tile-${card.dataset.id}`) && svg.getAttribute("width") === "64";
   }));
   out.heroFromData = await p.evaluate(() => document.querySelector("#hero img").alt.startsWith(`${DRIVERS.find((d) => d.id === SHOT_DRIVERS.hero).name}'s Ferrari`));
-  out.racingHowTo = await p.evaluate(() => { const t = document.getElementById("racing-howto").textContent; return t.includes("tow") && t.includes("barriers"); });
+  out.racingHowTo = await p.evaluate(() => { const t = document.getElementById("racing-howto").textContent; return t.includes("tow") && t.includes("barriers") && t.includes("Spinning cars block the road"); });
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   // Race day: replays, the podium and two players, each a block with a main

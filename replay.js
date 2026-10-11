@@ -131,7 +131,7 @@
   }
 
   // ---- The recording ----
-  // header: { trackId, laps, weather, lapLength, t0, stepMs, items, boxes,
+  // header: { trackId, laps, weather, solidSpins (the setting the race ran with), lapLength, t0, stepMs, items, boxes,
   // posts, playerId, players (two-player: both cars' ids, player 1 first),
   // cars: [{ id, name, code, number, team, color, isPlayer, player }] }
   function createRecording(header) {
