@@ -1,0 +1,23 @@
+# Marcha Real (Spain). Melody (the top voice) and bass (the left hand's lowest
+# notes) read from the piano score below, in C major: the first strain once
+# (bars 1 to 3 and the second ending) and the second strain. The score says
+# "Solemne"; 76 quarter notes a minute is the tempo Spain's Real Decreto
+# 1560/1997 gives.
+source: https://commons.wikimedia.org/wiki/File:Marcha_Real_de_Espa%C3%B1a.pdf
+bpm: 76
+melody: C5/1 G4/1 E5/1 C5/0.5 G5/0.5
+melody: F5/0.5 E5/0.5 D5/0.5 C5/0.5 C5/0.5 B4/0.5 A4/0.5 G4/0.5
+melody: C5/1 D5/1 E5/1 r/0.5 G5/0.5
+melody: F5/0.5 E5/0.5 D5/0.5 C5/0.5 G5/2
+melody: G5/1 E5/0.75 G5/0.25 F5/1 D5/0.75 F5/0.25
+melody: E5/1 C5/0.75 E5/0.25 D5/0.5 G4/0.5 A4/0.5 B4/0.5
+melody: C5/1 D5/1 E5/0.75 F5/0.25 G5/0.75 F5/0.25
+melody: E5/1 D5/1 C5/1 r/1
+bass: C3/2 C3/2
+bass: C2/1 E2/1 G2/1 r/1
+bass: C3/1 G2/1 C3/1 B2/1
+bass: A2/2 G2/2
+bass: C3/2 G2/2
+bass: C3/2 G2/1 r/1
+bass: C3/1 B2/1 A2/2
+bass: G2/1 G2/1 C3/1 r/1

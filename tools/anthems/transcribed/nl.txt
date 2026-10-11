@@ -1,0 +1,18 @@
+# Wilhelmus (the Netherlands). Melody read from the score image below, a
+# single line in G major, half note = 66 (so 132 quarter notes a minute): the
+# whole verse, its first line repeated as the score's repeat sign says. The
+# last note, a breve in the score (a held close), is given four beats here.
+# The bass line is this game's own (plain roots under the tune).
+source: https://commons.wikimedia.org/wiki/File:Wilhelmus_bladmuziek.jpg
+bpm: 132
+# Line 1 (twice): Wilhelmus van Nassouwe ben ik van Duitsen bloed
+melody: D4/1 G4/1 G4/1 A4/0.5 B4/0.5 C5/0.5 A4/0.5 B4/1 A4/0.5 B4/0.5 C5/1 B4/1 A4/0.5 G4/0.5 A4/1 G4/3
+melody: D4/1 G4/1 G4/1 A4/0.5 B4/0.5 C5/0.5 A4/0.5 B4/1 A4/0.5 B4/0.5 C5/1 B4/1 A4/0.5 G4/0.5 A4/1 G4/3
+# Line 2: Een prinse van Oranje ben ik, vrij onverveerd
+melody: B4/0.5 C5/0.5 D5/2 E5/1 D5/2 C5/1 B4/1 A4/0.5 B4/0.5 C5/1 B4/1 A4/1 G4/1 A4/2
+# Line 3: Den koning van Hispanje heb ik altijd geeerd
+melody: r/1 D4/1 G4/0.5 F#4/0.5 G4/0.5 A4/0.5 B4/1 A4/2 G4/1 F#4/1 D4/1 E4/0.5 F#4/0.5 G4/1 G4/1 F#4/1 G4/4
+bass: r/1 G2/4 G2/2 C3/1 G2/1 D3/2 G2/3
+bass: r/1 G2/4 G2/2 C3/1 G2/1 D3/2 G2/3
+bass: r/1 G2/2 C3/1 G2/2 A2/1 G2/1 D3/1 C3/1 G2/1 D3/1 E3/1 D3/2
+bass: r/2 G2/2 G2/1 D3/2 E3/1 D3/1 D3/1 D3/1 E3/1 C3/1 D3/1 G2/4

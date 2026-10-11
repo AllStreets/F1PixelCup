@@ -1,0 +1,50 @@
+# Hymne Monégasque (Monaco). Melody (the voice's line) and bass (the left
+# hand's notes on the first and third beats) read from the score below, in G
+# major, half note = 96 (192 quarter notes a minute): the sung strain, bars 5
+# to 24, once (no repeat, the second ending). In bar 20 the left hand's
+# passing notes on the way up (A, B) are left out: the bass holds its G.
+source: https://nationalanthems.info/mc~.jpg
+bpm: 192
+# Bars 5 to 12
+melody: D4/2 G4/1.5 A4/0.5
+melody: B4/2 C5/1.5 B4/0.5
+melody: A4/2 B4/1.5 A4/0.5
+melody: G4/2 D4/1.5 r/0.5
+melody: D5/2 D5/1.5 D5/0.5
+melody: D5/3 r/0.5 G4/0.5
+melody: A4/1.5 B4/0.5 C5/1.5 B4/0.5
+melody: A4/3.5 r/0.5
+# Bars 13 to 20
+melody: D4/2 G4/1.5 A4/0.5
+melody: B4/2 C5/1.5 B4/0.5
+melody: A4/2 B4/1.5 A4/0.5
+melody: A4/2 G4/2
+melody: E5/2 E5/1.5 E5/0.5
+melody: D5/3 D5/1
+melody: F#5/1.5 E5/0.5 D5/1.5 C5/0.5
+melody: B4/3 r/1
+# Bars 21 to 24
+melody: E5/2 E5/1.5 E5/0.5
+melody: D5/3 D5/1
+melody: F#5/1.5 E5/0.5 C5/1.5 A4/0.5
+melody: G4/4
+bass: G2/2 B2/2
+bass: G3/2 G3/2
+bass: D3/2 D3/2
+bass: G2/2 G3/2
+bass: F#2/2 F#3/2
+bass: G2/2 G3/2
+bass: C3/2 A2/2
+bass: D3/2 E2/2
+bass: G2/2 G3/2
+bass: G2/2 G3/2
+bass: D3/2 D#3/2
+bass: E3/2 E3/2
+bass: C3/2 C3/2
+bass: B2/2 B2/2
+bass: D3/2 D3/2
+bass: G3/4
+bass: C4/2 G3/2
+bass: C3/2 B3/2
+bass: C3/2 D3/2
+bass: G2/2 G3/2

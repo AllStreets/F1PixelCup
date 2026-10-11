@@ -16,7 +16,9 @@ import * as THREE from "three";
 import { buildDriver, driverLoaded, suitColours } from "./driver.js";
 import { canvasTexture, color } from "./textures.js";
 
-const Ceremony = window.Ceremony;
+import { drawFlag } from "./flags.js";
+
+const BaseCeremony = window.Ceremony;
 const BASE_FOV = 36;
 // Narrower than this, the view widens to keep the podium and its plates in frame.
 const FRAME_ASPECT = 1.2;
@@ -30,7 +32,10 @@ const FONT = "'Titillium Web', 'Trebuchet MS', system-ui, sans-serif";
 // entries: [{ place, driver, team, points }], P1 first. cup: { id, name }.
 // The effects (r3d/postfx.js) are made for this scene after it, and handed
 // over with setFx.
-export function createPodium(renderer, { entries, cup, tier, environment }) {
+// anthemSeconds: how long the winner's anthem (or what stands in for it) runs;
+// the ceremony's timeline is laid out round it (ceremony.js: withAnthem).
+export function createPodium(renderer, { entries, cup, tier, environment, anthemSeconds = BaseCeremony.DEFAULT_ANTHEM }) {
+  const Ceremony = BaseCeremony.withAnthem(anthemSeconds);
   let fx = null;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(BASE_FOV, 16 / 9, 0.1, 80);
@@ -247,7 +252,8 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
     g.fill();
   }
 
-  // A pennant: the team's colours, the driver's number and code.
+  // A pennant: the team's colours, the flag the driver races under, their
+  // number and code.
   function bannerTexture(e) {
     const W = 256;
     const H = 380;
@@ -272,18 +278,18 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
       g.fillStyle = shade;
       g.fillRect(0, 0, W, H);
       g.fillStyle = trim;
-      g.fillRect(0, 26, W, 14);
-      g.fillRect(0, H - cut - 34, W, 10);
+      g.fillRect(0, 8, W, 10);
+      const flag = drawFlag(g, e.driver.country, (W - 168) / 2, 30, 168, 112);
       g.fillStyle = "#ffffff";
       g.textAlign = "center";
       g.textBaseline = "middle";
-      g.font = `italic 900 130px ${FONT}`;
+      g.font = `italic 900 ${flag ? 96 : 130}px ${FONT}`;
       g.shadowColor = "rgba(0,0,0,0.4)";
       g.shadowBlur = 10;
-      g.fillText(String(e.driver.number), W / 2, 138);
+      g.fillText(String(e.driver.number), W / 2, flag ? 200 : 138);
       g.shadowBlur = 0;
-      g.font = `700 46px ${FONT}`;
-      g.fillText(spaced(e.driver.code), W / 2, 230);
+      g.font = `700 ${flag ? 40 : 46}px ${FONT}`;
+      g.fillText(spaced(e.driver.code), W / 2, flag ? 272 : 230);
       g.restore();
     }, { repeat: false });
   }
@@ -534,13 +540,13 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
   const dir = new THREE.Vector3();
   function updateSpray(t, dt, calm) {
     if (!spray.drops.length) return;
-    const on = Ceremony.sprayOn(t, tier) && !calm;
     const pos = spray.points.geometry.attributes.position;
-    if (on) {
-      // Each bottle in spurts, a few hundred drops a second.
+    if (!calm) {
+      // Each bottle in spurts, a few hundred drops a second, from the moment
+      // its own cork goes.
       const rate = spray.drops.length / (SPRAY_LIFE * figures.length);
       figures.forEach((f, k) => {
-        if (!f.neck) return;
+        if (!f.neck || !Ceremony.sprayOn(t, tier, f.entry.place)) return;
         const pulse = 0.55 + 0.45 * Math.sin(t * 7.3 + k * 2.1);
         f.neck.bottle.localToWorld(neckAt.copy(f.neck.tip));
         f.neck.bottle.localToWorld(glassAt.copy(f.neck.glass));
@@ -552,6 +558,7 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
           spray.next = (spray.next + 1) % spray.drops.length;
           Ceremony.sprayDrop(neckAt, dir, Math.random, d);
           spray.emitted += 1;
+          f.emitted = (f.emitted || 0) + 1;
         }
       });
     }
@@ -805,6 +812,8 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
       drawing: compiled && startedAt > 0,
       t,
       beat: t >= 0 ? Ceremony.beatAt(t) : null,
+      anthemSeconds: Ceremony.anthemSeconds,
+      flags: entries.map((e) => e.driver.country),
       tier,
       still: still(),
       camera: [camera.position.x, camera.position.y, camera.position.z],
@@ -822,7 +831,7 @@ export function createPodium(renderer, { entries, cup, tier, environment }) {
         meanVy: airborne.length ? airborne.reduce((s, p) => s + p.vy, 0) / airborne.length : 0,
         meanY: airborne.length ? airborne.reduce((s, p) => s + p.y, 0) / airborne.length : 0,
       },
-      spray: { pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
+      spray: { byPlace: Object.fromEntries(figures.map((f) => [f.entry.place, f.emitted || 0])), pool: spray.drops.length, live: live.length, emitted: spray.emitted, maxY: live.reduce((m, d) => Math.max(m, d.y), 0) },
     };
   }
 

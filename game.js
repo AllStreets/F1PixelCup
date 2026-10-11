@@ -4178,7 +4178,7 @@ function podiumSummary() {
     secondPlace,
     secondEntry,
     // (A single race's wall names its country, as a Grand Prix's would.)
-    scene: { cup: { id: activeCup.id, name: activeCup.single ? activeCup.tracks[0].country : activeCup.name }, podium },
+    scene: { cup: { id: activeCup.id, name: activeCup.single ? activeCup.tracks[0].country : activeCup.name }, podium, anthemSeconds: podiumAnthem(podium).seconds },
   };
 }
 
@@ -4203,6 +4203,7 @@ function stepPodium() {
 }
 
 function beginPodium() {
+  preparePodiumSound();
   const api = podiumApi();
   if (!api) return;
   try {
@@ -4210,6 +4211,198 @@ function beginPodium() {
   } catch (error) {
     console.warn("The podium ceremony failed to build; the podium stays 2D.", error);
   }
+}
+
+// ---- The podium's sound (podium-sound.js) ----
+// The winner's anthem (or the game's fanfare where there is none) and how
+// long the ceremony stands for it. With the sound off there is nothing to
+// stand for: the ceremony keeps its short pause.
+function podiumAnthem(podium) {
+  const winner = podium[0] && DRIVERS.find((d) => d.id === podium[0].driverId);
+  const key = window.PodiumSound ? PodiumSound.anthemFor(winner) : null;
+  const on = Boolean(window.PodiumSound && audio.enabled);
+  return { key, on, seconds: on ? PodiumSound.anthemSeconds(key) : Ceremony.DEFAULT_ANTHEM };
+}
+
+// Rendered ahead, behind the cup's last results, a small step per task (a few
+// notes of the anthem, or one of the short sounds), in the order they are
+// needed, so no frame waits on them. Each becomes an AudioBuffer as it is done.
+function preparePodiumSound() {
+  stopPodiumSound();
+  const summary = podiumSummary();
+  const anthem = podiumAnthem(summary.podium);
+  const tier = window.Render3D && Render3D.graphics ? Render3D.graphics().tier : "medium";
+  const ceremony = Ceremony.withAnthem(anthem.seconds);
+  // (With reduced motion asked for no spray is drawn, so none is heard.)
+  const calm = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const plan = {
+    winner: summary.podium[0] ? summary.podium[0].driverId : null,
+    anthem: anthem.key, anthemSeconds: anthem.seconds, on: anthem.on,
+    cues: anthem.on ? PodiumSound.cues(ceremony, { tier, spray: !calm }) : [],
+    buffers: new Map(), sources: [], started: null, readyAtStart: null, log: [], waiting: [],
+  };
+  audio.podium = plan;
+  if (!anthem.on) return;
+  const made = PodiumSound.sounds(ceremony, anthem.key, PodiumSound.RATE);
+  const anthemWork = PodiumSound.pieceSteps(anthem.key || "fanfare", PodiumSound.RATE);
+  const anthemSteps = [...anthemWork.steps];
+  // What is left to do, a step at a time: [the sound's name, a step of it].
+  const order = [...new Set(plan.cues.map((c) => c.sound))];
+  const finish = (name, samples) => {
+    const buffer = audio.ctx.createBuffer(1, samples.length, PodiumSound.RATE);
+    buffer.getChannelData(0).set(samples);
+    plan.buffers.set(name, buffer);
+    // A cue that was waiting for it (the ceremony already under way) starts now.
+    plan.waiting.filter((cue) => cue.sound === name).forEach((cue) => playPodiumCue(plan, cue));
+    plan.waiting = plan.waiting.filter((cue) => cue.sound !== name);
+  };
+  const step = () => {
+    const name = order[0];
+    if (name === "anthem") {
+      anthemSteps.shift()();
+      if (anthemSteps.length) return;
+      finish(name, anthemWork.result());
+    } else finish(name, made[name]());
+    order.shift();
+  };
+  const next = () => {
+    if (audio.podium !== plan || !order.length) return;
+    // (Not until there is an audio context to make buffers for; asked again.)
+    if (!audio.ready) { plan.timer = setTimeout(next, 300); return; }
+    try {
+      step();
+    } catch (error) {
+      console.warn("The podium's sound failed to render; the ceremony goes on without it.", error);
+      stopPodiumSound();
+      return;
+    }
+    plan.timer = setTimeout(next, 12);
+  };
+  plan.timer = setTimeout(next, 60);
+}
+
+// One cue, set on the audio clock at its own moment from the ceremony's
+// start (plan.started). A cue already past picks up part-way through.
+function playPodiumCue(plan, cue) {
+  const ctxA = audio.ctx;
+  const buffer = plan.buffers.get(cue.sound);
+  const at = plan.started + cue.at;
+  const late = Math.max(0, ctxA.currentTime - at);
+  if (!cue.loop && late >= buffer.duration) return;
+  const source = ctxA.createBufferSource();
+  source.buffer = buffer;
+  source.loop = Boolean(cue.loop);
+  const gain = ctxA.createGain();
+  const startAt = Math.max(at, ctxA.currentTime);
+  if (cue.loop) {
+    gain.gain.setValueAtTime(0, startAt);
+    gain.gain.linearRampToValueAtTime(cue.gain, startAt + cue.fadeIn);
+  } else gain.gain.value = cue.gain;
+  source.connect(gain);
+  gain.connect(plan.gain);
+  const skip = cue.loop ? late % buffer.duration : late;
+  source.start(startAt, skip);
+  plan.sources.push(source);
+  plan.log.push({ id: cue.id, at: cue.at, startAt, skip, seconds: buffer.duration, loop: Boolean(cue.loop) });
+}
+
+// The ceremony is t seconds in (its first frame, or the 2D podium opening):
+// every cue whose sound is ready is set to start at its own moment; the
+// others as soon as they are rendered (the first sounds are ready first).
+function startPodiumSound(t) {
+  const plan = audio.podium;
+  if (!plan || plan.started !== null || !plan.on || !audioReady()) return;
+  try {
+    const ctxA = audio.ctx;
+    plan.started = ctxA.currentTime + 0.03 - t;
+    plan.readyAtStart = plan.buffers.size;
+    plan.gain = ctxA.createGain();
+    plan.gain.gain.value = 1;
+    plan.gain.connect(audio.master);
+    plan.cues.forEach((cue) => {
+      if (plan.buffers.has(cue.sound)) playPodiumCue(plan, cue);
+      else plan.waiting.push(cue);
+    });
+  } catch (error) {
+    console.warn("The podium's sound failed to start; the ceremony goes on without it.", error);
+    stopPodiumSound();
+  }
+}
+
+// Leaving the podium: everything still sounding stops, a short fade first.
+function stopPodiumSound() {
+  const plan = audio.podium;
+  if (!plan) return;
+  audio.podium = null;
+  clearTimeout(plan.timer);
+  plan.waiting = [];
+  if (!plan.gain) return;
+  const ctxA = audio.ctx;
+  plan.gain.gain.setTargetAtTime(0, ctxA.currentTime, 0.05);
+  const { sources, gain } = plan;
+  // (Kept for the checks to hear that it has gone quiet.)
+  audio.podiumLast = plan;
+  setTimeout(() => {
+    sources.forEach((source) => { try { source.stop(); } catch (error) { /* already ended */ } });
+    gain.disconnect();
+  }, 300);
+}
+
+// The sound setting changed while the cup's last results (or their replay)
+// are up: the ceremony is laid out again for it (with the sound off there is
+// no anthem to stand for; with it on there is).
+function podiumSoundSettingChanged() {
+  if (!audio.podium || audio.podium.started !== null || audio.podium.on === audio.enabled) return;
+  if (state.phase !== "results" && state.phase !== "replay") return;
+  stopPodiumWait();
+  state.podiumReady = "none";
+  beginPodium();
+}
+
+// A meter on what the podium plays, made when first asked for (the checks).
+function podiumMeter(plan) {
+  if (!plan.meter && plan.gain) {
+    plan.meter = audio.ctx.createAnalyser();
+    plan.meter.fftSize = 16384;
+    plan.gain.connect(plan.meter);
+  }
+  return plan.meter;
+}
+
+// What the podium is playing (for the checks): the plan, what was started
+// and when, and the level coming out of it now. last: of the one just left.
+function podiumSoundState({ last = false } = {}) {
+  const plan = last ? audio.podiumLast : audio.podium;
+  if (!plan) return null;
+  let level = 0;
+  const meter = podiumMeter(plan);
+  if (meter) {
+    // (The last 2048 samples: about a twentieth of a second.)
+    const data = new Float32Array(meter.fftSize);
+    meter.getFloatTimeDomainData(data);
+    const recent = data.subarray(data.length - 2048);
+    level = Math.sqrt(recent.reduce((sum, v) => sum + v * v, 0) / recent.length);
+  }
+  return {
+    winner: plan.winner, anthem: plan.anthem, anthemSeconds: plan.anthemSeconds, on: plan.on,
+    cues: plan.cues.map((c) => ({ id: c.id, at: c.at, gain: c.gain })), rendered: plan.buffers.size, readyAtStart: plan.readyAtStart,
+    started: plan.started !== null, zero: plan.started, now: plan.started !== null ? audio.ctx.currentTime - plan.started : null,
+    log: plan.log.map((l) => ({ ...l })), waiting: plan.waiting.length, level,
+  };
+}
+
+// The podium's sound at each of these frequencies now, in decibels (for the checks).
+function podiumSoundPower(frequencies) {
+  const plan = audio.podium;
+  const meter = plan && podiumMeter(plan);
+  if (!meter) return null;
+  const bins = new Float32Array(meter.frequencyBinCount);
+  meter.getFloatFrequencyData(bins);
+  const width = audio.ctx.sampleRate / meter.fftSize;
+  return frequencies.map((f) => {
+    const k = Math.round(f / width);
+    return Math.max(bins[k - 1], bins[k], bins[k + 1]);
+  });
 }
 
 // Show podium (the button, Enter, either player): straight onto the 3D
@@ -4263,6 +4456,10 @@ function showPodium() {
   // steps, and they stay: an unready ceremony is let go, never swapped in later.
   const threeD = state.podiumReady === "ready";
   if (!threeD && podiumApi()) render3dSafely(() => podiumApi().end());
+  // Without the 3D ceremony the celebration is still heard, from now. (A cup
+  // whose results never readied one, e.g. no 3D at all, prepares it here.)
+  if (!audio.podium) preparePodiumSound();
+  if (!threeD) startPodiumSound(0);
   if (!window.Screens) return;
   const summary = podiumSummary();
   window.Screens.showPodium({
@@ -4289,6 +4486,8 @@ function drawPodiumScene() {
     if (drawn.ok) frame = drawn.value;
   }
   const on = Boolean(frame && frame.drawing);
+  // The sound runs on the ceremony's own clock: from its first drawn frame.
+  if (on) startPodiumSound(frame.t);
   if (on !== state.podium3d || on) {
     state.podium3d = on;
     if (window.Screens && window.Screens.placePodium) window.Screens.placePodium(on ? frame.anchors : null, on && frame.platesIn);
@@ -4342,6 +4541,7 @@ function resetToGarage() {
   // The ceremony stops and frees its drivers, set and effects.
   if (window.Render3D && window.Render3D.podium) render3dSafely(() => window.Render3D.podium.end());
   state.podium3d = false;
+  stopPodiumSound();
   stopPodiumWait();
   state.podiumReady = "none";
   state.raceIndex = 0;
@@ -6146,6 +6346,7 @@ function initAudio() {
 function setAudioEnabled(enabled) {
   audio.enabled = enabled;
   saveAudioPreference();
+  podiumSoundSettingChanged();
   if (audio.ready && audio.master) {
     // Stay silent if the game is paused, whatever the toggle says.
     const level = enabled && !state.paused ? 0.55 : 0;
@@ -7885,6 +8086,8 @@ window.Game = {
     setAudioEnabled(on);
   },
   isSoundOn: () => audio.enabled,
+  podiumSound: podiumSoundState,
+  podiumSoundPower,
   setSolidSpins,
   isSolidSpins: () => state.solidSpins,
   toggleFullscreen,

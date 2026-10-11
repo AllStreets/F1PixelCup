@@ -2287,7 +2287,7 @@ function podiumPreload() {
   });
 }
 
-// summary: { cup: { id, name }, podium: [{ place, driverId, points }] }
+// summary: { cup: { id, name }, podium: [{ place, driverId, points }], anthemSeconds }
 // Builds the ceremony and starts compiling it; nothing of the race is freed
 // until it first draws (podiumFrame), so it can be readied behind the cup's
 // last results.
@@ -2304,7 +2304,7 @@ function podiumBegin(summary) {
   podiumEnd(false);
   podiumPreload();
   const tier = currentTier();
-  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment });
+  const podium = createPodium(renderer, { entries, cup: summary.cup, tier, environment: scene.environment, anthemSeconds: summary.anthemSeconds });
   const fx = createPostFx(renderer, podium.scene, podium.camera);
   fx.setTier(tier);
   podium.setFx(fx);

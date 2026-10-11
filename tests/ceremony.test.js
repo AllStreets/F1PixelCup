@@ -15,24 +15,63 @@ test("the steps: P1 in the middle and highest, P2 left and P3 right from the cam
   [p1, p2, p3].forEach((s) => assert.ok(s.depth >= 1 && s.standZ - Ceremony.STEP_FORWARD > -s.depth / 2 && s.standZ + Ceremony.STEP_FORWARD < s.depth / 2));
 });
 
-test("the poses on the timeline", () => {
-  // 0 to 2.5 s: everyone stands while the camera sweeps in.
-  [1, 2, 3].forEach((p) => assert.equal(Ceremony.poseAt(p, 0), "stand"));
-  [1, 2, 3].forEach((p) => assert.equal(Ceremony.poseAt(p, 2.4), "stand"));
-  // Arms up in order: P3, then P2, then P1.
-  const raised = (p) => [...Array(250).keys()].map((i) => i / 50).find((t) => Ceremony.poseAt(p, t) === "arms_up");
-  assert.ok(raised(3) >= 2.5 && raised(3) < raised(2) && raised(2) < raised(1) && raised(1) < 5);
-  assert.equal(Ceremony.poseAt(1, 4.9), "arms_up");
-  // 5 to 9 s: P1 lifts the trophy, P2 and P3 wave.
-  assert.equal(Ceremony.poseAt(1, 6), "trophy");
-  assert.equal(Ceremony.poseAt(2, 6), "wave");
-  assert.equal(Ceremony.poseAt(3, 8.9), "wave");
-  // 9 s on, for as long as it runs: all three spray.
-  [9, 12, 60, 600].forEach((t) => [1, 2, 3].forEach((p) => assert.equal(Ceremony.poseAt(p, t), "spray")));
-  assert.equal(Ceremony.beatAt(1), "sweep");
-  assert.equal(Ceremony.beatAt(3), "arms");
-  assert.equal(Ceremony.beatAt(6), "trophy");
-  assert.equal(Ceremony.beatAt(30), "spray");
+test("the order of a real podium: step up, the anthem standing, the trophy, the champagne", () => {
+  const C = Ceremony.withAnthem(24);
+  const B = C.BEATS;
+  assert.ok(B.sweepEnd < B.arms[3] + 1e-9 && B.arms[3] < B.arms[2] && B.arms[2] < B.arms[1] && B.arms[1] < B.armsDown);
+  assert.ok(B.armsDown < B.anthem && Math.abs(B.anthemEnd - B.anthem - 24) < 1e-9 && B.anthemEnd < B.trophy && B.trophy + 3 < B.spray);
+  // The sweep in: everyone stands.
+  [1, 2, 3].forEach((p) => assert.equal(C.poseAt(p, 0), "stand"));
+  [1, 2, 3].forEach((p) => assert.equal(C.poseAt(p, B.sweepEnd - 0.1), "stand"));
+  // Arms up in order as each steps up: P3, then P2, then P1.
+  [3, 2, 1].forEach((p) => {
+    assert.equal(C.poseAt(p, B.arms[p] - 0.01), "stand");
+    assert.equal(C.poseAt(p, B.arms[p] + 0.01), "arms_up");
+    assert.equal(C.poseAt(p, B.armsDown - 0.01), "arms_up");
+  });
+  // The anthem: all three stand still, from before its first note to after its last.
+  [B.armsDown, B.anthem, B.anthem + 12, B.anthemEnd, B.trophy - 0.01].forEach((t) => [1, 2, 3].forEach((p) => assert.equal(C.poseAt(p, t), "stand")));
+  // Then P1 lifts the trophy while P2 and P3 wave.
+  assert.equal(C.poseAt(1, B.trophy + 1), "trophy");
+  assert.equal(C.poseAt(2, B.trophy + 1), "wave");
+  assert.equal(C.poseAt(3, B.spray - 0.1), "wave");
+  // Then, for as long as it runs: all three spray.
+  [B.spray, B.spray + 3, B.spray + 60, B.spray + 600].forEach((t) => [1, 2, 3].forEach((p) => assert.equal(C.poseAt(p, t), "spray")));
+  assert.equal(C.beatAt(1), "sweep");
+  assert.equal(C.beatAt(B.arms[2]), "arms");
+  assert.equal(C.beatAt(B.anthem + 5), "anthem");
+  assert.equal(C.beatAt(B.trophy + 1), "trophy");
+  assert.equal(C.beatAt(B.spray + 30), "spray");
+});
+
+test("the anthem's length moves everything after it, and nothing before it", () => {
+  const short = Ceremony.withAnthem(15).BEATS;
+  const long = Ceremony.withAnthem(38).BEATS;
+  ["sweepEnd", "armsDown", "anthem"].forEach((k) => assert.equal(short[k], long[k]));
+  assert.deepEqual(short.arms, long.arms);
+  ["anthemEnd", "trophy", "spray"].forEach((k) => assert.ok(Math.abs(long[k] - short[k] - 23) < 1e-9, k));
+  [1, 2, 3].forEach((p) => assert.ok(Math.abs(Ceremony.withAnthem(38).corkAt(p) - Ceremony.withAnthem(15).corkAt(p) - 23) < 1e-9));
+  // The plain module is a ceremony with a short pause where the anthem goes.
+  assert.ok(Math.abs(Ceremony.BEATS.anthemEnd - Ceremony.BEATS.anthem - Ceremony.DEFAULT_ANTHEM) < 1e-9);
+  assert.equal(Ceremony.withAnthem(24).anthemSeconds, 24);
+  assert.throws(() => Ceremony.withAnthem(-1));
+  assert.throws(() => Ceremony.withAnthem(NaN));
+});
+
+test("a cork for each bottle: each driver's spray starts at their own pop, one after another", () => {
+  const C = Ceremony.withAnthem(20);
+  const pops = [1, 2, 3].map((p) => C.corkAt(p));
+  assert.equal(new Set(pops).size, 3);
+  pops.forEach((at, i) => {
+    const place = i + 1;
+    // The bottle is in the hand before it pops, and it pops within 1.5 s of the spray beat.
+    assert.ok(at > C.BEATS.spray + C.PROP_SWAP && at < C.BEATS.spray + 1.5);
+    assert.equal(C.bottleShown(place, at - 0.01), true);
+    assert.equal(C.sprayOn(at - 0.01, "high", place), false);
+    assert.equal(C.sprayOn(at + 0.01, "high", place), true);
+    assert.equal(C.sprayOn(at + 0.01, "medium", place), true);
+    assert.equal(C.sprayOn(at + 0.01, "low", place), false);
+  });
 });
 
 test("each steps forward as the arms go up, and stays there", () => {
@@ -46,28 +85,31 @@ test("each steps forward as the arms go up, and stays there", () => {
   });
 });
 
-test("the trophy only while P1 lifts it; confetti from the trophy, spray from 9 s (none on Low)", () => {
+test("the trophy only while P1 lifts it; confetti from the trophy, spray after it (none on Low)", () => {
   // The props change hands halfway through the poses' crossfade, not as it starts.
   const half = Ceremony.PROP_SWAP;
+  const { trophy, spray } = Ceremony.BEATS;
   assert.ok(half > 0.1 && half < 0.3);
-  assert.equal(Ceremony.trophyShown(1, 4.9), false);
-  assert.equal(Ceremony.trophyShown(1, 5 + half - 0.05), false);
-  assert.equal(Ceremony.trophyShown(1, 5 + half + 0.05), true);
-  assert.equal(Ceremony.trophyShown(1, 9.05), true);
-  assert.equal(Ceremony.trophyShown(1, 9 + half + 0.05), false);
-  assert.equal(Ceremony.trophyShown(2, 6), false);
+  assert.equal(Ceremony.trophyShown(1, trophy - 0.1), false);
+  assert.equal(Ceremony.trophyShown(1, trophy + half - 0.05), false);
+  assert.equal(Ceremony.trophyShown(1, trophy + half + 0.05), true);
+  assert.equal(Ceremony.trophyShown(1, spray + 0.05), true);
+  assert.equal(Ceremony.trophyShown(1, spray + half + 0.05), false);
+  assert.equal(Ceremony.trophyShown(2, trophy + 1), false);
   [1, 2, 3].forEach((p) => {
-    assert.equal(Ceremony.bottleShown(p, 8), false);
-    assert.equal(Ceremony.bottleShown(p, 9 + half - 0.05), false);
-    assert.equal(Ceremony.bottleShown(p, 9 + half + 0.05), true);
-    assert.equal(Ceremony.bottleShown(p, 300), true);
+    assert.equal(Ceremony.bottleShown(p, spray - 1), false);
+    assert.equal(Ceremony.bottleShown(p, spray + half - 0.05), false);
+    assert.equal(Ceremony.bottleShown(p, spray + half + 0.05), true);
+    assert.equal(Ceremony.bottleShown(p, spray + 300), true);
   });
-  assert.equal(Ceremony.confettiOn(4.9), false);
-  assert.equal(Ceremony.confettiOn(5), true);
-  assert.equal(Ceremony.sprayOn(8.9, "high"), false);
-  assert.equal(Ceremony.sprayOn(9.5, "high"), true);
-  assert.equal(Ceremony.sprayOn(9.5, "medium"), true);
-  assert.equal(Ceremony.sprayOn(9.5, "low"), false);
+  // No confetti over the anthem: the cannons go with the trophy.
+  assert.equal(Ceremony.confettiOn(Ceremony.BEATS.anthem + 1), false);
+  assert.equal(Ceremony.confettiOn(trophy - 0.1), false);
+  assert.equal(Ceremony.confettiOn(trophy), true);
+  assert.equal(Ceremony.sprayOn(spray - 0.1, "high"), false);
+  assert.equal(Ceremony.sprayOn(spray + 2, "high"), true);
+  assert.equal(Ceremony.sprayOn(spray + 2, "medium"), true);
+  assert.equal(Ceremony.sprayOn(spray + 2, "low"), false);
 });
 
 test("confetti and spray counts per tier", () => {
@@ -77,17 +119,25 @@ test("confetti and spray counts per tier", () => {
   assert.deepEqual(Ceremony.counts("nonsense"), Ceremony.counts("medium"));
 });
 
-test("the camera sweeps in, pushes in on P1 for the trophy, then orbits in front of the wall, smoothly", () => {
-  const at = (t) => Ceremony.cameraAt(t);
+test("the camera sweeps in, pushes slowly in on the winner through the anthem, closer for the trophy, then orbits, smoothly", () => {
+  const C = Ceremony.withAnthem(24);
+  const B = C.BEATS;
+  const at = (t) => C.cameraAt(t);
   const dist = (c) => Math.hypot(c.x - c.lookX, c.y - c.lookY, c.z - c.lookZ);
-  assert.ok(dist(at(0)) > dist(at(2.5)) * 1.3, "starts well back");
-  // The trophy: closer to P1 than at any point of the arms-up beat.
-  assert.ok(dist(at(8)) < dist(at(4)) * 0.8);
-  // Looking between P1's head and the trophy held over it while it goes up.
-  const head = Ceremony.stepFor(1).height + 1.6;
-  assert.ok(at(8).lookY > head + 0.1 && at(8).lookY < head + 0.6);
+  assert.ok(dist(at(0)) > dist(at(B.sweepEnd)) * 1.3, "starts well back");
+  // The anthem: a slow, steady push on the winner, every second a little
+  // closer, looking at P1 (in the middle) at about head height.
+  const head = C.stepFor(1).height + 1.6;
+  for (let t = B.anthem + 1; t < B.anthemEnd - 1; t += 1) assert.ok(dist(at(t + 1)) < dist(at(t)) - 0.01, `pushes in at ${t}`);
+  assert.ok(dist(at(B.anthemEnd)) < dist(at(B.anthem)) * 0.8);
+  assert.ok(Math.abs(at(B.anthemEnd).lookX) < 1e-9 && Math.abs(at(B.anthemEnd).lookY - head) < 0.5);
+  assert.ok(Math.abs(at(B.anthem + 12).x) < 0.2, "from straight ahead");
+  // The trophy: at least as close, looking between P1's head and the trophy over it.
+  const lift = B.trophy + 3;
+  assert.ok(dist(at(lift)) <= dist(at(B.anthemEnd)) + 1e-9 && dist(at(lift)) < dist(at(B.arms[1])) * 0.8);
+  assert.ok(at(lift).lookY > head + 0.1 && at(lift).lookY < head + 0.6);
   // No jumps anywhere: 1 ms apart, the camera moves less than 2 cm.
-  for (let t = 0; t < 40; t += 0.001) {
+  for (let t = 0; t < B.spray + 30; t += 0.001) {
     const a = at(t);
     const b = at(t + 0.001);
     assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 0.02, `jump at ${t.toFixed(3)}`);
@@ -95,7 +145,7 @@ test("the camera sweeps in, pushes in on P1 for the trophy, then orbits in front
   }
   // It orbits: the angle changes, always in front of the wall and off the floor.
   const angles = [];
-  for (let t = 9; t < 60; t += 0.5) {
+  for (let t = B.spray; t < B.spray + 51; t += 0.5) {
     const c = at(t);
     assert.ok(c.z > 2 && c.y > 0.5);
     angles.push(Math.atan2(c.x, c.z));
@@ -103,9 +153,9 @@ test("the camera sweeps in, pushes in on P1 for the trophy, then orbits in front
   assert.ok(Math.max(...angles) - Math.min(...angles) > 0.3);
   assert.ok(Math.max(...angles.map(Math.abs)) < 0.7);
   // And loops: the orbit repeats.
-  const p = Ceremony.ORBIT_PERIOD;
-  const a = at(20);
-  const b = at(20 + p);
+  const p = C.ORBIT_PERIOD;
+  const a = at(B.spray + 11);
+  const b = at(B.spray + 11 + p);
   assert.ok(Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-6);
 });
 
@@ -175,12 +225,15 @@ test("spray: a drop leaves the neck along the bottle and falls under gravity", (
 });
 
 test("the name plates: in once the camera settles, out for the trophy close-up, back for the spray", () => {
+  const { anthem, trophy, spray } = Ceremony.BEATS;
   assert.equal(Ceremony.platesShown(1), false);
   assert.equal(Ceremony.platesShown(2.4), true);
   assert.equal(Ceremony.platesShown(4.5), true);
-  assert.equal(Ceremony.platesShown(7), false);
-  assert.equal(Ceremony.platesShown(10.5), true);
-  assert.equal(Ceremony.platesShown(300), true);
+  // Up through the anthem (who is on the podium), aside for the trophy close-up.
+  assert.equal(Ceremony.platesShown(anthem + 1), true);
+  assert.equal(Ceremony.platesShown(trophy + 2), false);
+  assert.equal(Ceremony.platesShown(spray + 1.5), true);
+  assert.equal(Ceremony.platesShown(spray + 300), true);
   // With reduced motion the camera holds still: there is no close-up to clear.
   [0, 1, 4.5, 7, 10.5].forEach((t) => assert.equal(Ceremony.platesShown(t, true), true));
 });
