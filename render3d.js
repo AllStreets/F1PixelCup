@@ -24,6 +24,7 @@ import { setTunnel, lightInTunnel } from "./r3d/tunnel-light.js";
 import { buildMarshalPosts, updateMarshalPosts, buildHelicopter, updateHelicopter, buildFireworks, updateFireworks, buildStarter, updateStarter, HELI_HEIGHT, HELI_ASIDE } from "./r3d/trackside.js";
 import { crowdUniforms } from "./r3d/track.js";
 import { VENUES, buildLandmarks, buildCity, buildMainStand, waterMaterial } from "./r3d/landmarks.js";
+import { buildVegasFill } from "./r3d/vegas-fill.js";
 import { loadTracksideModels, tracksideModel, tracksideModelsState, tracksideTemplates, venueModelsSettled as modelsSettled, loadAllVenueModels, STAND_MODELS, VENUE_MODELS, preloadVenues as preloadModels, releaseOtherVenues } from "./r3d/models.js";
 import { buildPeople, updatePeople, showCrowdFor, inspectPeople, PERSON_SCALE } from "./r3d/people.js";
 import { buildEntrances, updateEntrances, inspectEntrances } from "./r3d/entrances.js";
@@ -934,7 +935,8 @@ function buildWorld(track) {
   // The venue's light, as set: the tunnel dims it from here, frame by frame.
   const light = { hemi: hemi.intensity, sun: sun.intensity, exposure: renderer.toneMappingExposure, env: scene.environmentIntensity };
   group.add(buildSky(bg, venue.night, fogColor));
-  group.add(buildGround(course, venue, bg));
+  const ground = buildGround(course, venue, bg);
+  group.add(ground);
   const circuit = buildCircuit(course, venue);
   group.add(circuit);
   // A venue's city first (Las Vegas's Strip, where it really stands), then
@@ -974,6 +976,17 @@ function buildWorld(track) {
   // photographers and the TV crew, after everything else has its ground.
   const people = buildPeople(course, { decor, landmarks, marshals, entrances });
   group.add(people);
+  // Las Vegas's ground filled in (r3d/vegas-fill.js): last of all, where
+  // nothing else stands, claiming nothing; among the landmarks, so the
+  // audit of what stands over the track covers it. Its painted ground is drawn
+  // in the plain one's place.
+  const fill = venue.fill === "vegasFill" ? buildVegasFill(course, venue, { tier: currentTier(), landmarks }) : null;
+  if (fill) {
+    landmarks.add(fill);
+    if (fill.userData.replacesGround) ground.visible = false;
+    const animate = landmarks.userData.animate;
+    landmarks.userData.animate = (dt) => { animate?.(dt); fill.userData.animate(dt); };
+  }
   const boxes = track.itemBoxes.map((b) => {
     const mesh = buildItemBox();
     mesh.userData.source = b;
@@ -984,7 +997,7 @@ function buildWorld(track) {
   });
   if (decor.userData.dropped) console.info(`${track.id}: ${decor.userData.dropped} scenery pieces dropped for lack of room`);
   if (decor.userData.moved) console.info(`${track.id}: ${decor.userData.moved} scenery pieces moved round the main stand`);
-  return { trackId: track.id, course, venue, group, circuit, entrances, decor, landmarks, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
+  return { trackId: track.id, course, venue, group, circuit, entrances, decor, landmarks, fill, yachts, marshals, starter, people, boxes, cars: new Map(), fov: BASE_FOV, rumble: 0, light, tunnel: { inside: 0, adapted: 0 }, life: {}, warmMaterials: [] };
 }
 
 function disposeWorld(world) {
@@ -1484,6 +1497,7 @@ function drawFrame(frame) {
   // Each view draws the near stands' crowd in 3D for its own camera.
   showCrowdFor(world.people, camera, currentTier());
   showYachtsFor(world.yachts, camera, currentTier(), scene.fog ? scene.fog.far : Infinity);
+  world.fill?.userData.showFor(currentTier());
   // In the helicopter view the camera is in it.
   if (frame.view && frame.view.mode === "helicopter") helicopter.visible = false;
   rain.update({ camera, world, racers, dt, isWet: wet, view: index });

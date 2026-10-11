@@ -53,6 +53,8 @@ export const FILES = {
   foroSol: "./assets/landmarks/foro_sol.glb",
   vegasSphere: "./assets/landmarks/vegas_sphere.glb",
   vegasStrip: "./assets/landmarks/vegas_strip.glb",
+  // (No geometry: the map's data for the ground between the towers, r3d/vegas-fill.js.)
+  vegasFill: "./assets/landmarks/vegas_fill.glb",
   losailGrandstand: "./assets/landmarks/losail_grandstand.glb",
   lusailTowers: "./assets/landmarks/lusail_towers.glb",
   yasHotel: "./assets/landmarks/yas_hotel.glb",
@@ -98,7 +100,7 @@ export const VENUE_MODELS = {
   baku: ["flameTowers", "bakuOldCity", "yachts"],
   cota: ["cotaTower", "hillside"],
   mexico: ["foroSol"],
-  lasvegas: ["vegasSphere", "vegasStrip"],
+  lasvegas: ["vegasSphere", "vegasStrip", "vegasFill"],
   losail: ["losailGrandstand", "lusailTowers"],
   yasmarina: ["yasHotel", "yachts"],
   hockenheim: ["motodrom"],

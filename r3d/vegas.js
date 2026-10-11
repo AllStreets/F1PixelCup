@@ -78,7 +78,7 @@ function stripMaterials(night, clock) {
 // rooms softly lit. Rooms smaller than a pixel or two give way to their
 // wall's average (no shimmer far off). UVs in metres: u round the walls, v
 // the height above the street.
-function stripFacade(night) {
+export function stripFacade(night) {
   const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, metalness: 0, vertexColors: true });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uNight = { value: night ? 1 : 0 };
@@ -135,6 +135,9 @@ function stripFacade(night) {
         c = mix(c, mix(pale, glassC * (1.0 - 0.25 * mullion), rib), isRibbon);
         c = mix(c, mix(glassC * (1.0 - 0.2 * mullion) * (1.0 - 0.3 * spandrel), pale, line), isLined);
         c = mix(c, glassC * (1.0 - 0.2 * mullion) * (1.0 - 0.35 * spandrel), isGlass);
+        // A quiet tower at night: a dark shape in the city's blue dusk, not a
+        // moonlit grey block.
+        c = mix(c, c * vec3(0.3, 0.33, 0.42), isQuiet * uNight);
         // The walls darken toward the ground (the light reaches less of them).
         c *= mix(0.72, 1.0, smoothstep(0.0, 12.0, vFacade.y));
         diffuseColor.rgb = c;
@@ -144,7 +147,7 @@ function stripFacade(night) {
         metalnessFactor = mix(metalnessFactor, 0.25, glassAt);
         // A hotel's evening: a room in five in stone, fewer behind glass,
         // each its own soft brightness, most of them warm.
-        float share = isStone * 0.2 + isQuiet * 0.07 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
+        float share = isStone * 0.2 + isQuiet * 0.11 + isRibbon * 0.13 + (isLined + isGlass) * 0.09;
         float roomH = sHash(room + floor(vFacade.x / 37.0));
         float lit = step(mix(roomH, sHash(vec2(room.y * 0.37, 7.1)), 0.2), share) * step(8.0, vFacade.y);
         float opening = windowed * win + isRibbon * rib * (1.0 - mullion) + (isLined * (1.0 - line) + isGlass) * (1.0 - spandrel) * (1.0 - mullion);
@@ -180,13 +183,13 @@ function stripFacade(night) {
         vec3 shop = mix(vec3(1.0, 0.72, 0.4), vec3(1.0, 0.5, 0.62), sHash(vec2(floor(vFacade.x / 28.0), 2.2)));
         totalEmissiveRadiance += shop * street * 0.3 * uNight;`);
   };
-  m.customProgramCacheKey = () => `vegas-facade-v5-${night ? 1 : 0}`;
+  m.customProgramCacheKey = () => `vegas-facade-v6-${night ? 1 : 0}`;
   return m;
 }
 
 // The LED walls: abstract colour flowing across them (no image, no mark),
 // read off their UVs in metres.
-function videoMaterial(clock) {
+export function videoMaterial(clock) {
   const m = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uVideoTime = clock;
