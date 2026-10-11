@@ -62,7 +62,8 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   let firstFramePrograms = null;
   const confetti = { mesh: null, pieces: [], burstAt: -1 };
   // With reduced motion asked for (read every frame, it can change): the
-  // camera holds its settled view, nobody steps forward, the banners hang
+  // camera holds its settled view, nobody steps (each stands forward on their
+  // step from the start), the banners hang
   // still, the confetti lies where it fell and there is no spray.
   const motionQuery = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
   const still = () => Boolean(motionQuery && motionQuery.matches);
@@ -746,7 +747,9 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
       // hand halfway through the fade.
       if (f.props.trophy) f.props.trophy.visible = false;
       if (f.props.bottle) f.props.bottle.visible = Ceremony.bottleShown(place, t);
-      f.fig.root.position.z = f.step.standZ + (calm ? 0 : Ceremony.STEP_FORWARD * Ceremony.forwardAt(place, t));
+      // (With reduced motion nobody steps: each stands forward from the start,
+      // where the presenter can reach them.)
+      f.fig.root.position.z = f.step.standZ + Ceremony.STEP_FORWARD * (calm ? 1 : Ceremony.forwardAt(place, t));
       f.fig.update(dt);
     });
     scene.children.forEach((o) => {

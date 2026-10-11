@@ -381,7 +381,7 @@
       ovation: () => crowd(L.ovation, (t) => Math.min(1.1, 0.3 + 0.3 * bump(t, 0.9, 0.5, 1.2)
         + ceremony.HANDOVERS.reduce((sum, h) => sum + (h.place === 1 ? 0.6 * Math.min(1, Math.exp(-(((h.release - B.present - t) / 0.9) ** 2)))
           : (h.place === 2 ? 0.75 : 0.6) * bump(t, h.release - B.present + 0.3, 0.3, 1.1)), 0)) * Math.min(1, (L.ovation - t) / 0.25), 23,
-      { voices: 26, claps: 80, whistles: 3, hubbubGain: 0.3 }),
+      { voices: 32, claps: 40, whistles: 3, hubbubGain: 0.3 }),
       ring1: () => once(() => renderRing(1, rate)),
       ring2: () => once(() => renderRing(2, rate)),
       ring3: () => once(() => renderRing(3, rate)),

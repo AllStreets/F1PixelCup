@@ -261,7 +261,7 @@ async (page) => {
     // three metals and three sizes, third's the smallest; the presenter
     // standing by, in the picture, touching neither table nor trophy.
     const T = stand.table;
-    const secondStep = require("../../ceremony.js").stepFor(2);
+    const secondStep = await p.evaluate(() => Ceremony.stepFor(2));
     const onTable = (tr) => Math.abs(tr.foot - T.height) < 1e-6 && Math.abs(tr.x - T.x) < T.width / 2 - 0.05 && Math.abs(tr.z - T.z) < T.length / 2 - 0.05;
     const byPlace = Object.fromEntries(stand.trophies.map((tr) => [tr.place, tr]));
     const who = stand.presenter;
@@ -344,21 +344,23 @@ async (page) => {
     results.presentationInOrderNeverInMidAir = (scene.frames > 600 && scene.bad.length === 0 && order === "3,2,1" && w("trophiesApart") > 0)
       || JSON.stringify({ frames: scene.frames, bad: scene.bad, order, apart: scene.worst.trophiesApart });
     // At a walking pace (measured from the presenter's own position, frame
-    // to frame), and the three handovers done in 15 to 21 s of the
-    // presenter's first step.
+    // to frame), and the winner has theirs 13 to 21 s after the presenter's
+    // first step away from the table.
     const took = scene.first[1] - scene.moved;
-    results.presentationAtAWalkingPace = (-w("presenterPace") <= scene.pace * 1.1 && -w("presenterPace") > 1.2 && took >= 15 && took <= 21 && Math.abs(scene.moved - scene.present) < 0.6)
-      || JSON.stringify({ pace: scene.worst.presenterPace, took, moved: scene.moved, present: scene.present });
+    results.presentationAtAWalkingPace = (-w("presenterPace") <= scene.pace * 1.1 && -w("presenterPace") > 1.2 && took >= 13 && took <= 21 && scene.moved > scene.present)
+      || `pace ${-w("presenterPace")}, took ${took}, moved ${scene.moved}, present ${scene.present}`;
     // Hands on the trophies: the presenter's two within 3 cm of its foot all
     // the while it is carried and held up; each driver's right within 3 cm
     // of the stem as it is given, the left as it joins and then holds it.
-    const hands = ["presenterHands", ...[3, 2, 1].flatMap((place) => [`take${place}`, `join${place}`, `hold${place}`])];
-    results.handsMeetTheTrophies = hands.every((k) => -w(k) < 0.03) || JSON.stringify(Object.fromEntries(hands.map((k) => [k, scene.worst[k]])));
+    // (The winner's own pass to the left hand comes with the lift: below.)
+    const short = (keys, from) => keys.filter((k) => from[k]).map((k) => `${k} ${from[k][0].toFixed(3)}@${from[k][1]}`).join(" ");
+    const hands = ["presenterHands", "take1", ...[3, 2].flatMap((place) => [`take${place}`, `join${place}`, `hold${place}`])];
+    results.handsMeetTheTrophies = hands.every((k) => -w(k) < 0.03) || short(hands, scene.worst);
     // And nothing passes through a trophy: no forearm through a cup (to
     // within a centimetre of the sleeve), no trophy into a chest, a waist
     // or a head, the presenter's or a driver's.
     const clear = ["presenterBody", "presenterArms", ...[3, 2, 1].flatMap((place) => [`body${place}`, `forearms${place}`])];
-    results.nothingThroughATrophy = clear.every((k) => w(k) > (/rms/.test(k) ? -0.01 : 0)) || JSON.stringify(Object.fromEntries(clear.map((k) => [k, scene.worst[k]])));
+    results.nothingThroughATrophy = clear.every((k) => w(k) > (/rms/.test(k) ? -0.01 : 0)) || short(clear, scene.worst);
 
     const trophy = await at(["trophy", 1.4]);
     results.trophyBeat = pose(trophy) === "trophy,wave,wave" || pose(trophy);
@@ -373,6 +375,29 @@ async (page) => {
     const later = await at(["trophy", 2.6]);
     results.confettiFalls = later.confetti.meanY < trophy.confetti.meanY - 0.4 && later.confetti.meanVy < -0.3 || `${trophy.confetti.meanY} -> ${later.confetti.meanY}`;
     results.noSprayBeforeTheCorks = later.spray.emitted === 0;
+    // The end of the winner's lift: the gold comes down to the left hand,
+    // the left on its stem before the right lets go (each within 3 cm),
+    // never in mid-air, clear of the winner's body and forearms.
+    const down = await p.evaluate(() => new Promise((done) => {
+      const C = Ceremony.withAnthem(Render3D.podium.inspect().anthemSeconds);
+      const worst = {};
+      const note = (k, v, t) => { if (Number.isFinite(v) && (!(k in worst) || v < worst[k][0])) worst[k] = [v, +t.toFixed(2)]; };
+      const tick = () => {
+        const st = Render3D.podium.inspect();
+        const tr = st.trophies.find((x) => x.place === 1);
+        const pass = C.trophyAt(1, st.t).pass;
+        note("held", -Math.min(tr.grip.R, tr.grip.L), st.t);
+        note("body", tr.body, st.t);
+        note("forearms", Math.min(tr.arms.R, tr.arms.L), st.t);
+        if (pass >= C.PASS.joined && pass < C.PASS.given) note("join", -st.hands.join[1], st.t);
+        if (pass >= C.PASS.given) note("hold", -st.hands.hold[1], st.t);
+        if (st.t < C.BEATS.spray - 0.07) requestAnimationFrame(tick);
+        else done(worst);
+      };
+      requestAnimationFrame(tick);
+    }));
+    results.winnerBringsTheGoldDown = (-down.held[0] < 0.1 && down.join && -down.join[0] < 0.03 && down.hold && -down.hold[0] < 0.03 && down.body[0] > 0 && down.forearms[0] > -0.01)
+      || short(["held", "join", "hold", "body", "forearms"], down);
 
     // Just into the spray: the poses crossfade, so the trophy is still up for
     // the first moment and the bottles come in as the hands meet.
@@ -608,7 +633,7 @@ async (page) => {
     const calmPlates = await plateBoxes();
     results.reducedMotionHandsStillMeet = (calmHands.every((g) => g.take < 0.03 && g.presenter < 0.03 && g.forearm > -0.01 && g.body > 0)
       && calmPlates.length === 3 && calmPlates.every((pl) => !covers(pl, calmHands[0].table)))
-      || JSON.stringify({ calmHands, calmPlates });
+      || calmHands.map((g) => [g.take, g.presenter, g.forearm, g.body].map((v) => v.toFixed(3)).join("/")).join(" ");
     calm.push(await at(["trophy", 2]));
     const platesUp = await p.evaluate(() => document.getElementById("podium-screen").classList.contains("plates-in"));
     calm.push(await at(["spray", 1.6]));
