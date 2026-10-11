@@ -235,6 +235,8 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **The tunnel heard on the engine** (user, 2026-10-11): fixed on main.
 - [ ] **Flag and Safety Car signals** (branch `sc-entries`; user, 2026-10-11): a chequered-flag official beside the racing lane on the final lap until the winner is home; a SAFETY CAR sign in the real signal's yellow while it is out; a sound for the Safety Car coming out; a sound of its own for a Steward Penalty hit.
 
+- [ ] **Spinning cars: solid or not** (branch `balance`; user, 2026-10-12): a Settings switch, off by default. Off: cars pass through a spinning car (the Mario Kart feel, as now). On: a spinning car blocks the road (the F1 feel, as before).
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
