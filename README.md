@@ -4,29 +4,33 @@
 
 **THE 2025 GRID. EVERY 2025 CIRCUIT. IN YOUR BROWSER.**
 
-<a href="https://f1-pixel-cup.vercel.app/play.html"><img alt="play now" src="https://img.shields.io/badge/▶_play_now-in_your_browser-dc0000?style=for-the-badge&labelColor=0b0d14"/></a>
+<a href="https://f1-pixel-cup.vercel.app/play.html"><img alt="play now" src="https://img.shields.io/badge/play_now-in_your_browser-dc0000?style=for-the-badge&labelColor=0b0d14"/></a>
 <img alt="circuits" src="https://img.shields.io/badge/circuits-32-ffed00?style=for-the-badge&labelColor=0b0d14"/>
 <img alt="drivers" src="https://img.shields.io/badge/drivers-20-ff8000?style=for-the-badge&labelColor=0b0d14"/>
 <img alt="cups" src="https://img.shields.io/badge/cups-8_+_a_season-00d2be?style=for-the-badge&labelColor=0b0d14"/>
 <img alt="power-ups" src="https://img.shields.io/badge/power--ups-8-dc0000?style=for-the-badge&labelColor=0b0d14"/>
+<img alt="players" src="https://img.shields.io/badge/players-1_or_2-75d5ff?style=for-the-badge&labelColor=0b0d14"/>
+<img alt="anthems" src="https://img.shields.io/badge/podium_anthems-13-ffc22e?style=for-the-badge&labelColor=0b0d14"/>
 <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-ffed00?style=for-the-badge&labelColor=0b0d14"/></a>
 <br/>
 <img alt="stack" src="https://img.shields.io/badge/stack-three.js_r186_·_Blender_·_WebAudio-6b7382?style=flat-square&labelColor=0b0d14"/>
 <img alt="build" src="https://img.shields.io/badge/build_step-none-6b7382?style=flat-square&labelColor=0b0d14"/>
-<img alt="tests" src="https://img.shields.io/badge/tests-399_Node_·_26_browser_checks-6b7382?style=flat-square&labelColor=0b0d14"/>
-<img alt="data" src="https://img.shields.io/badge/data-OpenStreetMap_·_F1DB-6b7382?style=flat-square&labelColor=0b0d14"/>
-
-**[f1-pixel-cup.vercel.app](https://f1-pixel-cup.vercel.app)**
+<img alt="tests" src="https://img.shields.io/badge/tests-564_Node_·_30_browser_checks-6b7382?style=flat-square&labelColor=0b0d14"/>
+<img alt="data" src="https://img.shields.io/badge/data-OpenStreetMap_·_F1DB_·_NASA-6b7382?style=flat-square&labelColor=0b0d14"/>
 
 </div>
 
 ---
 
 <p align="center">
-  <img src="docs/readme/hero.jpg" alt="Charles Leclerc's Ferrari leads Lewis Hamilton's on the Monaco harbour front, the McLarens, Red Bull and Mercedes queued behind" width="100%"/>
+  <a href="https://f1-pixel-cup.vercel.app"><img src="docs/readme/hero.jpg" alt="Charles Leclerc's Ferrari leads Lewis Hamilton's along Monaco's harbour front, the McLarens and the rest of the field behind, yachts moored at the quay" width="100%"/></a>
 </p>
 
-<p align="center"><em>Monaco, the harbour front. Leclerc's Ferrari leads Hamilton's, with Norris, Piastri, Verstappen and Russell queued up behind. Yachts at the quay, the crowd in the stands, the start gantry overhead.</em></p>
+<p align="center"><em>Monaco, the harbour front. Leclerc's Ferrari leads Hamilton's, the McLarens next and the field strung out behind. Yachts stern to the quay, the hills above the town, a Safety Car gate in the barrier. Click the picture to play.</em></p>
+
+<p align="center">
+<a href="https://f1-pixel-cup.vercel.app"><img alt="play it live" src="https://img.shields.io/badge/play_it_live-f1--pixel--cup.vercel.app-dc0000?style=for-the-badge&labelColor=0b0d14"/></a>
+</p>
 
 <p align="center">
 <a href="#what-this-is">What this is</a> ·
@@ -36,6 +40,7 @@
 <a href="#the-grid">The grid</a> ·
 <a href="#the-circuits">The circuits</a> ·
 <a href="#cups-seasons-and-your-own-way">Cups and seasons</a> ·
+<a href="#the-power-ups">Power-ups</a> ·
 <a href="#race-day">Race day</a> ·
 <a href="#controls">Controls</a> ·
 <a href="#the-honest-physics">Honest physics</a> ·
@@ -52,7 +57,7 @@
 
 It is F1 with a Mario Kart heart. The circuits are traced from their real outlines, most pit lanes are where OpenStreetMap puts them, it rains at Spa about as often as it really does, and the scoring is 25, 18, 15. But the races are five laps, item boxes sit on the straights and a blue shell (here, a Steward Penalty) can still ruin the leader's afternoon.
 
-Then the TV bit: replays from four broadcast cameras; a 3D podium where the top three, each with their own face, take their steps, the winner lifts the trophy and the champagne goes everywhere; and a second player on the same keyboard if you want a fight.
+Then the TV bit: replays from four broadcast cameras, with sound; a 3D podium where the top three, each with their own face and their name on their suit, stand for the winner's anthem, are handed bronze, silver and gold, and spray the champagne; and a second player on the same keyboard if you want a fight.
 
 > [!TIP]
 > Fastest way in: open **[f1-pixel-cup.vercel.app/play.html](https://f1-pixel-cup.vercel.app/play.html)**, press **Enter** and you're on the grid of the Opening Cup as Charles Leclerc. `W A S D` to drive, `Space` to fire whatever the box gave you.
@@ -73,6 +78,14 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 <td><em><b>The Bellagio's fountains.</b> Rows of jets rise and fall across the lake, all of them together every half minute.</em></td>
 </tr>
 <tr>
+<td width="50%"><img src="docs/readme/sphere.jpg" alt="The Sphere in Las Vegas showing the Earth at night, seen from the track" width="100%"/></td>
+<td width="50%"><img src="docs/readme/nurburg.jpg" alt="The ruined castle of Nürburg on its wooded hill above the village, seen from the Nürburgring" width="100%"/></td>
+</tr>
+<tr>
+<td><em><b>The Sphere.</b> Its skin shows the Earth (NASA's Blue Marble, clouds and all), turning once every 48 seconds as you drive by.</em></td>
+<td><em><b>Landmarks everywhere.</b> All 32 venues have their own, the historic ones too: here the ruined Nürburg on its hill above the village.</em></td>
+</tr>
+<tr>
 <td width="50%"><img src="docs/readme/safety-car.jpg" alt="The Safety Car with its roof lights on, leading the cars behind it at Spa" width="100%"/></td>
 <td width="50%"><img src="docs/readme/wall.jpg" alt="Leclerc's Ferrari hitting the barrier at Suzuka in a burst of sparks and dust" width="100%"/></td>
 </tr>
@@ -82,35 +95,35 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 </tr>
 <tr>
 <td width="50%"><img src="docs/readme/cars.jpg" alt="Norris's McLaren leads Piastri's, Verstappen's Red Bull and the Mercedes at Suzuka" width="100%"/></td>
-<td width="50%"><img src="docs/readme/harbour.jpg" alt="Monaco's harbour from above: stands full of people, yachts at the quay, cars on the harbour front" width="100%"/></td>
+<td width="50%"><img src="docs/readme/harbour.jpg" alt="Monaco's harbour from above: stands full of people, sailing yachts on the water, cars rounding the corner" width="100%"/></td>
 </tr>
 <tr>
 <td><em><b>The cars.</b> Suzuka's main straight: Norris and Piastri, then Verstappen, Antonelli and Russell. One Blender-built 2025-shape car, painted in each team's scheme.</em></td>
-<td><em><b>Monaco's harbour.</b> Stands full of 3D spectators, the sea behind, yachts moored stern to the quay. Verstappen, Alonso, Gasly and Albon below.</em></td>
+<td><em><b>Monaco's harbour.</b> Stands full of 3D spectators, the sea and its yachts behind, Verstappen leading a queue through the corner.</em></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/readme/rain.jpg" alt="A wet race at Spa, spray and rain over the field" width="100%"/></td>
+<td width="50%"><img src="docs/readme/rain.jpg" alt="A wet race at Spa: the field in a cloud of spray under the Raidillon board" width="100%"/></td>
 <td width="50%"><img src="docs/readme/night.jpg" alt="Singapore at night, the Flyer lit above the start line" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>Rain.</b> Spa in the wet with Hamilton: spray off every car, drops on the lens, green intermediates on the wheels and less grip everywhere.</em></td>
-<td><em><b>Night races.</b> Singapore under the lights, the Flyer lit up over the start line. Russell's Mercedes and Alonso's Aston Martin.</em></td>
+<td><em><b>Rain.</b> Spa in the wet, from behind Hamilton's Ferrari: spray off every car, drops on the lens and less grip everywhere.</em></td>
+<td><em><b>Night races.</b> Singapore under the lights and the stars, the Flyer lit up over the start line. Russell's Mercedes and Alonso's Aston Martin.</em></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/readme/sphere.jpg" alt="The Sphere in Las Vegas showing the Earth at night, seen from the track" width="100%"/></td>
-<td width="50%"><img src="docs/readme/pitlane.jpg" alt="The pit lane: race choices, Charles Leclerc's card and his Ferrari on a turntable" width="100%"/></td>
+<td width="50%"><img src="docs/readme/podium-anthem.jpg" alt="The podium during the anthem: Hamilton, Leclerc and Norris on their steps in race suits with their numbers and team names, the presenter and three trophies waiting beside them" width="100%"/></td>
+<td width="50%"><img src="docs/readme/podium-handover.jpg" alt="The presenter hands Leclerc the gold trophy; Hamilton and Norris hold silver and bronze" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>Landmarks.</b> The Sphere beside the Las Vegas circuit, its skin showing the Earth (NASA's Blue Marble) turning as you drive by. Every venue has its own set piece, from the Sphere to Suzuka's Ferris wheel and the Nürburg on its hill.</em></td>
-<td><em><b>The pit lane.</b> Pick the race, the difficulty, the grid and the weather; pick your driver; their car turns on the showroom floor.</em></td>
+<td><em><b>The podium: the anthem.</b> Hamilton, Leclerc and Norris stand for the winner's anthem under their flags, each with their own face, number and team name. The presenter and the three trophies wait at the side.</em></td>
+<td><em><b>The presentation.</b> Bronze and silver are already in their hands; the presenter holds the gold one up to the winner.</em></td>
 </tr>
 <tr>
-<td width="50%"><img src="docs/readme/podium-trophy.jpg" alt="The podium: Leclerc lifts the trophy between Hamilton and Norris" width="100%"/></td>
+<td width="50%"><img src="docs/readme/podium-trophy.jpg" alt="Leclerc lifts the gold trophy over his head in a shower of confetti, Hamilton and Norris waving with theirs" width="100%"/></td>
 <td width="50%"><img src="docs/readme/podium-spray.jpg" alt="The podium: champagne spray and confetti" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>The podium.</b> The camera pushes in as Leclerc lifts the trophy, Hamilton and Norris waving either side. Each driver has their own face.</em></td>
-<td><em><b>...and the champagne.</b> Spray, confetti, name plates with the cup's points, banners in team colours.</em></td>
+<td><em><b>The lift.</b> The winner's trophy goes up to a fanfare, confetti cannons and the crowd's roar.</em></td>
+<td><em><b>...and the champagne.</b> A cork for each bottle, then the spray, a trophy in one hand and a bottle in the other.</em></td>
 </tr>
 <tr>
 <td width="50%"><img src="docs/readme/replay-helicopter.jpg" alt="The replay's helicopter camera over Monaco with a timing tower and lower-third" width="100%"/></td>
@@ -122,11 +135,11 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 </tr>
 <tr>
 <td width="50%"><img src="docs/readme/split-spa.jpg" alt="Two-player split screen at Spa: Leclerc on top, Hamilton below" width="100%"/></td>
-<td width="50%"><img src="docs/readme/picker.jpg" alt="The circuit picker choosing a custom cup: Monaco, Spa and Suzuka picked" width="100%"/></td>
+<td width="50%"><img src="docs/readme/pitlane.jpg" alt="The pit lane: race choices, Charles Leclerc's card and his Ferrari on a turntable" width="100%"/></td>
 </tr>
 <tr>
-<td><em><b>Two players.</b> Split screen at Spa: Leclerc on top, Hamilton below, each with their own HUD and mini map.</em></td>
-<td><em><b>Your own cup.</b> The circuit picker: any four of the 32, in the order you choose. Monaco, Spa, Suzuka and one to go.</em></td>
+<td><em><b>Two players.</b> Split screen at Spa: P1 (Leclerc) on top, P2 (Hamilton) below, each with their own HUD and mini map.</em></td>
+<td><em><b>The pit lane.</b> Pick the race, the difficulty, the grid and the weather; pick your driver; their car turns on the showroom floor.</em></td>
 </tr>
 </table>
 
@@ -136,24 +149,24 @@ Every picture here comes from the game's own renderer in a 1600x900 window, take
 
 <table>
 <tr>
-<td width="33%" valign="top">🏁 <b>32 real circuits</b><br/><sub>All 24 of 2025 in calendar order, plus 8 historic ones. Real outlines, real pit lanes, named corners.</sub></td>
-<td width="33%" valign="top">🏎️ <b>The 2025 grid</b><br/><sub>20 drivers, 10 teams, each car in its team's paint with its driver's number and helmet.</sub></td>
-<td width="33%" valign="top">🏆 <b>8 cups and a season</b><br/><sub>Six calendar cups, two historic cups and the full 24-race 2025 Season, saved after every race.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/circuits.svg" width="40" alt=""/><br/><b>32 real circuits</b><br/><sub>All 24 of 2025 in calendar order, plus 8 historic ones. Real outlines, real pit lanes, named corners, landmarks at every one.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/grid.svg" width="40" alt=""/><br/><b>The 2025 grid</b><br/><sub>20 drivers, 10 teams, each car in its team's paint with its driver's number and helmet.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/cups.svg" width="40" alt=""/><br/><b>8 cups and a season</b><br/><sub>Six calendar cups, two historic cups and the full 24-race 2025 Season, saved after every race.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🎲 <b>Race your way</b><br/><sub>A random cup, a custom cup of any four circuits, or a single race.</sub></td>
-<td width="33%" valign="top">🌧️ <b>Weather</b><br/><sub>Dry, Wet, or Changeable: each circuit rains as often as it really does.</sub></td>
-<td width="33%" valign="top">🍌 <b>8 power-ups</b><br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/choices.svg" width="40" alt=""/><br/><b>Race your way</b><br/><sub>A random cup, a custom cup of any four circuits, or a single race.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/weather.svg" width="40" alt=""/><br/><b>Weather</b><br/><sub>Dry, Wet, or Changeable: each circuit rains as often as it really does.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/powerups.svg" width="40" alt=""/><br/><b>8 power-ups</b><br/><sub>F1 ideas with Mario Kart counterparts, from an Oil Slick to the Safety Car.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🎥 <b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, with broadcast graphics and sound, from 0.25x to 4x.</sub></td>
-<td width="33%" valign="top">🥂 <b>A 3D podium</b><br/><sub>The top three with their own faces: arms up, the trophy, the champagne.</sub></td>
-<td width="33%" valign="top">🎮 <b>Two players</b><br/><sub>Split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/replays.svg" width="40" alt=""/><br/><b>TV replays</b><br/><sub>Director, Trackside, Onboard and Helicopter cameras, with broadcast graphics and sound, from 0.25x to 4x.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/podium.svg" width="40" alt=""/><br/><b>A 3D podium</b><br/><sub>The top three with their own faces and race suits: the winner's anthem, bronze, silver and gold handed over, then the champagne.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/players.svg" width="40" alt=""/><br/><b>Two players</b><br/><sub>P1 and P2 in split screen on one keyboard or two gamepads, stacked or side by side.</sub></td>
 </tr>
 <tr>
-<td width="33%" valign="top">🏟️ <b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, an official waving the chequered flag through the last lap, a TV helicopter, fireworks at the flag.</sub></td>
-<td width="33%" valign="top">📈 <b>A career per driver</b><br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub></td>
-<td width="33%" valign="top">🔊 <b>All sound synthesised</b><br/><sub>Engines that start up on the grid and crackle on the lift, tyres, crowd, rain and the start lights, made live with WebAudio. No audio files.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/trackside.svg" width="40" alt=""/><br/><b>Trackside life</b><br/><sub>Stands and 3D crowds at every venue, marshals with flags, an official waving the chequered flag through the last lap, a TV helicopter, fireworks at the flag.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/career.svg" width="40" alt=""/><br/><b>A career per driver</b><br/><sub>Points, an Elo-style rating from Karting to World Champion, poles, wins and best laps.</sub></td>
+<td width="33%" valign="top"><img src="docs/readme/icons/sound.svg" width="40" alt=""/><br/><b>All sound synthesised</b><br/><sub>Engines that start up on the grid and crackle on the lift, tyres, a crowd made of voices, rain, anthems and the start lights, made live with WebAudio. No audio files.</sub></td>
 </tr>
 </table>
 
@@ -194,7 +207,7 @@ Twenty drivers, ten teams, the 2025 line-ups. Pick a driver and you race their t
 
 ## The circuits
 
-All 32, at one scale, five laps each. 🌙 marks the night races, under floodlights; the rain column is how often Changeable weather turns wet there.
+All 32, at one scale, five laps each. <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> marks the night races, run under floodlights, a moon and stars; <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> the historic circuits. The rain column is how often Changeable weather turns wet there.
 
 | | Circuit | Lap | Rain | What's there |
 |---|---|---|---|---|
@@ -202,7 +215,7 @@ All 32, at one scale, five laps each. 🌙 marks the night races, under floodlig
 | 2 | Shanghai, China | 5.451 km | 30% | The snail at turns 1 and 2, as tight as the real one, and its grandstand |
 | 3 | Suzuka, Japan | 5.807 km | 30% | The figure of eight on its bridge, and the Ferris wheel |
 | 4 | Bahrain | 5.412 km | 2% | Desert twilight under floodlights, the Sakhir tower, heat haze |
-| 5 | Jeddah, Saudi Arabia 🌙 | 6.175 km | 2% | The fountain, yachts out at sea |
+| 5 | Jeddah, Saudi Arabia <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> | 6.175 km | 2% | The fountain, yachts out at sea |
 | 6 | Miami, United States | 5.412 km | 15% | The stadium |
 | 7 | Imola, Italy | 4.909 km | 30% | The hillside at Tosa; Tamburello, Piratella and Rivazza on their boards |
 | 8 | Monaco | 3.337 km | 15% | The casino, the tunnel, the harbour full of yachts |
@@ -215,25 +228,25 @@ All 32, at one scale, five laps each. 🌙 marks the night races, under floodlig
 | 15 | Zandvoort, Netherlands | 4.259 km | 30% | The Hugenholtz terraces |
 | 16 | Monza, Italy | 5.793 km | 15% | The old banking |
 | 17 | Baku, Azerbaijan | 6.003 km | 5% | The Flame Towers, the old city, yachts |
-| 18 | Singapore 🌙 | 4.928 km | 25% | Marina Bay Sands, the Flyer, yachts on the bay |
+| 18 | Singapore <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> | 4.928 km | 25% | Marina Bay Sands, the Flyer, yachts on the bay |
 | 19 | Circuit of the Americas, United States | 5.514 km | 10% | The tower and the hill up to Turn 1 |
 | 20 | Mexico City | 4.304 km | 15% | Foro Sol |
 | 21 | Interlagos, Brazil | 4.309 km | 40% | São Paulo's towers and the lake |
-| 22 | Las Vegas, United States 🌙 | 6.201 km | 2% | The Sphere and the Strip |
-| 23 | Lusail, Qatar 🌙 | 5.380 km | 2% | Its grandstand and Lusail's towers |
-| 24 | Yas Marina, Abu Dhabi 🌙 | 5.281 km | 2% | The Yas hotel, yachts in the marina |
-| 🕰️ | Hockenheimring, Germany | 4.574 km | 25% | The Rhine plain's pine forest |
-| 🕰️ | Nürburgring, Germany | 5.148 km | 40% | Dark Eifel forest on rolling hills |
-| 🕰️ | Estoril, Portugal | 4.182 km | 15% | Pines on the hills, the Atlantic to the south |
-| 🕰️ | Kyalami, South Africa | 4.529 km | 15% | The Highveld's dry grass and acacias, Johannesburg on the horizon |
-| 🕰️ | Sepang, Malaysia | 5.543 km | 45% | Oil palms everywhere |
-| 🕰️ | Istanbul Park, Türkiye | 5.338 km | 15% | Dry hills and scrub |
-| 🕰️ | Mugello, Italy | 5.245 km | 15% | A Tuscan valley of cypresses and olive groves |
-| 🕰️ | Watkins Glen, United States | 5.430 km | 30% | The Finger Lakes' woods in autumn colours |
+| 22 | Las Vegas, United States <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> | 6.201 km | 2% | The whole Strip, the Sphere showing the Earth, 30 grandstands |
+| 23 | Lusail, Qatar <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> | 5.380 km | 2% | Its grandstand and Lusail's towers |
+| 24 | Yas Marina, Abu Dhabi <img src="docs/readme/icons/night.svg" width="18" alt="night race"/> | 5.281 km | 2% | The Yas hotel, yachts in the marina |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Hockenheimring, Germany | 4.574 km | 25% | The Motodrom's great stand across from the pits, in the Rhine plain's pine forest |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Nürburgring, Germany | 5.148 km | 40% | The ruined Nürburg on its wooded hill above its village, Eifel forest all round |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Estoril, Portugal | 4.182 km | 15% | The Serra de Sintra with the Pena Palace on top, the Atlantic to the south |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Kyalami, South Africa | 4.529 km | 15% | Johannesburg's skyline on the horizon, the Highveld's dry grass and acacias |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Sepang, Malaysia | 5.543 km | 45% | The double-fronted grandstand under its palm-leaf canopies, oil palms everywhere |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Istanbul Park, Türkiye | 5.338 km | 15% | The grandstand hung from its masts, and the bank outside Turn 8 |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Mugello, Italy | 5.245 km | 15% | A terraced Tuscan hill with its farmhouse and cypresses |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> | Watkins Glen, United States | 5.430 km | 30% | A Finger Lake between autumn woods |
 
 Every circuit has its pit lane and garages, stands and a crowd, marshal posts and a TV helicopter, and its own ground, sky, colour grade and trees or city. Every venue has its landmarks, built in Blender, the historic circuits too: Hockenheim's Motodrom, the Nürburg on its wooded hill above its village, the Serra de Sintra above Estoril with the Pena Palace on top, Johannesburg's skyline from Kyalami, Sepang's double-fronted grandstand under its palm-leaf canopies, Istanbul Park's grandstand hung from its masts, a terraced Tuscan hill at Mugello and a Finger Lake between autumn woods at Watkins Glen.
 
-Las Vegas has the whole Strip: every major resort from the Strat to Mandalay Bay stands where OpenStreetMap puts it, each in its own stone or glass, with the half-scale Eiffel Tower, the Bellagio's lake and its fountain show, the Venetian's campanile, the Colosseum at Caesars Palace, the High Roller, the Luxor's pyramid and beam, and the Sphere. The night races run under a moon and stars.
+Las Vegas has the whole Strip: every major resort from the Strat to Mandalay Bay stands where OpenStreetMap puts it, each in its own stone or glass, with the half-scale Eiffel Tower, the Bellagio's lake and its fountain show, the Venetian's campanile, the Colosseum at Caesars Palace, the High Roller, the Luxor's pyramid and beam, and the Sphere, its skin showing NASA's Blue Marble Earth turning once every 48 seconds. The ground between the towers is filled in from OpenStreetMap too (low buildings, car parks, pools, roads, the monorail), and 30 grandstands line the lap. The five night races run under a moon and stars, unless the rain clouds hide them.
 
 > [!NOTE]
 > **Where the pits are.** Where OpenStreetMap maps the real pit lane, the game's sits beside it, on its real side. Three don't: at Interlagos the real lane leaves the track through the Senna S and at Singapore its side bends too tightly for garages, so theirs are across the road, and Monaco's is placed by hand. Albert Park, Monza, Suzuka and Las Vegas have none mapped, so theirs come from the circuit's shape.
@@ -252,6 +265,12 @@ Las Vegas has the whole Strip: every major resort from the Strat to Mandalay Bay
 | **Custom cup** | Any four circuits, in the order you choose, from a picker you can search. |
 | **Single race** | One circuit, chosen or drawn at random. |
 
+<p align="center">
+  <img src="docs/readme/picker.jpg" alt="The circuit picker choosing a custom cup: Monaco, Spa and Suzuka picked, one to go" width="70%"/>
+</p>
+
+<p align="center"><em>The circuit picker building a custom cup: Monaco, Spa, Suzuka and one to go.</em></p>
+
 ### The cups
 
 | Cup | Races |
@@ -262,8 +281,8 @@ Las Vegas has the whole Strip: every major resort from the Strat to Mandalay Bay
 | **Classics Cup** | Spa-Francorchamps · Hungaroring · Zandvoort · Monza |
 | **Autumn Cup** | Baku · Singapore · Circuit of the Americas · Mexico City |
 | **Finale Cup** | Interlagos · Las Vegas · Lusail · Yas Marina |
-| **Legends Cup** 🕰️ | Hockenheimring · Nürburgring · Estoril · Kyalami |
-| **Golden Era Cup** 🕰️ | Sepang · Istanbul Park · Mugello · Watkins Glen |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> **Legends Cup** | Hockenheimring · Nürburgring · Estoril · Kyalami |
+| <img src="docs/readme/icons/historic.svg" width="18" alt="historic"/> **Golden Era Cup** | Sepang · Istanbul Park · Mugello · Watkins Glen |
 
 The 2025 grid races the historic circuits too. Each is the layout its outline data holds, and the game says which: Hockenheim is the short Grand Prix circuit raced from 2002 to 2019, the Nürburgring the Grand Prix circuit of 2002 to 2020, Sepang the F1 circuit of 1999 to 2017, Istanbul Park as raced in 2005 to 2011 and 2020 to 2021, Mugello as raced in 2020, and Watkins Glen the long circuit with the Boot, close to its F1 layout of 1975 to 1980; Estoril and Kyalami are today's circuits, not the ones F1 raced.
 
@@ -278,38 +297,68 @@ The 2025 grid races the historic circuits too. Each is the layout its outline da
 
 Every driver keeps their own career, saved in the browser. **Career points** only go up: the race's F1 points, a cup bonus of 50, 30 or 20 for the top three and points for qualifying, all times the difficulty (Rookie x1, Pro x2, Legend x3). The **rating** goes up and down: it starts at 1200 and moves Elo-style against a field of fixed strength for each difficulty, through the tiers Karting, F4, F3, F2, F1 and World Champion (1850 and up). Best laps, poles, wins and the race history are kept too.
 
-### The power-ups
+---
 
-The item you get depends on your place, or on how far you are behind the leader if that puts you further back, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare, and the back of the field gets the fast ones most (none of the three strongest in the first fifteen seconds, and never two Steward Penalties within 60 seconds). A broken box is back in two seconds, so the cars at the back get theirs too.
+## The power-ups
+
+Drive through a red box and the roulette spins. What you get depends on your place, or on how far you are behind the leader if that puts you further back, with Mario Kart 8 Deluxe's shape of odds: the weak items are common and the strong ones rare, and the back of the field gets the fast ones most. A broken box is back in two seconds, so the cars at the back get theirs too.
 
 | Item | Mario Kart | What it does |
 |---|---|---|
-| **DRS** | Mushroom | A burst of speed at once, then the rear wing's flap really opens: three seconds of boost, four and a half on a straight. |
-| **Oil Slick** | Banana | Drop it behind you for a short spin, or hold `Space` to trail it, where it blocks one Undercut or Debris from behind or spins the first car that runs into it. |
-| **Debris** | Green shell | Fired straight ahead, fast; bounces off the track's edges for eight seconds. |
-| **Undercut** | Red shell | Homes in on the car ahead, round every corner, and spins it. |
-| **Overtake Mode** | Star | Eight seconds faster and untouchable; cars you touch spin and are knocked aside. |
-| **Formation Lap** | Bullet Bill | Six seconds of autopilot at huge speed straight through the field, knocking cars aside; at the end it carries you on, for up to two seconds more, until you are clear of other cars. |
-| **Steward Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, for them and anyone beside them. If it lands on you, you hear the steward's whistle. |
-| **Safety Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up and is slowed to its pace. You aren't. A yellow SAFETY CAR sign and its own two-tone warning tell everyone it is out. |
+| <img src="docs/readme/icons/item-drs.svg" width="30" alt="DRS"/>&nbsp;&nbsp;**DRS** | Mushroom | A burst of speed at once, then the rear wing's flap really opens: three seconds of boost, four and a half on a straight. |
+| <img src="docs/readme/icons/item-oilSlick.svg" width="30" alt="Oil Slick"/>&nbsp;&nbsp;**Oil&nbsp;Slick** | Banana | Drop it behind you, where it lies for fifteen seconds and gives a short spin to whoever drives through it, you included. Or hold `Space` to trail it, where it blocks one Undercut or Debris from behind or spins the first car that runs into it. |
+| <img src="docs/readme/icons/item-debris.svg" width="30" alt="Debris"/>&nbsp;&nbsp;**Debris** | Green shell | Fired straight ahead, fast; bounces off the track's edges for eight seconds and spins anyone it hits, you included. |
+| <img src="docs/readme/icons/item-undercut.svg" width="30" alt="Undercut"/>&nbsp;&nbsp;**Undercut** | Red shell | Homes in on the car ahead, round every corner, and spins it. |
+| <img src="docs/readme/icons/item-overtakeMode.svg" width="30" alt="Overtake Mode"/>&nbsp;&nbsp;**Overtake&nbsp;Mode** | Star | Eight seconds faster and untouchable; cars you touch spin and are knocked aside. |
+| <img src="docs/readme/icons/item-formationLap.svg" width="30" alt="Formation Lap"/>&nbsp;&nbsp;**Formation&nbsp;Lap** | Bullet Bill | Six seconds of autopilot at huge speed straight through the field, knocking cars aside; at the end it carries you on, for up to two seconds more, until you are clear of other cars. |
+| <img src="docs/readme/icons/item-stewardPenalty.svg" width="30" alt="Steward Penalty"/>&nbsp;&nbsp;**Steward&nbsp;Penalty** | Blue shell | Flies over the field to the leader: the heaviest hit in the game, a near stop and a long spin, and a spin for anyone right beside them. If it lands on you, you hear the steward's whistle. |
+| <img src="docs/readme/icons/item-safetyCar.svg" width="30" alt="Safety Car"/>&nbsp;&nbsp;**Safety&nbsp;Car** | Lightning | Joins by whichever of the circuit's service gates (or the pit exit) gets it in front of the leader soonest, then leads for seven seconds; every rival loses their power-up, is slowed to its pace and can't overtake. You aren't. A yellow SAFETY CAR sign and its own two-tone warning tell everyone it is out. |
 
-Shots, oil and the safety car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
+> [!NOTE]
+> **The limits.** None of the three strongest (Formation Lap, Steward Penalty, Safety Car) in the first fifteen seconds of a race. Never two Steward Penalties within 60 seconds, and never two Safety Cars within 30 (or one in the first 20). After a spin, a car can't be spun again for four and a half seconds.
+
+Shots, oil and the Safety Car move along the track itself, so they follow every corner and never meet a car on the other level of Suzuka's crossover.
 
 ---
 
 ## Race day
 
-**The replays.** Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay** from four cameras: *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one). The broadcast graphics come along: a timing tower, a lower-third with the car in view, and a scrubber from 0.25x to 4x. Replays have sound at 0.5x, 1x and 2x (the venue only at 0.25x and 4x), heard from the camera: the engine close and level onboard, the cars coming and going past a trackside camera with the Doppler shift. Pick a car and every camera stays on it; **Auto** (or `A`) hands the choice of cars back to the director.
+### <img src="docs/readme/icons/replays.svg" width="24" alt=""/> The replays
 
-**The podium.** After a cup, the season or a single race, the top three stand on their steps in 3D, and it runs as a real podium does. The camera sweeps in and the arms go up (third, then second, then first, each stepping forward) as the crowd cheers. Then all three stand for **the winner's national anthem**, an instrumental the game synthesizes itself from the notes of the score (a brass band in a hall; never a recording), while the camera pushes slowly in on the winner under their flag. All 20 drivers have theirs, 13 anthems in all: *Hymne Monégasque* (Monaco), *God Save the King* (United Kingdom), *Wilhelmus* (Netherlands), *Advance Australia Fair* (Australia), *Il Canto degli Italiani* (Italy), *Marcha Real* (Spain), *O Canada* (Canada), *La Marseillaise* (France), *Phleng Chat Thai* (Thailand), *Das Lied der Deutschen* (Germany), *Kimigayo* (Japan), *God Defend New Zealand* (New Zealand), *Hino Nacional Brasileiro* (Brazil). Then **the trophies are presented**: three of them wait on a table beside the podium (a bronze cup for third, a bigger silver goblet for second, a grand gold urn with handles and a lid for the winner), and a presenter in formal dress (a man in a dark suit and tie or a woman in a green trouser suit; the same one for the same podium), who has waited beside the podium since the start, carries each to its driver at a walking pace, holds it up, and nods as it is taken. Each arm is solved every frame to put its hand on the trophy's stem or foot; the checks hold every hand to within 3 cm of where it is put and every forearm and body clear of the cups. Third and second lift theirs, then bring them down to the left hand; the winner's lift is the big one, to a fanfare, confetti cannons and the crowd's roar. Then a cork for each bottle and the champagne (on Medium and High graphics), trophy in one hand and bottle in the other, and a slow orbit for as long as you want to watch. Each scene's sound ends before the next begins (the anthem, a processional timed to end as the winner takes the gold, the fanfare, the corks). The crowd is made of voices (shouts on vowels, whistles, horns, hand claps), not of noise, here and in the grandstands during a race. Every sound is made by the game and follows its sound setting; with the sound off the ceremony skips the wait for the anthem. The name plates carry the points, and each banner the driver's flag, number and team colours.
+Every race is recorded at 30 samples a second, so when the results come up you can **Watch the replay**.
 
-**Two players.** Turn on *2 players* in the pit lane, pick P2's driver (it can't be P1's), and both of you race the same field, each with your own view, HUD, mini map and career. Each view keeps a sensible shape on any window: stacked on a normal screen, side by side on an ultrawide.
+- **Four cameras.** *Trackside* (TV cameras round the lap that pan and zoom after the car, then cut to the next), *Onboard* (the T-cam, with that driver's throttle, brake and steering drawn live), *Helicopter*, and the *Director*, who opens on the leader from the air, then cuts every six seconds between Trackside, Onboard and Helicopter shots, following the closest battle in the top six (or you, when there isn't one).
+- **Broadcast graphics.** A timing tower, a lower-third with the car in view, a seek bar and five speeds: 0.25x, 0.5x, 1x, 2x and 4x.
+- **Sound, heard from the camera.** The engine close and level onboard; the cars coming and going past a trackside camera, with the Doppler shift. Full sound at 0.5x, 1x and 2x; the venue only at 0.25x and 4x.
+- **Your car or the director's.** Pick a car and every camera stays on it; **Auto** (or `A`) hands the choice of cars back to the director.
+
+### <img src="docs/readme/icons/podium.svg" width="24" alt=""/> The podium
+
+After a cup, the season or a single race, the top three stand on their steps in 3D, and it runs as a real podium does:
+
+1. **The arrival.** The camera sweeps in and the arms go up (third, then second, then first, each stepping forward) as the crowd cheers.
+2. **The winner's anthem.** All three stand while the camera pushes slowly in on the winner under their flag. The anthem is an instrumental the game synthesizes itself from the notes of the score (a brass band in a hall; never a recording).
+3. **The trophies.** Three wait on a table beside the podium: a bronze cup for third, a bigger silver goblet for second, a grand gold urn with handles and a lid for the winner. A presenter in formal dress (a man in a dark suit and tie or a woman in a green trouser suit; the same one for the same podium) carries each to its driver at a walking pace, holds it up, and nods as it is taken. Third and second lift theirs; the winner's lift is the big one, to a fanfare, confetti cannons and the crowd's roar.
+4. **The champagne.** A cork for each bottle and the spray (on Medium and High graphics), trophy in one hand and bottle in the other, then a slow orbit for as long as you want to watch.
+
+**Race suits.** Each driver wears their team's colours with their race number on the chest, their flag under the collar, the team's name in plain capitals and their three-letter code on the belt; on the back, their surname over a big number. Words, numbers and flags only: no logos and no crests.
+
+**13 anthems for all 20 drivers:** *Hymne Monégasque* (Monaco), *God Save the King* (United Kingdom), *Wilhelmus* (Netherlands), *Advance Australia Fair* (Australia), *Il Canto degli Italiani* (Italy), *Marcha Real* (Spain), *O Canada* (Canada), *La Marseillaise* (France), *Phleng Chat Thai* (Thailand), *Das Lied der Deutschen* (Germany), *Kimigayo* (Japan), *God Defend New Zealand* (New Zealand), *Hino Nacional Brasileiro* (Brazil).
+
+**A crowd made of voices.** Shouts on vowels, whistles, horns and hand claps, not noise, here and in the grandstands during a race. Every sound is made by the game and follows its sound setting; with the sound off the ceremony pauses only briefly where the anthem would be. The name plates carry the points, and each banner the driver's flag, number and team colours.
+
+> [!NOTE]
+> Each arm is solved every frame to put its hand on the trophy's stem or foot. The checks hold every hand to within 3 cm of where it is put, and every forearm and body clear of the cups.
+
+### <img src="docs/readme/icons/players.svg" width="24" alt=""/> Two players
+
+Turn on *2 players* in the pit lane, pick P2's driver (it can't be P1's), and both of you race the same field, each with your own view, HUD, mini map and career. Each view keeps a sensible shape on any window: stacked on a normal screen, side by side on an ultrawide. The season is one player's championship.
 
 ---
 
 ## Controls
 
-### One player
+### <img src="docs/readme/icons/keyboard.svg" width="24" alt=""/> One player
 
 | Action | Keys |
 |---|---|
@@ -318,14 +367,14 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 | Steer | `A` `D` or `←` `→` |
 | Drift (charge a boost) | hold `Shift` while turning |
 | Use the power-up | `Space` (Oil Slick: tap to drop, hold to trail) |
-| Pause | `Esc` or `P` |
+| Pause | `Esc` or `P` (race, countdown and qualifying) |
 | Full screen, on and off | `F` (or double-click the picture) |
 | Quit while paused | `Q` (after the flag, `Q` keeps your result) |
 | Next race, or from qualifying to the race | `Enter` |
 | Back to the pit lane from results or the podium | `Esc` |
 | In the pit lane: change driver, start | `←` `→`, `Enter` |
 
-### Two players
+### <img src="docs/readme/icons/players.svg" width="24" alt=""/> P1 and P2
 
 | | Throttle | Brake | Steer | Drift | Power-up |
 |---|---|---|---|---|---|
@@ -334,7 +383,7 @@ Shots, oil and the safety car move along the track itself, so they follow every 
 
 Keys are read by position, and the pit lane labels them for your keyboard layout (AZERTY shows `Z Q S D`). The two views stack one above the other, or sit side by side once the window is more than 2.1 times as wide as it is tall.
 
-### Gamepads
+### <img src="docs/readme/icons/gamepad.svg" width="24" alt=""/> Gamepads
 
 The first pad is P1's, the second P2's (standard mapping), and a pad and the keys work together.
 
@@ -347,17 +396,26 @@ The first pad is P1's, the second P2's (standard mapping), and a pad and the key
 | Power-up | the left or top face button |
 | Pause | Start |
 
-### Replays
+### <img src="docs/readme/icons/replays.svg" width="24" alt=""/> Replay keys
 
 | Action | Keys |
 |---|---|
 | Play or pause | `Space` |
 | Back or forward 5 s | `←` `→` |
 | Previous or next car | `↑` `↓` |
-| Slower or faster (0.25x to 4x) | `-`, `=` (or `+`) |
+| Slower or faster (0.25x to 4x) | `-` and `=` (or `_` and `+`) |
 | Next camera | `C` |
 | Auto: the director picks the cars again | `A` |
 | Leave the replay | `X` or `Esc` |
+
+### Settings
+
+| Setting | Choices |
+|---|---|
+| Sound | On or off |
+| Full screen | On or off (`F` anywhere, or double-click the picture) |
+| Spinning cars block the road | Off by default. On, a spinning car is solid (see [the physics](#the-honest-physics)); it applies from the next session |
+| Graphics | Auto, High (the default), Medium or Low |
 
 ---
 
@@ -368,10 +426,11 @@ It's an arcade game, and it says where.
 - **A fixed 60 Hz step.** The physics runs in steps of exactly 1/60 s (up to eight a frame), and drawing happens between them, so the game drives the same at 60 Hz and 144 Hz. The race clock is the physics' own time: it advances exactly as far as the physics does and stops while you're paused.
 - **Not identical cars.** Every car runs the same physics code, but its numbers come from its team and its driver (speed, handling, acceleration, traction), so a Red Bull is not a Sauber. The pit lane shows the bars.
 - **CPU drivers brake like drivers.** They look down the road, work out how fast their car can take what's coming and brake for it (`racecraft.js`). They also steer round traffic, which your own hands do for you.
-- **Difficulty, in numbers.** Rookie CPU cars run at 90% pace, Pro at 100%, Legend at 103%. There is catch-up, and it's in the open: a CPU car more than 300 units (about a second and a half at top speed) ahead of you, or of the leading player in a two-player race, eases off, more the further ahead it is, by up to 8% on Rookie, 4% on Pro and 2% on Legend. Cars near you and behind you are never helped or held back.
+- **Difficulty, in numbers.** Rookie CPU cars run at 90% pace, Pro at 100%, Legend at 103%. There is catch-up, and it's in the open: a CPU car more than 300 units of road (a second or two at racing speed) ahead of you, or of the leading player in a two-player race, eases off, more the further ahead it is, by up to 8% on Rookie, 4% on Pro and 2% on Legend. Cars near you and behind you are never helped or held back.
 - **The tow, and fair contact.** Close behind another car you meet less drag and reach a higher top speed (up to 6%), so you can pull out and pass. Wheel to wheel, cars push each other apart and nobody is thrown back; run into the back of a car and you lose the speed.
 - **Steer, or meet the wall.** The barriers are where you see them, past the run-off, and the physics stops you at exactly that line. Your car only settles a little along the road on its own, so if you don't steer through a corner you run wide, off the road and into the wall. You glance off it with a wobble, sparks and dust, and the cars behind slip past while you gather it up.
 - **Spinning cars: Mario Kart or F1, your choice.** By default the field drives straight through a car that is spinning or has just hit the wall. Turn on **Spinning cars block the road** in Settings and it is solid instead: the cars behind go round it or lose their speed against it. It applies to you and the CPU cars alike, and takes effect from the next session.
+- **Comebacks are possible, and measured.** The power-ups and the pace are tuned by simulating whole races (`tools/balance/`): in those simulations a car starting last on Pro finishes third on average and wins about one race in four; on Legend it nearly always reaches the top ten and rarely wins.
 - **Rain is real grip.** In the wet a car has 72% of its dry cornering grip, 85% of its traction and 75% of its braking, oil spins last longer and sliding tyres scrub. Under Monaco's tunnel roof the road stays dry.
 - **Same scale everywhere,** so Spa is the longest lap and Monaco the shortest. But for the size of its cars the road is wider than a real one: corners tighter than it can turn are opened out, and stretches that would overlap once widened are nudged apart. Shanghai's snail is the exception: there the road narrows to half its width so the loops can come as close as the real ones.
 - **Suzuka really crosses itself,** on a bridge, and each car only looks for road near where it already is, so nobody snaps across the crossover or cuts between two stretches side by side.
@@ -383,23 +442,32 @@ It's an arcade game, and it says where.
 
 ```
 play.html          the game, full window          index.html      the website (no 3D, loads fast)
-game.js            physics, AI, laps, items, audio, HUD and the pit-lane flow
-render3d.js, r3d/  the three.js renderer: car, track, landmarks, trackside, people,
-                   rain, post-processing, the podium, replays' cameras
-*.js (pure)        UMD modules tested in Node: weather, racecraft, grid, season, career,
-                   choices, replay, ceremony, faces, twoplayer, powerups, pitlane, venue...
+game.js            physics, AI, laps, items, the HUD and the pit-lane flow
+screens.js         the pit lane, results, replay and podium screens, Settings
+render3d.js, r3d/  the three.js renderer: car, track, landmarks, the Strip, trackside, people,
+                   rain, post-processing, the podium, its trophies and presenter, suits, cameras
+*.js (pure)        UMD modules tested in Node: weather, racecraft, grid, season, career, choices,
+                   replay, ceremony, faces, suits, twoplayer, powerups, pitlane, entrances,
+                   runoff, siting, marshals, venue, quality...
+*-sound.js         the synths: engine-sound, crowd-sound, podium-sound, signal-sounds; anthem-data
 tracks-data.js     the 32 circuits, generated by tools/tracks/
 assets/            Blender-built GLBs (car, driver, items, landmarks, people, yachts), textures
 tools/blender/     the build scripts for every model, headless and self-checking
+tools/             tracks/ vegas/ sphere/ anthems/ balance/ perf/ site/ readme/, capture-shots.js
 tools/checks/      the browser checks          tests/      the Node tests
 ```
 
 - **No build step.** Plain scripts and one ES module renderer on [three.js](https://threejs.org) r186 (vendored, loaded through an import map), and a 2D canvas over the top for the HUD. If WebGL isn't there, the original 2D renderer takes over.
-- **Built in Blender, from code.** The car, the driver figure, the power-up models, the landmarks, the grandstands, the crowd and crews, and the yachts are all generated by Python scripts in `tools/blender/`, run headless (`Blender -b --factory-startup -P <script>`). Each script checks its own result and refuses to write a broken model; the trackside models are compressed with meshopt.
+- **Built in Blender, from code.** The car, the driver figure, the power-up models, the landmarks of all 32 venues, the Las Vegas Strip, the grandstands, the crowd and crews, and the yachts are all generated by Python scripts in `tools/blender/`, run headless (`Blender -b --factory-startup -P <script>`). Each script checks its own result and refuses to write a broken model; the trackside models are compressed with meshopt. The trophies are turned on a lathe in three.js, and the presenter is built on the driver figure.
 - **Faces without photos.** The drivers' heads are MakeHuman's CC0 base mesh with its shape targets baked into shape keys. Each driver's look (shape sliders from a set of about forty, hair, beard, brows, eye and skin colour) is data in `game-data.js`; hair and beards are shells of fur. Public photos were used as reference only.
-- **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`.
-- **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Graphics run on three tiers (High, Medium, Low) with Auto picking one. The 3D picture's resolution is capped per tier (a Retina screen's full resolution on High) and steps down a notch when frames miss 60 a second, then back up when there is room; Auto drops a tier only once that has run out. The HUD always draws at the screen's own resolution.
-- **Checked twice.** `npm test` runs 515 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, faces, the circuits' data...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the season's save and resume, the podium, the replays, split screen, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` runs them all against the dev server; its header shows how.
+- **Circuits from open data.** Outlines from [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) and pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel and the named corners from OpenStreetMap, through `tools/tracks/fetch_osm.py` and `build_tracks.py`. The Las Vegas Strip's buildings and the ground between them come from OpenStreetMap too (`tools/vegas/`), and the Sphere's Earth from NASA (`tools/sphere/`).
+- **Sound from nothing.** Every sound is synthesised live with WebAudio, the anthems included: `tools/anthems/` reads each melody from a public-domain score or MIDI file into notes (`anthem-data.js`), and the game's own brass band plays them.
+- **Shaders compile behind the loading panel.** `Render3D.prepare()` builds each circuit, compiles every shader and uploads every texture before the countdown, so the first frame never stalls. Only the raced venue's models are loaded.
+- **High by default, with dynamic resolution.** Graphics run on three tiers (High, Medium, Low; High unless you choose otherwise, or Auto to let the game pick). The 3D picture's pixel ratio is capped per tier (2 on High, 1.5 on Medium, 1 on Low) and steps down an eighth at a time when frames miss 60 a second, to a floor of 1.25, 1 or 0.75, then back up when there is room; Auto drops a tier only once that has run out. The HUD always draws at the screen's own resolution.
+- **Checked twice.** `npm test` runs 564 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, anthems, suits, faces, the circuits' data, this README...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the balance, the season's save and resume, the podium, the replays, the sound, split screen, frame times, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` lists them; its header shows how to run them against the dev server.
+
+> [!NOTE]
+> **Measured, not guessed.** On the development machine (a 120 Hz Retina screen, a 3456x2234 drawing buffer) a race frame at Monaco on High costs 8 to 10 ms of GPU at a pixel ratio of 2, 7.9 ms at 1.5 and 4.8 ms at 1. Each car casts its shadow from one mesh, which took Monaco's shadow map from about 440 draws a frame to under 100 (`docs/superpowers/specs/2026-10-05-performance-headroom-design.md`).
 
 ### Run it yourself
 
@@ -419,7 +487,9 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 
 **Live:** https://f1-pixel-cup.vercel.app. The Vercel project follows this repo: every push to `main` deploys, other branches get preview URLs, and `.vercelignore` keeps `docs/`, `tests/` and `tools/` out of the upload.
 
-**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `sphere`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). `vegas.jpg` (1200 wide), `bellagio.jpg`, `safety-car.jpg` and `wall.jpg` (800) are copies of the site's own pictures (the script's `vegas`, `ontrack` and `wall` parts). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest. The website's own pictures are the script's other parts; its header lists them.
+**The README's pictures** come from `tools/capture-shots.js` with `globalThis.CAPTURE_PARTS = ["readme"]` against the dev server (`globalThis.README_ONLY` retakes just some: `hero`, `harbour`, `cars`, `night`, `rain`, `replay`, `podium`, `split`, and `pitlane`, which takes the picker too). `vegas.jpg` (1200 wide), `bellagio.jpg`, `sphere.jpg`, `nurburg.jpg`, `safety-car.jpg` and `wall.jpg` (800) are copies of the site's own pictures (the script's `vegas`, `historic`, `ontrack` and `wall` parts). They're written full size to `docs/readme/`, then sized for GitHub with `sips -s formatOptions 80 hero.jpg`, `sips -Z 1200 -s formatOptions 80` for `pitlane.jpg` and `picker.jpg` (so their text stays readable) and `sips -Z 800 -s formatOptions 78` for the rest.
+
+**The README's icons** are drawn by `node tools/readme/build-icons.js` into `docs/readme/icons/`, in the style of the game's own power-up icons (`item-icons.js`), which it writes out as they are. `tests/readme.test.js` fails if the README gains an emoji or a dash, points at a file that isn't there, or the icons are stale.
 
 </details>
 
@@ -438,7 +508,8 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | **Sep 29 to 30** · *a world* | A career per driver, the power-ups' beauty pass, painted helmets, the 2025 grid's pages on the site, broadcast post-processing, pit lanes from OpenStreetMap, marshals and the helicopter, rain with real wet grip, car v2 and the Blender driver figure. |
 | **Oct 1 to 2** · *race day* | TV-camera replays, the 3D podium ceremony and two-player split screen. |
 | **Oct 4 to 5** · *the whole calendar* | The drivers' own faces; landmarks, yachts, stands and 3D crowds at every venue; all 24 circuits of 2025 in six cups and the Season; random, custom and single races; the Legends and Golden Era cups. Then this README. |
-| **Oct 6 to 10** · *sound and fury* | Sound in the replays and an engine that starts up, shimmers flat out and crackles on the lift; the Safety Car's service gates; steering that matters, barrier hits and comebacks from the back; landmarks at the historic circuits; a moon over the night races; and the whole Las Vegas Strip, building by building. |
+| **Oct 5 to 10** · *sound and fury* | Sound in the replays and an engine that starts up, shimmers flat out, crackles on the lift and rings in the tunnel; the Safety Car's service gates, its sign and its warning; the official with the chequered flag; steering that matters, barrier hits and comebacks from the back; landmarks at the historic circuits; a moon over the night races; High graphics by default with dynamic resolution; and the whole Las Vegas Strip, building by building, with the ground between filled in. |
+| **Oct 11** · *the ceremony* | Las Vegas's 30 grandstands and the Sphere's turning Earth; the podium's sound and the winner's anthem (13 of them, for all 20 drivers); a crowd made of voices; race suits with numbers, names, flags and team names; the trophy presentation in bronze, silver and gold; `F` for the full screen. Then this README's second pass, with its own icons. |
 
 ### What's next
 
@@ -452,16 +523,17 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 | What | From | Licence |
 |---|---|---|
 | Circuit outlines | [bacinger/f1-circuits](https://github.com/bacinger/f1-circuits) | MIT |
-| Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names, the Las Vegas Strip's buildings | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
+| Pit lanes, the Monaco and Silverstone start lines, the Monaco tunnel, corner names, the Las Vegas Strip's buildings and the ground between them | [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright) | ODbL |
 | The website's race data (the drivers' and teams' pages) | [F1DB](https://github.com/f1db/f1db) by Marcel Overdijk | CC BY 4.0 |
 | Ground textures | [Poly Haven](https://polyhaven.com) | CC0 |
-| The Earth on the Las Vegas Sphere (Blue Marble and its clouds) | [NASA Earth Observatory / Visible Earth](https://visibleearth.nasa.gov/images/73909) | Public domain |
+| The Earth on the Las Vegas Sphere ([Blue Marble](https://visibleearth.nasa.gov/images/73909) and its [clouds](https://visibleearth.nasa.gov/images/57747)) | NASA Earth Observatory / Visible Earth | Public domain |
 | The drivers' heads (base mesh and shape targets, data only) | [MakeHuman](https://github.com/makehumancommunity/makehuman) | CC0 |
 | 3D engine | [three.js](https://github.com/mrdoob/three.js) | MIT |
 | Model decompression | [meshoptimizer](https://github.com/zeux/meshoptimizer)'s decoder, shipped with three.js | MIT |
 | The podium's anthems (the notes only: melodies from MIDI files and scores, played by the game's own synth) | Wikimedia Commons, [nationalanthems.info](https://nationalanthems.info) and IMSLP, each listed in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES); the compositions are in the public domain (Thailand's in Thailand; see the notices) | Public domain, CC0 and CC BY 4.0 |
 | Typeface | [Titillium Web](https://fonts.google.com/specimen/Titillium+Web), from Google Fonts | SIL OFL 1.1 |
+| This README's icons | Drawn for this project in the style of the game's own power-up icons (`tools/readme/build-icons.js`) | MIT, with the code |
 
 The game's own code is released under the [MIT License](LICENSE). The pieces above keep their own licences, and the notices for those shipped here are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
 
-F1 Pixel Cup is a fan-made game. It isn't affiliated with Formula 1, the FIA or any team, and it carries no official logos or sponsor marks: the names on the cars are the drivers', and the paint is each team's colours.
+F1 Pixel Cup is a fan-made game. It isn't affiliated with Formula 1, the FIA or any team, and it carries no official logos or sponsor marks: the names and numbers on the cars and the race suits are the drivers', the team names are plain words, and the paint is each team's colours.

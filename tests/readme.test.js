@@ -61,3 +61,20 @@ test("every README picture is used, and none is oversized", () => {
     assert.ok(fs.statSync(path.join(dir, f)).size < 450 * 1024, `${f} is over 450 KB`);
   });
 });
+
+test("the README's counts are the data's", () => {
+  const { CIRCUITS, DRIVERS, TEAMS, CUP_DEFS, POWER_UPS } = require("../game-data.js");
+  const checks = fs.readFileSync(path.join(root, "tools", "checks", "run-all.js"), "utf8").match(/globalThis\.CHECKS \|\| "([^"]+)"/)[1].split(",");
+  assert.ok(readme.includes(`${checks.length} browser checks`), `run-all.js lists ${checks.length} checks`);
+  assert.ok(readme.includes(`badge/circuits-${CIRCUITS.length}-`));
+  assert.ok(readme.includes(`badge/drivers-${DRIVERS.length}-`));
+  assert.ok(readme.includes(`badge/cups-${CUP_DEFS.length}_+_a_season-`));
+  assert.ok(readme.includes(`badge/power--ups-${POWER_UPS.length}-`));
+  assert.ok(readme.includes(`${DRIVERS.length} drivers, ${TEAMS.length} teams`));
+  // Every circuit's lap length and rain odds, as the table gives them.
+  CIRCUITS.forEach((c) => {
+    const row = `| ${(c.lengthM / 1000).toFixed(3)} km | ${Math.round(c.rainChance * 100)}% |`;
+    assert.ok(readme.includes(row), `${c.id}: ${row}`);
+  });
+  assert.equal((readme.match(/^\| .* km \| \d+% \|/gm) || []).length, CIRCUITS.length);
+});
