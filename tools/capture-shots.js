@@ -14,6 +14,10 @@
 //   sips -s formatOptions 80 hero.jpg
 //   sips -Z 1200 -s formatOptions 80 pitlane.jpg picker.jpg
 //   sips -Z 800 -s formatOptions 78 <each other picture>.jpg
+// Six of the README's pictures are the site's shots, sized from the full
+// captures before those are made smaller: vegas.jpg (vegas-strip, 1200 wide),
+// bellagio.jpg, sphere.jpg (the "vegas" part), kyalami.jpg ("historic",
+// cropped to 16:9), safety-car.jpg (ontrack-sc-gate) and wall.jpg, 800 wide.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside,
 // trackside2025 (the 2025 venues' landmarks) and historic (the historic
@@ -691,8 +695,8 @@ async (page) => {
   if (parts.includes("readme")) {
     const RM = "docs/readme/";
     // Set globalThis.README_ONLY to a list of names to retake only those:
-    // hero, harbour, cars, night, sphere, rain, replay (both replay
-    // pictures), podium (both), split, pitlane (with the picker).
+    // hero, harbour, cars, night, rain, replay (both replay
+    // pictures), podium (all four), split, pitlane (with the picker).
     const want = (name) => !globalThis.README_ONLY || globalThis.README_ONLY.includes(name);
     // Who and where: Leclerc leads the hero with Hamilton beside him, and
     // the rest of the gallery spreads across the grid. The README's captions
@@ -710,12 +714,9 @@ async (page) => {
       { name: "night", circuit: "singapore", anchor: "lm:marinaBaySands",
         cars: [["russell", 0, -5], ["alonso", -30, 6], ["gasly", -55, -4]],
         cam: { from: [-70, 0, 14], at: [60, 0, 22], fov: 55 } },
-      { name: "sphere", circuit: "lasvegas", anchor: "lm:vegasSphere", shift: 120,
-        cars: [["piastri", 0, -5], ["antonelli", -30, 6], ["sainz", -55, -4]],
-        cam: { from: [60, -25, 10], at: [-60, 40, 45], fov: 65 } },
     ];
     const CHASE = [
-      { name: "rain", circuit: "spa", weather: "wet", driver: "hamilton", seconds: 14 },
+      { name: "rain", circuit: "suzuka", weather: "wet", driver: "hamilton", seconds: 8 },
     ];
     const startAt = async (circuit, driverId, weather) => {
       await freshGame();
@@ -794,7 +795,7 @@ async (page) => {
       await rmShot(s.name);
     }
     if (want("replay")) await shootReplays(RM, ["replay-onboard", "replay-helicopter"]);
-    if (want("podium")) await shootPodium(RM, ["podium-trophy", "podium-spray"]);
+    if (want("podium")) await shootPodium(RM, ["podium-anthem", "podium-handover", "podium-trophy", "podium-spray"]);
     if (want("split")) await shootSplit(RM, ["split-spa"], false);
     // The pit lane with the hero's driver picked, and the circuit picker
     // choosing a custom cup.
