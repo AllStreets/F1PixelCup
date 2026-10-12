@@ -14,6 +14,10 @@
 //   sips -s formatOptions 80 hero.jpg
 //   sips -Z 1200 -s formatOptions 80 pitlane.jpg picker.jpg
 //   sips -Z 800 -s formatOptions 78 <each other picture>.jpg
+// Six of the README's pictures are the site's shots, sized from the full
+// captures before those are made smaller: vegas.jpg (vegas-strip, 1200 wide),
+// bellagio.jpg, sphere.jpg (the "vegas" part), kyalami.jpg ("historic",
+// cropped to 16:9), safety-car.jpg (ontrack-sc-gate) and wall.jpg, 800 wide.
 // To retake only some parts, set globalThis.CAPTURE_PARTS first, for example
 // ["items"]; the default takes circuits, teams, items, helmets, trackside,
 // trackside2025 (the 2025 venues' landmarks) and historic (the historic
@@ -712,7 +716,7 @@ async (page) => {
         cam: { from: [-70, 0, 14], at: [60, 0, 22], fov: 55 } },
     ];
     const CHASE = [
-      { name: "rain", circuit: "spa", weather: "wet", driver: "hamilton", seconds: 9 },
+      { name: "rain", circuit: "suzuka", weather: "wet", driver: "hamilton", seconds: 8 },
     ];
     const startAt = async (circuit, driverId, weather) => {
       await freshGame();

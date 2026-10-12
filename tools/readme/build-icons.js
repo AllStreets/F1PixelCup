@@ -96,7 +96,7 @@ const DRAWN = {
   // A clock turned back: the historic circuits.
   historic: ["#d09a5c", `<circle cx="32" cy="31" r="17" fill="none" stroke="#d09a5c" stroke-width="5"/>`
     + stroke(WHITE, 4, "M32 20v11l-8 5")],
-  // The keys: W A S D lit in P1's blue.
+  // The keys: W A S D lit in a blue that reads on the white board (P1's, deeper).
   keyboard: [P1, `<rect x="7" y="16" width="50" height="32" rx="6" fill="${WHITE}"/>`
     + [0, 1, 2, 3, 4].map((c) => `<rect x="${12 + c * 8.4}" y="21" width="6" height="6" rx="1.5" fill="${c === 1 ? "#1f9fe0" : INK}" fill-opacity="${c === 1 ? 1 : 0.8}"/>`).join("")
     + [0, 1, 2, 3, 4].map((c) => `<rect x="${12 + c * 8.4}" y="29.5" width="6" height="6" rx="1.5" fill="${c < 3 ? "#1f9fe0" : INK}" fill-opacity="${c < 3 ? 1 : 0.8}"/>`).join("")
@@ -108,7 +108,10 @@ const DRAWN = {
 };
 
 // The power-ups' own icons, with the stronger edge.
-const item = (svg) => `${svg.replace('stroke-opacity=".09"', 'stroke-opacity=".22"')}\n`;
+const item = (svg) => {
+  if (!svg.includes('stroke-opacity=".09"')) throw new Error("build-icons: item-icons.js has changed its tile's edge");
+  return `${svg.replace('stroke-opacity=".09"', 'stroke-opacity=".22"')}\n`;
+};
 
 function icons() {
   const out = {};

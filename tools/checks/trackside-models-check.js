@@ -189,8 +189,8 @@ async (page) => {
     });
   }
 
-  // Las Vegas's race-weekend grandstands (r3d/track.js venueStands): a score
-  // or more round the lap, on every quarter of it, each by the stretch it
+  // Las Vegas's race-weekend grandstands (r3d/track.js venueStands): 30 of
+  // them (the README says so) round the lap, on every quarter of it, each by the stretch it
   // was placed for (its nearest point of the track within 150 of its own
   // place round the lap), no two on the same ground, every one with a crowd.
   if (await step(() => !CHECK_ONLY.length || CHECK_ONLY.includes("lasvegas"))) {
@@ -207,7 +207,7 @@ async (page) => {
       });
       const close = spots.filter((a, i) => spots.some((b, j) => j > i && Math.hypot(a.x - b.x, a.z - b.z) < 70));
       const quarters = new Set(spots.map((s) => Math.floor((s.d / total) * 4)));
-      return (spots.length >= 20 && quarters.size === 4 && !astray.length && !close.length && t.people.stands === spots.length)
+      return (spots.length === 30 && quarters.size === 4 && !astray.length && !close.length && t.people.stands === spots.length)
         || JSON.stringify({ spots: spots.length, quarters: [...quarters], astray: astray.length, close: close.length, crowds: t.people.stands });
     });
   }
