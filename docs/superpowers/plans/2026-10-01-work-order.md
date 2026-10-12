@@ -256,6 +256,8 @@ Stage R comes last because its screenshots should show the finished game. If a R
 - [x] **F for the full screen** (user, 2026-10-12): on main.
 - [x] **Trophy presentation** (branch `stage-k-podium`; user, 2026-10-12) **[REVIEW]**: bronze, silver and gold trophies in rising size, a well-dressed presenter handing them over between the anthem and the champagne, its own music and applause, no scene overlapping another.
 
+- [ ] **README overhaul** (branch `stage-r-readme`; user, 2026-10-12): every number and claim checked against the code; coloured SVG icons in place of all emoji; the hero image a link to the production site; fresh pictures.
+
 ## 9. Stop before Supabase
 
 Accounts, cloud saves and anything with keys wait for the user.
