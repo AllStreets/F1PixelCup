@@ -1,124 +1,95 @@
-# Handoff: picking up F1 Pixel Cup (written 2026-10-01)
+# Handoff: picking up F1 Pixel Cup (written 2026-10-13)
 
-For the next Claude Code session, which the user will remote-control through the day. Read this first, then the work order.
+For the next Claude Code session. Read this first, then `docs/AGENT-RULES.md`.
 
 ## Where things stand
 
-- **Live:** https://f1-pixel-cup.vercel.app. Every push to `main` auto-deploys (Vercel).
-- **`main`** is at the merge of Stage I, car v2 and the drivers (`9293b2e`, plus this plan). Everything is merged; there are no open branches with work in them.
-- **Shipped and live:**
-  - Stages A to I of `docs/superpowers/plans/2026-09-29-master-todo.md`:
-    - careers per driver, the power-ups, helmets and the website;
-    - post-processing and trackside life (pit lanes, venue moments, marshals, the helicopter, fireworks);
-    - rain (real wet grip), car v2 and the Blender driver figure.
-  - Fixes made on 2026-09-30:
-    - smooth motion at any refresh rate (`placeForDrawing` in `game.js`);
-    - CPU drivers that brake like drivers (`racecraft.js`), so qualifying is contested;
-    - the speed panel on the qualifying lap;
-    - no stray 2D streaks;
-    - a wet-grid NaN hotfix.
-- **Tests:** `npm test` is 200/200. The full browser regression is green: 16 checks, see "Checks".
+- **Live:** https://f1-pixel-cup.vercel.app. Every push to `main` deploys to production on Vercel. Repo: github.com/AllStreets/F1PixelCup.
+- **`main` is clean and pushed** at `d9e8d87` (plus this handoff). Nothing is in progress: no agent is running, no branch holds unmerged work, no worktree has uncommitted changes.
+- **The work order is finished:** `docs/superpowers/plans/2026-10-01-work-order.md` has every box ticked, including everything the user added through 2026-10-12.
+- **The only thing left on the roadmap is accounts and Supabase, and it is PARKED until the user says so.** Do not start it, plan it or provision anything for it unasked.
+- **Tests:** `npm test` is 566 of 566. There are 30 browser checks (list in `tools/checks/run-all.js`).
 
-## What to do next
+## What the game is now
 
-**`docs/superpowers/plans/2026-10-01-work-order.md`** is the ordered list, with the user's 2026-10-01 instructions folded in. Start at item 0.
+- **Racing:** 32 circuits (all 24 of 2025 in six calendar cups, plus the Legends and Golden Era historic cups), the 2025 Season, random and custom cups, single races. 20 drivers, 10 teams. One or two players (split screen; players are **P1** and **P2**, never 1P or 2P).
+- **Feel:** steering matters (an unsteered car runs wide into the barrier and glances off with sparks); comebacks from last are possible on every difficulty; eight power-ups, each true to its Mario Kart counterpart; the Steward Penalty is the heaviest hit. Settings has "Spinning cars block the road", off by default.
+- **Safety Car:** joins through service gates round every circuit where it reaches the leader soonest, catches up, leads, drives back to its garage. A yellow SAFETY CAR sign (`#FEDD00`) and its own warning sound.
+- **Trackside:** Blender-built landmarks at all 32 circuits, yachts in the harbours, stands with 3D crowds (at most 14 stands' crowds in 3D at once on High, 8 on Medium), pit crews, marshals, a chequered-flag official who waves only on the last lap until the winner is home, a moon and stars at night races.
+- **Las Vegas:** every major Strip resort placed from OpenStreetMap and pinned (`tools/vegas/strip-places.json`; a check fails if one moves), the ground between filled in, 30 stands, the Sphere showing NASA's Blue Marble Earth turning.
+- **Race day:** TV-camera replays with sound (Director/Auto, Trackside, Onboard, Helicopter); a 3D podium in a real podium's order: step up, the winner's national anthem (13 anthems cover all 20 drivers, synthesized from public-domain scores), the trophy presentation (bronze, silver, gold, handed over by a presenter), champagne.
+- **Drivers:** real faces, race suits with number, surname, code, national flag and the team's name in plain capitals on the chest.
+- **Sound:** all procedural WebAudio: an engine that starts up, lives at full throttle and rings in tunnels; a crowd made of voices.
+- **Graphics:** High by default, with a resolution cap per tier and dynamic resolution. F toggles the full screen.
 
-1. **Item 0, the drivers [REVIEW].** The user wants to see the drivers before anything is built on them.
-   - The raw renders are in `docs/review/2026-10-01/driver_*.png`: a red default suit and a plain white helmet. In the game the suit takes team colours and the helmet the driver's painted design.
-   - Render them dressed: Leclerc in Ferrari colours and Hamilton in his, with their helmets.
-   - Publish a private review page (the Artifact tool) and send the link. Wait for the user's notes.
-2. Meanwhile, start **Stage J** (monuments, stands, people): write its spec, build the first two landmarks, one grandstand and the people figures, then **[REVIEW]** that first look.
-3. Then K (podium) **[REVIEW]**, L (all 24 circuits of 2025, in 4-race cups), L2 (historical cups), P (random, custom and single races), M (replays), N (two-player split-screen), R (the README), and stop before Supabase.
+## Decisions the user has made (do not reopen unasked)
 
-### Design reviews
+- **No team logos, no crests, no sponsor marks, no brand emblems anywhere.** The user asked for real logos on 2026-10-12, was told non-commercial use is not a defence and the risk is a takedown, and chose "either real logos or none": so none. Team names appear as plain words only. A test holds the suit painter to words, numbers and flags.
+- **Thailand's anthem is included at the user's decision** (its composer died in 1968; the notices say so).
+- **Las Vegas leads the site's Trackside section**, not the page.
+- **The trophy presentation shipped at about 21.7 s**, with painted-on formal wear and the presenter in the first seconds of the winner's lift. The user saw these flagged and said "I love it."
+- **No em dashes or en dashes in anything a reader sees** (README, site, in-game text, review pages).
+- **Showcase content:** Leclerc first, Hamilton second.
 
-The user wants a say on:
-- the drivers;
-- the podium ceremony;
-- the trackside elements (monuments, buildings, stands, people).
+## Things only the user's ear can judge (still unconfirmed)
 
-For those:
-1. Build on the branch and render the look (game screenshots, Blender renders).
-2. Commit the images to `docs/review/<date>/` and publish a review page.
-3. **Do not merge until the user says yes.**
+The user has not yet said how these sound; adjust on their word:
+- the champagne pop and fizz (rebuilt 2026-10-12);
+- the engine start-up at the start of qualifying and on the grid;
+- the tunnel on the engine at Monaco (four constants at the top of the audio code in `game.js`: `TUNNEL_SEND`, `ENGINE_Q`, `TUNNEL_Q`, `TUNNEL_SWELL`);
+- the Safety Car warning and the Steward Penalty whistle;
+- the grandstand crowd's level in a race (raised from 0.07 to 0.11 as a guess).
 
-Everything else runs without check-ins, as before. Circuits get review pages too, but those don't block.
+Renders to listen to are in `docs/review/2026-10-10/`, `2026-10-11/` and `2026-10-12/` (`*.wav`).
 
-## Starting up
+## Known small things, not blocking
 
-```bash
-cd "/Users/connorevans/Desktop/My Projects (Programming)/F1_Pixel_Cup"
-python3 tools/dev-server.py .        # http://localhost:8765, no caching; run it in the background
-npm test                             # Node tests
-```
+- Lap chimes and kerb thuds are not in replays.
+- The SAFETY CAR sign, the two signal sounds and the flag official are covered in replays by Node tests only, and were not tested separately in two-player views.
+- The Sphere's rotation was not tested in split screen or replays; one Earth map serves all three tiers.
+- The Safety Car's first call shows it appearing under a carport beside the track; its catch-up pace is 1.5 times the field's top speed. The user was told and has not objected.
+- Rookie is very easy after the balance pass (the simulated player wins every time); Pro comebacks reach the top 5 in 94% of simulated races. The user was told.
+- Interlagos and Singapore keep their pit lanes across the road from the real side; Sepang's grandstand sits inside the loop; Watkins Glen's lake is brought close to the fence. All explained to the user.
+- Three framing nits in README pictures (the presenter's head at an edge, cars cut by the bottom edge in two shots).
 
-Browser checks run through the Playwright MCP tool `browser_run_code_unsafe`:
+## How the work has been run (and how to run more)
 
-```js
-async (page) => eval(await (await page.request.get("http://localhost:8765/tools/checks/run-all.js")).text())(page)
-```
+- **The main session orchestrates; helper agents build.** Each stage gets its own git worktree beside the main checkout (`F1_Pixel_Cup-<letters>`) and its own branch and port. Agents push their branches only. The main session merges into `main`, re-runs the affected checks on `main`, pushes, and publishes review pages (the Artifact tool).
+- **Rules every agent follows:** `docs/AGENT-RULES.md` (in the repo; `/private/tmp/claude-501/AGENT-RULES.md` is only a link to it).
+- **The headless browser runner:** `~/.f1pixelcup/pw/run.js` (a copy is in `tools/agents/`). `node ~/.f1pixelcup/pw/run.js <port> checks name,name [--long]` or `... code script.js`. It allows two agent browsers at once across all agents and cuts a run off after 50 minutes (`RUN_MAX_MIN` to change). `CIRCUITS=id,id` limits `trackside-models` and `people` to some circuits; the full 32-circuit sweep takes about ten minutes on a quiet machine.
+- **Main's own dev server:** `python3 tools/dev-server.py . 8770`, run from the main checkout (it may need restarting).
+- **The headed Retina perf check:** `node tools/perf/check-headed.js 8770`. It opens a visible browser on the user's screen and needs a quiet machine; one result (`ratioClimbsBack`) fails under load and passes when quiet.
+- **Never use the Playwright MCP window or the Blender MCP for this project's checks or builds:** the user watches that window; Blender runs headless (`/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P <script>`).
 
-Set `globalThis.CHECKS = "rain,car"` first to run a subset, and `globalThis.LONG = true` for full failure text. A full run takes about 8 to 10 minutes. The tool moves anything over 120 s to the background and notifies you when it finishes. A single check: `eval(await (await page.request.get(".../tools/checks/<name>-check.js")).text())(page)`.
+### Things learnt the hard way
 
-In the results, **play, landing, career and race-sim always list plain values** (counts, strings) under "bad". Those are informational, compared by eye; a real failure says so.
-
-## Blender
-
-- **Builds run headless and never touch an open Blender:**
-  ```bash
-  F1_CAR_OUT=assets/f1_car.glb /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/build_f1_car.py
-  F1_DRIVER_OUT=assets/driver.glb F1_DRIVER_PREVIEW=<dir> /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/build_driver.py
-  /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P tools/blender/preview.py -- model.glb out_prefix 900
-  ```
-- **Another terminal session may be using Blender through the Blender MCP for a different project.** Don't use the Blender MCP tools here; use the headless commands above. They are a separate process, so the two can't clash.
-- `tools/blender/f1parts.py` holds the helmet shell, shared by the car and the drivers (the painted designs depend on its UVs).
-- The build scripts check themselves (for example, no pose may put a boot below the ground). Keep that habit.
-
-## The rules that always hold
-
-- **A spec and a plan first.** Specs go in `docs/superpowers/specs/<date>-<topic>-design.md`.
-- **Tests first,** and seen to fail on the old code.
-- **A branch per stage.** Merge to `main` and `git push origin main` after each major piece. Standing permission: no need to ask.
-- **A fresh reviewer at the end of each stage.** Use a new subagent on the most capable model. Fix **every** finding, minors included, each with a test that failed first.
-- **The quality bar:**
-  - real features only (the copy never claims what the game doesn't do);
-  - physically honest;
-  - intense beauty, judged from real screenshots;
-  - `Render3D.auditScenery(track)` returns 0 on every circuit (nothing over the track).
-- **Browser checks at real window sizes.** Use `newContext({ viewport: null })` and resize only via CDP `Browser.setWindowBounds`. **Never force a viewport**: the user watches that window. The view must fill any window with no black bars.
-- **Showcase content:** Leclerc first, Hamilton second, but the promo spreads across the grid.
-- **Licences and secrets:**
-  - Data and imagery stay licence-clean: F1DB (CC BY) and OpenStreetMap (ODbL, credited), Poly Haven (CC0). No media.formula1.com images, no official logos and no sponsor marks.
-  - Never commit or upload `.env*` or `.vercel/`.
-- **Writing for the user's readers** (README, site, review pages): **no em dashes.** The user dislikes them.
-- **Stop before Supabase.**
+- **The user plays on this same Mac.** Seven agents' browsers at once made the game lag for them (load average about 250). Run at most two agents at a time, the nearest-to-done first. If the user says the game is laggy, check `uptime` and the agents' processes before blaming the game, and offer to pause.
+- **Usage limits** (session and weekly) were hit repeatedly. Be economical: checks in small groups, no repeated full runs, short agent reports, the main session doing merges and small fixes itself. Resume stopped agents with SendMessage after a reset.
+- **Checks that fail under machine load** (grid, motion, split, podium timing, perf) must be re-run alone before being called real. Checks must not depend on frame timing or on which circuit a cup starts with: name the circuit and step the game's own clock.
+- **macOS empties `/private/tmp/claude-501`** of files untouched for a few days. Keep nothing lasting there.
+- **Merges between long-lived branches** have conflicted mostly where two branches each added to the same spot (the renderer's build order, `r3d/landmarks.js`, the check files): keep both sides, then run the checks. The build order in `render3d.js` is: a venue's city (the Strip), the Safety Car's entrances, a venue's main stand, the track data's decor, landmarks, then the fill.
+- **Design reviews:** the user wants a say on how things look (drivers, podium, trackside, buildings). Build on a branch, publish a review page with real screenshots and an honest "what I'd point out myself" list, and merge only on their yes. They often approve with "merge" and usually accept flagged fixes; do those fixes while they look.
+- **After a major feature, update the site and the README too** (the user asked twice). `tests/readme.test.js` fails on any emoji, dash, 1P/2P, missing picture or count that differs from the data.
 
 ## Map of the code (what you'll touch most)
 
-- **`game.js`:** physics on a fixed 60 Hz step (`takePhysicsSteps`, `updateRacer`), with drawing between steps (`placeForDrawing`). Also the AI, laps, items, audio, the HUD and the pit-lane flow (`startCup`, `startRaceWeekend`, `showPodium`).
-- **Pure modules,** UMD and tested in `tests/`:
-  - `weather.js` (wet grip and scrub);
-  - `racecraft.js` (CPU corner speeds and braking);
-  - `pitlane.js`, `venue.js`, `marshals.js`, `grid.js`, `powerups.js`, `career.js`, `quality.js`.
-- **`render3d.js`:** the three.js renderer.
-  - `prepare()` builds a circuit behind the loading panel: a piecewise shader compile, the shadow and effect shaders, texture uploads. The first frame stalls on nothing.
-  - Also `render()`, `inspect()` (what the checks read) and the audits.
-- **`r3d/`:**
-  - `car.js`: liveries painted in the shader, AO, tyre lettering, number decals;
-  - `track.js`, `landmarks.js`, `trackside.js`, `rain.js`, `postfx.js`, `tunnel-light.js`, `items.js`, `powerups.js`.
-- **`tools/tracks/`:** `build_tracks.py`, plus `fetch_osm.py` for pit lanes, tunnels and corners. These write `tracks-data.js`. The outlines come from `f1-circuits.geojson`, which has all 24 circuits of 2025 and 16 historical ones.
-- **`game-data.js`:** drivers, teams, difficulties, circuits and cups.
-- **`tools/capture-shots.js`:** the website's screenshots, taken from the real game.
+- **`game.js`:** physics on a fixed 60 Hz step, AI, laps, items, the HUD, audio, the pit lane and cup flow, the keys.
+- **Pure modules,** UMD and tested in `tests/`: `weather.js`, `racecraft.js`, `pitlane.js`, `entrances.js`, `runoff.js`, `siting.js`, `venue.js`, `marshals.js`, `grid.js`, `powerups.js`, `choices.js`, `season.js`, `career.js`, `quality.js`, `twoplayer.js`, `replay.js`, `ceremony.js`, `engine-sound.js`, `suits.js`, `faces.js`.
+- **`render3d.js`:** the three.js renderer: `prepare()` builds a circuit behind the loading panel (everything that draws must be in the scene then), `render()`, `inspect()` (what the checks read), the audits.
+- **`r3d/`:** `car.js`, `driver.js`, `suit.js`, `podium.js`, `trophies.js`, `track.js`, `landmarks.js`, `models.js` (per-venue loading, compressed GLBs), `yachts.js`, `people.js`, `entrances.js`, `trackside.js`, `rain.js`, `postfx.js`, `tunnel-light.js`, `items.js`, `powerups.js`.
+- **`screens.js`, `play.html`, `play.css`:** the pit lane, results, podium screen, settings, replay graphics.
+- **`game-data.js`:** drivers (with `look` and `country`), teams, difficulties, circuits, cups, power-up copy (the site's cards read it).
+- **Blender:** `tools/blender/build_*.py` (car, driver, people, landmarks, yachts), `tools/compress-models.mjs`.
+- **Tracks:** `tools/tracks/build_tracks.py`, `fetch_osm.py` → `tracks-data.js`. Las Vegas: `tools/vegas/`. Anthems: `tools/anthems/`. The Sphere's Earth: `tools/sphere/fetch_earth.py`.
+- **The site:** `index.html`, `landing.css`, `landing.js`, `drivers.html`, `teams.html`; pictures by `tools/capture-shots.js`.
+- **Specs and plans:** `docs/superpowers/specs/`, `docs/superpowers/plans/`. Review images: `docs/review/<date>/`.
+- **Licences:** `THIRD-PARTY-NOTICES` (F1DB, OpenStreetMap, Poly Haven, MakeHuman, NASA, the anthem sources, three.js, meshoptimizer, fonts).
 
-## Things learnt the hard way
+## Housekeeping left as it is
 
-- **Shaders and textures** compile and upload once, in `prepare()`. Anything new that draws (a model, a points system) must be in the scene when `prepare()` runs, or it will stall the first frame it appears.
-- **Wet grip is per speed:** `Weather.dryLimitAt(physics, speed)`. At speed 0 there is no limit, so guard divisions. That was the NaN bug.
-- **Checks must be able to fail.** Prove every new one against the old code. Reviewers have caught tautological checks more than once.
-- **Bash permission hiccups:** the auto-mode safety check sometimes returns no verdict. Retry once. If it persists, work in files (Write/Edit) and come back to the shell.
+- **14 sibling worktrees** (`F1_Pixel_Cup-B`, `-F`, `-H`, `-J`, `-K`, `-L`, `-M`, `-N`, `-P`, `-PF`, `-R`, `-S`, `-SC`, `-V`) and their branches are all fully merged into `main` and clean. They are kept so a stage's agent can be resumed with its context; they can be removed with `git worktree remove` if the user wants the disk space back. Ask first.
+- Some old dev servers may still be listening (8770, 8772). They are idle and harmless; stop them if they are in the way.
 
-## Resume note (2026-10-05, usage limit)
+## The next step
 
-- Local `main` (6869187, NOT pushed) merges `stage-l-calendar`: real pit sides, Shanghai's snail, the historic cups. npm test 399/399; full browser run green except one real regression: trackside-models `everyLandmarkFromItsModel` reports Barcelona's `barcelonaGrandstand` not built. Its anchors are `oppositePits(c)` (r3d/landmarks.js ~1225), and Barcelona's pit lane moved to its real side in this merge, so the grandstand finds no room. Fix (re-anchor it to the real main straight's grandstand side, clear of the new pit lane), re-run trackside-models, then push main.
-- Stage R (README) is running on branch `stage-r-readme` (worktree F1_Pixel_Cup-R). If it stopped, resume it from its brief in the work order, item 8.
-- After R: stop before Supabase.
+Wait for the user. If they ask what is next: the roadmap's last item is accounts and Supabase, parked until they say; otherwise it is whatever they ask for.
