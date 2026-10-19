@@ -33,6 +33,7 @@
 </p>
 
 <p align="center">
+<a href="#a-fan-project">A fan project</a> ·
 <a href="#what-this-is">What this is</a> ·
 <a href="#gallery">Gallery</a> ·
 <a href="#features">Features</a> ·
@@ -48,6 +49,14 @@
 <a href="#how-it-came-together">How it came together</a> ·
 <a href="#credits-and-licences">Credits</a>
 </p>
+
+---
+
+## A fan project
+
+I made this because I love the sport. It's free to play, it has no ads, nothing in it is for sale, and I have never made money from it and never will. It isn't affiliated with, endorsed by or connected to Formula 1, Formula One Management, the FIA, or any team or driver.
+
+F1, FORMULA 1 and related marks are trademarks of Formula One Licensing B.V. Driver and team names appear only to say who is who on the grid, and the game uses no official logos or sponsor marks. If you represent any of them and want something changed or taken down, email connorevans29@gmail.com and I'll do it.
 
 ---
 
@@ -536,4 +545,4 @@ It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D roa
 
 The game's own code is released under the [MIT License](LICENSE). The pieces above keep their own licences, and the notices for those shipped here are in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES).
 
-F1 Pixel Cup is a fan-made game. It isn't affiliated with Formula 1, the FIA or any team, and it carries no official logos or sponsor marks: the names and numbers on the cars and the race suits are the drivers', the team names are plain words, and the paint is each team's colours.
+F1 Pixel Cup is a fan-made game. It isn't affiliated with Formula 1, the FIA or any team, and it carries no official logos or sponsor marks: the names and numbers on the cars and the race suits are the drivers', the team names are plain words, and the paint is each team's colours. It's free and non-commercial, and nobody makes money from it. See [A fan project](#a-fan-project).
