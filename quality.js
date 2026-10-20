@@ -1,5 +1,5 @@
 // Graphics quality: which post-processing each machine gets
-// (docs/superpowers/specs/2026-09-29-postfx-design.md). Pure rules; in the page
+// (docs/design/specs/2026-09-29-postfx-design.md). Pure rules; in the page
 // this defines window.Quality, in Node it is require()-able for the tests.
 //
 // A first guess comes from the device. While racing, dynamic resolution
@@ -50,7 +50,7 @@
     return { composer: on, bloom: on, grade: on, flare: high, speedBlur: high, haze: high, bursts: on };
   }
 
-  // The render pixel ratio (docs/superpowers/specs/2026-10-05-performance-
+  // The render pixel ratio (docs/design/specs/2026-10-05-performance-
   // headroom-design.md): each tier's cap, never above the screen's own, and
   // the floor dynamic resolution may lower it to.
   const PIXEL_RATIO = { high: 2, medium: 1.5, low: 1 };

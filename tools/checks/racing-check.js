@@ -1,4 +1,4 @@
-// Browser check: the racing itself (docs/superpowers/specs/2026-10-05-balance-design.md).
+// Browser check: the racing itself (docs/design/specs/2026-10-05-balance-design.md).
 // The tow, fair contact, cars slipping past one that is spinning, and the
 // barriers: an unsteered car runs off and glances off the wall it can see,
 // never through it and never stuck, while a steered one stays on the road.

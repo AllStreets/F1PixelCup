@@ -1,6 +1,6 @@
 """Build the Las Vegas Strip: every tall building round the circuit, where it
 really stands, and the Strip's landmarks by hand, and export them to
-assets/landmarks/vegas_strip.glb (docs/superpowers/specs/2026-10-05-vegas-strip-design.md).
+assets/landmarks/vegas_strip.glb (docs/design/specs/2026-10-05-vegas-strip-design.md).
 
 Run headless, so it never touches an open Blender session:
 

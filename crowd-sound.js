@@ -1,4 +1,4 @@
-// A crowd that sounds like people (docs/superpowers/specs/2026-10-12-crowd-sound-design.md):
+// A crowd that sounds like people (docs/design/specs/2026-10-12-crowd-sound-design.md):
 // the podium's roar, cheering, applause and murmur (podium-sound.js) and the
 // grandstands' crowd in a race (game.js). Shaped noise reads as water, so a
 // crowd here is made of voices: each one a pulse train at a speaking or

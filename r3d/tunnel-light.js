@@ -1,4 +1,4 @@
-// Light in the tunnel (docs/superpowers/specs/2026-09-29-trackside-design.md,
+// Light in the tunnel (docs/design/specs/2026-09-29-trackside-design.md,
 // G2). Whatever is inside the tunnel -- the road, the barriers, the cars, the
 // walls and ceiling -- is out of the sky's and the sun's light, and lit by the
 // lamps instead; whatever is outside is not touched. So from the approach the

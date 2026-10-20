@@ -446,7 +446,7 @@ tools/checks/      the browser checks          tests/      the Node tests
 - **Checked twice.** `npm test` runs 566 Node tests (scoring, odds, weather, grids, the season, replays, the ceremony's timeline, anthems, suits, faces, the circuits' data, this README...). Then 30 browser checks in `tools/checks/` drive the real game in Playwright at real window sizes: every power-up, the balance, the season's save and resume, the podium, the replays, the sound, split screen, frame times, nothing over the track on every circuit, the view filling any window with no black bars. `tools/checks/run-all.js` lists them; its header shows how to run them against the dev server.
 
 > [!NOTE]
-> **Measured, not guessed.** On the development machine (a 120 Hz Retina screen, a 3456x2234 drawing buffer) a race frame at Monaco on High costs 8 to 10 ms of GPU at a pixel ratio of 2, 7.9 ms at 1.5 and 4.8 ms at 1. Each car casts its shadow from one mesh, which took Monaco's shadow map from about 440 draws a frame to under 100 (`docs/superpowers/specs/2026-10-05-performance-headroom-design.md`).
+> **Measured, not guessed.** On the development machine (a 120 Hz Retina screen, a 3456x2234 drawing buffer) a race frame at Monaco on High costs 8 to 10 ms of GPU at a pixel ratio of 2, 7.9 ms at 1.5 and 4.8 ms at 1. Each car casts its shadow from one mesh, which took Monaco's shadow map from about 440 draws a frame to under 100 (`docs/design/specs/2026-10-05-performance-headroom-design.md`).
 
 ### Run it yourself
 
@@ -475,6 +475,8 @@ It has to be served over HTTP (the renderer is an ES module and loads models), s
 ---
 
 ## How it came together
+
+I built it with coding agents: I set the direction and the rules, they drafted, and I reviewed, tested, played and decided what stayed. The design record for each feature, with the options weighed and the reasons, is in [`docs/design`](docs/design).
 
 It didn't start in 3D. It started as a pixel-art kart racer with a pseudo-3D road drawn on a canvas, which is where the name comes from (and that view is still there, as the fallback when WebGL isn't available).
 

@@ -1,5 +1,5 @@
 // The Safety Car's service entrances (entrances.js):
-// docs/superpowers/specs/2026-10-05-safety-car-entries-design.md.
+// docs/design/specs/2026-10-05-safety-car-entries-design.md.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

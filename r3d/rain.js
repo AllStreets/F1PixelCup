@@ -1,4 +1,4 @@
-// Rain (docs/superpowers/specs/2026-09-29-rain-design.md): the wet road, the
+// Rain (docs/design/specs/2026-09-29-rain-design.md): the wet road, the
 // overcast, the falling rain and the spray off the wheels. What is wet is the
 // game's (weather.js); this draws it. All of it is off in a dry race.
 import * as THREE from "three";

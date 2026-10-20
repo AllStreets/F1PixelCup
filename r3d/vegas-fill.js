@@ -1,4 +1,4 @@
-// Las Vegas's ground filled in (docs/superpowers/specs/2026-10-11-vegas-fill-design.md):
+// Las Vegas's ground filled in (docs/design/specs/2026-10-11-vegas-fill-design.md):
 // what stands between and behind the Strip's towers, from the map
 // (assets/landmarks/vegas_fill.glb carries tools/vegas/fill.json: OpenStreetMap,
 // ODbL), at the Strip's own scale and origin (r3d/vegas.js).

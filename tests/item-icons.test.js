@@ -10,7 +10,7 @@ const sandbox = {};
 vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, "..", "game-data.js"), "utf8")}\nthis.POWER_UPS = POWER_UPS;`, sandbox);
 const IDS = sandbox.POWER_UPS.map((p) => p.id);
 
-// The accents from the style guide (docs/superpowers/specs/2026-09-29-power-ups-beauty-design.md).
+// The accents from the style guide (docs/design/specs/2026-09-29-power-ups-beauty-design.md).
 const ACCENTS = {
   drs: "#00d46a", overtakeMode: "#ffd400", oilSlick: "#9b7bff", debris: "#8a94a6",
   undercut: "#e8002d", stewardPenalty: "#2f7bff", formationLap: "#ff8a00", safetyCar: "#ffb000",

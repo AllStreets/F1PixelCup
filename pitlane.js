@@ -1,4 +1,4 @@
-// The pit lane (docs/superpowers/specs/2026-09-29-trackside-design.md, G1).
+// The pit lane (docs/design/specs/2026-09-29-trackside-design.md, G1).
 // Pure geometry, shared by the physics (game.js: the safety car's way in), the
 // renderer (r3d/track.js, r3d/landmarks.js) and the tests. In the page it
 // defines window.Pit; in Node it is require()-able.

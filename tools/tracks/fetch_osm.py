@@ -54,7 +54,7 @@ PIT_LANES = {
     "losail": (1037707300, 196193732),
     # Yas Marina's runs beside the straight and under the track to turn 2.
     "yasmarina": (176695254, 176695255, 176695253),
-    # The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md).
+    # The historic circuits (docs/design/specs/2026-10-04-historic-cups-design.md).
     "hockenheim": 15446020,
     "nurburgring": 30815119,
     "estoril": 363050271,

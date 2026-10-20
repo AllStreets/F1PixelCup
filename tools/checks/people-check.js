@@ -1,5 +1,5 @@
 // Browser check: the trackside models and people, Stage J's first look
-// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 7).
+// (docs/design/specs/2026-10-01-trackside-blender-design.md, section 7).
 // The landmarks and the covered grandstand built from their Blender models,
 // nothing over the track, nobody on the road, the crowd on its feet as the
 // player passes, no 3D crowd on Low, and the frame time holding on every

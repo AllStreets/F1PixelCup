@@ -1,5 +1,5 @@
 """Build the trackside landmarks and the grandstand, and export them to
-assets/landmarks/*.glb (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+assets/landmarks/*.glb (docs/design/specs/2026-10-01-trackside-blender-design.md).
 
 Run headless, so it never touches an open Blender session:
 

@@ -310,7 +310,7 @@ const POOL_IDS = TRACKS.map((track) => track.id);
 const trackById = (id) => TRACKS.find((track) => track.id === id);
 
 // A random cup, a custom cup or a single race, as a cup the race weekend can
-// run (docs/superpowers/specs/2026-10-01-race-choices-design.md).
+// run (docs/design/specs/2026-10-01-race-choices-design.md).
 function choiceCup(kind, ids) {
   const { id, name } = Choices.KINDS[kind];
   return { id, name, icon: name, kind, season: false, single: kind === "single", tracks: ids.map(trackById).filter(Boolean) };
@@ -462,7 +462,7 @@ const state = {
   hudPlaceFlashDir: 0,
   shakeMag: 0,
   shakeUntil: 0,
-  // Two-player split screen (twoplayer.js; docs/superpowers/specs/
+  // Two-player split screen (twoplayer.js; docs/design/specs/
   // 2026-10-01-split-screen-design.md): the pit-lane choice (never stored, so
   // every visit starts with one player), the cup's (fixed once it starts),
   // player 2's driver, and the racer ids of the humans in the session
@@ -2149,7 +2149,7 @@ function racerById(id) {
   return state.racers.find((racer) => racer.id === id);
 }
 
-// Trackside life for the renderer (docs/superpowers/specs/
+// Trackside life for the renderer (docs/design/specs/
 // 2026-09-29-trackside-design.md, G3): each marshal post's flag, from the
 // race as it is; where the TV helicopter is (trailing the race leader by
 // 400); and whether the chequered flag is out, with the winner's colour for
@@ -3444,7 +3444,7 @@ function powerUpFrame(now) {
   };
 }
 
-// Contacts (docs/superpowers/specs/2026-10-05-balance-design.md). Cars touch
+// Contacts (docs/design/specs/2026-10-05-balance-design.md). Cars touch
 // when their car-shaped footprints overlap (powerups.js contactKind), and the
 // way they met decides what it costs:
 // - wheel to wheel, they are pushed apart across the road and each scrubs a
@@ -3641,7 +3641,7 @@ function updateRace(dt, now) {
 }
 
 // ---------------------------------------------------------------------------
-// The replay's recording (replay.js; docs/superpowers/specs/
+// The replay's recording (replay.js; docs/design/specs/
 // 2026-10-01-replays-design.md). From lights out, every second physics step,
 // the race as it stands: every car, everything on the road, the boxes, the
 // marshals' flags and the player's keys. It only reads the race.
@@ -4610,7 +4610,7 @@ function resetToGarage() {
 
 // ---------------------------------------------------------------------------
 // The replay: the race just run, from its recording, as television shows it
-// (docs/superpowers/specs/2026-10-01-replays-design.md). Its own clock is the
+// (docs/design/specs/2026-10-01-replays-design.md). Its own clock is the
 // race clock; the cars are stand-ins posed from the recording each frame (the
 // race's own racers are never touched, so the results stand).
 // ---------------------------------------------------------------------------
@@ -5061,7 +5061,7 @@ function handleReplayKey(event) {
 }
 
 // ---------------------------------------------------------------------------
-// Split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md):
+// Split screen (docs/design/specs/2026-10-01-split-screen-design.md):
 // each player's view drawn into its own part of the window, with its own
 // camera and HUD. Player 1's camera and HUD state are the state's own fields;
 // player 2's are swapped in while player 2's view is drawn.

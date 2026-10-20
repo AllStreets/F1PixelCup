@@ -1,4 +1,4 @@
-// Venue moments, heard (docs/superpowers/specs/2026-09-29-trackside-design.md,
+// Venue moments, heard (docs/design/specs/2026-09-29-trackside-design.md,
 // G2): where on the lap the engine rings in a tunnel or under a bridge, and
 // where a grandstand's crowd swells. Pure; shared by the audio in game.js and
 // the tests. In the page it defines window.Venue; in Node it is require()-able.

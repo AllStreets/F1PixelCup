@@ -1,4 +1,4 @@
-// The Las Vegas Strip (docs/superpowers/specs/2026-10-05-vegas-strip-design.md):
+// The Las Vegas Strip (docs/design/specs/2026-10-05-vegas-strip-design.md):
 // every tall building round the circuit where it really stands, and the
 // Strip's landmarks, from assets/landmarks/vegas_strip.glb
 // (tools/blender/build_vegas.py, its footprints from OpenStreetMap: ODbL).

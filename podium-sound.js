@@ -1,4 +1,4 @@
-// The podium's sound (docs/superpowers/specs/2026-10-11-podium-sound-design.md):
+// The podium's sound (docs/design/specs/2026-10-11-podium-sound-design.md):
 // the winner's national anthem, synthesized here from note lists
 // (anthem-data.js; never a recording), and the celebration around it: the
 // crowd, applause, the trophy's fanfare, the confetti cannons, a cork for each

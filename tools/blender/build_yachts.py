@@ -1,5 +1,5 @@
 """Build the yachts and export them to assets/yachts.glb
-(docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 8.1).
+(docs/design/specs/2026-10-01-trackside-blender-design.md, section 8.1).
 
 Run headless, so it never touches an open Blender session:
 

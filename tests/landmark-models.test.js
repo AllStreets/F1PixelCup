@@ -1,5 +1,5 @@
 // The landmark and grandstand models (tools/blender/build_landmarks.py ->
-// assets/landmarks/*.glb), docs/superpowers/specs/2026-10-01-trackside-blender-design.md
+// assets/landmarks/*.glb), docs/design/specs/2026-10-01-trackside-blender-design.md
 // sections 1 to 3. Real metres, glTF axes: y up, the front toward -z.
 const test = require("node:test");
 const assert = require("node:assert/strict");

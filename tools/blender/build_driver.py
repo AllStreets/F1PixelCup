@@ -1,5 +1,5 @@
 """Build the race driver figure used by the podium ceremony, and export it to
-assets/driver.glb (docs/superpowers/specs/2026-10-01-driver-v2-design.md).
+assets/driver.glb (docs/design/specs/2026-10-01-driver-v2-design.md).
 
 Run headless, so it never touches an open Blender session:
 

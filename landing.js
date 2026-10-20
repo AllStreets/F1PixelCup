@@ -93,7 +93,7 @@
   }
 
   // What each historic circuit shows from the track, built in Blender
-  // (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md),
+  // (docs/design/specs/2026-10-05-historic-landmarks-design.md),
   // pictured in the game (tools/capture-shots.js, part "historic").
   const HISTORIC_SIGHTS = [
     { id: "hockenheim", title: "Hockenheim's Motodrom", alt: "The Motodrom's three-tier stand under its long roof across the straight from the pits at Hockenheim", text: "The Motodrom's great stand across the straight from the pits: three tiers of terraces under a long roof." },
@@ -111,7 +111,7 @@
           <figcaption><b>${esc(s.title)}</b> ${esc(s.text)}</figcaption>
         </figure>`;
 
-  // Your way (docs/superpowers/specs/2026-10-01-race-choices-design.md): a
+  // Your way (docs/design/specs/2026-10-01-race-choices-design.md): a
   // random cup, a custom cup or a single race, each a link into the pit lane
   // with that choice picked.
   function choicesCard() {

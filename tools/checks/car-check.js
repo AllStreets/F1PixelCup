@@ -1,4 +1,4 @@
-// Browser check: car v2 in the game (docs/superpowers/specs/2026-09-30-car-v2-design.md).
+// Browser check: car v2 in the game (docs/design/specs/2026-09-30-car-v2-design.md).
 // Run with the Playwright MCP tool browser_run_code_unsafe, with the dev
 // server on http://localhost:8765. Returns { results, errors } (the shared
 // convention of every check in tools/checks); every result should be true.

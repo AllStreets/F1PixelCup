@@ -184,7 +184,7 @@ export function tyreCompoundInk() {
 
 // ---------------------------------------------------------------------------
 // Helmets: each driver's design (driver.helmet in game-data.js; see
-// docs/superpowers/specs/2026-09-29-helmets-design.md) painted onto the
+// docs/design/specs/2026-09-29-helmets-design.md) painted onto the
 // helmet's equirectangular UVs: x round the head with the front in the
 // middle, y down from the crown. Original art in the driver's colours.
 // ---------------------------------------------------------------------------
@@ -405,7 +405,7 @@ function numberDecals() {
   return numberGeometries;
 }
 
-// The car's shadow (docs/superpowers/specs/2026-10-05-performance-headroom-design.md):
+// The car's shadow (docs/design/specs/2026-10-05-performance-headroom-design.md):
 // one mesh of the whole car casts it, in place of a shadow draw for each of
 // its twenty-odd parts. It writes nothing when the scene itself is drawn (no
 // colour, no depth); the shadow map draws it with its own depth material.

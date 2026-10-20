@@ -1,5 +1,5 @@
 // Browser check: the engine's voice and the replay's sound
-// (docs/superpowers/specs/2026-10-05-sound-design.md). The sound is made by
+// (docs/design/specs/2026-10-05-sound-design.md). The sound is made by
 // Web Audio; what it is told to do is read back from state.engineSound and
 // state.replaySound. Run with the Playwright MCP tool browser_run_code_unsafe,
 // dev server on http://localhost:8765. Returns { results, errors, info };

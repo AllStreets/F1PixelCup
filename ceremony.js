@@ -1,4 +1,4 @@
-// The podium ceremony's rules (docs/superpowers/specs/2026-09-30-podium-design.md):
+// The podium ceremony's rules (docs/design/specs/2026-09-30-podium-design.md):
 // the timeline as a function of real time, the camera's path, the steps, the
 // counts per graphics tier and the confetti and spray physics. Pure; in the
 // page this defines window.Ceremony, in Node it is require()-able for the tests.
@@ -13,7 +13,7 @@
   // (third, second, the winner last, whose lift is the big one), then the
   // champagne. anthemSeconds is how long the anthem (or what stands in for
   // it) runs; everything after it moves with it. Without one given, a short pause.
-  // (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md)
+  // (docs/design/specs/2026-10-12-trophy-presentation-design.md)
   const DEFAULT_ANTHEM = 3;
   // The winner's lift (its fanfare sting has ended, echo and all, within it).
   const TROPHY_TIME = 4.6;

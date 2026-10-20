@@ -1,5 +1,5 @@
 // One icon per power-up, 64×64, in one broadcast-graphics style (see
-// docs/superpowers/specs/2026-09-29-power-ups-beauty-design.md): a top-lit dark
+// docs/design/specs/2026-09-29-power-ups-beauty-design.md): a top-lit dark
 // tile with an accent bar, and a flat glyph in white plus the item's accent on
 // a 4 px grid -- letters drawn as paths, no fonts, no glows. The site inlines
 // the SVG; the game's HUD turns each into an image once and draws it in the

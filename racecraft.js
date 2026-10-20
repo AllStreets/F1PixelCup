@@ -1,7 +1,7 @@
 // Racecraft: how fast a CPU driver can take the road ahead, and when it must
-// brake for it (docs/superpowers/specs/2026-09-30-racecraft-design.md); the
+// brake for it (docs/design/specs/2026-09-30-racecraft-design.md); the
 // tow behind another car, and how CPU cars far ahead of the player ease off
-// (docs/superpowers/specs/2026-10-05-balance-design.md). Pure:
+// (docs/design/specs/2026-10-05-balance-design.md). Pure:
 // the corner speed comes from the car's own turning (and, wet, its grip), not
 // from a fixed rule, so a CPU drives the corners the way a good driver would.
 // In the page it defines window.Racecraft; in Node it is require()-able.
@@ -72,7 +72,7 @@
     return false;
   }
 
-  // The tow (docs/superpowers/specs/2026-10-05-balance-design.md): in a
+  // The tow (docs/design/specs/2026-10-05-balance-design.md): in a
   // car's wake the air is already moving, so the car behind meets less drag
   // and reaches a higher top speed. Strongest right behind it (`from` is
   // about as close as a car can follow), fading to nothing at `reach`, and

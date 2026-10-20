@@ -1,4 +1,4 @@
-// The podium ceremony in 3D (docs/superpowers/specs/2026-09-30-podium-design.md).
+// The podium ceremony in 3D (docs/design/specs/2026-09-30-podium-design.md).
 //
 // Its own scene and camera, drawn by the game's renderer while the podium
 // screen is up: three steps faced in the cup's colour and numbered on their
@@ -351,7 +351,7 @@ export function createPodium(renderer, { entries, cup, tier, environment, anthem
   function buildFigures() {
     figures = entries.map((e) => {
       // Bareheaded on the podium (the user, 2026-10-01): each driver's own
-      // face, hair and beard (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
+      // face, hair and beard (docs/design/specs/2026-10-01-driver-faces-design.md).
       const fig = buildDriver(e.driver, e.team, { headwear: "none", tier });
       const s = Ceremony.stepFor(e.place);
       // The figure faces +X; turned to face the camera (+Z).

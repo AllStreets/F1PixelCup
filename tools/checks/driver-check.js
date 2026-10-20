@@ -1,6 +1,6 @@
 // Browser check: the driver figure, dressed by the game's own code
-// (docs/superpowers/specs/2026-10-01-driver-v2-design.md, and bareheaded,
-// docs/superpowers/specs/2026-10-01-driver-faces-design.md). Loads the studio
+// (docs/design/specs/2026-10-01-driver-v2-design.md, and bareheaded,
+// docs/design/specs/2026-10-01-driver-faces-design.md). Loads the studio
 // (tools/preview/driver.html) with Leclerc, Hamilton and Russell. Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/driver-check.js, dev server on http://localhost:8765.
@@ -210,7 +210,7 @@ async (page) => {
     return (out.high.layers > out.medium.layers && out.medium.layers > out.low.layers && !out.high.lite && out.medium.lite && out.low.lite) || JSON.stringify(out);
   });
 
-  // The suits' marks (docs/superpowers/specs/2026-10-12-race-suits-design.md):
+  // The suits' marks (docs/design/specs/2026-10-12-race-suits-design.md):
   // each figure's sheet is drawn with its own driver's number, code, surname,
   // country and team's name, and really has paint where each mark sits and none between
   // them (the sheet's pixels read back).

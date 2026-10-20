@@ -177,7 +177,7 @@ async (page) => {
   out.gridHowTo = await p.evaluate(() => { const t = document.getElementById("grid-howto").textContent; return t.includes("From the back") && t.includes("Qualifying") && t.includes("pole 10"); });
 
   // Race day: replays, the podium and two players, each a block with a main
-  // shot and a strip of four that picks it (docs/superpowers/specs/2026-10-01-site-showcase-design.md).
+  // shot and a strip of four that picks it (docs/design/specs/2026-10-01-site-showcase-design.md).
   const BLOCKS = ["replays", "podium", "two-player"];
   out.raceDay = await p.evaluate((blocks) => Boolean(document.querySelector('nav a[href="#race-day"]'))
     && blocks.every((id) => {

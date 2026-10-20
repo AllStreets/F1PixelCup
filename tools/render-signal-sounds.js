@@ -1,5 +1,5 @@
 // Renders the race's two signal sounds to WAV for listening
-// (docs/superpowers/specs/2026-10-11-flag-and-safety-car-signals-design.md),
+// (docs/design/specs/2026-10-11-flag-and-safety-car-signals-design.md),
 // from the same recipes the game plays (signal-sounds.js).
 // Run: node tools/render-signal-sounds.js [out directory]
 const fs = require("fs");

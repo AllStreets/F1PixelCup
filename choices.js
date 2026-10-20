@@ -1,4 +1,4 @@
-// Choosing races (docs/superpowers/specs/2026-10-01-race-choices-design.md):
+// Choosing races (docs/design/specs/2026-10-01-race-choices-design.md):
 // the random cup's seeded draw and its reroll, the custom cup's checks and
 // edits, the circuit search, and the pit lane's remembered choices. Pure, and
 // nothing here knows how many circuits there are: the pool is whatever the

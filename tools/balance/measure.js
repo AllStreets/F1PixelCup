@@ -1,4 +1,4 @@
-// The balance measurement (docs/superpowers/specs/2026-10-05-balance-design.md):
+// The balance measurement (docs/design/specs/2026-10-05-balance-design.md):
 // many races of tools/balance/comeback.js, written to a JSON file for
 // tools/balance/summarize.js. Runs through the headless browser runner, with
 // the dev server on <port>:

@@ -1,4 +1,4 @@
-// Weather and grip (docs/superpowers/specs/2026-09-29-rain-design.md). Pure:
+// Weather and grip (docs/design/specs/2026-09-29-rain-design.md). Pure:
 // whether a race is wet, how much grip a wet road leaves, and the cornering
 // limit that grip sets. In the page it defines window.Weather; in Node it is
 // require()-able.

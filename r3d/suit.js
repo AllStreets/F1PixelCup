@@ -1,5 +1,5 @@
 // The race suit's marks and detail
-// (docs/superpowers/specs/2026-10-12-race-suits-design.md). A sheet per
+// (docs/design/specs/2026-10-12-race-suits-design.md). A sheet per
 // driver (a canvas: the race number, the flag and the code for the front, the
 // surname and number for the back; suits.js says where), laid on the torso
 // by the suit's shader from the body's rest position, so it stays on the

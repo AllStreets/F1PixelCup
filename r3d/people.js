@@ -1,4 +1,4 @@
-// The people at the track (docs/superpowers/specs/2026-10-01-trackside-blender-design.md):
+// The people at the track (docs/design/specs/2026-10-01-trackside-blender-design.md):
 // the crowd in the grandstands, the pit crews in their garages, photographers
 // at the corners and a TV camera crew on its platform. The figures are the
 // Blender models in assets/people.glb (tools/blender/build_people.py), at the

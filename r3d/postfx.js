@@ -1,4 +1,4 @@
-// Post-processing: the hybrid look (docs/superpowers/specs/2026-09-29-postfx-design.md).
+// Post-processing: the hybrid look (docs/design/specs/2026-09-29-postfx-design.md).
 //
 // A Broadcast base -- bloom, a per-circuit grade, a vignette, a sun flare when
 // the sun is really in view, a speed blur at the edges of the frame and heat
@@ -246,7 +246,7 @@ export function createPostFx(renderer, scene, camera) {
   // The copied frame is read straight by the bloom (at half size and down)
   // and by the finish pass, which adds the bloom as it reads the frame: no
   // full-size copy of the frame into a buffer, and no full-size blend of the
-  // bloom back over it (docs/superpowers/specs/2026-10-05-performance-headroom-design.md).
+  // bloom back over it (docs/design/specs/2026-10-05-performance-headroom-design.md).
   function makeFrameTexture(size) {
     const t = new THREE.FramebufferTexture(size.x, size.y);
     // The bloom samples it at half size: filtered, as the old buffer was.

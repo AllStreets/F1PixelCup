@@ -1,4 +1,4 @@
-// Replays (docs/superpowers/specs/2026-10-01-replays-design.md). Pure: the
+// Replays (docs/design/specs/2026-10-01-replays-design.md). Pure: the
 // race's recording (its state every second physics step, in typed arrays),
 // playing it back exactly and drawing between samples, and the maths of the
 // TV cameras and the director. In the page it defines window.Replay; in Node

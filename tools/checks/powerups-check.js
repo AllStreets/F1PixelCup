@@ -360,7 +360,7 @@ async (page) => {
     return (resumed && sc.parked && Math.abs(sc.d - bay.d) < 1) || JSON.stringify({ resumed, parked: sc.parked, d: sc.d, bay: bay.d });
   });
 
-  // The SAFETY CAR sign and the two signal sounds (docs/superpowers/specs/
+  // The SAFETY CAR sign and the two signal sounds (docs/design/specs/
   // 2026-10-11-flag-and-safety-car-signals-design.md): the sign comes on
   // when it is called, stays while it is out, and is gone after it goes in;
   // its sound plays once on the call. The Steward Penalty's sound plays once

@@ -1,5 +1,5 @@
 // The chequered flag official, the SAFETY CAR sign and the two signal sounds
-// (docs/superpowers/specs/2026-10-11-flag-and-safety-car-signals-design.md).
+// (docs/design/specs/2026-10-11-flag-and-safety-car-signals-design.md).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Marshals = require("../marshals.js");

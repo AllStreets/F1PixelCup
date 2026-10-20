@@ -1,5 +1,5 @@
 // Renders the podium's sound to WAVs for listening
-// (docs/superpowers/specs/2026-10-11-podium-sound-design.md), from the same
+// (docs/design/specs/2026-10-11-podium-sound-design.md), from the same
 // code the game plays (podium-sound.js, ceremony.js): the whole celebration
 // with one winner's anthem (podium-celebration.wav: Monaco's), and each
 // anthem on its own (anthem-<country>.wav) with the fanfare that stands in

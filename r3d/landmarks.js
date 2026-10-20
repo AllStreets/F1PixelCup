@@ -77,9 +77,9 @@ export const VENUES = {
     hills: { tint: "#56804c", count: 16, height: [160, 320] },
     extras: ["spTowers", "lake", "skyline", "favela"],
   },
-  // The 2025 calendar's other circuits (docs/superpowers/specs/2026-10-01-calendar-design.md).
+  // The 2025 calendar's other circuits (docs/design/specs/2026-10-01-calendar-design.md).
   // `landmarks`: their Blender models (r3d/models.js), placed by
-  // siteLandmarks (SITES, below; docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
+  // siteLandmarks (SITES, below; docs/design/specs/2026-10-01-landmarks-2025-design.md).
   albertpark: {
     // Parkland round Albert Park Lake, Melbourne's towers to the north.
     ground: "grass", groundTint: "#7fae62", standColor: "#1d5fa8", stand: "covered",
@@ -256,7 +256,7 @@ export const VENUES = {
     landmarks: ["yasHotel"],
     harbour: { anchored: 14, anchorIn: "sea", wind: 0.3 },
   },
-  // The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md):
+  // The historic circuits (docs/design/specs/2026-10-04-historic-cups-design.md):
   // each place as it is, the cars and stands the game's own.
   hockenheim: {
     // The Rhine plain's pine forest, the stadium section by the line.
@@ -852,7 +852,7 @@ function coastline(course, group, { bearing, tint = "#2a6f96", sand = "#cdbb94" 
 
 // Landmarks are modelled in metres and drawn at the city's scale: its
 // windows are 8 units a storey (buildingMaterial), about 2.5 units a metre
-// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+// (docs/design/specs/2026-10-01-trackside-blender-design.md).
 export { LANDMARK_SCALE };
 
 // Facades with a grid of rooms read off the model's UVs (metres: u along
@@ -1383,7 +1383,7 @@ function marinaBaySandsModel(course, group, venue) {
 }
 
 // ---------------------------------------------------------------------------
-// The 2025 venues' landmarks (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md)
+// The 2025 venues' landmarks (docs/design/specs/2026-10-01-landmarks-2025-design.md)
 // ---------------------------------------------------------------------------
 
 // The circuit's points furthest toward `bearing` (0 east, PI/2 south), each
@@ -1446,7 +1446,7 @@ const SITES = {
   // places it where it stands otherwise.)
   vegasSphere: (c) => ({ anchors: anchorsAround(c, 0.25, 60, insideFirst(c)), gaps: [16, 30, 60, 110, 180], step: 24, gapFirst: true, forecourt: true }),
   lusailTowers: (c) => ({ anchors: anchorsFacing(c, Math.PI / 2), gaps: [800, 1100, 1400], step: 40 }),
-  // The historic venues (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+  // The historic venues (docs/design/specs/2026-10-05-historic-landmarks-design.md).
   motodrom: (c) => ({ anchors: oppositePits(c), gaps: [16, 28, 45, 70, 110, 160, 220], step: 18, gapFirst: true, faceTrack: true }),
   // North-north-east of the GP circuit, as the Nürburg is.
   // Nearer than in life (it is some way off) so it reads as a castle from

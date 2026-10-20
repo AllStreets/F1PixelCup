@@ -2,8 +2,8 @@
 // dressed per driver: the suit in the team's colours, the helmet with the
 // driver's own painted design (the same texture the car's helmet wears), and
 // bareheaded, the driver's own face, hair and beard.
-// See docs/superpowers/specs/2026-10-01-driver-v2-design.md and
-// docs/superpowers/specs/2026-10-01-driver-faces-design.md.
+// See docs/design/specs/2026-10-01-driver-v2-design.md and
+// docs/design/specs/2026-10-01-driver-faces-design.md.
 //
 // The body is skinned, so every figure is a SkeletonUtils clone with its own
 // skeleton, and an AnimationMixer plays its five poses: stand, wave, arms_up,

@@ -1,6 +1,6 @@
 // Las Vegas's ground filled in (tools/vegas/build_fill_data.py ->
 // tools/vegas/fill.json and assets/landmarks/vegas_fill.glb, r3d/vegas-fill.js,
-// r3d/vegas-fill-plan.js), docs/superpowers/specs/2026-10-11-vegas-fill-design.md.
+// r3d/vegas-fill-plan.js), docs/design/specs/2026-10-11-vegas-fill-design.md.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");

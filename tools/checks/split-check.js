@@ -1,4 +1,4 @@
-// Browser check: two-player split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md).
+// Browser check: two-player split screen (docs/design/specs/2026-10-01-split-screen-design.md).
 // It is off by default; with two players each key set and each gamepad drives
 // only its own car; each view's HUD is its own player's and lies inside its
 // view; the views fill the window at several sizes (resized through CDP

@@ -1,4 +1,4 @@
-// Browser check: the 3D podium ceremony (docs/superpowers/specs/2026-09-30-podium-design.md).
+// Browser check: the 3D podium ceremony (docs/design/specs/2026-09-30-podium-design.md).
 // A cup is run with every race's finishing order shuffled and scored by the
 // game's own finalizeRace, then the podium is shown. Run with the Playwright
 // MCP tool browser_run_code_unsafe, filename: tools/checks/podium-check.js,
@@ -255,7 +255,7 @@ async (page) => {
       && stand.beats.armsDown < stand.beats.anthem && stand.beats.anthemEnd <= stand.beats.present && stand.beats.present < stand.beats.trophy && stand.beats.trophy < stand.beats.spray)
       || `${stand.beat} ${pose(stand)} ${stand.anthemSeconds}`;
 
-    // ---- The trophy presentation (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md) ----
+    // ---- The trophy presentation (docs/design/specs/2026-10-12-trophy-presentation-design.md) ----
     // Before it: three trophies standing on the table (read off the scene:
     // each one's foot on its top, within its edges, clear of the others) in
     // three metals and three sizes, third's the smallest; the presenter

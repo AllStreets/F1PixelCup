@@ -1,6 +1,6 @@
 // Career scoring and the saved player profile -- one career per driver.
 //
-// Two numbers, as agreed in docs/superpowers/specs/2026-09-27-scoring-career-design.md:
+// Two numbers, as agreed in docs/design/specs/2026-09-27-scoring-career-design.md:
 // career points (race points scaled by difficulty, plus a cup bonus; only ever
 // go up) and a skill rating (Elo against a fixed-strength AI field per
 // difficulty; goes up and down). This file has no DOM code. In the browser it

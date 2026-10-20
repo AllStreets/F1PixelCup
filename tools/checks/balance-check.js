@@ -1,4 +1,4 @@
-// Browser check: a comeback is possible (docs/superpowers/specs/2026-10-05-balance-design.md).
+// Browser check: a comeback is possible (docs/design/specs/2026-10-05-balance-design.md).
 // The balance autopilot (tools/balance/comeback.js, a decent driver using its
 // power-ups sensibly) starts last on Pro in six five-lap races, and on
 // average finishes in the top eight. Before the balance work it averaged

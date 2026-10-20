@@ -1,6 +1,6 @@
 """Build the landmarks of the historic circuits (the Legends and Golden Era
 cups), and export them to assets/landmarks/*.glb
-(docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+(docs/design/specs/2026-10-05-historic-landmarks-design.md).
 
 Run headless, so it never touches an open Blender session:
 

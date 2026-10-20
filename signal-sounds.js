@@ -1,5 +1,5 @@
 // The race's two signal sounds
-// (docs/superpowers/specs/2026-10-11-flag-and-safety-car-signals-design.md):
+// (docs/design/specs/2026-10-11-flag-and-safety-car-signals-design.md):
 // the Safety Car coming out, and the Steward Penalty landing on a player.
 // Pure: each a recipe of notes the game plays through its tone player
 // (game.js playTone: an oscillator, a quick attack, an exponential fall), and

@@ -1,5 +1,5 @@
 // Renders the engine start-up sounds to a WAV for listening
-// (docs/superpowers/specs/2026-10-05-sound-design.md, "Starting up"), from
+// (docs/design/specs/2026-10-05-sound-design.md, "Starting up"), from
 // the same code the game plays (engine-sound.js: renderStartup, startPlan):
 // first a qualifying start (the player's own car), then, after a pause, a
 // race start from the back of the grid (the player's and six of the

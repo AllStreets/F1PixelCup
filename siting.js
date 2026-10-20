@@ -1,4 +1,4 @@
-// Where trackside pieces go round a circuit (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+// Where trackside pieces go round a circuit (docs/design/specs/2026-10-05-historic-landmarks-design.md).
 // Pure: the middle of the pit lane's zone round the lap, the lap's anchors from a point,
 // a stand moved along the lap round a venue's main stand, and whether a round
 // footprint touches a placed model's rectangles. In the page it defines

@@ -1,4 +1,4 @@
-// Browser check: choosing races (docs/superpowers/specs/2026-10-01-race-choices-design.md).
+// Browser check: choosing races (docs/design/specs/2026-10-01-race-choices-design.md).
 // Every choice end to end through the pit lane's own controls: a random cup
 // shown before the start, rerolled, remembered, raced as shown to its podium
 // with the career credited; a custom cup picked in the circuit picker with

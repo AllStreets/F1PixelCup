@@ -1,4 +1,4 @@
-// The engine's voice (docs/superpowers/specs/2026-10-05-sound-design.md).
+// The engine's voice (docs/design/specs/2026-10-05-sound-design.md).
 // Pure: from a car's speed, throttle and brake, step by step, what a modern
 // F1 power unit sounds like: the revs through eight gears, a little life in
 // the note at full speed (the drivetrain's shimmer, the hybrid deploying and

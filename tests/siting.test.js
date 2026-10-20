@@ -1,5 +1,5 @@
 // Where trackside pieces go round a circuit (siting.js),
-// docs/superpowers/specs/2026-10-05-historic-landmarks-design.md.
+// docs/design/specs/2026-10-05-historic-landmarks-design.md.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Siting = require("../siting.js");

@@ -3,7 +3,7 @@
 // shoulder to wrist), a walk that swings the legs with the distance covered,
 // a nod, a lean. Each works on the bones as they are after the figure's
 // pose for the frame, so a gesture eases in and out by its weight.
-// (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md)
+// (docs/design/specs/2026-10-12-trophy-presentation-design.md)
 
 import * as THREE from "three";
 

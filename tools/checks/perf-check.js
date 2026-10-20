@@ -1,5 +1,5 @@
 // Browser check: frame-time headroom at a Retina pixel ratio
-// (docs/superpowers/specs/2026-10-05-performance-headroom-design.md). A race at
+// (docs/design/specs/2026-10-05-performance-headroom-design.md). A race at
 // Monaco in a 1728x1117 view at devicePixelRatio 2 (CDP device metrics, in a
 // window of its own), every car driving itself, real requestAnimationFrame
 // intervals measured. Runs in run-all (headless) and headed through

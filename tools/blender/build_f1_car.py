@@ -1,6 +1,6 @@
 """Build the F1 car used by the 3D renderer and export it to assets/f1_car.glb.
 
-Car v2 (docs/superpowers/specs/2026-09-30-car-v2-design.md): the 2025 shape --
+Car v2 (docs/design/specs/2026-09-30-car-v2-design.md): the 2025 shape --
 a slim nose on a four-element front wing, letterbox sidepod inlets over a deep
 undercut and a steep downwash ramp, a wide floor with edge wings and fences,
 a blade roll hoop, a spoon rear wing with a beam wing below, 18-inch wheels

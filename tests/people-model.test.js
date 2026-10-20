@@ -1,5 +1,5 @@
 // The people figures (tools/blender/build_people.py -> assets/people.glb),
-// docs/superpowers/specs/2026-10-01-trackside-blender-design.md section 4.
+// docs/design/specs/2026-10-01-trackside-blender-design.md section 4.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");

@@ -43,7 +43,7 @@ test("what each tier draws", () => {
   assert.deepEqual(Quality.passesFor("low"), { composer: false, bloom: false, grade: false, flare: false, speedBlur: false, haze: false, bursts: false });
 });
 
-// docs/superpowers/specs/2026-10-05-performance-headroom-design.md
+// docs/design/specs/2026-10-05-performance-headroom-design.md
 test("each tier caps the render pixel ratio, never above the screen's own", () => {
   assert.deepEqual(Quality.PIXEL_RATIO, { high: 2, medium: 1.5, low: 1 });
   assert.deepEqual(Quality.RATIO_FLOOR, { high: 1.25, medium: 1, low: 0.75 });

@@ -1,5 +1,5 @@
 """Download the MakeHuman data files the driver's head is made from, pinned to
-one commit (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
+one commit (docs/design/specs/2026-10-01-driver-faces-design.md).
 
 MakeHuman's assets (the base mesh and the targets) are CC0 1.0: see the
 repository's LICENSE.md, section C, and LICENSE.ASSETS.md, and the header of

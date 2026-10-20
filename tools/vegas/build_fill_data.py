@@ -2,7 +2,7 @@
 from OpenStreetMap (© OpenStreetMap contributors, ODbL:
 https://www.openstreetmap.org/copyright): the data the game fills the
 circuit's empty ground with (r3d/vegas-fill.js,
-docs/superpowers/specs/2026-10-11-vegas-fill-design.md).
+docs/design/specs/2026-10-11-vegas-fill-design.md).
 
   python3 tools/vegas/build_fill_data.py --cache osm_fill.json
 

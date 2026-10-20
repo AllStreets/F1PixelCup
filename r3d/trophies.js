@@ -1,5 +1,5 @@
 // The podium's three trophies
-// (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md): third's
+// (docs/design/specs/2026-10-12-trophy-presentation-design.md): third's
 // is the cup the winner used to lift (the same profile and handles as the
 // driver model's, tools/blender/build_driver.py), in bronze; second's a
 // bigger goblet of its own, in silver; the winner's a grand urn on a plinth

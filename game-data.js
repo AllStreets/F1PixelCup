@@ -20,7 +20,7 @@ function getTeamForDriver(driver) {
   return TEAMS.find((t) => t.id === driver.teamId) || TEAMS[0];
 }
 
-// Each driver's helmet (docs/superpowers/specs/2026-09-29-helmets-design.md):
+// Each driver's helmet (docs/design/specs/2026-09-29-helmets-design.md):
 // original art in their signature colours -- no logos, no sponsor marks.
 // country: the nationality each races under (the podium plays its anthem,
 // podium-sound.js, and hangs its flag).
@@ -48,7 +48,7 @@ const DRIVERS = [
 ];
 
 // Each driver's face, for the podium, where they stand bareheaded
-// (docs/superpowers/specs/2026-10-01-driver-faces-design.md): skin, hair and
+// (docs/design/specs/2026-10-01-driver-faces-design.md): skin, hair and
 // beard, eyes, MakeHuman's ethnic blend, and the face's shape sliders
 // (faces.js), worked out from public photos of each driver in 2025, used as
 // reference only.
@@ -173,7 +173,7 @@ const DIFFICULTIES = [
 ];
 
 // Circuits in the order of the 2025 calendar
-// (docs/superpowers/specs/2026-10-01-calendar-design.md). lengthM is the real
+// (docs/design/specs/2026-10-01-calendar-design.md). lengthM is the real
 // lap length in metres, from the bacinger/f1-circuits data the outlines come
 // from; rainChance is how often Changeable weather rains there (weather.js);
 // short is the name the place goes by, where a full name won't fit; places
@@ -203,7 +203,7 @@ const CIRCUITS = [
   { id: "lasvegas", short: "Las Vegas", places: "USA Nevada", name: "Las Vegas Strip Circuit", country: "United States", theme: "Saturday night down the Strip", lengthM: 6201, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0c0a24", grass: "#2a2836", accent: "#ff5ad0", road: "#3a3846", shoulder: "#58545e", horizonA: "#140f30", horizonB: "#2a1f50", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffd2f0" } },
   { id: "losail", short: "Lusail", places: "Doha", name: "Lusail International Circuit", country: "Qatar", theme: "Floodlit curves in the desert", lengthM: 5380, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0a0e22", grass: "#3a3226", accent: "#ffd9a0", road: "#3a3846", shoulder: "#5e564a", horizonA: "#100c1e", horizonB: "#2a2234", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffcf90" } },
   { id: "yasmarina", short: "Yas Marina", places: "Abu Dhabi", name: "Yas Marina Circuit", country: "United Arab Emirates", theme: "Night race at the marina", lengthM: 5281, laps: 5, roadWidth: 33, rainChance: 0.02, bg: { sky: "#0d1230", grass: "#2a3040", accent: "#7fd0ff", road: "#3a3848", shoulder: "#565262", horizonA: "#101438", horizonB: "#2a2f60", curbA: "#dc0000", curbB: "#ffffff", sun: "#ffb070" } },
-  // The historic circuits (docs/superpowers/specs/2026-10-04-historic-cups-design.md):
+  // The historic circuits (docs/design/specs/2026-10-04-historic-cups-design.md):
   // famous circuits no longer on the calendar, each as the outline data has it
   // (`era` names that layout and its Formula 1 years honestly).
   { id: "hockenheim", short: "Hockenheim", historic: true, era: "The short Grand Prix circuit, raced in F1 from 2002, last in 2019", name: "Hockenheimring", country: "Germany", theme: "Into the Motodrom stadium", lengthM: 4574, laps: 5, roadWidth: 33, rainChance: 0.25, bg: { sky: "#8ab9e0", grass: "#4f8a42", accent: "#ffe2a0", road: "#48484f", shoulder: "#c0b8a4", horizonA: "#2a4a2c", horizonB: "#4f7a48", curbA: "#dc0000", curbB: "#ffffff", sun: "#fff0c8" } },

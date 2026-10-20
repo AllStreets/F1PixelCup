@@ -1,5 +1,5 @@
 // The season: the whole calendar as one championship
-// (docs/superpowers/specs/2026-10-01-calendar-design.md). Pure: the points,
+// (docs/design/specs/2026-10-01-calendar-design.md). Pure: the points,
 // the drivers' and constructors' standings, the save and its checks, and the
 // cup the pit lane remembers. A season is its settings and the results of the
 // races run so far; everything else is worked out from those, so a save can't

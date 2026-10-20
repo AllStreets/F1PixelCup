@@ -4,7 +4,7 @@
 // column you roll from is set by your place, or by how far you are behind the
 // leader if that is further back; the weakest items are the most common and
 // the strongest are the rarest
-// (docs/superpowers/specs/2026-10-05-balance-design.md).
+// (docs/design/specs/2026-10-05-balance-design.md).
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

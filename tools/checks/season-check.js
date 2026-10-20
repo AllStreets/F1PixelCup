@@ -1,4 +1,4 @@
-// Browser check: the season (docs/superpowers/specs/2026-10-01-calendar-design.md,
+// Browser check: the season (docs/design/specs/2026-10-01-calendar-design.md,
 // section 4). A season starts from the pit lane, its first race is run to the
 // flag, the standings are saved; a reload offers to resume it and resumes at
 // race 2 with the same standings, driver and settings; "New season" asks once

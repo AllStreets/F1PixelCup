@@ -1,7 +1,7 @@
 // Browser check: the trackside's final look, every venue
-// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 8).
+// (docs/design/specs/2026-10-01-trackside-blender-design.md, section 8).
 // Every venue's landmark built from its Blender model (the 2025 venues'
-// too: docs/superpowers/specs/2026-10-01-landmarks-2025-design.md, and the
+// too: docs/design/specs/2026-10-01-landmarks-2025-design.md, and the
 // historic ones': 2026-10-05-historic-landmarks-design.md), the main
 // grandstands across the straight from the pits, the crowd heard where the
 // stands are, the
@@ -62,12 +62,12 @@ async (page) => {
   const WANT = {
     monza: ["monzaBanking"], spa: ["spaPits"], silverstone: ["silverstoneWing"], suzuka: ["suzukaWheel"],
     monaco: ["casino"], singapore: ["marinaBaySands", "singaporeFlyer"], bahrain: ["sakhirTower"], interlagos: ["spTowers"],
-    // The 2025 venues (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
+    // The 2025 venues (docs/design/specs/2026-10-01-landmarks-2025-design.md).
     albertpark: ["melbourneSkyline"], shanghai: ["shanghaiGrandstand"], jeddah: ["jeddahFountain"], miami: ["miamiStadium"],
     imola: ["hillside"], barcelona: ["barcelonaGrandstand"], montreal: ["biosphere"], redbullring: ["spielbergGrandstand", "hillside"],
     hungaroring: ["hillside"], zandvoort: ["hugenholtz"], baku: ["bakuOldCity", "flameTowers"], cota: ["cotaTower", "hillside"],
     mexico: ["foroSol"], lasvegas: ["vegasSphere", "vegasStrip"], losail: ["losailGrandstand", "lusailTowers"], yasmarina: ["yasHotel"],
-    // The historic circuits (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+    // The historic circuits (docs/design/specs/2026-10-05-historic-landmarks-design.md).
     hockenheim: ["motodrom"], nurburgring: ["nurburgCastle"], estoril: ["estorilGrandstand", "sintraHills"], kyalami: ["joburgSkyline", "hillside"],
     sepang: ["sepangGrandstand"], istanbul: ["istanbulGrandstand", "hillside"], mugello: ["tuscanHill", "hillside"], watkinsglen: ["fingerLakes", "hillside"],
   };
@@ -83,7 +83,7 @@ async (page) => {
     return bad.length === 0 || JSON.stringify(bad).slice(0, 400);
   }, WANT);
 
-  // The venues' main grandstands where the real ones stand (docs/superpowers/
+  // The venues' main grandstands where the real ones stand (docs/design/
   // specs/2026-10-05-historic-landmarks-design.md): across the straight from
   // the pits' middle, at the barrier (the smallest gaps). At Barcelona the
   // circuit data's three stands rearranged round it along the straight, none

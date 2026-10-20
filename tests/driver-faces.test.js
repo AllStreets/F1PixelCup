@@ -1,5 +1,5 @@
 // The driver's head, eyes, hair and beards in assets/driver.glb
-// (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
+// (docs/design/specs/2026-10-01-driver-faces-design.md).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

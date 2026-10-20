@@ -1,5 +1,5 @@
 // Browser check: the Safety Car on every circuit
-// (docs/superpowers/specs/2026-10-05-safety-car-entries-design.md; the game's
+// (docs/design/specs/2026-10-05-safety-car-entries-design.md; the game's
 // own code: game.js deploySafetyCar and updateSafetyCar, entrances.js,
 // pitlane.js wayIn and parkAt).
 //

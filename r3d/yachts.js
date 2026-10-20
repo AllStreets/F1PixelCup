@@ -1,4 +1,4 @@
-// The yachts on the water (docs/superpowers/specs/2026-10-01-trackside-blender-design.md,
+// The yachts on the water (docs/design/specs/2026-10-01-trackside-blender-design.md,
 // section 8.1): the Blender models in assets/yachts.glb (tools/blender/build_yachts.py),
 // at the city's scale, instanced per model and level of detail.
 //

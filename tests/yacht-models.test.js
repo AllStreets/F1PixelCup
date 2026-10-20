@@ -1,5 +1,5 @@
 // The yachts (tools/blender/build_yachts.py -> assets/yachts.glb),
-// docs/superpowers/specs/2026-10-01-trackside-blender-design.md section 8.1.
+// docs/design/specs/2026-10-01-trackside-blender-design.md section 8.1.
 // Real metres, glTF axes: x toward the bow, y up, the waterline at y = 0.
 const test = require("node:test");
 const assert = require("node:assert/strict");

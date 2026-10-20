@@ -1,5 +1,5 @@
 // The trackside models built in Blender (tools/blender/build_landmarks.py,
-// build_people.py, build_yachts.py; docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+// build_people.py, build_yachts.py; docs/design/specs/2026-10-01-trackside-blender-design.md).
 //
 // Two sets:
 // - the core (the people, at every circuit) loads with the car, and the
@@ -24,7 +24,7 @@ import { Float32BufferAttribute } from "three";
 
 // Landmarks (and the yachts) are drawn at the city's scale: its windows are
 // 8 units a storey (buildingMaterial), about 2.5 units a metre
-// (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+// (docs/design/specs/2026-10-01-trackside-blender-design.md).
 export const LANDMARK_SCALE = 2.5;
 
 export const FILES = {

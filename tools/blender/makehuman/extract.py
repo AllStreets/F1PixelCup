@@ -1,5 +1,5 @@
 """Cut the head and neck out of MakeHuman's base mesh and write head.json
-(docs/superpowers/specs/2026-10-01-driver-faces-design.md).
+(docs/design/specs/2026-10-01-driver-faces-design.md).
 
   python3 tools/blender/makehuman/extract.py <cache dir from fetch.py>
 

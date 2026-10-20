@@ -1,5 +1,5 @@
 // The Safety Car's service entrances
-// (docs/superpowers/specs/2026-10-05-safety-car-entries-design.md). Pure:
+// (docs/design/specs/2026-10-05-safety-car-entries-design.md). Pure:
 // where each circuit's service roads come through the barrier, which way onto
 // the track gets the Safety Car in front of the leader soonest, and how it
 // drives that way and catches up. Shared by the physics (game.js), the

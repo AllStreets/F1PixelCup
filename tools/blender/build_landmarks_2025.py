@@ -1,5 +1,5 @@
 """Build the landmarks of the 2025 calendar's other sixteen venues, and export
-them to assets/landmarks/*.glb (docs/superpowers/specs/2026-10-01-landmarks-2025-design.md).
+them to assets/landmarks/*.glb (docs/design/specs/2026-10-01-landmarks-2025-design.md).
 
 Run headless, so it never touches an open Blender session:
 

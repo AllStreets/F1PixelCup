@@ -1,5 +1,5 @@
 // Browser check: graphics tiers and the post-processing
-// (docs/superpowers/specs/2026-09-29-postfx-design.md). Run with the Playwright
+// (docs/design/specs/2026-09-29-postfx-design.md). Run with the Playwright
 // MCP tool browser_run_code_unsafe, filename: tools/checks/postfx-check.js,
 // dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors []. `measured` reports the

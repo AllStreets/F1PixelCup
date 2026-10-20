@@ -1,5 +1,5 @@
 """The driver's bare head for the podium: the face, eyes, brows, lashes, hair
-styles and facial hair (docs/superpowers/specs/2026-10-01-driver-faces-design.md).
+styles and facial hair (docs/design/specs/2026-10-01-driver-faces-design.md).
 
 Built from MakeHuman's CC0 base mesh and targets, cut out by
 tools/blender/makehuman/extract.py into head.json. build_driver.py calls

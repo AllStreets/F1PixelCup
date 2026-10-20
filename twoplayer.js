@@ -1,4 +1,4 @@
-// Two-player split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md).
+// Two-player split screen (docs/design/specs/2026-10-01-split-screen-design.md).
 // Pure rules: how the window is cut into two views, each view's HUD area and
 // field of view, the two key sets, reading a gamepad, and player 2's driver.
 // In the page this defines window.TwoPlayer; in Node it is require()-able.

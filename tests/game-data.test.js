@@ -29,7 +29,7 @@ test("getTeamForDriver finds the driver's team", () => {
   assert.equal(Data.getTeamForDriver(norris).id, "mclaren");
 });
 
-// The 2025 calendar, race by race (docs/superpowers/specs/2026-10-01-calendar-design.md).
+// The 2025 calendar, race by race (docs/design/specs/2026-10-01-calendar-design.md).
 const CALENDAR_2025 = ["albertpark", "shanghai", "suzuka", "bahrain", "jeddah", "miami", "imola", "monaco",
   "barcelona", "montreal", "redbullring", "silverstone", "spa", "hungaroring", "zandvoort", "monza",
   "baku", "singapore", "cota", "mexico", "interlagos", "lasvegas", "losail", "yasmarina"];
@@ -66,7 +66,7 @@ test("every circuit has a real outline, a country, a real length and its own wea
   assert.ok(chance("bahrain") < 0.05);
 });
 
-// The historic cups (docs/superpowers/specs/2026-10-04-historic-cups-design.md).
+// The historic cups (docs/design/specs/2026-10-04-historic-cups-design.md).
 const HISTORIC = ["hockenheim", "nurburgring", "estoril", "kyalami", "sepang", "istanbul", "mugello", "watkinsglen"];
 const HISTORIC_CUPS = [["legendsCup", "Legends Cup"], ["goldenEraCup", "Golden Era Cup"]];
 

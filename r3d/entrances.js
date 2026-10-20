@@ -1,5 +1,5 @@
 // The Safety Car's service entrances in 3D
-// (docs/superpowers/specs/2026-10-05-safety-car-entries-design.md). Where
+// (docs/design/specs/2026-10-05-safety-car-entries-design.md). Where
 // they are is entrances.js's (window.Entrances, read from the track); this
 // draws each one: its access road from the road's edge out through a gap in
 // the barrier to a carport behind it, the gate in the gap (two leaves on

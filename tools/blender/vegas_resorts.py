@@ -1,5 +1,5 @@
 """The Strip's resorts, each in its own architecture (the second pass of
-docs/superpowers/specs/2026-10-05-vegas-strip-design.md): a footprint from
+docs/design/specs/2026-10-05-vegas-strip-design.md): a footprint from
 the map is the building's real plan; this gives it its walls' kind (floodlit
 stone with its rooms' windows, glass in ribbons between pale bands, bronze
 glass with fine pale lines, a curtain of tinted glass), its roof and crown

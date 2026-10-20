@@ -1,4 +1,4 @@
-// One race of the balance measurement (docs/superpowers/specs/
+// One race of the balance measurement (docs/design/specs/
 // 2026-10-05-balance-design.md), run in the real game page: the player's car
 // (Leclerc's Ferrari unless told otherwise) is driven by an autopilot that
 // drives like a decent human, against the field with the game's own physics,

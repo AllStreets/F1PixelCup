@@ -1,5 +1,5 @@
 // The historic circuits' landmarks (tools/blender/build_landmarks_historic.py
-// -> assets/landmarks/*.glb), docs/superpowers/specs/2026-10-05-historic-landmarks-design.md.
+// -> assets/landmarks/*.glb), docs/design/specs/2026-10-05-historic-landmarks-design.md.
 // Real metres, glTF axes: y up, the front (the circuit side) toward -z.
 const test = require("node:test");
 const assert = require("node:assert/strict");

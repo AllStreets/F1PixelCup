@@ -2,7 +2,7 @@
 // settings that use them (r3d/landmarks.js VENUES), read from the modules'
 // source: every listed model has its file, every 2025 venue has its landmark
 // and its stand type, and the harbours have their yachts.
-// docs/superpowers/specs/2026-10-01-landmarks-2025-design.md.
+// docs/design/specs/2026-10-01-landmarks-2025-design.md.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -51,7 +51,7 @@ test("every 2025 venue has its landmarks, from models it loads", () => {
   });
 });
 
-// The historic circuits' landmarks (docs/superpowers/specs/2026-10-05-historic-landmarks-design.md).
+// The historic circuits' landmarks (docs/design/specs/2026-10-05-historic-landmarks-design.md).
 // (The settings only; that each is built from its model, where it should
 // stand, is tools/checks/trackside-models-check.js's.)
 // The track data (tracks-data.js), for the corners' boards.

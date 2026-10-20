@@ -1,5 +1,5 @@
 """Build the trackside people and export them to assets/people.glb
-(docs/superpowers/specs/2026-10-01-trackside-blender-design.md, section 4).
+(docs/design/specs/2026-10-01-trackside-blender-design.md, section 4).
 
 Run headless, so it never touches an open Blender session:
 

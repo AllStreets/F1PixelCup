@@ -1,5 +1,5 @@
 // The trophy presentation, in the podium's scene
-// (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md): the
+// (docs/design/specs/2026-10-12-trophy-presentation-design.md): the
 // table, the three trophies (r3d/trophies.js), the presenter
 // (r3d/presenter.js), and each frame's handing over: where ceremony.js says
 // everyone and everything is, the hands are put there (r3d/gestures.js).

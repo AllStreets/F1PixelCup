@@ -1,5 +1,5 @@
 // The marks on a driver's race suit and where they sit
-// (docs/superpowers/specs/2026-10-12-race-suits-design.md): the race number,
+// (docs/design/specs/2026-10-12-race-suits-design.md): the race number,
 // the three-letter code, the surname, the national flag and the team's name
 // in plain words. No team logos,
 // or crests. r3d/suit.js paints them on a sheet the suit's shader

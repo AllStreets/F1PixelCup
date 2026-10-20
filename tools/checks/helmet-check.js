@@ -1,5 +1,5 @@
 // Browser check: every driver's helmet is painted with their own design
-// (docs/superpowers/specs/2026-09-29-helmets-design.md). Run with the
+// (docs/design/specs/2026-09-29-helmets-design.md). Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
 // tools/checks/helmet-check.js, dev server on http://localhost:8765.
 // Expected: every value in `results` true, errors [].

@@ -1,4 +1,4 @@
-// Browser check: rain races (docs/superpowers/specs/2026-09-29-rain-design.md).
+// Browser check: rain races (docs/design/specs/2026-09-29-rain-design.md).
 // Run with the Playwright MCP tool browser_run_code_unsafe, with the dev
 // server on http://localhost:8765. Returns { results, errors } (the shared
 // convention of every check in tools/checks); every result should be true.

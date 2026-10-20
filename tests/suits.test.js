@@ -1,5 +1,5 @@
 // The marks on the race suits and where they sit
-// (docs/superpowers/specs/2026-10-12-race-suits-design.md).
+// (docs/design/specs/2026-10-12-race-suits-design.md).
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

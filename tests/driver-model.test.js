@@ -115,7 +115,7 @@ test("every pose moves over its loop: the spray really shakes, the arms really w
   assert.ok(swing(anim("stand"), "chest") > 0.001, "standing, the chest breathes");
 });
 
-// --- v2 (docs/superpowers/specs/2026-10-01-driver-v2-design.md) ---------------
+// --- v2 (docs/design/specs/2026-10-01-driver-v2-design.md) ---------------
 
 // Node index -> world matrix in the rest pose.
 function worldMatrices(doc) {

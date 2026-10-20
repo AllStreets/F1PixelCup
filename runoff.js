@@ -1,5 +1,5 @@
 // The run-off and the barriers round a circuit
-// (docs/superpowers/specs/2026-10-05-balance-design.md). Real circuits fold
+// (docs/design/specs/2026-10-05-balance-design.md). Real circuits fold
 // back on themselves, so each sample along the lap measures how much room it
 // has on either side before another stretch of the circuit, and the run-off
 // and barriers shrink to fit. The renderer (r3d/track.js) draws the barriers

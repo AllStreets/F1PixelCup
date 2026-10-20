@@ -113,7 +113,7 @@ rain.setTier(currentTier());
 
 // The render pixel ratio: the tier's cap (never above the screen's own), lowered
 // by dynamic resolution when racing frames run slow
-// (docs/superpowers/specs/2026-10-05-performance-headroom-design.md).
+// (docs/design/specs/2026-10-05-performance-headroom-design.md).
 const screenRatio = () => window.devicePixelRatio || 1;
 const ratioLimits = () => ({ cap: Quality.ratioCap(currentTier(), screenRatio()), floor: Quality.ratioFloor(currentTier(), screenRatio()) });
 const scaler = Quality.createScaler(ratioLimits());
@@ -669,7 +669,7 @@ function inspect() {
   };
   const cars = {};
   if (current) current.cars.forEach((car, id) => { cars[id] = carLooks(car); });
-  // The trackside models and people (docs/superpowers/specs/2026-10-01-trackside-blender-design.md).
+  // The trackside models and people (docs/design/specs/2026-10-01-trackside-blender-design.md).
   const landmarks = [];
   if (current) current.landmarks.traverse((o) => { if (o.userData.landmark) landmarks.push({ ...o.userData.landmark, x: Math.round(o.position.x), z: Math.round(o.position.z) }); });
   const stands = current ? current.decor.children.filter((o) => o.userData.stand).map((o) => ({ x: Math.round(o.position.x), z: Math.round(o.position.z), yaw: +o.rotation.y.toFixed(3), d: o.userData.d })) : [];
@@ -1240,7 +1240,7 @@ function resize(full = false) {
 }
 
 // ---------------------------------------------------------------------------
-// Split screen (docs/superpowers/specs/2026-10-01-split-screen-design.md):
+// Split screen (docs/design/specs/2026-10-01-split-screen-design.md):
 // two views of the one scene, each in its own viewport. game.js sets the
 // views (CSS px from the canvas's top left; null for one view) before the
 // circuit is prepared, so the effects are sized for them before the first
@@ -1537,7 +1537,7 @@ function drawFrame(frame) {
 const viewCams = [];
 
 // ---------------------------------------------------------------------------
-// Replay cameras (docs/superpowers/specs/2026-10-01-replays-design.md):
+// Replay cameras (docs/design/specs/2026-10-01-replays-design.md):
 // trackside TV cameras that pan and zoom after a car and cut to the next, the
 // onboard T-cam, and the helicopter. The maths is in replay.js.
 // ---------------------------------------------------------------------------

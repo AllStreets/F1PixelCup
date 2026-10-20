@@ -1,5 +1,5 @@
 // The dignitary who presents the podium's trophies
-// (docs/superpowers/specs/2026-10-12-trophy-presentation-design.md): the
+// (docs/design/specs/2026-10-12-trophy-presentation-design.md): the
 // driver figure with a look of their own (faces.js) and formal wear. A man in
 // a dark suit and tie or a woman in a trouser suit, drawn from the podium
 // itself (the cup and its top three), so the same podium has the same one.

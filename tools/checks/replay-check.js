@@ -1,4 +1,4 @@
-// Browser check: TV-camera replays (docs/superpowers/specs/2026-10-01-replays-design.md).
+// Browser check: TV-camera replays (docs/design/specs/2026-10-01-replays-design.md).
 // A short real race is run; its positions are kept independently as it runs;
 // the replay is opened from the results screen and must show the race exactly,
 // from every camera, with its cameras where they belong; seeking, speeds and

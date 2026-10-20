@@ -1,6 +1,6 @@
 // The Las Vegas Strip (tools/vegas/build_strip_data.py -> tools/vegas/strip.json,
 // tools/blender/build_vegas.py -> assets/landmarks/vegas_strip.glb, r3d/vegas.js),
-// docs/superpowers/specs/2026-10-05-vegas-strip-design.md.
+// docs/design/specs/2026-10-05-vegas-strip-design.md.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");

@@ -1,4 +1,4 @@
-// Trackside life (docs/superpowers/specs/2026-09-29-trackside-design.md, G3):
+// Trackside life (docs/design/specs/2026-09-29-trackside-design.md, G3):
 // marshal posts with their flags, the TV helicopter over the leader, fireworks
 // when the chequered flag falls, and the starter waving it. The game decides
 // what happens (game.js tracksideFrame, marshals.js); this draws it.
@@ -267,7 +267,7 @@ export function updateFireworks(points, course, frame, stands, since, tier) {
 // ---------------------------------------------------------------------------
 // The chequered flag official: on a flag stand by the line, right behind the
 // barrier, waving the flag through the last lap until the winner has it
-// (docs/superpowers/specs/2026-10-11-flag-and-safety-car-signals-design.md).
+// (docs/design/specs/2026-10-11-flag-and-safety-car-signals-design.md).
 // ---------------------------------------------------------------------------
 
 export function buildStarter(course) {

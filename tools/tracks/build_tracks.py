@@ -365,7 +365,7 @@ def footprint_clear(pts, x, y, angle, half_len, half_depth, need):
     return True
 
 
-# The pit lane (docs/superpowers/specs/2026-09-29-trackside-design.md, G1).
+# The pit lane (docs/design/specs/2026-09-29-trackside-design.md, G1).
 # Offsets beyond the road's half-width; pitlane.js has the same numbers and
 # tests/pitlane.test.js checks they agree.
 PIT_WALL_IN = 8

@@ -1,5 +1,5 @@
 // The 2025 venues' landmarks (tools/blender/build_landmarks_2025.py ->
-// assets/landmarks/*.glb), docs/superpowers/specs/2026-10-01-landmarks-2025-design.md.
+// assets/landmarks/*.glb), docs/design/specs/2026-10-01-landmarks-2025-design.md.
 // Real metres, glTF axes: y up, the front (the circuit side) toward -z.
 const test = require("node:test");
 const assert = require("node:assert/strict");

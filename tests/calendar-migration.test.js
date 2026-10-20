@@ -1,5 +1,5 @@
 // The two old cups became the calendar cups
-// (docs/superpowers/specs/2026-10-01-calendar-design.md, section 2). A
+// (docs/design/specs/2026-10-01-calendar-design.md, section 2). A
 // regression guard: careers are keyed by circuit and driver, never by cup, so
 // a career saved in the old cups must keep loading exactly as it was and go on
 // counting in the new ones.

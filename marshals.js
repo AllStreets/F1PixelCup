@@ -1,4 +1,4 @@
-// Marshal posts and their flags (docs/superpowers/specs/2026-09-29-trackside-design.md,
+// Marshal posts and their flags (docs/design/specs/2026-09-29-trackside-design.md,
 // G3). Pure: where the posts stand round the lap, and which flag each shows
 // for the race as it is. In the page it defines window.Marshals; in Node it is
 // require()-able.

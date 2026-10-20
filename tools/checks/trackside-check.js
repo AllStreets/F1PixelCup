@@ -1,4 +1,4 @@
-// Browser check: trackside life (docs/superpowers/specs/2026-09-29-trackside-design.md).
+// Browser check: trackside life (docs/design/specs/2026-09-29-trackside-design.md).
 // G1: pit lanes, garages, the Safety Car's way into the pits. G2: the venue
 // moments, seen and heard. G3: marshals, the helicopter, fireworks. Run with the
 // Playwright MCP tool browser_run_code_unsafe, filename:
@@ -356,7 +356,7 @@ async (page) => {
     await frames(2);
     return (before.fireworks === 0 && after.fireworks > 0 && later.fireworks > 0) || JSON.stringify({ before: before.fireworks, after: after.fireworks, later: later.fireworks });
   });
-  // The chequered flag official (docs/superpowers/specs/2026-10-11-flag-and-
+  // The chequered flag official (docs/design/specs/2026-10-11-flag-and-
   // safety-car-signals-design.md): a figure of their own on a flag stand
   // clear of the road; the flag lowered before the last lap, waved through
   // it, and lowered again the moment the first car (a CPU car here, not the
