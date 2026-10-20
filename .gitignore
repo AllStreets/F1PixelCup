@@ -3,3 +3,6 @@ __pycache__/
 .superpowers/
 .vercel
 .env*
+
+# Design-review captures live outside the repo (kept in git history before 2026-10-20).
+docs/review/
