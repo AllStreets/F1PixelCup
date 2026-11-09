@@ -1,8 +1,8 @@
 <div align="center">
 
-# F1 PIXEL CUP
+<a href="https://f1-pixel-cup.vercel.app/play.html"><img src=".github/assets/banner.jpg" alt="F1 Pixel Cup: the title in raised italic letters, red and yellow, beside five lit start lights and a Monaco grid of low-poly cars on the harbour straight, over a red and white kerb" width="100%"/></a>
 
-**THE 2025 GRID. EVERY 2025 CIRCUIT. IN YOUR BROWSER.**
+&nbsp;
 
 <a href="https://f1-pixel-cup.vercel.app/play.html"><img alt="play now" src="https://img.shields.io/badge/play_now-in_your_browser-dc0000?style=for-the-badge&labelColor=0b0d14"/></a>
 <img alt="circuits" src="https://img.shields.io/badge/circuits-32-ffed00?style=for-the-badge&labelColor=0b0d14"/>
